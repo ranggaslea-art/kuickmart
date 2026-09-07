@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+
+  <!-- Shopping Bag & Cart Symbol -->
+  <g filter="url(#dropShadow)" transform="translate(40, 25)">
+    <!-- Cart / Bag Body -->
+    <path d="M 120 180 L 312 180 L 296 350 C 296 365 284 378 268 378 L 164 378 C 148 378 136 365 136 350 Z" fill="#ffffff" />
+    <!-- Handle -->
+    <path d="M 172 180 C 172 130 260 130 260 180" fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" />
+    <!-- Lightning Flash on Bag -->
+    <path d="M 226 210 L 180 290 L 216 290 L 196 360 L 254 275 L 218 275 Z" fill="url(#accentGrad)" />
+  </g>
+
+  <!-- Speed Motion Lines -->
+  <circle cx="105" cy="420" r="16" fill="#f8fafc" opacity="0.9" />
+  <circle cx="330" cy="420" r="16" fill="#f8fafc" opacity="0.9" />
+  <circle cx="390" cy="420" r="8" fill="#f59e0b" />
+  <circle cx="65" cy="420" r="8" fill="#f59e0b" />
+</svg>
