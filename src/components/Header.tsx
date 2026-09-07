@@ -171,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
                   )}
                 </div>
                 {showTagline && tagline && (
-                  <p className="text-[10px] font-medium text-stone-500">{tagline}</p>
+                  <p className="text-[10px] font-medium text-stone-500 hidden xl:block">{tagline}</p>
                 )}
               </div>
             </div>
@@ -218,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Search Bar */}
-          <div className="flex-1 relative min-w-[150px] sm:min-w-[200px] max-w-3xl">
+          <div className="flex-1 relative min-w-[100px] sm:min-w-[140px] max-w-2xl">
             <div className="relative">
               <input
                 type="text"
@@ -226,9 +226,9 @@ export const Header: React.FC<HeaderProps> = ({
                 onChange={(e) => onSearchChange(e.target.value)}
                 onFocus={() => setIsSearchFocused(true)}
                 placeholder="Cari minyak goreng, beras, susu, indomie, snack..."
-                className="w-full pl-10 pr-9 py-2 bg-stone-100 hover:bg-stone-50 focus:bg-white border border-stone-300 focus:border-blue-500 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-100 transition-all"
+                className="w-full pl-9 sm:pl-10 pr-8 sm:pr-9 py-2 bg-stone-100 hover:bg-stone-50 focus:bg-white border border-stone-300 focus:border-blue-500 rounded-xl text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-100 transition-all"
               />
-              <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               {searchQuery && (
                 <button
                   onClick={() => onSearchChange('')}
@@ -286,75 +286,76 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
             {/* Fullscreen Toggle Button */}
             <button
               onClick={toggleFullscreen}
               title={isFullscreen ? "Keluar Mode Layar Penuh" : "Mode Layar Penuh (Fullscreen)"}
-              className="p-2 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 flex items-center justify-center transition-all cursor-pointer shrink-0"
             >
               {isFullscreen ? (
                 <Minimize className="w-4 h-4 text-blue-600" />
               ) : (
                 <Maximize className="w-4 h-4 text-stone-600" />
               )}
-              <span className="text-xs font-medium hidden lg:inline">
-                {isFullscreen ? 'Normal' : 'Full Layar'}
-              </span>
             </button>
 
-            {/* Admin Panel Button (Satu-satunya Tombol Admin di Header) */}
+            {/* Admin Panel Button */}
             <button
               onClick={onOpenAdminPanel}
               title="Masuk Panel Admin & Kasir Toko"
-              className="px-2.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
             >
               <span className="text-sm">👑</span>
-              <span className="hidden sm:inline">Admin Toko</span>
+              <span className="hidden lg:inline">Admin Toko</span>
             </button>
 
             {/* Member Card Button */}
             <button
               onClick={onOpenMemberModal}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 flex items-center gap-2 transition-all"
+              title={`Member ${member.tier} - ${member.points.toLocaleString('id-ID')} Poin`}
+              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-amber-700 shrink-0" />
-              <div className="text-left hidden md:block leading-tight">
+              <div className="text-left hidden 2xl:block leading-tight">
                 <div className="text-[10px] font-bold uppercase text-amber-700 tracking-wider">Member {member.tier}</div>
                 <div className="text-xs font-black text-amber-950">{member.points.toLocaleString('id-ID')} Poin</div>
               </div>
             </button>
 
-            {/* Order History */}
+            {/* Order History (Pesanan) - Selalu Tampil & Prioritas Utama */}
             <button
               onClick={onOpenOrderHistory}
               title="Daftar Pesanan & Status Belanja"
-              className="p-2 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 relative transition-all"
+              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs"
             >
-              <Receipt className="w-4 h-4" />
-              <span className="text-xs font-medium hidden md:inline">Pesanan</span>
+              <Receipt className="w-4 h-4 text-blue-700" />
+              <span className="text-xs font-bold text-stone-800 hidden sm:inline">Pesanan</span>
               {activeOrdersCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white font-bold text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white font-bold text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center animate-pulse shadow-xs">
                   {activeOrdersCount}
                 </span>
               )}
             </button>
 
-            {/* Cart Button */}
+            {/* Cart Button (Keranjang) - Selalu Tampil & Prioritas Utama */}
             <button
               onClick={onOpenCart}
-              className="p-2 sm:px-3.5 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center gap-2 shadow-sm font-semibold text-xs transition-all relative"
+              title="Buka Keranjang Belanja"
+              className="p-1.5 sm:px-3 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center gap-1.5 sm:gap-2 shadow-sm font-semibold text-xs transition-all relative shrink-0 cursor-pointer"
             >
-              <ShoppingBag className="w-4 h-4" />
+              <div className="relative flex items-center justify-center">
+                <ShoppingBag className="w-4 h-4" />
+                {totalCartCount > 0 && (
+                  <span className="sm:hidden absolute -top-1.5 -right-2 bg-red-500 text-white font-bold text-[10px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                    {totalCartCount}
+                  </span>
+                )}
+              </div>
               <div className="hidden sm:block text-left leading-tight">
-                <div className="text-[10px] font-normal opacity-90">Keranjang</div>
+                <div className="text-[10px] font-normal opacity-90">Keranjang ({totalCartCount})</div>
                 <div className="font-bold">{formatRupiah(totalCartPrice)}</div>
               </div>
-              {totalCartCount > 0 && (
-                <span className="sm:hidden absolute -top-1 -right-1 bg-red-500 text-white font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
-                  {totalCartCount}
-                </span>
-              )}
             </button>
           </div>
         </div>

@@ -119,7 +119,8 @@ import {
   CreditCard,
   Store as StoreIcon,
   Headphones,
-  BadgePercent
+  BadgePercent,
+  ChevronRight
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -850,6 +851,9 @@ export default function App() {
     (o) => o.status !== 'completed' && o.status !== 'cancelled'
   );
 
+  const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const totalCartPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+
   return (
     <div className="min-h-screen w-full min-w-full flex-1 bg-[#F8F9FA] text-[#1E2022] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
       {/* Sticky Header */}
@@ -1417,6 +1421,33 @@ export default function App() {
           setIsSupabaseModalOpen(true);
         }}
       />
+
+      {/* 9. Floating Bottom Cart Bar (Akses Cepat Keranjang Belanja) */}
+      {cartItems.length > 0 && !isCartOpen && !isCheckoutOpen && (
+        <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-6 sm:w-auto sm:max-w-md z-40 animate-in slide-in-from-bottom-5 duration-200">
+          <div
+            onClick={() => setIsCartOpen(true)}
+            className="bg-stone-950/95 hover:bg-stone-900 text-white px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 sm:gap-6 cursor-pointer border border-white/10 transition-all hover:scale-[1.02] active:scale-95"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white relative shadow-sm shrink-0">
+                <ShoppingBag className="w-5 h-5" />
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white font-black text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center border border-stone-950">
+                  {totalCartCount}
+                </span>
+              </div>
+              <div>
+                <p className="text-[11px] text-stone-300 font-medium">Total ({totalCartCount} item)</p>
+                <p className="text-sm font-extrabold text-amber-400">{formatRupiah(totalCartPrice)}</p>
+              </div>
+            </div>
+            <button className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-xs shrink-0">
+              <span>Buka Keranjang</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
