@@ -52,7 +52,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Megaphone,
-  Bike
+  Bike,
+  Loader2
 } from 'lucide-react';
 import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo } from '../types';
 import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS } from '../data/mockData';
@@ -75,6 +76,9 @@ interface AdminPanelModalProps {
   onClose: () => void;
   products: Product[];
   onUpdateProducts: (products: Product[]) => void;
+  onAddProduct?: (product: Product) => Promise<{ success: boolean; error?: string }>;
+  onEditProduct?: (product: Product) => Promise<{ success: boolean; error?: string }>;
+  onDeleteProduct?: (productId: string) => Promise<{ success: boolean; error?: string }>;
   orders: Order[];
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
   stores: Store[];
@@ -112,6 +116,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onClose,
   products,
   onUpdateProducts,
+  onAddProduct,
+  onEditProduct,
+  onDeleteProduct,
   orders,
   onUpdateOrderStatus,
   stores,
@@ -278,6 +285,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [formDescription, setFormDescription] = useState('');
   const [formTags, setFormTags] = useState<string>('Best Seller');
   const [formConversions, setFormConversions] = useState<ProductUnitConversion[]>([]);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [productFeedback, setProductFeedback] = useState<{ type: 'success' | 'error'; message: string; isRlsError?: boolean } | null>(null);
 
   const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -636,7 +645,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setFormConversions(computeConversionChains(base, newConvs));
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const discount = formOriginalPrice > formPrice ? Math.round(((formOriginalPrice - formPrice) / formOriginalPrice) * 100) : 0;
     const tagList = formTags ? formTags.split(',').map(t => t.trim()) : [];
@@ -649,57 +658,121 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       }));
     const finalConversions = validConversions.length > 0 ? computeConversionChains(formUnit.trim() || 'Pcs', validConversions) : undefined;
 
-    if (editingProduct) {
-      const updated = products.map(p => {
-        if (p.id === editingProduct.id) {
-          return {
-            ...p,
-            name: formName,
-            brand: formBrand,
-            category: formCategory,
-            price: Number(formPrice),
-            originalPrice: Number(formOriginalPrice),
-            discountPercent: discount,
-            unit: formUnit,
-            stock: Number(formStock),
-            barcode: formBarcode,
-            image: formImage,
-            description: formDescription,
-            tags: tagList as any,
-            unitConversions: finalConversions,
-          };
+    setIsSavingProduct(true);
+    setProductFeedback(null);
+
+    try {
+      if (editingProduct) {
+        const updatedProd: Product = {
+          ...editingProduct,
+          name: formName,
+          brand: formBrand,
+          category: formCategory,
+          price: Number(formPrice),
+          originalPrice: Number(formOriginalPrice),
+          discountPercent: discount,
+          unit: formUnit,
+          stock: Number(formStock),
+          barcode: formBarcode,
+          image: formImage,
+          description: formDescription,
+          tags: tagList as any,
+          unitConversions: finalConversions,
+        };
+
+        if (onEditProduct) {
+          const res = await onEditProduct(updatedProd);
+          if (!res.success && res.error) {
+            const isRls = res.error.toLowerCase().includes('violates row-level security') || res.error.toLowerCase().includes('rls');
+            setProductFeedback({
+              type: 'error',
+              message: `Perubahan tersimpan di browser, namun gagal disimpan ke Supabase: "${res.error}".`,
+              isRlsError: isRls,
+            });
+          } else {
+            setProductFeedback({
+              type: 'success',
+              message: isSupabaseConnected 
+                ? 'Perubahan info produk berhasil disimpan permanen ke Supabase Cloud!' 
+                : 'Perubahan produk berhasil disimpan!',
+            });
+          }
+        } else {
+          onUpdateProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
+          setProductFeedback({
+            type: 'success',
+            message: 'Perubahan produk berhasil disimpan!',
+          });
         }
-        return p;
+      } else {
+        const newProd: Product = {
+          id: `prod_${Date.now()}`,
+          name: formName,
+          brand: formBrand,
+          category: formCategory,
+          price: Number(formPrice),
+          originalPrice: Number(formOriginalPrice),
+          discountPercent: discount,
+          unit: formUnit,
+          stock: Number(formStock),
+          barcode: formBarcode || Math.floor(1000000000000 + Math.random() * 9000000000000).toString(),
+          image: formImage,
+          description: formDescription,
+          rating: 4.8,
+          soldCount: 0,
+          tags: tagList as any,
+          unitConversions: finalConversions,
+        };
+
+        if (onAddProduct) {
+          const res = await onAddProduct(newProd);
+          if (!res.success && res.error) {
+            const isRls = res.error.toLowerCase().includes('violates row-level security') || res.error.toLowerCase().includes('rls');
+            setProductFeedback({
+              type: 'error',
+              message: `Produk tersimpan di lokal, namun GAGAL disimpan ke Supabase Cloud: "${res.error}".`,
+              isRlsError: isRls,
+            });
+          } else {
+            setProductFeedback({
+              type: 'success',
+              message: isSupabaseConnected 
+                ? `Produk "${newProd.name}" berhasil ditambahkan dan tersimpan permanen ke Supabase Cloud!` 
+                : `Produk "${newProd.name}" berhasil ditambahkan ke katalog lokal!`,
+            });
+          }
+        } else {
+          onUpdateProducts([newProd, ...products]);
+          setProductFeedback({
+            type: 'success',
+            message: `Produk "${newProd.name}" berhasil ditambahkan!`,
+          });
+        }
+      }
+      setIsAddingProduct(false);
+      setEditingProduct(null);
+    } catch (err: any) {
+      setProductFeedback({
+        type: 'error',
+        message: `Gagal menyimpan produk: ${err.message || err}`,
       });
-      onUpdateProducts(updated);
-    } else {
-      const newProd: Product = {
-        id: `prod_${Date.now()}`,
-        name: formName,
-        brand: formBrand,
-        category: formCategory,
-        price: Number(formPrice),
-        originalPrice: Number(formOriginalPrice),
-        discountPercent: discount,
-        unit: formUnit,
-        stock: Number(formStock),
-        barcode: formBarcode || Math.floor(1000000000000 + Math.random() * 9000000000000).toString(),
-        image: formImage,
-        description: formDescription,
-        rating: 4.8,
-        soldCount: 0,
-        tags: tagList as any,
-        unitConversions: finalConversions,
-      };
-      onUpdateProducts([newProd, ...products]);
+    } finally {
+      setIsSavingProduct(false);
     }
-    setIsAddingProduct(false);
-    setEditingProduct(null);
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     if (window.confirm('Yakin ingin menghapus produk ini dari katalog?')) {
-      onUpdateProducts(products.filter(p => p.id !== id));
+      if (onDeleteProduct) {
+        await onDeleteProduct(id);
+      } else {
+        onUpdateProducts(products.filter(p => p.id !== id));
+      }
+      setProductFeedback({
+        type: 'success',
+        message: 'Produk berhasil dihapus dari katalog.',
+      });
+      setTimeout(() => setProductFeedback(null), 4000);
     }
   };
 
@@ -1419,6 +1492,49 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {/* TAB 1: PRODUCTS MANAGEMENT */}
           {activeTab === 'products' && (
             <div className="space-y-4">
+              {productFeedback && (
+                <div className={`p-4 rounded-2xl text-xs font-semibold flex items-start justify-between gap-3 shadow-2xs transition-all ${
+                  productFeedback.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' 
+                    : 'bg-amber-50 text-amber-950 border border-amber-300'
+                }`}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      {productFeedback.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      )}
+                      <span className="font-bold">{productFeedback.message}</span>
+                    </div>
+                    {productFeedback.isRlsError && (
+                      <p className="text-[11px] text-amber-800 font-normal pl-6">
+                        Penyebab: Supabase Row Level Security (RLS) masih mengunci izin INSERT/UPDATE pada tabel <code>products</code>. Buka modal Supabase lalu jalankan script SQL perbaikan izin RLS.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {productFeedback.isRlsError && (
+                      <button
+                        type="button"
+                        onClick={onOpenSupabaseModal}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-[11px] shadow-sm flex items-center gap-1"
+                      >
+                        <Database className="w-3 h-3" />
+                        <span>Perbaiki Izin RLS</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setProductFeedback(null)}
+                      className="text-stone-400 hover:text-stone-700 text-xs px-1.5 py-0.5"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {isAddingProduct ? (
                 /* Add / Edit Product Form */
                 <form onSubmit={handleSaveProduct} className="bg-stone-50 border border-stone-200 rounded-3xl p-5 space-y-4">
@@ -1902,10 +2018,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                      disabled={isSavingProduct}
+                      className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
                     >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>{editingProduct ? 'Simpan Perubahan' : 'Tambahkan Produk'}</span>
+                      {isSavingProduct ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {isSavingProduct
+                          ? 'Menyimpan...'
+                          : editingProduct
+                          ? 'Simpan Perubahan'
+                          : 'Tambahkan Produk'}
+                      </span>
                     </button>
                   </div>
                 </form>

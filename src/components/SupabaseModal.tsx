@@ -21,6 +21,7 @@ import {
   seedDataToSupabase 
 } from '../lib/supabase';
 import { SUPABASE_SQL_SCHEMA, SUPABASE_RLS_FIX_SQL } from '../lib/supabaseSchema';
+import { Product, Store, Category, Voucher } from '../types';
 
 interface SupabaseModalProps {
   isOpen: boolean;
@@ -28,6 +29,12 @@ interface SupabaseModalProps {
   isSupabaseConnected: boolean;
   onConnectionChange: (status: boolean) => void;
   onRefreshData: () => void;
+  currentData?: {
+    products?: Product[];
+    stores?: Store[];
+    categories?: Category[];
+    vouchers?: Voucher[];
+  };
 }
 
 export const SupabaseModal: React.FC<SupabaseModalProps> = ({
@@ -36,6 +43,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
   isSupabaseConnected,
   onConnectionChange,
   onRefreshData,
+  currentData,
 }) => {
   if (!isOpen) return null;
 
@@ -59,12 +67,15 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
     setIsTesting(false);
     setTestResult(res);
     onConnectionChange(res.success);
+    if (res.success) {
+      onRefreshData();
+    }
   };
 
   const handleSeedData = async () => {
     setIsSeeding(true);
     setSeedResult(null);
-    const res = await seedDataToSupabase();
+    const res = await seedDataToSupabase(currentData);
     setIsSeeding(false);
     setSeedResult(res);
     if (res.success) {

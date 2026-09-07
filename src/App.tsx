@@ -41,6 +41,7 @@ import {
 import { 
   Product, 
   Store, 
+  Category,
   CartItem, 
   Voucher, 
   Address, 
@@ -66,7 +67,14 @@ import {
   getSupabase, 
   testSupabaseConnection, 
   syncOrderToSupabase, 
-  fetchProductsFromSupabase 
+  fetchProductsFromSupabase,
+  fetchStoresFromSupabase,
+  fetchCategoriesFromSupabase,
+  fetchVouchersFromSupabase,
+  saveProductToSupabase,
+  deleteProductFromSupabase,
+  saveStoreToSupabase,
+  saveVoucherToSupabase
 } from './lib/supabase';
 import { 
   Zap, 
@@ -109,7 +117,7 @@ export default function App() {
   });
   const [stores, setStores] = useState<Store[]>(INITIAL_STORES);
   const [currentStore, setCurrentStore] = useState<Store>(INITIAL_STORES[0]);
-  const [categories] = useState(CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [vouchers, setVouchers] = useState<Voucher[]>(() => {
     const saved = localStorage.getItem(STORAGE_VOUCHERS_KEY);
     return saved ? JSON.parse(saved) : VOUCHERS;
@@ -207,19 +215,154 @@ export default function App() {
   // Supabase State
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
+  // Load all live catalog data from Supabase
+  const loadAllFromSupabase = async () => {
+    try {
+      const [dbProducts, dbStores, dbCategories, dbVouchers] = await Promise.all([
+        fetchProductsFromSupabase(),
+        fetchStoresFromSupabase(),
+        fetchCategoriesFromSupabase(),
+        fetchVouchersFromSupabase(),
+      ]);
+
+      if (dbProducts && dbProducts.length > 0) {
+        setProducts((prevProducts) => {
+          const dbIds = new Set(dbProducts.map((p) => p.id));
+          // Pertahankan produk yang baru saja ditambah di lokal yang belum ada di Supabase
+          const localOnly = prevProducts.filter((p) => !dbIds.has(p.id));
+
+          // Auto-sync produk lokal ke Supabase di background agar tidak pernah hilang
+          if (localOnly.length > 0) {
+            localOnly.forEach((p) => {
+              saveProductToSupabase(p).catch(() => {});
+            });
+          }
+
+          const formattedDb = dbProducts.map((p) => ({
+            ...p,
+            image: formatImageUrl(p.image),
+          }));
+
+          return [...localOnly, ...formattedDb];
+        });
+      }
+      if (dbStores && dbStores.length > 0) {
+        setStores((prevStores) => {
+          const dbIds = new Set(dbStores.map((s) => s.id));
+          const localOnly = prevStores.filter((s) => !dbIds.has(s.id));
+          return [...localOnly, ...dbStores];
+        });
+        setCurrentStore((prev) => dbStores.find((s) => s.id === prev.id) || dbStores[0]);
+      }
+      if (dbCategories && dbCategories.length > 0) {
+        setCategories(dbCategories);
+      }
+      if (dbVouchers && dbVouchers.length > 0) {
+        setVouchers((prevVouchers) => {
+          const dbIds = new Set(dbVouchers.map((v) => v.id));
+          const localOnly = prevVouchers.filter((v) => !dbIds.has(v.id));
+          return [...localOnly, ...dbVouchers];
+        });
+      }
+    } catch (e) {
+      console.warn('Gagal memuat data dari Supabase:', e);
+    }
+  };
+
   // Check Supabase connection on load
   useEffect(() => {
     testSupabaseConnection().then((res) => {
       setIsSupabaseConnected(res.success);
       if (res.success) {
-        fetchProductsFromSupabase().then((dbProducts) => {
-          if (dbProducts && dbProducts.length > 0) {
-            setProducts(dbProducts);
-          }
-        });
+        loadAllFromSupabase();
       }
     });
   }, []);
+
+  // CRUD Produk Terjamin Persistensinya
+  const handleAddProduct = async (newProd: Product): Promise<{ success: boolean; error?: string }> => {
+    // 1. Simpan langsung ke state produk lokal
+    setProducts((prev) => [newProd, ...prev]);
+
+    // 2. Langsung simpan ke localStorage secara sinkron
+    try {
+      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+      const list: Product[] = saved ? JSON.parse(saved) : products;
+      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify([newProd, ...list.filter(p => p.id !== newProd.id)]));
+    } catch (err) {
+      console.warn('Gagal simpan produk baru ke localStorage:', err);
+    }
+
+    // 3. Simpan ke Supabase jika terhubung
+    if (isSupabaseConnected) {
+      const res = await saveProductToSupabase(newProd);
+      return res;
+    }
+    return { success: true };
+  };
+
+  const handleEditProduct = async (updatedProd: Product): Promise<{ success: boolean; error?: string }> => {
+    setProducts((prev) => prev.map((p) => (p.id === updatedProd.id ? updatedProd : p)));
+
+    try {
+      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+      const list: Product[] = saved ? JSON.parse(saved) : products;
+      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(list.map(p => p.id === updatedProd.id ? updatedProd : p)));
+    } catch (err) {
+      console.warn('Gagal update produk di localStorage:', err);
+    }
+
+    if (isSupabaseConnected) {
+      const res = await saveProductToSupabase(updatedProd);
+      return res;
+    }
+    return { success: true };
+  };
+
+  const handleDeleteProduct = async (productId: string): Promise<{ success: boolean; error?: string }> => {
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+
+    try {
+      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+      const list: Product[] = saved ? JSON.parse(saved) : products;
+      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(list.filter(p => p.id !== productId)));
+    } catch (err) {
+      console.warn('Gagal hapus produk di localStorage:', err);
+    }
+
+    if (isSupabaseConnected) {
+      const res = await deleteProductFromSupabase(productId);
+      return res;
+    }
+    return { success: true };
+  };
+
+  const handleUpdateProducts = (newProducts: Product[]) => {
+    setProducts(newProducts);
+    if (isSupabaseConnected) {
+      newProducts.forEach((p) => {
+        saveProductToSupabase(p).catch(() => {});
+      });
+    }
+  };
+
+  const handleUpdateStores = (newStores: Store[]) => {
+    setStores(newStores);
+    if (isSupabaseConnected) {
+      newStores.forEach((s) => {
+        saveStoreToSupabase(s).catch(() => {});
+      });
+    }
+  };
+
+  const handleUpdateVouchers = (newVouchers: Voucher[]) => {
+    setVouchers(newVouchers);
+    if (isSupabaseConnected) {
+      newVouchers.forEach((v) => {
+        saveVoucherToSupabase(v).catch(() => {});
+      });
+    }
+  };
 
   // Save Cart to LocalStorage
   useEffect(() => {
@@ -249,9 +392,23 @@ export default function App() {
     }
   }, [vouchers]);
 
-  // Save Products to LocalStorage
+  // Save Products to LocalStorage with Quota Safe Guard
   useEffect(() => {
-    localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+    try {
+      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+    } catch (e) {
+      console.warn('Storage quota warning on saving products:', e);
+      try {
+        // Fallback jika foto upload Base64 terlalu besar untuk batas 5MB localStorage
+        const lean = products.map(p => ({
+          ...p,
+          image: p.image && p.image.length > 3000 ? getProductFallbackImage(p.category) : p.image
+        }));
+        localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(lean));
+      } catch (err) {
+        console.error('Failed to save products to localStorage:', err);
+      }
+    }
   }, [products]);
 
   // Count products by category
@@ -856,12 +1013,14 @@ export default function App() {
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
         isSupabaseConnected={isSupabaseConnected}
-        onConnectionChange={setIsSupabaseConnected}
-        onRefreshData={() => {
-          fetchProductsFromSupabase().then((res) => {
-            if (res) setProducts(res);
-          });
+        onConnectionChange={(connected) => {
+          setIsSupabaseConnected(connected);
+          if (connected) {
+            loadAllFromSupabase();
+          }
         }}
+        onRefreshData={loadAllFromSupabase}
+        currentData={{ products, stores, categories, vouchers }}
       />
 
       {/* 8. Admin & POS Store Management Panel Modal */}
@@ -869,15 +1028,18 @@ export default function App() {
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
         products={products}
-        onUpdateProducts={setProducts}
+        onUpdateProducts={handleUpdateProducts}
+        onAddProduct={handleAddProduct}
+        onEditProduct={handleEditProduct}
+        onDeleteProduct={handleDeleteProduct}
         orders={orders}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         stores={stores}
         currentStore={currentStore}
         onSelectStore={setCurrentStore}
-        onUpdateStores={setStores}
+        onUpdateStores={handleUpdateStores}
         vouchers={vouchers}
-        onUpdateVouchers={setVouchers}
+        onUpdateVouchers={handleUpdateVouchers}
         isSupabaseConnected={isSupabaseConnected}
         receiptConfigs={receiptConfigs}
         onUpdateReceiptConfigs={setReceiptConfigs}

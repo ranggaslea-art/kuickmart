@@ -78,16 +78,26 @@ export async function testSupabaseConnection(url?: string, anonKey?: string): Pr
   }
 }
 
-// Seed initial catalog data to Supabase
-export async function seedDataToSupabase(): Promise<{ success: boolean; message: string; count?: number }> {
+// Seed initial or current catalog data to Supabase
+export async function seedDataToSupabase(customData?: {
+  products?: Product[];
+  stores?: Store[];
+  categories?: Category[];
+  vouchers?: Voucher[];
+}): Promise<{ success: boolean; message: string; count?: number }> {
   const supabase = getSupabase();
   if (!supabase) {
     return { success: false, message: 'Supabase client belum terhubung. Konfigurasi kredensial terlebih dahulu.' };
   }
 
+  const storesToSeed = customData?.stores && customData.stores.length > 0 ? customData.stores : INITIAL_STORES;
+  const categoriesToSeed = customData?.categories && customData.categories.length > 0 ? customData.categories : CATEGORIES;
+  const vouchersToSeed = customData?.vouchers && customData.vouchers.length > 0 ? customData.vouchers : VOUCHERS;
+  const productsToSeed = customData?.products && customData.products.length > 0 ? customData.products : PRODUCTS;
+
   try {
     // 1. Seed Stores
-    const storesPayload = INITIAL_STORES.map((s) => ({
+    const storesPayload = storesToSeed.map((s) => ({
       id: s.id,
       name: s.name,
       code: s.code,
@@ -106,7 +116,7 @@ export async function seedDataToSupabase(): Promise<{ success: boolean; message:
     await supabase.from('stores').upsert(storesPayload, { onConflict: 'id' });
 
     // 2. Seed Categories
-    const categoriesPayload = CATEGORIES.map((c) => ({
+    const categoriesPayload = categoriesToSeed.map((c) => ({
       id: c.id,
       name: c.name,
       slug: c.slug,
@@ -117,7 +127,7 @@ export async function seedDataToSupabase(): Promise<{ success: boolean; message:
     await supabase.from('categories').upsert(categoriesPayload, { onConflict: 'id' });
 
     // 3. Seed Vouchers
-    const vouchersPayload = VOUCHERS.map((v) => ({
+    const vouchersPayload = vouchersToSeed.map((v) => ({
       id: v.id,
       code: v.code,
       title: v.title,
@@ -131,7 +141,7 @@ export async function seedDataToSupabase(): Promise<{ success: boolean; message:
     await supabase.from('vouchers').upsert(vouchersPayload, { onConflict: 'id' });
 
     // 4. Seed Products
-    const productsPayload = PRODUCTS.map((p) => ({
+    const productsPayload = productsToSeed.map((p) => ({
       id: p.id,
       name: p.name,
       brand: p.brand,
@@ -156,8 +166,8 @@ export async function seedDataToSupabase(): Promise<{ success: boolean; message:
 
     return { 
       success: true, 
-      message: `Berhasil sinkronisasi ${PRODUCTS.length} produk & master data ke Supabase!`,
-      count: PRODUCTS.length 
+      message: `Berhasil sinkronisasi ${productsToSeed.length} produk & data master toko ke Supabase!`,
+      count: productsToSeed.length 
     };
   } catch (err: any) {
     return { success: false, message: `Gagal sinkron data: ${err.message || err}` };
@@ -262,3 +272,209 @@ export async function fetchProductsFromSupabase(): Promise<Product[] | null> {
     return null;
   }
 }
+
+// Fetch stores from Supabase
+export async function fetchStoresFromSupabase(): Promise<Store[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.from('stores').select('*').order('name');
+    if (error || !data || data.length === 0) return null;
+
+    return data.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      address: row.address,
+      city: row.city,
+      distanceKm: Number(row.distance_km || 1.0),
+      is24Hours: Boolean(row.is_24_hours),
+      isOpen: Boolean(row.is_open),
+      openHours: row.open_hours || '24 Jam Nonstop',
+      phone: row.phone,
+      readyForPickup: Boolean(row.ready_for_pickup),
+      readyForDelivery: Boolean(row.ready_for_delivery),
+      deliveryFee: Number(row.delivery_fee || 6000),
+      minOrder: Number(row.min_order || 15000),
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+// Fetch categories from Supabase
+export async function fetchCategoriesFromSupabase(): Promise<Category[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.from('categories').select('*').order('name');
+    if (error || !data || data.length === 0) return null;
+
+    return data.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      icon: row.icon,
+      badge: row.badge || undefined,
+      color: row.color || undefined,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+// Fetch vouchers from Supabase
+export async function fetchVouchersFromSupabase(): Promise<Voucher[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.from('vouchers').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) return null;
+
+    return data.map((row: any) => ({
+      id: row.id,
+      code: row.code,
+      title: row.title,
+      discountAmount: Number(row.discount_amount),
+      type: row.type,
+      minSpend: Number(row.min_spend || 0),
+      maxDiscount: row.max_discount ? Number(row.max_discount) : undefined,
+      validUntil: row.valid_until,
+      description: row.description,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+// Save single product to Supabase
+export async function saveProductToSupabase(product: Product): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabase();
+  if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
+  try {
+    const payload = {
+      id: product.id,
+      name: product.name || 'Produk Baru',
+      brand: product.brand || 'Umum',
+      category_slug: product.category || 'sembako-dapur',
+      subcategory: product.subcategory || null,
+      price: Number(product.price) || 0,
+      original_price: product.originalPrice ? Number(product.originalPrice) : null,
+      discount_percent: Number(product.discountPercent) || 0,
+      unit: product.unit || 'Pcs',
+      image: product.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400',
+      stock: Number(product.stock) || 0,
+      rating: Number(product.rating) || 4.8,
+      sold_count: Number(product.soldCount) || 0,
+      tags: Array.isArray(product.tags) ? product.tags : [],
+      description: product.description || '',
+      barcode: product.barcode || '',
+      is_popular: Boolean(product.isPopular),
+    };
+    const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('Supabase upsert product error:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Supabase save product exception:', err);
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+// Delete product from Supabase
+export async function deleteProductFromSupabase(productId: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabase();
+  if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
+  try {
+    const { error } = await supabase.from('products').delete().eq('id', productId);
+    if (error) {
+      console.error('Supabase delete product error:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Supabase delete product exception:', err);
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+// Save single store to Supabase
+export async function saveStoreToSupabase(store: Store): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: store.id,
+      name: store.name,
+      code: store.code,
+      address: store.address,
+      city: store.city,
+      distance_km: store.distanceKm,
+      is_24_hours: store.is24Hours,
+      is_open: store.isOpen,
+      open_hours: store.openHours,
+      phone: store.phone,
+      ready_for_pickup: store.readyForPickup,
+      ready_for_delivery: store.readyForDelivery,
+      delivery_fee: store.deliveryFee,
+      min_order: store.minOrder,
+    };
+    const { error } = await supabase.from('stores').upsert(payload, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// Delete store from Supabase
+export async function deleteStoreFromSupabase(storeId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('stores').delete().eq('id', storeId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// Save voucher to Supabase
+export async function saveVoucherToSupabase(voucher: Voucher): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: voucher.id,
+      code: voucher.code,
+      title: voucher.title,
+      discount_amount: voucher.discountAmount,
+      type: voucher.type,
+      min_spend: voucher.minSpend,
+      max_discount: voucher.maxDiscount || null,
+      valid_until: voucher.validUntil,
+      description: voucher.description,
+    };
+    const { error } = await supabase.from('vouchers').upsert(payload, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// Delete voucher from Supabase
+export async function deleteVoucherFromSupabase(voucherId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('vouchers').delete().eq('id', voucherId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
