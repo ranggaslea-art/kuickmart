@@ -1046,13 +1046,6 @@ export default function App() {
             }}
           />
 
-          {/* Real-Time Visitor Counter & Origin Stats Widget */}
-          <VisitorCounterWidget 
-            visitorId={visitorId} 
-            staffUsers={staffUsers}
-            onOpenLiveTrafficModal={() => setIsLiveTrafficModalOpen(true)}
-          />
-
           {/* Quick Category Bar */}
           <CategoryBar
             categories={categories}
@@ -1236,6 +1229,13 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* Real-Time Visitor Counter & Origin Stats Widget (Di Bawah Halaman Indeks, Ukuran 1/4) */}
+          <VisitorCounterWidget 
+            visitorId={visitorId} 
+            staffUsers={staffUsers}
+            onOpenLiveTrafficModal={() => setIsLiveTrafficModalOpen(true)}
+          />
 
           {/* Floating Cart Button on Mobile */}
           {cartItems.length > 0 && (
