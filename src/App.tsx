@@ -39,6 +39,10 @@ import {
   AdminPanelModal 
 } from './components/AdminPanelModal';
 import { 
+  VisitorCounterWidget 
+} from './components/VisitorCounterWidget';
+import { cleanReceiptText } from './utils/sanitizeReceipt';
+import { 
   Product, 
   Store, 
   Category,
@@ -139,6 +143,24 @@ const STORAGE_STAFF_USERS_KEY = 'kuickmart_staff_users';
 const STORAGE_MY_ORDER_IDS_KEY = 'nusamart_my_order_ids';
 const STORAGE_VISITOR_ID_KEY = 'nusamart_visitor_id';
 
+const sanitizeReceiptConfigs = (configs: ReceiptInfo[]): ReceiptInfo[] => {
+  return configs.map((c) => ({
+    ...c,
+    address: cleanReceiptText(c.address),
+    city: cleanReceiptText(c.city),
+    profileName: cleanReceiptText(c.profileName),
+    storeName: cleanReceiptText(c.storeName),
+  }));
+};
+
+const sanitizeStores = (list: Store[]): Store[] => {
+  return list.map((s) => ({
+    ...s,
+    address: cleanReceiptText(s.address),
+    city: cleanReceiptText(s.city),
+  }));
+};
+
 export default function App() {
   // Visitor ID & Visitor-specific Orders
   const [visitorId] = useState<string>(() => {
@@ -183,8 +205,19 @@ export default function App() {
       return PRODUCTS;
     }
   });
-  const [stores, setStores] = useState<Store[]>(INITIAL_STORES);
-  const [currentStore, setCurrentStore] = useState<Store>(INITIAL_STORES[0]);
+  const [stores, setStores] = useState<Store[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_STORES_KEY);
+      const list = saved ? JSON.parse(saved) : INITIAL_STORES;
+      return sanitizeStores(list);
+    } catch {
+      return sanitizeStores(INITIAL_STORES);
+    }
+  });
+  const [currentStore, setCurrentStore] = useState<Store>(() => {
+    const list = sanitizeStores(INITIAL_STORES);
+    return list[0];
+  });
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [vouchers, setVouchers] = useState<Voucher[]>(() => {
     const saved = localStorage.getItem(STORAGE_VOUCHERS_KEY);
@@ -293,9 +326,10 @@ export default function App() {
   const [receiptConfigs, setReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_RECEIPT_CONFIGS_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_RECEIPT_CONFIGS;
+      const list = saved ? JSON.parse(saved) : INITIAL_RECEIPT_CONFIGS;
+      return sanitizeReceiptConfigs(list);
     } catch {
-      return INITIAL_RECEIPT_CONFIGS;
+      return sanitizeReceiptConfigs(INITIAL_RECEIPT_CONFIGS);
     }
   });
 
@@ -917,6 +951,23 @@ export default function App() {
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const totalCartPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
+  // Kembali ke halaman index / beranda utama saat logo diklik
+  const handleGoHome = () => {
+    setIsViewingOrderHistory(false);
+    setSearchQuery('');
+    setSelectedCategory('all');
+    setActiveTagFilter(null);
+    setSelectedProductDetail(null);
+    setIsCartOpen(false);
+    setIsCheckoutOpen(false);
+    setTrackedOrder(null);
+    setIsAdminPanelOpen(false);
+    setIsMemberModalOpen(false);
+    setIsStoreSelectorOpen(false);
+    setIsSupabaseModalOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen w-full min-w-full flex-1 bg-[#F8F9FA] text-[#1E2022] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
       {/* Sticky Header */}
@@ -942,6 +993,7 @@ export default function App() {
         brandConfig={brandConfig}
         isSyncing={isSyncing}
         onRefreshData={loadAllFromSupabase}
+        onGoHome={handleGoHome}
       />
 
       {/* Main View Container */}
@@ -987,6 +1039,9 @@ export default function App() {
               setIsAdminPanelOpen(true);
             }}
           />
+
+          {/* Real-Time Visitor Counter & Origin Stats Widget */}
+          <VisitorCounterWidget visitorId={visitorId} />
 
           {/* Quick Category Bar */}
           <CategoryBar

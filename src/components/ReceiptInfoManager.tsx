@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ReceiptInfo, Store } from '../types';
 import { formatRupiah } from '../utils/formatters';
+import { cleanReceiptText } from '../utils/sanitizeReceipt';
 
 interface ReceiptInfoManagerProps {
   receiptConfigs: ReceiptInfo[];
@@ -80,8 +81,8 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     setHeaderBrand('NUSA MART EXPRESS');
     setSubHeader('Minimarket & Grosir Kebutuhan Sehari-Hari');
     setStoreName(activeStore ? activeStore.name : 'KuickMart Express - Cabang Baru');
-    setAddress(activeStore ? activeStore.address : 'Jl. Sudirman No. 10');
-    setCity(activeStore ? activeStore.city : 'Jakarta');
+    setAddress(activeStore ? cleanReceiptText(activeStore.address) : 'Jl. Sudirman No. 10');
+    setCity(activeStore ? cleanReceiptText(activeStore.city) : '');
     setPhone(activeStore ? activeStore.phone : '021-5551234');
     setTaxIdOrNpwp('NPWP: 01.345.678.9-012.000');
     setWebsiteOrSocial('www.nusamart.id • IG: @nusamartexpress');
@@ -104,8 +105,8 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     setHeaderBrand(item.headerBrand);
     setSubHeader(item.subHeader || '');
     setStoreName(item.storeName);
-    setAddress(item.address);
-    setCity(item.city || '');
+    setAddress(cleanReceiptText(item.address));
+    setCity(cleanReceiptText(item.city) || '');
     setPhone(item.phone);
     setTaxIdOrNpwp(item.taxIdOrNpwp || '');
     setWebsiteOrSocial(item.websiteOrSocial || '');
@@ -491,7 +492,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                     required
                     value={address}
                     onChange={e => setAddress(e.target.value)}
-                    placeholder="Contoh: Jl. Jendral Sudirman No. 18, Menteng, Jakarta Pusat"
+                    placeholder="Contoh: Jl. Jendral Sudirman No. 18, Menteng"
                     className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-stone-50/50 font-medium text-stone-900 focus:bg-white focus:ring-2 focus:ring-blue-200"
                   />
                 </div>
@@ -776,7 +777,10 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
 
                       <div className="text-[11px] text-stone-500 flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                        <span className="line-clamp-1">{item.address}</span>
+                        <span className="line-clamp-1">
+                          {cleanReceiptText(item.address)}
+                          {cleanReceiptText(item.city) ? `, ${cleanReceiptText(item.city)}` : ''}
+                        </span>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-600 pt-1">
@@ -912,8 +916,8 @@ export const ReceiptVisualCard: React.FC<ReceiptVisualCardProps> = ({ receipt, i
 
         {/* Address and Phone */}
         <p className="text-[10px] text-stone-500 leading-relaxed">
-          {receipt.address || 'Jl. Jendral Sudirman No. 18, Menteng'}
-          {receipt.city ? `, ${receipt.city}` : ''}
+          {cleanReceiptText(receipt.address) || 'Jl. Jendral Sudirman No. 18, Menteng'}
+          {cleanReceiptText(receipt.city) ? `, ${cleanReceiptText(receipt.city)}` : ''}
           {receipt.phone ? ` • Telp: ${receipt.phone}` : ''}
         </p>
 

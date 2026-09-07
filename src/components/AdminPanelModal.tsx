@@ -882,7 +882,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setStoreName('KuickMart Express - Cabang Baru');
     setStoreCode(`KM-${Math.floor(100 + Math.random() * 900)}`);
     setStoreAddress('Jl. Raya Utama No. 10');
-    setStoreCity('Jakarta');
+    setStoreCity('');
     setStorePhone('021-88990011');
     setStoreOpenHours('06.00 - 23.00 WIB');
     setStoreDistanceKm(1.2);
@@ -2587,7 +2587,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           required
                           value={storeCity}
                           onChange={e => setStoreCity(e.target.value)}
-                          placeholder="Contoh: Jakarta Pusat / Jakarta Selatan"
+                          placeholder="Contoh: Pangandaran / Bandung"
                           className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl bg-white font-medium text-stone-900 focus:ring-2 focus:ring-purple-200"
                         />
                       </div>
@@ -2601,7 +2601,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           required
                           value={storeAddress}
                           onChange={e => setStoreAddress(e.target.value)}
-                          placeholder="Contoh: Jl. Jendral Sudirman No. 18, Menteng, Jakarta Pusat"
+                          placeholder="Contoh: Jl. Jendral Sudirman No. 18, Menteng"
                           className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl bg-white font-medium text-stone-900 focus:ring-2 focus:ring-purple-200"
                         />
                       </div>

@@ -43,6 +43,7 @@ interface HeaderProps {
   brandConfig?: BrandHeaderFooterConfig;
   isSyncing?: boolean;
   onRefreshData?: () => void;
+  onGoHome?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -67,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   brandConfig,
   isSyncing,
   onRefreshData,
+  onGoHome,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -148,7 +150,18 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="w-full flex items-center justify-between gap-3 sm:gap-6">
           {/* Logo Brand */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-2 cursor-pointer">
+            <div 
+              onClick={onGoHome}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  onGoHome?.();
+                }
+              }}
+              title="Klik untuk kembali ke Beranda / Halaman Utama"
+              className="flex items-center gap-2 cursor-pointer select-none group hover:opacity-95 active:scale-98 transition-all"
+            >
               {logoImageUrl ? (
                 <img
                   src={logoImageUrl}

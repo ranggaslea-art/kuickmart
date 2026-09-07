@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Order, OrderStatus, ReceiptInfo, CourierInfo } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
+import { cleanReceiptText } from '../utils/sanitizeReceipt';
 import { cleanPhoneNumber, generateOrderWhatsAppMessage, getWhatsAppChatUrl, openWhatsAppDirect } from '../utils/whatsappHelper';
 
 interface OrderTrackerModalProps {
@@ -683,8 +684,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                     {resolvedReceipt.storeName || order.store.name}
                   </p>
                   <p className="text-[10px] text-stone-500 leading-relaxed">
-                    {resolvedReceipt.address || order.store.address}
-                    {resolvedReceipt.city ? `, ${resolvedReceipt.city}` : ''}
+                    {cleanReceiptText(resolvedReceipt.address || order.store.address)}
+                    {cleanReceiptText(resolvedReceipt.city) ? `, ${cleanReceiptText(resolvedReceipt.city)}` : ''}
                     {resolvedReceipt.phone ? ` • Telp: ${resolvedReceipt.phone}` : (order.store.phone ? ` • Telp: ${order.store.phone}` : '')}
                   </p>
 
