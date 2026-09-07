@@ -71,10 +71,12 @@ import {
   fetchStoresFromSupabase,
   fetchCategoriesFromSupabase,
   fetchVouchersFromSupabase,
+  fetchOrdersFromSupabase,
   saveProductToSupabase,
   deleteProductFromSupabase,
   saveStoreToSupabase,
-  saveVoucherToSupabase
+  saveVoucherToSupabase,
+  updateProductSalesAndStockInSupabase
 } from './lib/supabase';
 import { 
   Zap, 
@@ -218,11 +220,12 @@ export default function App() {
   // Load all live catalog data from Supabase
   const loadAllFromSupabase = async () => {
     try {
-      const [dbProducts, dbStores, dbCategories, dbVouchers] = await Promise.all([
+      const [dbProducts, dbStores, dbCategories, dbVouchers, dbOrders] = await Promise.all([
         fetchProductsFromSupabase(),
         fetchStoresFromSupabase(),
         fetchCategoriesFromSupabase(),
         fetchVouchersFromSupabase(),
+        fetchOrdersFromSupabase(),
       ]);
 
       if (dbProducts && dbProducts.length > 0) {
@@ -262,6 +265,19 @@ export default function App() {
           const dbIds = new Set(dbVouchers.map((v) => v.id));
           const localOnly = prevVouchers.filter((v) => !dbIds.has(v.id));
           return [...localOnly, ...dbVouchers];
+        });
+      }
+      if (dbOrders && dbOrders.length > 0) {
+        setOrders((prevOrders) => {
+          const dbIds = new Set(dbOrders.map((o) => o.id));
+          const localOnly = prevOrders.filter((o) => !dbIds.has(o.id));
+          // Auto sync pesanan lokal ke Supabase jika belum tersimpan di cloud
+          if (localOnly.length > 0) {
+            localOnly.forEach((o) => {
+              syncOrderToSupabase(o).catch(() => {});
+            });
+          }
+          return [...localOnly, ...dbOrders];
         });
       }
     } catch (e) {
@@ -534,6 +550,7 @@ export default function App() {
     setCartItems([]);
 
     // Deduct stock in base units based on items and conversion multipliers
+    const updatedProducts: Product[] = [];
     setProducts((prevProducts) =>
       prevProducts.map((p) => {
         const matchingItems = newOrder.items.filter((item) => item.product.id === p.id);
@@ -542,11 +559,13 @@ export default function App() {
             (sum, item) => sum + item.quantity * (item.conversionMultiplier || 1),
             0
           );
-          return {
+          const updated = {
             ...p,
             stock: Math.max(0, p.stock - totalDeduction),
-            soldCount: p.soldCount + totalDeduction,
+            soldCount: (p.soldCount || 0) + totalDeduction,
           };
+          updatedProducts.push(updated);
+          return updated;
         }
         return p;
       })
@@ -559,8 +578,19 @@ export default function App() {
       stamps: Math.min(5, prev.stamps + (newOrder.subtotal >= 50000 ? 1 : 0)),
     }));
 
-    // Sync to Supabase in background
-    syncOrderToSupabase(newOrder);
+    // Simpan pengurangan stok & penambahan barang terjual ke database Supabase
+    if (updatedProducts.length > 0) {
+      updatedProducts.forEach((p) => {
+        saveProductToSupabase(p).catch((err) => {
+          console.warn(`Gagal memperbarui stok/terjual ${p.name} ke database:`, err);
+        });
+      });
+    }
+
+    // Sync order beserta rincian barang terjual ke Supabase
+    syncOrderToSupabase(newOrder).catch((err) => {
+      console.warn('Gagal sinkronisasi transaksi pesanan ke Supabase:', err);
+    });
 
     // Open live tracker immediately
     setTrackedOrder(newOrder);

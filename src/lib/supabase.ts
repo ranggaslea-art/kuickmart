@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Product, Order, MemberProfile, Store, Category, Voucher } from '../types';
+import { Product, Order, MemberProfile, Store, Category, Voucher, CartItem } from '../types';
 import { PRODUCTS, INITIAL_STORES, CATEGORIES, VOUCHERS } from '../data/mockData';
 
 const STORAGE_KEY_URL = 'nusamart_supabase_url';
@@ -174,16 +174,34 @@ export async function seedDataToSupabase(customData?: {
   }
 }
 
-// Save order to Supabase
+// Save order to Supabase (Termasuk Menyimpan Rincian Barang yang Terjual & Mengurangi Stok)
 export async function syncOrderToSupabase(order: Order): Promise<{ success: boolean; error?: string }> {
   const supabase = getSupabase();
-  if (!supabase) return { success: false, error: 'Supabase not connected' };
+  if (!supabase) return { success: false, error: 'Supabase belum terhubung' };
 
   try {
-    const orderPayload = {
+    // 1. Pastikan toko terdaftar di Supabase agar foreign key store_id aman
+    if (order.store) {
+      await saveStoreToSupabase(order.store);
+    }
+
+    // 2. Simpan atau perbarui data barang yang terjual di tabel products Supabase
+    //    agar stok berkurang dan jumlah terjual (sold_count) bertambah permanen di database
+    for (const item of order.items) {
+      if (item.product) {
+        try {
+          await saveProductToSupabase(item.product);
+        } catch (e) {
+          console.warn('Gagal update produk terkait pesanan:', e);
+        }
+      }
+    }
+
+    // 3. Siapkan payload pesanan utama termasuk kolom items_json
+    const orderPayload: Record<string, any> = {
       id: order.id,
       order_number: order.orderNumber,
-      store_id: order.store.id,
+      store_id: order.store?.id || 'store_01',
       delivery_type: order.deliveryType,
       delivery_slot: order.deliverySlot || null,
       pickup_time: order.pickupTime || null,
@@ -212,31 +230,195 @@ export async function syncOrderToSupabase(order: Order): Promise<{ success: bool
       customer_notes: order.customerNotes || null,
       driver_json: order.driver || null,
       tracking_steps: order.trackingSteps,
+      items_json: order.items,
       created_at: order.createdAt,
     };
 
-    const { error: orderError } = await supabase.from('orders').upsert(orderPayload, { onConflict: 'id' });
+    let { error: orderError } = await supabase.from('orders').upsert(orderPayload, { onConflict: 'id' });
+    if (orderError && orderError.message?.toLowerCase().includes('items_json')) {
+      // Jika kolom items_json belum dieksekusi di database, fallback simpan tanpa kolom items_json
+      const { items_json, ...withoutItemsJson } = orderPayload;
+      const retry = await supabase.from('orders').upsert(withoutItemsJson, { onConflict: 'id' });
+      orderError = retry.error;
+    }
+
     if (orderError) throw orderError;
 
-    // Insert order items
-    const itemsPayload = order.items.map((item) => ({
-      order_id: order.id,
-      product_id: item.product.id,
-      product_name: item.product.name,
-      unit_price: item.product.price,
-      quantity: item.quantity,
-      subtotal: item.product.price * item.quantity,
-      notes: item.notes || null,
-    }));
+    // 4. Hapus data order_items sebelumnya (jika pesanan ini diupdate statusnya)
+    //    agar tidak terjadi duplikasi baris barang yang terjual
+    try {
+      await supabase.from('order_items').delete().eq('order_id', order.id);
+    } catch {
+      // Abaikan jika tabel order_items belum dibuat
+    }
+
+    // 5. Masukkan rincian item barang yang dibeli/terjual ke tabel order_items
+    const itemsPayload = order.items.map((item) => {
+      const generatedId = typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : `item_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+      return {
+        id: generatedId,
+        order_id: order.id,
+        product_id: item.product?.id || null,
+        product_name: item.product?.name || 'Barang Terjual',
+        unit_price: item.unitPrice || item.product?.price || 0,
+        quantity: item.quantity,
+        subtotal: (item.unitPrice || item.product?.price || 0) * item.quantity,
+        notes: item.notes || (item.selectedUnit ? `Satuan: ${item.selectedUnit}` : null),
+      };
+    });
 
     if (itemsPayload.length > 0) {
-      await supabase.from('order_items').insert(itemsPayload);
+      const { error: itemsErr } = await supabase.from('order_items').insert(itemsPayload);
+      if (itemsErr) {
+        console.warn('Peringatan saat insert ke order_items:', itemsErr.message);
+      }
     }
 
     return { success: true };
   } catch (err: any) {
     console.warn('Sync order error:', err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+// Update stok dan jumlah terjual produk langsung di Supabase
+export async function updateProductSalesAndStockInSupabase(
+  productId: string,
+  newStock: number,
+  newSoldCount: number
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabase();
+  if (!supabase) return { success: false, error: 'Supabase not connected' };
+
+  try {
+    const { error } = await supabase
+      .from('products')
+      .update({
+        stock: newStock,
+        sold_count: newSoldCount,
+      })
+      .eq('id', productId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.warn(`Update product stock & sales in Supabase failed for ${productId}:`, err);
     return { success: false, error: err.message };
+  }
+}
+
+// Fetch orders & barang terjual dari Supabase
+export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .order('created_at', { ascending: false });
+
+    if (ordersError) {
+      console.warn('Gagal memuat pesanan dari Supabase:', ordersError.message);
+      return null;
+    }
+
+    if (!ordersData || ordersData.length === 0) return [];
+
+    const stores = await fetchStoresFromSupabase();
+    const defaultStore = stores && stores.length > 0 ? stores[0] : null;
+
+    const parsedOrders: Order[] = ordersData.map((row: any) => {
+      // 1. Rekonstruksi rincian barang terjual
+      let items: CartItem[] = [];
+      if (Array.isArray(row.items_json) && row.items_json.length > 0) {
+        items = row.items_json;
+      } else if (Array.isArray(row.order_items) && row.order_items.length > 0) {
+        items = row.order_items.map((it: any): CartItem => ({
+          cartItemId: it.id,
+          product: {
+            id: it.product_id || `prod_${it.id}`,
+            name: it.product_name,
+            brand: 'Umum',
+            category: 'sembako-dapur',
+            price: Number(it.unit_price) || 0,
+            unit: 'Pcs',
+            image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400',
+            stock: 99,
+            rating: 4.8,
+            soldCount: 0,
+            description: '',
+            barcode: '',
+          },
+          quantity: Number(it.quantity) || 1,
+          notes: it.notes || undefined,
+          unitPrice: Number(it.unit_price) || 0,
+        }));
+      }
+
+      // 2. Rekonstruksi toko
+      const matchedStore = stores?.find((s) => s.id === row.store_id) || defaultStore || {
+        id: row.store_id || 'store_01',
+        name: 'Minimarket Terdekat',
+        code: 'STR-01',
+        address: 'Jl. Utama',
+        city: 'Kota',
+        distanceKm: 0.8,
+        is24Hours: true,
+        isOpen: true,
+        openHours: '24 Jam Nonstop',
+        phone: '08123456789',
+        readyForPickup: true,
+        readyForDelivery: true,
+        deliveryFee: Number(row.delivery_fee) || 6000,
+        minOrder: 15000,
+      };
+
+      return {
+        id: row.id,
+        orderNumber: row.order_number,
+        createdAt: row.created_at,
+        items,
+        store: matchedStore,
+        deliveryType: row.delivery_type || 'delivery',
+        deliverySlot: row.delivery_slot || undefined,
+        pickupTime: row.pickup_time || undefined,
+        address: row.address_json || undefined,
+        status: row.status,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status || 'paid',
+        subtotal: Number(row.subtotal) || 0,
+        deliveryFee: Number(row.delivery_fee) || 0,
+        discountAmount: Number(row.discount_amount) || 0,
+        pointsUsed: Number(row.points_used) || 0,
+        pointsEarned: Number(row.points_earned) || 0,
+        total: Number(row.total) || 0,
+        appliedVoucher: row.applied_voucher_code
+          ? {
+              id: 'v_app',
+              code: row.applied_voucher_code,
+              title: 'Voucher Promo',
+              discountAmount: Number(row.discount_amount) || 0,
+              type: 'fixed',
+              minSpend: 0,
+              validUntil: '2026-12-31',
+              description: 'Promo Diskon',
+            }
+          : undefined,
+        customerNotes: row.customer_notes || undefined,
+        customerLocation: row.customer_location || undefined,
+        driver: row.driver_json || undefined,
+        trackingSteps: Array.isArray(row.tracking_steps) ? row.tracking_steps : [],
+      };
+    });
+
+    return parsedOrders;
+  } catch (err: any) {
+    console.warn('Exception saat fetchOrdersFromSupabase:', err);
+    return null;
   }
 }
 

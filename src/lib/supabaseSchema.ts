@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     customer_notes TEXT,
     driver_json JSONB,
     tracking_steps JSONB DEFAULT '[]'::jsonb,
+    items_json JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -190,4 +191,7 @@ CREATE POLICY "Allow public read/write on orders" ON public.orders FOR ALL USING
 
 DROP POLICY IF EXISTS "Allow public read/write on order_items" ON public.order_items;
 CREATE POLICY "Allow public read/write on order_items" ON public.order_items FOR ALL USING (true) WITH CHECK (true);
+
+-- 2. Pastikan kolom items_json tersedia di tabel orders untuk menyimpan rincian barang terjual
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items_json JSONB DEFAULT '[]'::jsonb;
 `;

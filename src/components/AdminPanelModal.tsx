@@ -70,6 +70,7 @@ import {
 import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
+import { syncOrderToSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -287,6 +288,61 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [formConversions, setFormConversions] = useState<ProductUnitConversion[]>([]);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [productFeedback, setProductFeedback] = useState<{ type: 'success' | 'error'; message: string; isRlsError?: boolean } | null>(null);
+
+  // Orders Sync State & Handler
+  const [isSyncingOrders, setIsSyncingOrders] = useState(false);
+  const [orderSyncFeedback, setOrderSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleSyncAllOrdersToSupabase = async () => {
+    if (!isSupabaseConnected) {
+      setOrderSyncFeedback({
+        type: 'error',
+        message: 'Supabase belum terhubung. Silakan hubungkan database Supabase terlebih dahulu.'
+      });
+      return;
+    }
+    if (orders.length === 0) {
+      setOrderSyncFeedback({
+        type: 'error',
+        message: 'Tidak ada data transaksi pesanan untuk disinkronkan.'
+      });
+      return;
+    }
+
+    setIsSyncingOrders(true);
+    setOrderSyncFeedback(null);
+    try {
+      let successCount = 0;
+      let lastError = '';
+      for (const order of orders) {
+        const res = await syncOrderToSupabase(order);
+        if (res.success) {
+          successCount++;
+        } else if (res.error) {
+          lastError = res.error;
+        }
+      }
+
+      if (successCount === orders.length) {
+        setOrderSyncFeedback({
+          type: 'success',
+          message: `Berhasil! Seluruh ${successCount} transaksi pesanan dan rincian barang terjual telah tersimpan aman di database Supabase.`
+        });
+      } else {
+        setOrderSyncFeedback({
+          type: 'error',
+          message: `Tersinkron ${successCount} dari ${orders.length} pesanan. Info: ${lastError}`
+        });
+      }
+    } catch (err: any) {
+      setOrderSyncFeedback({
+        type: 'error',
+        message: `Terjadi kendala sinkronisasi: ${err?.message || err}`
+      });
+    } finally {
+      setIsSyncingOrders(false);
+    }
+  };
 
   const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2139,11 +2195,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                               </td>
                               <td className="p-3">
                                 <div className="flex flex-col gap-1">
-                                  <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] w-fit ${
-                                    p.stock <= 5 ? 'bg-red-100 text-red-700' : p.stock <= 15 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                                  }`}>
-                                    {p.stock} {p.unit || 'Item'}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] w-fit ${
+                                      p.stock <= 5 ? 'bg-red-100 text-red-700' : p.stock <= 15 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                    }`}>
+                                      Sisa: {p.stock} {p.unit || 'Item'}
+                                    </span>
+                                    <span className="bg-blue-50 text-blue-800 border border-blue-200 font-semibold px-1.5 py-0.5 rounded-full text-[9px] w-fit" title="Jumlah barang yang sudah terjual">
+                                      Terjual: {p.soldCount || 0} {p.unit}
+                                    </span>
+                                  </div>
                                   {p.unitConversions && p.unitConversions.length > 0 && (
                                     <span className="text-[10px] text-stone-500 font-medium leading-tight">
                                       {formatStockBreakdown(p.stock, p.unit, p.unitConversions).compact}
@@ -2184,6 +2245,80 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {/* TAB 2: ORDERS MANAGEMENT */}
           {activeTab === 'orders' && (
             <div className="space-y-4">
+              {/* Cloud Database Sync Status Card */}
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                isSupabaseConnected 
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                  : 'bg-amber-50/70 border-amber-200 text-amber-950'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    isSupabaseConnected ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+                  }`}>
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-xs">
+                        {isSupabaseConnected ? 'Penyimpanan Database Cloud (Supabase) Aktif' : 'Penyimpanan Cloud Belum Terhubung'}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isSupabaseConnected ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
+                      }`}>
+                        {isSupabaseConnected ? 'Real-Time Sync' : 'Penyimpanan Lokal'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-600 mt-0.5">
+                      {isSupabaseConnected 
+                        ? 'Setiap barang yang terjual dan transaksi pesanan otomatis disimpan ke database cloud (tabel orders & order_items) serta memperbarui stok.' 
+                        : 'Hubungkan Supabase agar data penjualan dan stok tersimpan permanen di database cloud.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {isSupabaseConnected ? (
+                    <button
+                      onClick={handleSyncAllOrdersToSupabase}
+                      disabled={isSyncingOrders || orders.length === 0}
+                      className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    >
+                      {isSyncingOrders ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menyimpan ke Cloud...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          <span>Sinkronkan ke Cloud ({orders.length})</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onOpenSupabaseModal}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Hubungkan Supabase</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {orderSyncFeedback && (
+                <div className={`p-3 rounded-xl text-xs font-medium flex items-center justify-between gap-2 animate-in fade-in duration-200 ${
+                  orderSyncFeedback.type === 'success' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-red-100 text-red-900 border border-red-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {orderSyncFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-700 shrink-0" />}
+                    <span>{orderSyncFeedback.message}</span>
+                  </div>
+                  <button onClick={() => setOrderSyncFeedback(null)} className="text-stone-500 hover:text-stone-800 text-xs font-bold cursor-pointer">×</button>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <h4 className="font-extrabold text-sm text-stone-900">Daftar Transaksi Kasir & Pesanan Masuk</h4>
                 <span className="text-xs text-stone-500">{orders.length} total pesanan</span>
@@ -2200,9 +2335,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   {orders.map(order => (
                     <div key={order.id} className="bg-white border border-stone-200 p-4 rounded-2xl shadow-2xs space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-2.5">
-                        <div>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-xs text-stone-900">{order.orderNumber}</span>
-                          <span className="text-[10px] text-stone-400 ml-2">{order.createdAt}</span>
+                          <span className="text-[10px] text-stone-400">{order.createdAt}</span>
+                          {isSupabaseConnected && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                              <Database className="w-2.5 h-2.5 text-emerald-600" />
+                              <span>Tersimpan di Cloud Database</span>
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-black text-blue-900">{formatRupiah(order.total)}</span>
