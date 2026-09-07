@@ -15,7 +15,8 @@ import {
   Flame,
   Layers,
   Maximize,
-  Minimize
+  Minimize,
+  Activity
 } from 'lucide-react';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -31,6 +32,7 @@ interface HeaderProps {
   cartItems: CartItem[];
   onOpenCart: () => void;
   onOpenAdminPanel: () => void;
+  onOpenLiveTrafficModal?: () => void;
   onOpenSupabaseModal?: () => void;
   isSupabaseConnected?: boolean;
   searchQuery: string;
@@ -57,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCart,
   onOpenSupabaseModal,
   onOpenAdminPanel,
+  onOpenLiveTrafficModal,
   isSupabaseConnected,
   searchQuery,
   onSearchChange,
@@ -312,6 +315,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <Maximize className="w-4 h-4 text-stone-600" />
               )}
             </button>
+
+            {/* Live Traffic Analytics Button (Wajib Login) */}
+            {onOpenLiveTrafficModal && (
+              <button
+                onClick={onOpenLiveTrafficModal}
+                title="Halaman Live Traffic Analytics (Wajib Login)"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-blue-900/90 hover:bg-blue-800 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50"
+              >
+                <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span className="hidden xl:inline">Live Traffic</span>
+              </button>
+            )}
 
             {/* Admin Panel Button */}
             <button

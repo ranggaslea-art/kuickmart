@@ -41,6 +41,9 @@ import {
 import { 
   VisitorCounterWidget 
 } from './components/VisitorCounterWidget';
+import { 
+  LiveTrafficModal 
+} from './components/LiveTrafficModal';
 import { cleanReceiptText } from './utils/sanitizeReceipt';
 import { 
   Product, 
@@ -270,6 +273,7 @@ export default function App() {
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
+  const [isLiveTrafficModalOpen, setIsLiveTrafficModalOpen] = useState(false);
 
   // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
@@ -965,6 +969,7 @@ export default function App() {
     setIsMemberModalOpen(false);
     setIsStoreSelectorOpen(false);
     setIsSupabaseModalOpen(false);
+    setIsLiveTrafficModalOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -982,6 +987,7 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        onOpenLiveTrafficModal={() => setIsLiveTrafficModalOpen(true)}
         isSupabaseConnected={isSupabaseConnected}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -1041,7 +1047,11 @@ export default function App() {
           />
 
           {/* Real-Time Visitor Counter & Origin Stats Widget */}
-          <VisitorCounterWidget visitorId={visitorId} />
+          <VisitorCounterWidget 
+            visitorId={visitorId} 
+            staffUsers={staffUsers}
+            onOpenLiveTrafficModal={() => setIsLiveTrafficModalOpen(true)}
+          />
 
           {/* Quick Category Bar */}
           <CategoryBar
@@ -1557,6 +1567,13 @@ export default function App() {
           setIsAdminPanelOpen(false);
           setIsSupabaseModalOpen(true);
         }}
+      />
+
+      {/* 9. Live Traffic Analytics Modal (Wajib Login) */}
+      <LiveTrafficModal
+        isOpen={isLiveTrafficModalOpen}
+        onClose={() => setIsLiveTrafficModalOpen(false)}
+        staffUsers={staffUsers}
       />
 
       {/* 9. Floating Bottom Cart Bar (Akses Cepat Keranjang Belanja) */}

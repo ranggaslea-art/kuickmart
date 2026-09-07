@@ -10,30 +10,53 @@ import {
   RefreshCw,
   Activity,
   Compass,
-  Calendar
+  Calendar,
+  Lock,
+  Unlock,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
+import { StaffUser } from '../types';
 
-interface VisitorOriginStat {
+export interface VisitorOriginStat {
   city: string;
   region: string;
   count: number;
   percentage: number;
 }
 
-interface RecentVisitorLog {
+export interface RecentVisitorLog {
   id: string;
   city: string;
   region: string;
   timeAgo: string;
   device: string;
+  timestamp?: number;
   isCurrent?: boolean;
 }
 
 interface VisitorCounterWidgetProps {
   visitorId: string;
+  staffUsers: StaffUser[];
+  onOpenLiveTrafficModal: () => void;
 }
 
-export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visitorId }) => {
+const DEFAULT_ACCOUNTS = [
+  { username: 'admin', pin: 'admin123', role: 'admin' as const, name: 'Store Manager (Admin)' },
+  { username: 'kasir', pin: '1234', role: 'kasir' as const, name: 'Kasir Shift Toko' },
+  { username: 'spv', pin: 'spv2026', role: 'supervisor' as const, name: 'Supervisor Toko' },
+  { username: 'gudang', pin: 'gudang2026', role: 'gudang' as const, name: 'Staff Gudang & Stok' },
+];
+
+export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ 
+  visitorId,
+  staffUsers,
+  onOpenLiveTrafficModal
+}) => {
   const [todayVisitorNumber, setTodayVisitorNumber] = useState<number>(() => {
     try {
       const savedNum = localStorage.getItem('kuickmart_today_visitor_num');
@@ -88,11 +111,117 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Authentication State for Traffic Analytics
+  const [currentUser, setCurrentUser] = useState<StaffUser | { name: string; username: string; role: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_traffic_auth');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Inline Login Form States
+  const [showInlineLogin, setShowInlineLogin] = useState(false);
+  const [inlineUsername, setInlineUsername] = useState('');
+  const [inlinePin, setInlinePin] = useState('');
+  const [inlineShowPassword, setInlineShowPassword] = useState(false);
+  const [inlineLoginError, setInlineLoginError] = useState<string | null>(null);
+
+  // Synchronize authentication from localStorage periodically or on storage event
+  useEffect(() => {
+    const syncAuth = () => {
+      try {
+        const saved = localStorage.getItem('kuickmart_traffic_auth');
+        setCurrentUser(saved ? JSON.parse(saved) : null);
+      } catch {}
+    };
+
+    window.addEventListener('storage', syncAuth);
+    return () => window.removeEventListener('storage', syncAuth);
+  }, []);
+
+  const handleInlineLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setInlineLoginError(null);
+
+    const cleanUser = inlineUsername.trim().toLowerCase();
+    const cleanPin = inlinePin.trim();
+
+    if (!cleanUser || !cleanPin) {
+      setInlineLoginError('Harap masukkan ID Pengguna dan Password/PIN.');
+      return;
+    }
+
+    const staffMatch = staffUsers.find(
+      u => u.username.toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
+    );
+
+    const defaultMatch = !staffMatch ? DEFAULT_ACCOUNTS.find(
+      u => u.username.toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
+    ) : null;
+
+    if (staffMatch) {
+      if (!staffMatch.isActive) {
+        setInlineLoginError('Akun ini sedang dinonaktifkan oleh Administrator Toko.');
+        return;
+      }
+      setCurrentUser(staffMatch);
+      try {
+        localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(staffMatch));
+      } catch {}
+      setShowInlineLogin(false);
+      setInlineUsername('');
+      setInlinePin('');
+      setIsExpanded(true);
+      return;
+    }
+
+    if (defaultMatch) {
+      const userObj = {
+        id: `usr_${defaultMatch.username}`,
+        username: defaultMatch.username,
+        name: defaultMatch.name,
+        role: defaultMatch.role,
+        pin: defaultMatch.pin,
+        isActive: true,
+        createdAt: '01 Jan 2026',
+      };
+      setCurrentUser(userObj);
+      try {
+        localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(userObj));
+      } catch {}
+      setShowInlineLogin(false);
+      setInlineUsername('');
+      setInlinePin('');
+      setIsExpanded(true);
+      return;
+    }
+
+    setInlineLoginError('ID Pengguna atau Password/PIN salah.');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('kuickmart_traffic_auth');
+    } catch {}
+    setIsExpanded(false);
+  };
+
+  const handleToggleExpand = () => {
+    if (!currentUser) {
+      // Wajib login untuk melihat halaman / detail Live Traffic Analytics
+      onOpenLiveTrafficModal();
+    } else {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
   // Initialize and register visit with server
   const registerVisit = async () => {
     setIsLoading(true);
     try {
-      // 1. Try to detect client location via public IP or browser timezone
       let clientCity = 'Pangandaran';
       let clientRegion = 'Jawa Barat';
 
@@ -103,7 +232,6 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
           clientCity = cachedCity;
           clientRegion = cachedRegion;
         } else {
-          // Quick timeout fetch to ipapi or timezone fallback
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 2000);
           const res = await fetch('https://ipapi.co/json/', { signal: controller.signal }).catch(() => null);
@@ -119,12 +247,11 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
           }
         }
       } catch (e) {
-        // Fallback gracefully
+        // Graceful fallback
       }
 
       setDetectedLocation({ city: clientCity, region: clientRegion });
 
-      // 2. Send visit registration to backend
       const res = await fetch('/api/visitors/visit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,7 +272,6 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
         if (data.recentVisitors && data.recentVisitors.length > 0) setRecentVisitors(data.recentVisitors);
         if (data.detectedLocation) setDetectedLocation(data.detectedLocation);
 
-        // Store in localStorage for offline resiliency
         const todayStr = new Date().toISOString().split('T')[0];
         localStorage.setItem('kuickmart_today_date', todayStr);
         localStorage.setItem('kuickmart_today_visitor_num', String(data.todayVisitorNumber));
@@ -173,11 +299,24 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
         {/* Top Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 relative z-10">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[11px] font-bold border border-emerald-500/30">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 Live Traffic Analytics
               </span>
+
+              {currentUser ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-400/30">
+                  <ShieldCheck className="w-3 h-3 text-blue-400" />
+                  <span>Login: {currentUser.name} ({currentUser.role})</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-400/30">
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span>Wajib Login untuk Melihat Detail</span>
+                </span>
+              )}
+
               <span className="text-xs text-blue-200/70 flex items-center gap-1 hidden sm:inline-flex">
                 <Calendar className="w-3 h-3" />
                 {todayDateFormatted}
@@ -200,15 +339,41 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
           </div>
 
           {/* Action & Toggle Origin Info */}
-          <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
+          <div className="flex items-center gap-2 shrink-0 self-start md:self-center flex-wrap">
+            {/* Button to Open Dedicated Live Traffic Modal */}
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={onOpenLiveTrafficModal}
+              title="Buka Halaman Live Traffic Analytics (Wajib Login)"
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer border border-blue-400/30"
+            >
+              {currentUser ? <Unlock className="w-3.5 h-3.5 text-emerald-300" /> : <Lock className="w-3.5 h-3.5 text-amber-300" />}
+              <span>{currentUser ? 'Buka Halaman Analytics' : 'Login Live Traffic'}</span>
+            </button>
+
+            {/* Toggle Asal Pengunjung Web */}
+            <button
+              onClick={handleToggleExpand}
               className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-xs font-bold text-white flex items-center gap-1.5 transition-all border border-white/10 cursor-pointer shadow-xs"
             >
               <Globe2 className="w-3.5 h-3.5 text-amber-300" />
-              <span>{isExpanded ? 'Tutup Asal Pengunjung' : 'Lihat Asal Pengunjung Web'}</span>
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <span>
+                {!currentUser 
+                  ? '🔒 Lihat Asal Pengunjung (Login)' 
+                  : (isExpanded ? 'Tutup Asal Pengunjung' : 'Lihat Asal Pengunjung Web')}
+              </span>
+              {currentUser && (isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)}
             </button>
+
+            {currentUser && (
+              <button
+                onClick={handleLogout}
+                title="Keluar / Kunci Akses Analytics"
+                className="px-2 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs font-bold flex items-center gap-1 transition-all border border-red-500/30 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
 
             <button
               onClick={registerVisit}
@@ -221,7 +386,7 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
           </div>
         </div>
 
-        {/* 3 Metric Cards Grid */}
+        {/* 4 Metric Cards Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mt-4 relative z-10">
           {/* Card 1: Urutan Pengunjung Hari Ini */}
           <div className="bg-white/10 backdrop-blur-xs rounded-2xl p-3 border border-white/10 flex flex-col justify-between">
@@ -282,8 +447,8 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
           </div>
         </div>
 
-        {/* Expandable Section: "Darimana Pengunjung Web Ini Berasal" */}
-        {isExpanded && (
+        {/* Section if Logged In: Detailed Origins & Live Stream */}
+        {currentUser && isExpanded && (
           <div className="mt-4 pt-4 border-t border-white/15 relative z-10 animate-fadeIn space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -344,9 +509,17 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({ visi
 
             {/* Live Recent Visitors Stream */}
             <div className="pt-2 border-t border-white/10">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-200 mb-2">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Pengunjung Terkini yang Mengakses Toko:</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-200">
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Pengunjung Terkini yang Mengakses Toko:</span>
+                </div>
+                <button
+                  onClick={onOpenLiveTrafficModal}
+                  className="text-[11px] text-amber-300 hover:text-amber-200 underline cursor-pointer"
+                >
+                  Lihat Tampilan Penuh Halaman Analytics &rarr;
+                </button>
               </div>
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {recentVisitors.map((v) => (
