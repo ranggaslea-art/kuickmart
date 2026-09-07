@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
   Plus, 
@@ -46,6 +46,22 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
   const [formData, setFormData] = useState<BrandHeaderFooterConfig>(() => JSON.parse(JSON.stringify(brandConfig)));
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'info'; message: string } | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
+  const isInitialMount = useRef(true);
+
+  // Auto-sync formData changes to parent and localStorage immediately
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    onUpdateBrandConfig(formData);
+    try {
+      localStorage.setItem('kuickmart_brand_config', JSON.stringify(formData));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [formData, onUpdateBrandConfig]);
 
   // States for adding / editing a feature item in a section
   const [targetSectionId, setTargetSectionId] = useState<string | null>(null);

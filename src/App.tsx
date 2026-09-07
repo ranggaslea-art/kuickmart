@@ -98,7 +98,10 @@ import {
   Phone,
   Heart,
   Star,
-  CreditCard
+  CreditCard,
+  Store as StoreIcon,
+  Headphones,
+  BadgePercent
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -186,7 +189,20 @@ export default function App() {
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_BRAND_CONFIG_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_BRAND_CONFIG;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...INITIAL_BRAND_CONFIG,
+          ...parsed,
+          sections: Array.isArray(parsed.sections) && parsed.sections.length > 0
+            ? parsed.sections
+            : INITIAL_BRAND_CONFIG.sections,
+          bottomLinks: Array.isArray(parsed.bottomLinks) && parsed.bottomLinks.length > 0
+            ? parsed.bottomLinks
+            : INITIAL_BRAND_CONFIG.bottomLinks,
+        };
+      }
+      return INITIAL_BRAND_CONFIG;
     } catch {
       return INITIAL_BRAND_CONFIG;
     }
@@ -942,78 +958,118 @@ export default function App() {
               </div>
             </div>
             <p className="text-stone-500 leading-relaxed">
-              {brandConfig.footerBrandDescription || 'Platform belanja minimarket online modern super cepat.'}
+              {brandConfig.footerDescription || 'Platform belanja minimarket online modern seperti Klik Indomaret & Alfagift dengan integrasi Supabase cloud database, pengiriman instan 30 menit, dan promo JSM hemat.'}
             </p>
           </div>
 
           {/* Dynamic Footer Sections */}
-          {brandConfig.footerSections && brandConfig.footerSections.map((section) => (
-            <div key={section.id}>
-              <h4 className="font-bold text-stone-900 mb-2">{section.title}</h4>
-              
-              {section.type === 'features' && section.features && (
-                <ul className="space-y-1.5 text-stone-500">
-                  {section.features.map((feat) => {
-                    const iconMap: Record<string, React.ReactNode> = {
-                      truck: <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />,
-                      'shield-check': <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />,
-                      sparkles: <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />,
-                      clock: <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />,
-                      check: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />,
-                      phone: <Phone className="w-3.5 h-3.5 text-blue-600 shrink-0" />,
-                      'map-pin': <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />,
-                      'credit-card': <CreditCard className="w-3.5 h-3.5 text-purple-600 shrink-0" />,
-                      star: <Star className="w-3.5 h-3.5 text-amber-500 shrink-0" />,
-                      heart: <Heart className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                    };
-                    return (
-                      <li key={feat.id} className="flex items-center gap-1.5">
-                        {iconMap[feat.icon] || <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
-                        <span>{feat.text}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+          {(brandConfig.sections || [])
+            .filter((section) => section.isVisible)
+            .map((section) => {
+              const iconMap: Record<string, React.ReactNode> = {
+                truck: <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />,
+                'shield-check': <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />,
+                sparkles: <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />,
+                clock: <Clock className="w-3.5 h-3.5 text-sky-600 shrink-0 mt-0.5" />,
+                'credit-card': <CreditCard className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />,
+                store: <StoreIcon className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />,
+                headphones: <Headphones className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />,
+                'badge-percent': <BadgePercent className="w-3.5 h-3.5 text-orange-600 shrink-0 mt-0.5" />,
+                'map-pin': <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />,
+                'check-circle': <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />,
+                heart: <Heart className="w-3.5 h-3.5 text-pink-600 shrink-0 mt-0.5" />,
+                star: <Star className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              };
 
-              {section.type === 'text' && (
-                <div>
-                  {section.text && <p className="text-stone-500 leading-relaxed mb-1.5">{section.text}</p>}
-                  {section.subtext && <p className="text-stone-400 text-[11px]">{section.subtext}</p>}
+              return (
+                <div key={section.id}>
+                  <h4 className="font-bold text-stone-900 mb-2">{section.title}</h4>
+                  
+                  {/* 1. Features list (Keunggulan Layanan / Poin Berikon) */}
+                  {section.type === 'features_list' && section.items && (
+                    <ul className="space-y-2 text-stone-500">
+                      {section.items.map((item) => (
+                        <li key={item.id} className="flex items-start gap-1.5">
+                          {iconMap[item.icon] || <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />}
+                          <div className="min-w-0">
+                            <span className="font-medium text-stone-700 leading-snug block">{item.text}</span>
+                            {item.subtext && (
+                              <p className="text-[11px] text-stone-400 leading-tight mt-0.5">
+                                {item.subtext}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* 2. Payment Methods */}
+                  {section.type === 'payment_methods' && (
+                    <div>
+                      {section.content && (
+                        <p className="text-stone-500 leading-relaxed mb-2">{section.content}</p>
+                      )}
+                      {section.paymentTags && section.paymentTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {section.paymentTags.map((tag, tIdx) => (
+                            <span
+                              key={tIdx}
+                              className="bg-stone-100 text-stone-700 text-[10px] font-medium px-2 py-0.5 rounded border border-stone-200 shadow-2xs"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. Contact Hours & Hotline CS */}
+                  {section.type === 'contact_hours' && (
+                    <div>
+                      {section.content && (
+                        <p className="text-stone-500 leading-relaxed mb-1.5">{section.content}</p>
+                      )}
+                      {section.subContent && (
+                        <p className="text-stone-400 text-[11px] leading-relaxed">{section.subContent}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 4. Text Block */}
+                  {section.type === 'text_block' && (
+                    <div>
+                      {section.content && (
+                        <p className="text-stone-500 leading-relaxed mb-1.5">{section.content}</p>
+                      )}
+                      {section.subContent && (
+                        <p className="text-stone-400 text-[11px] leading-relaxed">{section.subContent}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {section.type === 'links' && section.links && (
-                <ul className="space-y-1.5 text-stone-500">
-                  {section.links.map((lnk, i) => (
-                    <li key={i}>
-                      <a href={lnk.url || '#'} className="hover:text-blue-600 transition-colors">
-                        {lnk.title}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
+              );
+            })}
         </div>
 
+        {/* Footer Bottom Bar */}
         <div className="max-w-7xl mx-auto mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
-          <div>{brandConfig.footerBottomText || '© 2026 KuickMart Express. All rights reserved.'}</div>
+          <div>{brandConfig.copyrightText || '© 2026 KuickMart Express. All rights reserved.'}</div>
           <div className="flex items-center gap-4 mt-2 sm:mt-0">
             <button
               onClick={() => {
                 setAdminPanelInitialTab('brand_info');
                 setIsAdminPanelOpen(true);
               }}
-              className="text-blue-600 hover:text-blue-800 font-medium transition-colors cursor-pointer flex items-center gap-1"
+              className="text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer flex items-center gap-1 hover:underline"
             >
               <span>⚙️ Kelola Info Brand & Footer</span>
             </button>
-            {brandConfig.footerBottomLinks && brandConfig.footerBottomLinks.length > 0 ? (
-              brandConfig.footerBottomLinks.map((item, i) => (
-                <a key={i} href={item.url || '#'} className="hover:text-stone-600 transition-colors">
-                  {item.title}
+            {brandConfig.bottomLinks && brandConfig.bottomLinks.length > 0 ? (
+              brandConfig.bottomLinks.map((item) => (
+                <a key={item.id} href={item.url || '#'} className="hover:text-stone-600 transition-colors">
+                  {item.label}
                 </a>
               ))
             ) : (
