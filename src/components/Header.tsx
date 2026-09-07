@@ -13,7 +13,9 @@ import {
   Receipt,
   X,
   Flame,
-  Layers
+  Layers,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -39,6 +41,8 @@ interface HeaderProps {
   onSelectProduct: (p: Product) => void;
   storePromos?: StorePromoInfo[];
   brandConfig?: BrandHeaderFooterConfig;
+  isSyncing?: boolean;
+  onRefreshData?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -61,6 +65,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectProduct,
   storePromos,
   brandConfig,
+  isSyncing,
+  onRefreshData,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
@@ -260,7 +266,37 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Cloud Sync & Manual Refresh Button */}
+            {onRefreshData && (
+              <button
+                onClick={onRefreshData}
+                title="Sinkronisasi Data Real-Time dengan Cloud Supabase (Klik untuk refresh)"
+                className={`px-2.5 py-2 rounded-xl border text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                  isSyncing
+                    ? 'bg-sky-50 border-sky-300 text-sky-700'
+                    : isSupabaseConnected
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+                    : 'bg-stone-100 border-stone-300 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-600' : isSupabaseConnected ? 'text-emerald-600' : 'text-stone-500'}`} />
+                <span className="hidden sm:inline font-semibold text-[11px]">
+                  {isSyncing ? 'Sinkron...' : isSupabaseConnected ? 'Cloud Aktif' : 'Offline'}
+                </span>
+              </button>
+            )}
+
+            {/* Database Modal Trigger */}
+            <button
+              onClick={onOpenSupabaseModal}
+              title="Koneksi & Database Supabase Multi-Device"
+              className="p-2 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 transition-all"
+            >
+              <Database className={`w-4 h-4 ${isSupabaseConnected ? 'text-emerald-600' : 'text-stone-500'}`} />
+              <span className="text-xs font-medium hidden md:inline">Database</span>
+            </button>
+
             {/* Admin Panel Button (Satu-satunya Tombol Admin di Header) */}
             <button
               onClick={onOpenAdminPanel}

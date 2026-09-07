@@ -95,7 +95,8 @@ import {
   deleteCourierFromSupabase,
   fetchStaffUsersFromSupabase,
   saveStaffUserToSupabase,
-  deleteStaffUserFromSupabase
+  deleteStaffUserFromSupabase,
+  subscribeToSupabaseChanges
 } from './lib/supabase';
 import { 
   Zap, 
@@ -313,9 +314,11 @@ export default function App() {
 
   // Supabase State
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Load all live catalog & system data from Supabase
   const loadAllFromSupabase = async () => {
+    setIsSyncing(true);
     try {
       const [
         dbProducts, 
@@ -340,6 +343,10 @@ export default function App() {
         fetchCouriersFromSupabase(),
         fetchStaffUsersFromSupabase()
       ]);
+
+      if (dbProducts !== null) {
+        setIsSupabaseConnected(true);
+      }
 
       if (dbProducts && dbProducts.length > 0) {
         const formattedDb = dbProducts.map((p) => ({
@@ -411,17 +418,49 @@ export default function App() {
       }
     } catch (e) {
       console.warn('Gagal memuat data dari Supabase:', e);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  // Check Supabase connection on load
+  // Immediate multi-device sync on load, focus, real-time events, and polling
   useEffect(() => {
+    // 1. Load instantly on mount
+    loadAllFromSupabase();
+
+    // 2. Test connectivity
     testSupabaseConnection().then((res) => {
       setIsSupabaseConnected(res.success);
-      if (res.success) {
+    });
+
+    // 3. Subscribe to Supabase real-time changes
+    const unsubscribe = subscribeToSupabaseChanges(() => {
+      loadAllFromSupabase();
+    });
+
+    // 4. Auto sync when tab is focused / phone screen unlocked
+    const handleFocus = () => {
+      loadAllFromSupabase();
+    };
+    window.addEventListener('focus', handleFocus);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
         loadAllFromSupabase();
       }
-    });
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 5. Background polling every 10 seconds to keep all phones completely in sync
+    const interval = setInterval(() => {
+      loadAllFromSupabase();
+    }, 10000);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, []);
 
   // CRUD Produk Terjamin Persistensinya
@@ -438,12 +477,9 @@ export default function App() {
       console.warn('Gagal simpan produk baru ke localStorage:', err);
     }
 
-    // 3. Simpan ke Supabase jika terhubung
-    if (isSupabaseConnected) {
-      const res = await saveProductToSupabase(newProd);
-      return res;
-    }
-    return { success: true };
+    // 3. Simpan ke Supabase
+    const res = await saveProductToSupabase(newProd);
+    return res;
   };
 
   const handleEditProduct = async (updatedProd: Product): Promise<{ success: boolean; error?: string }> => {
@@ -457,11 +493,8 @@ export default function App() {
       console.warn('Gagal update produk di localStorage:', err);
     }
 
-    if (isSupabaseConnected) {
-      const res = await saveProductToSupabase(updatedProd);
-      return res;
-    }
-    return { success: true };
+    const res = await saveProductToSupabase(updatedProd);
+    return res;
   };
 
   const handleDeleteProduct = async (productId: string): Promise<{ success: boolean; error?: string }> => {
@@ -475,113 +508,94 @@ export default function App() {
       console.warn('Gagal hapus produk di localStorage:', err);
     }
 
-    if (isSupabaseConnected) {
-      const res = await deleteProductFromSupabase(productId);
-      return res;
-    }
-    return { success: true };
+    const res = await deleteProductFromSupabase(productId);
+    return res;
   };
 
   const handleUpdateProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
-    if (isSupabaseConnected) {
-      newProducts.forEach((p) => {
-        saveProductToSupabase(p).catch(() => {});
-      });
-    }
+    newProducts.forEach((p) => {
+      saveProductToSupabase(p).catch(() => {});
+    });
   };
 
   const handleUpdateStores = (newStores: Store[]) => {
     setStores(newStores);
-    if (isSupabaseConnected) {
-      newStores.forEach((s) => {
-        saveStoreToSupabase(s).catch(() => {});
-      });
-    }
+    newStores.forEach((s) => {
+      saveStoreToSupabase(s).catch(() => {});
+    });
   };
 
   const handleUpdateVouchers = (newVouchers: Voucher[]) => {
-    if (isSupabaseConnected) {
-      const newIds = new Set(newVouchers.map(v => v.id));
-      vouchers.forEach(v => {
-        if (!newIds.has(v.id)) {
-          deleteVoucherFromSupabase(v.id).catch(() => {});
-        }
-      });
-      newVouchers.forEach((v) => {
-        saveVoucherToSupabase(v).catch(() => {});
-      });
-    }
+    const newIds = new Set(newVouchers.map(v => v.id));
+    vouchers.forEach(v => {
+      if (!newIds.has(v.id)) {
+        deleteVoucherFromSupabase(v.id).catch(() => {});
+      }
+    });
+    newVouchers.forEach((v) => {
+      saveVoucherToSupabase(v).catch(() => {});
+    });
     setVouchers(newVouchers);
   };
 
   const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
     setBrandConfig((prev) => {
       const next = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
-      if (isSupabaseConnected) {
-        saveBrandConfigToSupabase(next).catch(() => {});
-      }
+      saveBrandConfigToSupabase(next).catch(() => {});
       return next;
     });
   };
 
   const handleUpdateReceiptConfigs = (newConfigs: ReceiptInfo[]) => {
-    if (isSupabaseConnected) {
-      const newIds = new Set(newConfigs.map(r => r.id));
-      receiptConfigs.forEach(r => {
-        if (!newIds.has(r.id)) {
-          deleteReceiptConfigFromSupabase(r.id).catch(() => {});
-        }
-      });
-      newConfigs.forEach((r) => {
-        saveReceiptConfigToSupabase(r).catch(() => {});
-      });
-    }
+    const newIds = new Set(newConfigs.map(r => r.id));
+    receiptConfigs.forEach(r => {
+      if (!newIds.has(r.id)) {
+        deleteReceiptConfigFromSupabase(r.id).catch(() => {});
+      }
+    });
+    newConfigs.forEach((r) => {
+      saveReceiptConfigToSupabase(r).catch(() => {});
+    });
     setReceiptConfigs(newConfigs);
   };
 
   const handleUpdateStorePromos = (newPromos: StorePromoInfo[]) => {
-    if (isSupabaseConnected) {
-      const newIds = new Set(newPromos.map(p => p.id));
-      storePromos.forEach(p => {
-        if (!newIds.has(p.id)) {
-          deleteStorePromoFromSupabase(p.id).catch(() => {});
-        }
-      });
-      newPromos.forEach((p) => {
-        saveStorePromoToSupabase(p).catch(() => {});
-      });
-    }
+    const newIds = new Set(newPromos.map(p => p.id));
+    storePromos.forEach(p => {
+      if (!newIds.has(p.id)) {
+        deleteStorePromoFromSupabase(p.id).catch(() => {});
+      }
+    });
+    newPromos.forEach((p) => {
+      saveStorePromoToSupabase(p).catch(() => {});
+    });
     setStorePromos(newPromos);
   };
 
   const handleUpdateCouriers = (newCouriers: CourierInfo[]) => {
-    if (isSupabaseConnected) {
-      const newIds = new Set(newCouriers.map(c => c.id));
-      couriers.forEach(c => {
-        if (!newIds.has(c.id)) {
-          deleteCourierFromSupabase(c.id).catch(() => {});
-        }
-      });
-      newCouriers.forEach((c) => {
-        saveCourierToSupabase(c).catch(() => {});
-      });
-    }
+    const newIds = new Set(newCouriers.map(c => c.id));
+    couriers.forEach(c => {
+      if (!newIds.has(c.id)) {
+        deleteCourierFromSupabase(c.id).catch(() => {});
+      }
+    });
+    newCouriers.forEach((c) => {
+      saveCourierToSupabase(c).catch(() => {});
+    });
     setCouriers(newCouriers);
   };
 
   const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
-    if (isSupabaseConnected) {
-      const newIds = new Set(newUsers.map(u => u.id));
-      staffUsers.forEach(u => {
-        if (!newIds.has(u.id)) {
-          deleteStaffUserFromSupabase(u.id).catch(() => {});
-        }
-      });
-      newUsers.forEach((u) => {
-        saveStaffUserToSupabase(u).catch(() => {});
-      });
-    }
+    const newIds = new Set(newUsers.map(u => u.id));
+    staffUsers.forEach(u => {
+      if (!newIds.has(u.id)) {
+        deleteStaffUserFromSupabase(u.id).catch(() => {});
+      }
+    });
+    newUsers.forEach((u) => {
+      saveStaffUserToSupabase(u).catch(() => {});
+    });
     setStaffUsers(newUsers);
   };
 
@@ -859,6 +873,8 @@ export default function App() {
         onSelectProduct={(p) => setSelectedProductDetail(p)}
         storePromos={storePromos}
         brandConfig={brandConfig}
+        isSyncing={isSyncing}
+        onRefreshData={loadAllFromSupabase}
       />
 
       {/* Main View Container */}

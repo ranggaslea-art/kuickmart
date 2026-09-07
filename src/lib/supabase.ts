@@ -54,8 +54,17 @@ export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
   let savedUrl = (localStorage.getItem(STORAGE_KEY_URL) || '').trim();
   let savedKey = (localStorage.getItem(STORAGE_KEY_KEY) || '').trim();
 
-  // If local storage is empty or contains placeholder, use env/default
-  if (!savedUrl || savedUrl.includes('xyzcompany') || !savedUrl.startsWith('https://')) {
+  // If default config is provided in code, ALWAYS enforce it across all devices
+  if (DEFAULT_SUPABASE_CONFIG.url && DEFAULT_SUPABASE_CONFIG.anonKey) {
+    if (!savedUrl || !savedKey || savedUrl !== DEFAULT_SUPABASE_CONFIG.url || savedKey !== DEFAULT_SUPABASE_CONFIG.anonKey) {
+      savedUrl = DEFAULT_SUPABASE_CONFIG.url;
+      savedKey = DEFAULT_SUPABASE_CONFIG.anonKey;
+      try {
+        localStorage.setItem(STORAGE_KEY_URL, DEFAULT_SUPABASE_CONFIG.url);
+        localStorage.setItem(STORAGE_KEY_KEY, DEFAULT_SUPABASE_CONFIG.anonKey);
+      } catch {}
+    }
+  } else if (!savedUrl || savedUrl.includes('xyzcompany') || !savedUrl.startsWith('https://')) {
     savedUrl = envUrl;
     savedKey = envKey;
     if (envUrl) {
@@ -106,6 +115,28 @@ export function getSupabase(): SupabaseClient | null {
   return supabaseInstance;
 }
 
+// Subscribe to real-time database changes across all devices
+export function subscribeToSupabaseChanges(onChange: () => void): () => void {
+  const supabase = getSupabase();
+  if (!supabase) return () => {};
+
+  try {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        onChange();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } catch (err) {
+    console.warn('Realtime subscription error:', err);
+    return () => {};
+  }
+}
+
 // Test connection to Supabase
 export async function testSupabaseConnection(url?: string, anonKey?: string): Promise<{ success: boolean; message: string }> {
   try {
@@ -117,8 +148,8 @@ export async function testSupabaseConnection(url?: string, anonKey?: string): Pr
     }
 
     const testClient = createClient(targetUrl, targetKey);
-    // Simple query to verify connection
-    const { error } = await testClient.from('products').select('count', { count: 'exact', head: true });
+    // Use GET .select('id').limit(1) for guaranteed compatibility with mobile carriers and proxies
+    const { error } = await testClient.from('products').select('id').limit(1);
     
     if (error) {
       // If table doesn't exist yet, it's still a reachable database!
