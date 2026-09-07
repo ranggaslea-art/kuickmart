@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   X, 
   Settings, 
@@ -238,17 +238,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   });
 
   const activeBrandConfig = brandConfig || internalBrandConfig;
-  const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig) => {
+  const handleUpdateBrandConfig = useCallback((newConfig: BrandHeaderFooterConfig) => {
     if (onUpdateBrandConfig) {
       onUpdateBrandConfig(newConfig);
     }
     setInternalBrandConfig(newConfig);
     try {
       localStorage.setItem('kuickmart_brand_config', JSON.stringify(newConfig));
+      window.dispatchEvent(new CustomEvent('brand_config_updated', { detail: newConfig }));
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [onUpdateBrandConfig]);
 
   // Login Authentication State - Selalu minta login setiap dibuka
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);

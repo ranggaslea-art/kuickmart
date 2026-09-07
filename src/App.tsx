@@ -212,6 +212,30 @@ export default function App() {
     localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(brandConfig));
   }, [brandConfig]);
 
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_BRAND_CONFIG_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setBrandConfig((prev) => ({ ...prev, ...parsed }));
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    };
+    const handleCustom = (e: CustomEvent<BrandHeaderFooterConfig>) => {
+      if (e.detail) {
+        setBrandConfig(e.detail);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('brand_config_updated', handleCustom as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('brand_config_updated', handleCustom as EventListener);
+    };
+  }, []);
+
   // Store Receipt Configurations State (Add, Edit, Delete Struk Info Toko)
   const [receiptConfigs, setReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     try {
@@ -939,7 +963,7 @@ export default function App() {
               {brandConfig.brandLogoImageUrl ? (
                 <img
                   src={brandConfig.brandLogoImageUrl}
-                  alt={brandConfig.brandNamePart1 + ' ' + brandConfig.brandNamePart2}
+                  alt={brandConfig.footerBrandName || (brandConfig.brandNamePart1 + ' ' + brandConfig.brandNamePart2)}
                   className="w-7 h-7 rounded-lg object-cover border border-stone-200 shadow-2xs"
                 />
               ) : (
@@ -947,9 +971,15 @@ export default function App() {
                   {brandConfig.brandLogoText || 'KM'}
                 </div>
               )}
-              <div className="flex items-center gap-1">
-                <span>{brandConfig.brandNamePart1}</span>
-                <span className="text-amber-500">{brandConfig.brandNamePart2}</span>
+              <div className="flex items-center gap-1 font-black text-base">
+                {brandConfig.footerBrandName ? (
+                  <span className="text-blue-900">{brandConfig.footerBrandName}</span>
+                ) : (
+                  <>
+                    <span className="text-blue-900">{brandConfig.brandNamePart1}</span>
+                    <span className="text-amber-500">{brandConfig.brandNamePart2}</span>
+                  </>
+                )}
                 {brandConfig.showBrandBadge && brandConfig.brandBadgeText && (
                   <span className={`text-[9px] font-bold uppercase tracking-wider ${brandConfig.brandBadgeColor || 'bg-red-600'} text-white px-1 py-0.5 rounded ml-1`}>
                     {brandConfig.brandBadgeText}

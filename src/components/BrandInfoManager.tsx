@@ -43,25 +43,39 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
   onUpdateBrandConfig,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'header' | 'footer_profile' | 'sections' | 'links' | 'preview'>('header');
-  const [formData, setFormData] = useState<BrandHeaderFooterConfig>(() => JSON.parse(JSON.stringify(brandConfig)));
+  const onUpdateRef = useRef(onUpdateBrandConfig);
+  useEffect(() => {
+    onUpdateRef.current = onUpdateBrandConfig;
+  }, [onUpdateBrandConfig]);
+
+  const [formData, _setFormData] = useState<BrandHeaderFooterConfig>(() => JSON.parse(JSON.stringify(brandConfig)));
+
+  // Sync internal form data if external brandConfig prop updates
+  useEffect(() => {
+    if (brandConfig) {
+      _setFormData(JSON.parse(JSON.stringify(brandConfig)));
+    }
+  }, [brandConfig]);
+
+  // Robust setFormData that automatically updates local state, parent App state, localStorage, and broadcasts
+  const setFormData = (updater: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
+    _setFormData((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (onUpdateRef.current) {
+        onUpdateRef.current(next);
+      }
+      try {
+        localStorage.setItem('kuickmart_brand_config', JSON.stringify(next));
+        window.dispatchEvent(new CustomEvent('brand_config_updated', { detail: next }));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
+
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'info'; message: string } | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-
-  const isInitialMount = useRef(true);
-
-  // Auto-sync formData changes to parent and localStorage immediately
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    onUpdateBrandConfig(formData);
-    try {
-      localStorage.setItem('kuickmart_brand_config', JSON.stringify(formData));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [formData, onUpdateBrandConfig]);
 
   // States for adding / editing a feature item in a section
   const [targetSectionId, setTargetSectionId] = useState<string | null>(null);
@@ -128,25 +142,14 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
       ...formData,
       updatedAt: new Date().toISOString(),
     };
-    onUpdateBrandConfig(updated);
-    try {
-      localStorage.setItem('kuickmart_brand_config', JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
-    showNotification('Konfigurasi identitas Brand, Header, dan Footer berhasil disimpan!');
+    setFormData(updated);
+    showNotification('Konfigurasi identitas Brand, Header, dan Footer berhasil disimpan dan langsung aktif di halaman toko!');
   };
 
   const handleResetToDefault = () => {
     if (confirm('Apakah Anda yakin ingin mengembalikan semua informasi Brand, Header, dan Footer ke konfigurasi bawaan pabrik?')) {
       const resetData = JSON.parse(JSON.stringify(INITIAL_BRAND_CONFIG));
       setFormData(resetData);
-      onUpdateBrandConfig(resetData);
-      try {
-        localStorage.setItem('kuickmart_brand_config', JSON.stringify(resetData));
-      } catch (e) {
-        console.error(e);
-      }
       showNotification('Informasi berhasil di-reset ke nilai default pabrik.', 'info');
     }
   };
