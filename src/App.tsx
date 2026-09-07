@@ -80,6 +80,7 @@ import {
   deleteProductFromSupabase,
   saveStoreToSupabase,
   saveVoucherToSupabase,
+  deleteVoucherFromSupabase,
   updateProductSalesAndStockInSupabase,
   fetchBrandConfigFromSupabase,
   saveBrandConfigToSupabase,
@@ -502,12 +503,18 @@ export default function App() {
   };
 
   const handleUpdateVouchers = (newVouchers: Voucher[]) => {
-    setVouchers(newVouchers);
     if (isSupabaseConnected) {
+      const newIds = new Set(newVouchers.map(v => v.id));
+      vouchers.forEach(v => {
+        if (!newIds.has(v.id)) {
+          deleteVoucherFromSupabase(v.id).catch(() => {});
+        }
+      });
       newVouchers.forEach((v) => {
         saveVoucherToSupabase(v).catch(() => {});
       });
     }
+    setVouchers(newVouchers);
   };
 
   const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
@@ -521,39 +528,63 @@ export default function App() {
   };
 
   const handleUpdateReceiptConfigs = (newConfigs: ReceiptInfo[]) => {
-    setReceiptConfigs(newConfigs);
     if (isSupabaseConnected) {
+      const newIds = new Set(newConfigs.map(r => r.id));
+      receiptConfigs.forEach(r => {
+        if (!newIds.has(r.id)) {
+          deleteReceiptConfigFromSupabase(r.id).catch(() => {});
+        }
+      });
       newConfigs.forEach((r) => {
         saveReceiptConfigToSupabase(r).catch(() => {});
       });
     }
+    setReceiptConfigs(newConfigs);
   };
 
   const handleUpdateStorePromos = (newPromos: StorePromoInfo[]) => {
-    setStorePromos(newPromos);
     if (isSupabaseConnected) {
+      const newIds = new Set(newPromos.map(p => p.id));
+      storePromos.forEach(p => {
+        if (!newIds.has(p.id)) {
+          deleteStorePromoFromSupabase(p.id).catch(() => {});
+        }
+      });
       newPromos.forEach((p) => {
         saveStorePromoToSupabase(p).catch(() => {});
       });
     }
+    setStorePromos(newPromos);
   };
 
   const handleUpdateCouriers = (newCouriers: CourierInfo[]) => {
-    setCouriers(newCouriers);
     if (isSupabaseConnected) {
+      const newIds = new Set(newCouriers.map(c => c.id));
+      couriers.forEach(c => {
+        if (!newIds.has(c.id)) {
+          deleteCourierFromSupabase(c.id).catch(() => {});
+        }
+      });
       newCouriers.forEach((c) => {
         saveCourierToSupabase(c).catch(() => {});
       });
     }
+    setCouriers(newCouriers);
   };
 
   const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
-    setStaffUsers(newUsers);
     if (isSupabaseConnected) {
+      const newIds = new Set(newUsers.map(u => u.id));
+      staffUsers.forEach(u => {
+        if (!newIds.has(u.id)) {
+          deleteStaffUserFromSupabase(u.id).catch(() => {});
+        }
+      });
       newUsers.forEach((u) => {
         saveStaffUserToSupabase(u).catch(() => {});
       });
     }
+    setStaffUsers(newUsers);
   };
 
   // Save Cart to LocalStorage
