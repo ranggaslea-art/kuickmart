@@ -18,6 +18,8 @@ import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 
 interface OrderHistoryViewProps {
   orders: Order[];
+  allOrders?: Order[];
+  onClaimOrder?: (orderNumberOrId: string) => boolean;
   onBackToShopping: () => void;
   onTrackOrder: (order: Order) => void;
   onReorder: (order: Order) => void;
@@ -25,11 +27,37 @@ interface OrderHistoryViewProps {
 
 export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
   orders,
+  allOrders,
+  onClaimOrder,
   onBackToShopping,
   onTrackOrder,
   onReorder,
 }) => {
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [searchOrderNumber, setSearchOrderNumber] = useState('');
+  const [claimMessage, setClaimMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSearchAndClaim = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchOrderNumber.trim()) return;
+
+    if (onClaimOrder) {
+      const success = onClaimOrder(searchOrderNumber.trim());
+      if (success) {
+        setClaimMessage({
+          type: 'success',
+          text: `Pesanan ${searchOrderNumber.trim()} berhasil ditemukan dan ditambahkan ke daftar pesanan Anda!`
+        });
+        setSearchOrderNumber('');
+      } else {
+        setClaimMessage({
+          type: 'error',
+          text: `Nomor pesanan "${searchOrderNumber.trim()}" tidak ditemukan. Pastikan nomor pesanan sudah sesuai.`
+        });
+      }
+      setTimeout(() => setClaimMessage(null), 5000);
+    }
+  };
 
   const filteredOrders = orders.filter((order) => {
     if (filter === 'active') return order.status !== 'completed' && order.status !== 'cancelled';
@@ -51,22 +79,28 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
   return (
     <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-stone-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-stone-200">
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToShopping}
             className="p-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors"
+            title="Kembali ke Beranda Belanja"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <h2 className="text-xl font-bold text-stone-900">Riwayat Pesanan & Belanja</h2>
-            <p className="text-xs text-stone-500">Pantau transaksi dan status pengiriman barang Anda</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-stone-900">Pesanan Saya</h2>
+              <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                Privasi Pelanggan
+              </span>
+            </div>
+            <p className="text-xs text-stone-500">Hanya menampilkan daftar belanja & pesanan milik Anda sendiri</p>
           </div>
         </div>
 
         {/* Filter Pills */}
-        <div className="flex bg-stone-100 p-1 rounded-xl text-xs font-semibold">
+        <div className="flex bg-stone-100 p-1 rounded-xl text-xs font-semibold self-start md:self-auto">
           <button
             onClick={() => setFilter('all')}
             className={`px-3 py-1.5 rounded-lg transition-all ${filter === 'all' ? 'bg-white text-stone-900 shadow-2xs font-bold' : 'text-stone-600'}`}
@@ -88,21 +122,66 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
         </div>
       </div>
 
+      {/* Lookup / Claim order banner */}
+      {onClaimOrder && (
+        <div className="mb-6 bg-white border border-stone-200 rounded-2xl p-4 shadow-2xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-blue-600" />
+                <span>Punya Nomor Pesanan Lain?</span>
+              </h4>
+              <p className="text-[11px] text-stone-500 mt-0.5">
+                Masukkan nomor pesanan (misal: NM-260907-XXXXX) jika memesan dari perangkat atau browser lain.
+              </p>
+            </div>
+            <form onSubmit={handleSearchAndClaim} className="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                type="text"
+                placeholder="Contoh: NM-260907-..."
+                value={searchOrderNumber}
+                onChange={(e) => setSearchOrderNumber(e.target.value)}
+                className="text-xs px-3 py-2 border border-stone-300 rounded-xl focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 uppercase font-mono w-full sm:w-48"
+              />
+              <button
+                type="submit"
+                className="px-3 py-2 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold rounded-xl transition-all shrink-0 cursor-pointer"
+              >
+                Cari & Lacak
+              </button>
+            </form>
+          </div>
+          {claimMessage && (
+            <div className={`mt-3 p-2.5 rounded-xl text-xs font-medium flex items-center gap-2 ${
+              claimMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+            }`}>
+              {claimMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <XCircle className="w-4 h-4 text-rose-600 shrink-0" />}
+              <span>{claimMessage.text}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Orders List */}
       {filteredOrders.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-3xl p-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mx-auto mb-3">
             <Receipt className="w-8 h-8" />
           </div>
-          <h3 className="font-bold text-base text-stone-800 mb-1">Belum Ada Riwayat Pesanan</h3>
+          <h3 className="font-bold text-base text-stone-800 mb-1">
+            {filter === 'all' ? 'Belum Ada Riwayat Pesanan' : `Tidak Ada Pesanan ${filter === 'active' ? 'Aktif' : 'Selesai'}`}
+          </h3>
           <p className="text-xs text-stone-500 max-w-sm mx-auto mb-4">
-            Kamu belum melakukan transaksi dengan filter ini. Mulai pesan kebutuhan harianmu sekarang!
+            {filter === 'all' 
+              ? 'Anda belum pernah membuat transaksi di perangkat ini. Belanja kebutuhan harian hemat & cepat sekarang!'
+              : `Tidak ada riwayat pesanan dengan status ${filter === 'active' ? 'aktif' : 'selesai'}.`
+            }
           </p>
           <button
             onClick={onBackToShopping}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-xs"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-xs cursor-pointer active:scale-95 transition-all"
           >
-            Belanja Sekarang
+            Mulai Belanja Sekarang
           </button>
         </div>
       ) : (

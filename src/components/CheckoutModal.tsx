@@ -54,6 +54,7 @@ interface CheckoutModalProps {
   member: MemberProfile;
   onOrderCreated: (order: Order) => void;
   couriers?: CourierInfo[];
+  visitorId?: string;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -71,6 +72,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   member,
   onOrderCreated,
   couriers,
+  visitorId,
 }) => {
   if (!isOpen || cartItems.length === 0) return null;
 
@@ -401,6 +403,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryType: effectiveDeliveryType,
         deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
         pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
+        customerId: member?.id || visitorId,
+        customerName: currentAddress?.recipientName || member?.name || 'Pelanggan',
+        customerPhone: currentAddress?.phone || member?.phone || '',
+        deviceSessionId: visitorId,
         address: effectiveDeliveryType === 'delivery' ? {
           ...currentAddress,
           ...(recordedLocation ? {

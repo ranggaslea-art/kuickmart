@@ -146,6 +146,10 @@ export interface Order {
   deliverySlot?: string;
   pickupTime?: string;
   address?: Address;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  deviceSessionId?: string;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: 'paid' | 'unpaid';

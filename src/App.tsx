@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Header 
 } from './components/Header';
@@ -136,8 +136,40 @@ const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
 const STORAGE_COURIERS_KEY = 'kuickmart_couriers';
 const STORAGE_BRAND_CONFIG_KEY = 'kuickmart_brand_config';
 const STORAGE_STAFF_USERS_KEY = 'kuickmart_staff_users';
+const STORAGE_MY_ORDER_IDS_KEY = 'nusamart_my_order_ids';
+const STORAGE_VISITOR_ID_KEY = 'nusamart_visitor_id';
 
 export default function App() {
+  // Visitor ID & Visitor-specific Orders
+  const [visitorId] = useState<string>(() => {
+    try {
+      let id = localStorage.getItem(STORAGE_VISITOR_ID_KEY);
+      if (!id) {
+        id = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem(STORAGE_VISITOR_ID_KEY, id);
+      }
+      return id;
+    } catch {
+      return 'vis_' + Date.now().toString(36);
+    }
+  });
+
+  const [myOrderIds, setMyOrderIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_MY_ORDER_IDS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_MY_ORDER_IDS_KEY, JSON.stringify(myOrderIds));
+    } catch (e) {
+      console.warn('Gagal menyimpan myOrderIds:', e);
+    }
+  }, [myOrderIds]);
   // Products & Catalogs
   const [products, setProducts] = useState<Product[]>(() => {
     try {
@@ -766,6 +798,15 @@ export default function App() {
 
   // Order Operations
   const handleOrderCreated = (newOrder: Order) => {
+    // Tambahkan ID dan nomor pesanan ke daftar pesanan pribadi milik pengunjung ini
+    setMyOrderIds((prev) => {
+      const updated = Array.from(new Set([newOrder.id, newOrder.orderNumber, ...prev]));
+      try {
+        localStorage.setItem(STORAGE_MY_ORDER_IDS_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     setOrders((prev) => [newOrder, ...prev]);
     setCartItems([]);
 
@@ -847,9 +888,31 @@ export default function App() {
     );
   };
 
-  const activeOrders = orders.filter(
-    (o) => o.status !== 'completed' && o.status !== 'cancelled'
-  );
+  // Filter pesanan: Pengunjung HANYA melihat pesanannya sendiri di tombol Pesanan dan riwayat
+  const myOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // 1. Apakah ID atau nomor pesanan ada di daftar pesanan milik pengunjung ini?
+      if (myOrderIds.includes(order.id) || myOrderIds.includes(order.orderNumber)) {
+        return true;
+      }
+      // 2. Apakah cocok dengan deviceSessionId atau visitorId perangkat ini?
+      if (order.deviceSessionId && order.deviceSessionId === visitorId) {
+        return true;
+      }
+      // 3. Jika pengguna member dan ada customerId spesifik milik visitor
+      if (order.customerId && order.customerId === visitorId) {
+        return true;
+      }
+      return false;
+    });
+  }, [orders, myOrderIds, visitorId]);
+
+  // Pesanan aktif milik pengunjung ini saja (untuk badge tombol Pesanan & banner aktif)
+  const myActiveOrders = useMemo(() => {
+    return myOrders.filter(
+      (o) => o.status !== 'completed' && o.status !== 'cancelled'
+    );
+  }, [myOrders]);
 
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const totalCartPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
@@ -872,7 +935,7 @@ export default function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onOpenOrderHistory={() => setIsViewingOrderHistory(true)}
-        activeOrdersCount={activeOrders.length}
+        activeOrdersCount={myActiveOrders.length}
         allProducts={products}
         onSelectProduct={(p) => setSelectedProductDetail(p)}
         storePromos={storePromos}
@@ -885,7 +948,25 @@ export default function App() {
       {isViewingOrderHistory ? (
         <main className="flex-1 w-full min-w-full">
           <OrderHistoryView
-            orders={orders}
+            orders={myOrders}
+            allOrders={orders}
+            onClaimOrder={(orderIdOrNumber) => {
+              const query = orderIdOrNumber.trim().toUpperCase();
+              const found = orders.find(
+                (o) => o.id === orderIdOrNumber.trim() || o.orderNumber.toUpperCase() === query
+              );
+              if (found) {
+                setMyOrderIds((prev) => {
+                  const updated = Array.from(new Set([found.id, found.orderNumber, ...prev]));
+                  try {
+                    localStorage.setItem(STORAGE_MY_ORDER_IDS_KEY, JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+                return true;
+              }
+              return false;
+            }}
             onBackToShopping={() => setIsViewingOrderHistory(false)}
             onTrackOrder={(order) => setTrackedOrder(order)}
             onReorder={handleReorder}
@@ -994,11 +1075,11 @@ export default function App() {
             </div>
           </div>
 
-          {/* Active Orders Quick Alert (if any active) */}
-          {activeOrders.length > 0 && (
+          {/* Active Orders Quick Alert (if any active of THIS visitor) */}
+          {myActiveOrders.length > 0 && (
             <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 mt-2">
               <div 
-                onClick={() => setTrackedOrder(activeOrders[0])}
+                onClick={() => setTrackedOrder(myActiveOrders[0])}
                 className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md cursor-pointer hover:opacity-95 transition-all"
               >
                 <div className="flex items-center gap-3">
@@ -1007,13 +1088,13 @@ export default function App() {
                   </div>
                   <div>
                     <div className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Pesanan Aktif ({activeOrders[0].orderNumber})</span>
+                      <span>Pesanan Aktif ({myActiveOrders[0].orderNumber})</span>
                       <span className="bg-amber-400 text-amber-950 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
-                        {activeOrders[0].deliveryType === 'delivery' ? 'Sedang Diantar' : 'Siap Diambil'}
+                        {myActiveOrders[0].deliveryType === 'delivery' ? 'Sedang Diantar' : 'Siap Diambil'}
                       </span>
                     </div>
                     <p className="text-[11px] text-blue-100 mt-0.5">
-                      {activeOrders[0].store.name} • Klik untuk lihat live status & struk
+                      {myActiveOrders[0].store.name} • Klik untuk lihat live status & struk
                     </p>
                   </div>
                 </div>
@@ -1325,6 +1406,7 @@ export default function App() {
         member={member}
         onOrderCreated={handleOrderCreated}
         couriers={couriers}
+        visitorId={visitorId}
       />
 
       {/* 4. Live Order Tracker Modal */}

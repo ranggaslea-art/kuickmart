@@ -398,6 +398,10 @@ export async function syncOrderToSupabase(order: Order): Promise<{ success: bool
       address_json: order.address
         ? {
             ...order.address,
+            customerId: order.customerId,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            deviceSessionId: order.deviceSessionId,
             customerLocation: order.customerLocation,
             latitude: order.customerLocation?.latitude || order.address.latitude,
             longitude: order.customerLocation?.longitude || order.address.longitude,
@@ -406,6 +410,10 @@ export async function syncOrderToSupabase(order: Order): Promise<{ success: bool
             accuracy: order.customerLocation?.accuracy || order.address.accuracy,
           }
         : null,
+      customer_id: order.customerId || null,
+      customer_name: order.customerName || null,
+      customer_phone: order.customerPhone || null,
+      device_session_id: order.deviceSessionId || null,
       customer_location: order.customerLocation || null,
       status: order.status,
       payment_method: order.paymentMethod,
@@ -607,6 +615,10 @@ export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
         deliverySlot: row.delivery_slot || undefined,
         pickupTime: row.pickup_time || undefined,
         address: row.address_json || undefined,
+        customerId: row.customer_id || row.address_json?.customerId || undefined,
+        customerName: row.customer_name || row.address_json?.customerName || undefined,
+        customerPhone: row.customer_phone || row.address_json?.customerPhone || undefined,
+        deviceSessionId: row.device_session_id || row.address_json?.deviceSessionId || undefined,
         status: row.status,
         paymentMethod: row.payment_method,
         paymentStatus: row.payment_status || 'paid',
