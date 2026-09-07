@@ -121,9 +121,9 @@ export const Header: React.FC<HeaderProps> = ({
     : [];
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
+    <header className="sticky top-0 z-30 w-full min-w-full bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       {/* Top Notification / Promo Bar */}
-      <div className={`bg-gradient-to-r ${activeAnnouncement?.bgGradient || 'from-red-600 via-rose-600 to-amber-600'} text-white text-xs py-1.5 px-3 sm:px-6 lg:px-8 font-medium transition-all`}>
+      <div className={`w-full min-w-full bg-gradient-to-r ${activeAnnouncement?.bgGradient || 'from-red-600 via-rose-600 to-amber-600'} text-white text-xs py-1.5 px-3 sm:px-6 lg:px-8 font-medium transition-all`}>
         <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shadow-2xs ${activeAnnouncement?.badgeColor || 'bg-white text-red-600'}`}>
@@ -144,8 +144,8 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Main Bar */}
-      <div className="w-full px-3 sm:px-6 lg:px-8 py-3">
-        <div className="flex items-center justify-between gap-3 sm:gap-6">
+      <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-3">
+        <div className="w-full flex items-center justify-between gap-3 sm:gap-6">
           {/* Logo Brand */}
           <div className="flex items-center gap-3 shrink-0">
             <div className="flex items-center gap-2 cursor-pointer">
@@ -360,7 +360,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Mobile Outlet Selector */}
-        <div className="flex lg:hidden items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs">
+        <div className="w-full flex lg:hidden items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs">
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => onToggleDeliveryType(deliveryType === 'delivery' ? 'pickup' : 'delivery')}

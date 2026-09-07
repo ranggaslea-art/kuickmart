@@ -106,7 +106,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const currentBanner = banners[activeSlide] || banners[0];
 
   return (
-    <div className="w-full px-3 sm:px-6 lg:px-8 pt-3 pb-2">
+    <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 pt-3 pb-2">
       {/* Quick Admin Bar if requested */}
       {onOpenPromoManager && (
         <div className="flex items-center justify-between mb-2 px-1">

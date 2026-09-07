@@ -851,7 +851,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-[#1E2022] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen w-full min-w-full flex-1 bg-[#F8F9FA] text-[#1E2022] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
       {/* Sticky Header */}
       <Header
         currentStore={currentStore}
@@ -879,7 +879,7 @@ export default function App() {
 
       {/* Main View Container */}
       {isViewingOrderHistory ? (
-        <main className="flex-1">
+        <main className="flex-1 w-full min-w-full">
           <OrderHistoryView
             orders={orders}
             onBackToShopping={() => setIsViewingOrderHistory(false)}
@@ -888,7 +888,7 @@ export default function App() {
           />
         </main>
       ) : (
-        <main className="flex-1">
+        <main className="flex-1 w-full min-w-full">
           {/* Hero Promotional Banner & Flash Deals */}
           <HeroBanner
             onSelectCategory={(slug) => {
@@ -915,7 +915,7 @@ export default function App() {
           />
 
           {/* Tag Filters & Sort Section */}
-          <div className="w-full px-3 sm:px-6 lg:px-8 py-2">
+          <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-2">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-stone-200 shadow-2xs">
               {/* Quick Tag Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
@@ -992,7 +992,7 @@ export default function App() {
 
           {/* Active Orders Quick Alert (if any active) */}
           {activeOrders.length > 0 && (
-            <div className="w-full px-3 sm:px-6 lg:px-8 mt-2">
+            <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 mt-2">
               <div 
                 onClick={() => setTrackedOrder(activeOrders[0])}
                 className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md cursor-pointer hover:opacity-95 transition-all"
@@ -1021,7 +1021,7 @@ export default function App() {
           )}
 
           {/* Product Grid Catalog */}
-          <div className="w-full px-3 sm:px-6 lg:px-8 py-5">
+          <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-black text-stone-900 tracking-tight">
@@ -1112,7 +1112,7 @@ export default function App() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-stone-200 bg-white py-8 px-3 sm:px-6 lg:px-8 text-stone-600 mt-12">
+      <footer className="w-full min-w-full border-t border-stone-200 bg-white py-8 px-3 sm:px-6 lg:px-8 text-stone-600 mt-12">
         <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 text-xs">
           {/* Brand Info Col */}
           <div>

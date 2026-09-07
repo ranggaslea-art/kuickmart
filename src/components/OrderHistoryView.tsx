@@ -49,7 +49,7 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
   };
 
   return (
-    <div className="w-full px-3 sm:px-6 lg:px-8 py-6 animate-in fade-in duration-200">
+    <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-6 animate-in fade-in duration-200">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-stone-200">
         <div className="flex items-center gap-3">
