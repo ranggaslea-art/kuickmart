@@ -12,13 +12,15 @@ import {
   Layers, 
   KeyRound, 
   Globe,
-  ExternalLink
+  ExternalLink,
+  Smartphone
 } from 'lucide-react';
 import { 
   getStoredSupabaseConfig, 
   saveStoredSupabaseConfig, 
   testSupabaseConnection, 
-  seedDataToSupabase 
+  seedDataToSupabase,
+  generateDeviceSyncUrl
 } from '../lib/supabase';
 import { SUPABASE_SQL_SCHEMA, SUPABASE_RLS_FIX_SQL } from '../lib/supabaseSchema';
 import { 
@@ -72,6 +74,8 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
   const [seedResult, setSeedResult] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
   const [copiedRlsFix, setCopiedRlsFix] = useState(false);
+  const [copiedSyncLink, setCopiedSyncLink] = useState(false);
+  const syncLink = generateDeviceSyncUrl(url, anonKey);
 
   const handleSaveAndTest = async () => {
     setIsTesting(true);
@@ -222,6 +226,46 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
                   className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-500 bg-white"
                 />
               </div>
+
+              {/* Multi-Device Auto Sync Card */}
+              {url && anonKey && (
+                <div className="bg-sky-50 border border-sky-200 p-4 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sky-950 font-bold text-xs">
+                      <Smartphone className="w-4 h-4 text-sky-600 shrink-0" />
+                      <span>Buka di HP Lain Agar Tampilan 100% Sama:</span>
+                    </div>
+                    <span className="text-[10px] bg-sky-200 text-sky-800 font-bold px-2 py-0.5 rounded-full">
+                      Multi-HP Auto Sync
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-sky-800 leading-relaxed">
+                    Agar HP lain (HP teman, kasir, atau pelanggan) langsung menampilkan data produk, struk, dan banner yang sama persis tanpa perlu ketik manual, bagikan link sinkronisasi di bawah ini:
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={syncLink}
+                      className="flex-1 text-[11px] font-mono px-3 py-2 bg-white border border-sky-200 rounded-xl text-stone-600 select-all"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(syncLink);
+                        setCopiedSyncLink(true);
+                        setTimeout(() => setCopiedSyncLink(false), 2500);
+                      }}
+                      className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-2xs whitespace-nowrap active:scale-95 transition-all"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{copiedSyncLink ? 'Link Disalin!' : 'Salin Link'}</span>
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-sky-700 bg-sky-100/60 p-2 rounded-lg">
+                    💡 <strong>Tips Permanen:</strong> Anda juga bisa menempelkan URL & Key ke file <code>src/lib/supabaseConfig.ts</code> agar semua orang di seluruh dunia otomatis terhubung ke database yang sama tanpa perlu link parameter.
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-2 pt-2">

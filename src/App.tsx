@@ -128,6 +128,7 @@ const STORAGE_ORDERS_KEY = 'nusamart_orders';
 const STORAGE_MEMBER_KEY = 'nusamart_member';
 const STORAGE_VOUCHERS_KEY = 'kuickmart_vouchers';
 const STORAGE_PRODUCTS_KEY = 'kuickmart_products_v2';
+const STORAGE_STORES_KEY = 'kuickmart_stores';
 const STORAGE_RECEIPT_CONFIGS_KEY = 'nusamart_receipt_configs';
 const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
 const STORAGE_COURIERS_KEY = 'kuickmart_couriers';
@@ -341,75 +342,72 @@ export default function App() {
       ]);
 
       if (dbProducts && dbProducts.length > 0) {
-        setProducts((prevProducts) => {
-          const dbIds = new Set(dbProducts.map((p) => p.id));
-          // Pertahankan produk yang baru saja ditambah di lokal yang belum ada di Supabase
-          const localOnly = prevProducts.filter((p) => !dbIds.has(p.id));
-
-          // Auto-sync produk lokal ke Supabase di background agar tidak pernah hilang
-          if (localOnly.length > 0) {
-            localOnly.forEach((p) => {
-              saveProductToSupabase(p).catch(() => {});
-            });
-          }
-
-          const formattedDb = dbProducts.map((p) => ({
-            ...p,
-            image: formatImageUrl(p.image),
-          }));
-
-          return [...localOnly, ...formattedDb];
-        });
+        const formattedDb = dbProducts.map((p) => ({
+          ...p,
+          image: formatImageUrl(p.image),
+        }));
+        setProducts(formattedDb);
+        try {
+          localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(formattedDb));
+        } catch (e) {
+          console.warn('Gagal cache produk Supabase ke localStorage:', e);
+        }
       }
       if (dbStores && dbStores.length > 0) {
-        setStores((prevStores) => {
-          const dbIds = new Set(dbStores.map((s) => s.id));
-          const localOnly = prevStores.filter((s) => !dbIds.has(s.id));
-          return [...localOnly, ...dbStores];
-        });
+        setStores(dbStores);
+        try {
+          localStorage.setItem(STORAGE_STORES_KEY, JSON.stringify(dbStores));
+        } catch {}
         setCurrentStore((prev) => dbStores.find((s) => s.id === prev.id) || dbStores[0]);
       }
       if (dbCategories && dbCategories.length > 0) {
         setCategories(dbCategories);
       }
       if (dbVouchers && dbVouchers.length > 0) {
-        setVouchers((prevVouchers) => {
-          const dbIds = new Set(dbVouchers.map((v) => v.id));
-          const localOnly = prevVouchers.filter((v) => !dbIds.has(v.id));
-          return [...localOnly, ...dbVouchers];
-        });
+        setVouchers(dbVouchers);
+        try {
+          localStorage.setItem(STORAGE_VOUCHERS_KEY, JSON.stringify(dbVouchers));
+        } catch {}
       }
       if (dbOrders && dbOrders.length > 0) {
-        setOrders((prevOrders) => {
-          const dbIds = new Set(dbOrders.map((o) => o.id));
-          const localOnly = prevOrders.filter((o) => !dbIds.has(o.id));
-          // Auto sync pesanan lokal ke Supabase jika belum tersimpan di cloud
-          if (localOnly.length > 0) {
-            localOnly.forEach((o) => {
-              syncOrderToSupabase(o).catch(() => {});
-            });
-          }
-          return [...localOnly, ...dbOrders];
-        });
+        setOrders(dbOrders);
+        try {
+          localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify(dbOrders));
+        } catch {}
       }
       // 1. Pengaturan Brand & Struk
       if (dbBrandConfig) {
         setBrandConfig(dbBrandConfig);
+        try {
+          localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(dbBrandConfig));
+        } catch {}
       }
       if (dbReceiptConfigs && dbReceiptConfigs.length > 0) {
         setReceiptConfigs(dbReceiptConfigs);
+        try {
+          localStorage.setItem(STORAGE_RECEIPT_CONFIGS_KEY, JSON.stringify(dbReceiptConfigs));
+        } catch {}
       }
       // 2. Info Promo & Flash Sale
       if (dbStorePromos && dbStorePromos.length > 0) {
         setStorePromos(dbStorePromos);
+        try {
+          localStorage.setItem(STORAGE_STORE_PROMOS_KEY, JSON.stringify(dbStorePromos));
+        } catch {}
       }
       // 3. Kurir & Armada
       if (dbCouriers && dbCouriers.length > 0) {
         setCouriers(dbCouriers);
+        try {
+          localStorage.setItem(STORAGE_COURIERS_KEY, JSON.stringify(dbCouriers));
+        } catch {}
       }
       // 4. Manajemen User / Staff
       if (dbStaffUsers && dbStaffUsers.length > 0) {
         setStaffUsers(dbStaffUsers);
+        try {
+          localStorage.setItem(STORAGE_STAFF_USERS_KEY, JSON.stringify(dbStaffUsers));
+        } catch {}
       }
     } catch (e) {
       console.warn('Gagal memuat data dari Supabase:', e);

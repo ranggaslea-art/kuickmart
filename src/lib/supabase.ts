@@ -24,19 +24,55 @@ import {
   INITIAL_COURIERS,
   INITIAL_STAFF_USERS
 } from '../data/mockData';
+import { DEFAULT_SUPABASE_CONFIG } from './supabaseConfig';
 
 const STORAGE_KEY_URL = 'nusamart_supabase_url';
 const STORAGE_KEY_KEY = 'nusamart_supabase_anon_key';
 
 export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
-  const metaEnv = (import.meta as any).env || {};
-  const envUrl = metaEnv.VITE_SUPABASE_URL || '';
-  const envKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+  // 1. Auto-detect credential from URL params (e.g., when opening sync link or QR code from another phone)
+  if (typeof window !== 'undefined' && window.location?.search) {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const queryUrl = params.get('sb_url');
+      const queryKey = params.get('sb_key');
+      if (queryUrl && queryKey) {
+        saveStoredSupabaseConfig(queryUrl, queryKey);
+        // Clean URL parameters without reloading
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    } catch {
+      // ignore
+    }
+  }
 
-  const savedUrl = localStorage.getItem(STORAGE_KEY_URL) || envUrl;
-  const savedKey = localStorage.getItem(STORAGE_KEY_KEY) || envKey;
+  const metaEnv = (import.meta as any).env || {};
+  const envUrl = (metaEnv.VITE_SUPABASE_URL || DEFAULT_SUPABASE_CONFIG.url || '').trim();
+  const envKey = (metaEnv.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_CONFIG.anonKey || '').trim();
+
+  let savedUrl = (localStorage.getItem(STORAGE_KEY_URL) || '').trim();
+  let savedKey = (localStorage.getItem(STORAGE_KEY_KEY) || '').trim();
+
+  // If local storage is empty or contains placeholder, use env/default
+  if (!savedUrl || savedUrl.includes('xyzcompany') || !savedUrl.startsWith('https://')) {
+    savedUrl = envUrl;
+    savedKey = envKey;
+    if (envUrl) {
+      try {
+        localStorage.setItem(STORAGE_KEY_URL, envUrl);
+        localStorage.setItem(STORAGE_KEY_KEY, envKey);
+      } catch {}
+    }
+  }
 
   return { url: savedUrl, anonKey: savedKey };
+}
+
+export function generateDeviceSyncUrl(url: string, anonKey: string): string {
+  if (typeof window === 'undefined' || !url || !anonKey) return '';
+  const base = window.location.origin + window.location.pathname;
+  return `${base}?sb_url=${encodeURIComponent(url.trim())}&sb_key=${encodeURIComponent(anonKey.trim())}`;
 }
 
 export function saveStoredSupabaseConfig(url: string, anonKey: string): void {
