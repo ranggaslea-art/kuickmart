@@ -106,7 +106,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const currentBanner = banners[activeSlide] || banners[0];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 pb-2">
+    <div className="w-full px-3 sm:px-6 lg:px-8 pt-3 pb-2">
       {/* Quick Admin Bar if requested */}
       {onOpenPromoManager && (
         <div className="flex items-center justify-between mb-2 px-1">
@@ -157,11 +157,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               </span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight max-w-lg leading-tight mb-2">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight max-w-2xl leading-tight mb-2">
               {currentBanner.title}
             </h2>
 
-            <p className="text-xs sm:text-sm text-stone-200 max-w-md line-clamp-2 mb-4">
+            <p className="text-xs sm:text-sm text-stone-200 max-w-xl line-clamp-2 mb-4">
               {currentBanner.subtitle}
             </p>
           </div>

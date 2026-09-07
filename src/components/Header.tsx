@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -15,7 +15,9 @@ import {
   Flame,
   Layers,
   RefreshCw,
-  Database
+  Database,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -69,6 +71,26 @@ export const Header: React.FC<HeaderProps> = ({
   onRefreshData,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    } catch {}
+  };
+
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const totalCartPrice = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
@@ -103,8 +125,8 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       {/* Top Notification / Promo Bar */}
-      <div className={`bg-gradient-to-r ${activeAnnouncement?.bgGradient || 'from-red-600 via-rose-600 to-amber-600'} text-white text-xs py-1.5 px-4 font-medium transition-all`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <div className={`bg-gradient-to-r ${activeAnnouncement?.bgGradient || 'from-red-600 via-rose-600 to-amber-600'} text-white text-xs py-1.5 px-3 sm:px-6 lg:px-8 font-medium transition-all`}>
+        <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shadow-2xs ${activeAnnouncement?.badgeColor || 'bg-white text-red-600'}`}>
               {activeAnnouncement?.badgeText || 'JSM HEMAT'}
@@ -124,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Main Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+      <div className="w-full px-3 sm:px-6 lg:px-8 py-3">
         <div className="flex items-center justify-between gap-3 sm:gap-6">
           {/* Logo Brand */}
           <div className="flex items-center gap-3 shrink-0">
@@ -198,7 +220,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Search Bar */}
-          <div className="flex-1 relative max-w-xl">
+          <div className="flex-1 relative min-w-[150px] sm:min-w-[200px] max-w-3xl">
             <div className="relative">
               <input
                 type="text"
@@ -295,6 +317,22 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Database className={`w-4 h-4 ${isSupabaseConnected ? 'text-emerald-600' : 'text-stone-500'}`} />
               <span className="text-xs font-medium hidden md:inline">Database</span>
+            </button>
+
+            {/* Fullscreen Toggle Button */}
+            <button
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "Keluar Mode Layar Penuh" : "Mode Layar Penuh (Fullscreen)"}
+              className="p-2 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              {isFullscreen ? (
+                <Minimize className="w-4 h-4 text-blue-600" />
+              ) : (
+                <Maximize className="w-4 h-4 text-stone-600" />
+              )}
+              <span className="text-xs font-medium hidden lg:inline">
+                {isFullscreen ? 'Normal' : 'Full Layar'}
+              </span>
             </button>
 
             {/* Admin Panel Button (Satu-satunya Tombol Admin di Header) */}

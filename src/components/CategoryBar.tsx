@@ -50,7 +50,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+    <div className="w-full px-3 sm:px-6 lg:px-8 py-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-bold text-stone-900 flex items-center gap-1.5">
           <Tag className="w-4 h-4 text-blue-600" />

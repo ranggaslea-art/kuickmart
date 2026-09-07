@@ -915,7 +915,7 @@ export default function App() {
           />
 
           {/* Tag Filters & Sort Section */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2">
+          <div className="w-full px-3 sm:px-6 lg:px-8 py-2">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-stone-200 shadow-2xs">
               {/* Quick Tag Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
@@ -992,7 +992,7 @@ export default function App() {
 
           {/* Active Orders Quick Alert (if any active) */}
           {activeOrders.length > 0 && (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-2">
+            <div className="w-full px-3 sm:px-6 lg:px-8 mt-2">
               <div 
                 onClick={() => setTrackedOrder(activeOrders[0])}
                 className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-md cursor-pointer hover:opacity-95 transition-all"
@@ -1021,7 +1021,7 @@ export default function App() {
           )}
 
           {/* Product Grid Catalog */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5">
+          <div className="w-full px-3 sm:px-6 lg:px-8 py-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-black text-stone-900 tracking-tight">
@@ -1067,7 +1067,7 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4">
                 {filteredProducts.map((product) => {
                   const inCart = cartItems.find((item) => item.product.id === product.id);
                   const qty = inCart ? inCart.quantity : 0;
@@ -1112,8 +1112,8 @@ export default function App() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-stone-200 bg-white py-8 px-4 sm:px-6 text-stone-600 mt-12">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6 text-xs">
+      <footer className="border-t border-stone-200 bg-white py-8 px-3 sm:px-6 lg:px-8 text-stone-600 mt-12">
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 text-xs">
           {/* Brand Info Col */}
           <div>
             <div className="flex items-center gap-2 mb-2 font-black text-blue-900 text-base">
@@ -1241,7 +1241,7 @@ export default function App() {
         </div>
 
         {/* Footer Bottom Bar */}
-        <div className="max-w-7xl mx-auto mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
+        <div className="w-full mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
           <div>{brandConfig.copyrightText || '© 2026 KuickMart Express. All rights reserved.'}</div>
           <div className="flex items-center gap-4 mt-2 sm:mt-0">
             <button
