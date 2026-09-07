@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Trash2, 
@@ -11,7 +11,8 @@ import {
   ShoppingBag, 
   AlertCircle, 
   Check,
-  Percent
+  Percent,
+  Store as StoreIcon
 } from 'lucide-react';
 import { CartItem, Voucher, MemberProfile, Store } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -33,6 +34,7 @@ interface CartDrawerProps {
   onProceedToCheckout: () => void;
   store: Store;
   deliveryType: 'delivery' | 'pickup';
+  onSelectDeliveryType?: (type: 'delivery' | 'pickup') => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -51,6 +53,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onProceedToCheckout,
   store,
   deliveryType,
+  onSelectDeliveryType,
 }) => {
   if (!isOpen) return null;
 
@@ -59,7 +62,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [showVoucherList, setShowVoucherList] = useState(false);
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
-  const rawDeliveryFee = deliveryType === 'delivery' ? store.deliveryFee : 0;
+
+  // Check if shopping is below minimum spend
+  const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
+  // When below minimum spend, ongkos kirim is disabled / inactive and service switches to 'pickup'
+  const effectiveDeliveryType = isBelowMinOrder ? 'pickup' : deliveryType;
+  const rawDeliveryFee = (!isBelowMinOrder && effectiveDeliveryType === 'delivery') ? store.deliveryFee : 0;
+
+  // Sync to parent if below minimum and was 'delivery'
+  useEffect(() => {
+    if (isBelowMinOrder && deliveryType === 'delivery' && onSelectDeliveryType) {
+      onSelectDeliveryType('pickup');
+    }
+  }, [isBelowMinOrder, deliveryType, onSelectDeliveryType]);
 
   // Free shipping threshold
   const freeShippingThreshold = 30000;
@@ -144,8 +159,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </div>
         </div>
 
-        {/* Free Shipping Progress Bar */}
-        {deliveryType === 'delivery' && (
+        {/* Free Shipping / Below Min Order Notification Bar */}
+        {isBelowMinOrder ? (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <div>
+                <span className="font-bold text-[11px] block">
+                  Belanja di bawah batas minimum {formatRupiah(store.minOrder)}
+                </span>
+                <p className="text-[10px] text-amber-800 leading-tight mt-0.5">
+                  Ongkos kirim nonaktif. Anda tetap bisa lanjut transaksi &amp; bayar via <strong>Ambil di Toko</strong>.
+                </p>
+              </div>
+            </div>
+            <span className="text-[9px] font-bold uppercase bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded shrink-0">
+              Ongkir Nonaktif
+            </span>
+          </div>
+        ) : effectiveDeliveryType === 'delivery' ? (
           <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2.5 border-b border-stone-100">
             <div className="flex items-center justify-between text-xs font-semibold text-stone-800 mb-1.5">
               <div className="flex items-center gap-1.5">
@@ -165,7 +197,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               />
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Cart Item List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -274,9 +306,43 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           )}
         </div>
 
-        {/* Bottom Section: Vouchers, Loyalty, Breakdown, and Checkout Button */}
+        {/* Bottom Section: Delivery Selector, Vouchers, Loyalty, Breakdown, and Checkout Button */}
         {cartItems.length > 0 && (
           <div className="p-4 border-t border-stone-200 bg-stone-50/70 space-y-3">
+            {/* Delivery Service Mode Selector */}
+            <div className="bg-stone-100/90 p-1 rounded-xl grid grid-cols-2 gap-1 text-xs font-semibold">
+              <button
+                type="button"
+                disabled={isBelowMinOrder}
+                onClick={() => !isBelowMinOrder && onSelectDeliveryType && onSelectDeliveryType('delivery')}
+                className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                  isBelowMinOrder
+                    ? 'opacity-50 cursor-not-allowed bg-stone-200/50 text-stone-400'
+                    : effectiveDeliveryType === 'delivery'
+                    ? 'bg-white text-blue-700 font-bold shadow-2xs cursor-pointer'
+                    : 'text-stone-600 hover:text-stone-900 cursor-pointer'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>
+                  {isBelowMinOrder ? 'Diantar (Nonaktif)' : `Diantar (${formatRupiah(store.deliveryFee)})`}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectDeliveryType && onSelectDeliveryType('pickup')}
+                className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  effectiveDeliveryType === 'pickup'
+                    ? 'bg-white text-red-600 font-bold shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <StoreIcon className="w-3.5 h-3.5" />
+                <span>Ambil di Toko (Gratis)</span>
+              </button>
+            </div>
+
             {/* Voucher Selector Accordion */}
             <div className="bg-white rounded-xl border border-stone-200 p-2.5">
               <div className="flex items-center justify-between">
@@ -393,10 +459,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <span>Subtotal Produk</span>
                 <span className="font-semibold text-stone-900">{formatRupiah(subtotal)}</span>
               </div>
-              {deliveryType === 'delivery' && (
+              {isBelowMinOrder ? (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="flex items-center gap-1">
+                    <span>Ongkos Kirim</span>
+                    <span className="text-[9px] bg-amber-100 text-amber-900 font-semibold px-1.5 py-0.2 rounded">
+                      Nonaktif (Di Bawah Min.)
+                    </span>
+                  </span>
+                  <span className="font-semibold text-emerald-700">Rp 0 (Ambil di Toko)</span>
+                </div>
+              ) : effectiveDeliveryType === 'delivery' ? (
                 <div className="flex justify-between">
                   <span>Ongkos Kirim ({store.distanceKm} km)</span>
                   <span className="font-semibold text-stone-900">{formatRupiah(rawDeliveryFee)}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between">
+                  <span>Ongkos Kirim (Ambil di Toko)</span>
+                  <span className="font-semibold text-emerald-600">Gratis (Rp 0)</span>
                 </div>
               )}
               {voucherDiscount > 0 && (
@@ -422,18 +503,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
             </div>
 
-            {/* Checkout Button */}
+            {/* Checkout Button - Clickable even below minimum spend */}
             <button
               onClick={onProceedToCheckout}
-              disabled={subtotal < store.minOrder}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-stone-300 text-white font-bold text-xs py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-transform active:scale-98"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-transform active:scale-98 cursor-pointer"
             >
               <span>Lanjut ke Pembayaran</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-            {subtotal < store.minOrder && (
-              <p className="text-[10px] text-red-600 text-center font-medium">
-                Minimal belanja di toko ini adalah {formatRupiah(store.minOrder)}
+            {isBelowMinOrder && (
+              <p className="text-[11px] text-blue-900 bg-blue-50/90 border border-blue-200/80 rounded-xl p-2.5 text-center font-medium leading-relaxed">
+                Belanja di bawah minimum ({formatRupiah(store.minOrder)}): Ongkos kirim nonaktif, pesanan diproses via <strong>Ambil di Toko</strong>. Anda tetap dapat melanjutkan transaksi dan menekan tombol pembayaran.
               </p>
             )}
           </div>

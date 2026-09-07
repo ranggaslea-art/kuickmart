@@ -246,7 +246,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
-  const rawDeliveryFee = deliveryType === 'delivery' ? store.deliveryFee : 0;
+  const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
+  const effectiveDeliveryType = isBelowMinOrder ? 'pickup' : deliveryType;
+  const rawDeliveryFee = (!isBelowMinOrder && effectiveDeliveryType === 'delivery') ? store.deliveryFee : 0;
+
+  // Auto-switch to pickup if below minimum and was on delivery
+  useEffect(() => {
+    if (isBelowMinOrder && deliveryType === 'delivery') {
+      onSelectDeliveryType('pickup');
+    }
+  }, [isBelowMinOrder, deliveryType, onSelectDeliveryType]);
 
   // Calculate discounts
   let voucherDiscount = 0;
@@ -389,10 +398,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         createdAt: new Date().toISOString(),
         items: [...cartItems],
         store: store,
-        deliveryType: deliveryType,
-        deliverySlot: deliveryType === 'delivery' ? deliverySlot : undefined,
-        pickupTime: deliveryType === 'pickup' ? pickupSlot : undefined,
-        address: deliveryType === 'delivery' ? {
+        deliveryType: effectiveDeliveryType,
+        deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
+        pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
+        address: effectiveDeliveryType === 'delivery' ? {
           ...currentAddress,
           ...(recordedLocation ? {
             latitude: recordedLocation.latitude,
@@ -438,7 +447,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           isSimulated: isDokuSimulatedPaid || dokuPaymentData.source === 'doku_sandbox_ready',
         } : undefined,
         driver:
-          deliveryType === 'delivery'
+          effectiveDeliveryType === 'delivery'
             ? (() => {
                 const assigned = 
                   couriers?.find(c => c.status === 'available' && (!c.storeId || c.storeId === store.id)) ||
@@ -536,39 +545,63 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => onSelectDeliveryType('delivery')}
+                type="button"
+                disabled={isBelowMinOrder}
+                onClick={() => !isBelowMinOrder && onSelectDeliveryType('delivery')}
                 className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-                  deliveryType === 'delivery'
-                    ? 'border-blue-600 bg-blue-50/50 shadow-2xs'
-                    : 'border-stone-200 hover:border-stone-300 bg-white'
+                  isBelowMinOrder
+                    ? 'opacity-50 cursor-not-allowed bg-stone-100 border-stone-200'
+                    : effectiveDeliveryType === 'delivery'
+                    ? 'border-blue-600 bg-blue-50/50 shadow-2xs cursor-pointer'
+                    : 'border-stone-200 hover:border-stone-300 bg-white cursor-pointer'
                 }`}
               >
-                <div className={`p-2 rounded-xl ${deliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <div className={`p-2 rounded-xl ${isBelowMinOrder ? 'bg-stone-200 text-stone-400' : effectiveDeliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
                   <Bike className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-bold text-xs text-stone-900">Diantar Kurir</div>
-                  <div className="text-[10px] text-stone-500">Ongkir {formatRupiah(store.deliveryFee)}</div>
+                  <div className="font-bold text-xs text-stone-900">
+                    {isBelowMinOrder ? 'Diantar (Nonaktif)' : 'Diantar Kurir'}
+                  </div>
+                  <div className="text-[10px] text-stone-500">
+                    {isBelowMinOrder ? `Min. ${formatRupiah(store.minOrder)} (Ongkir Nonaktif)` : `Ongkir ${formatRupiah(store.deliveryFee)}`}
+                  </div>
                 </div>
               </button>
 
               <button
+                type="button"
                 onClick={() => onSelectDeliveryType('pickup')}
-                className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-                  deliveryType === 'pickup'
+                className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                  effectiveDeliveryType === 'pickup'
                     ? 'border-red-600 bg-red-50/50 shadow-2xs'
                     : 'border-stone-200 hover:border-stone-300 bg-white'
                 }`}
               >
-                <div className={`p-2 rounded-xl ${deliveryType === 'pickup' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <div className={`p-2 rounded-xl ${effectiveDeliveryType === 'pickup' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
                   <StoreIcon className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="font-bold text-xs text-stone-900">Ambil di Toko</div>
-                  <div className="text-[10px] text-emerald-600 font-semibold">Gratis (Rp 0)</div>
+                  <div className="text-[10px] text-emerald-600 font-semibold">Gratis (Rp 0 Ongkir)</div>
                 </div>
               </button>
             </div>
+
+            {/* Below min order warning banner */}
+            {isBelowMinOrder && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-[11px] block">
+                    Belanja di bawah batas minimum ({formatRupiah(store.minOrder)})
+                  </span>
+                  <span className="text-[10px] text-amber-800 leading-tight block mt-0.5">
+                    Layanan antar kurir dan ongkos kirim dinonaktifkan. Pesanan Anda diproses via <strong>Ambil di Toko</strong> dan Anda dapat langsung menekan tombol pembayaran.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Time Slot Picker */}
             {deliveryType === 'delivery' ? (
@@ -1193,10 +1226,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <span>Total Pesanan ({cartItems.reduce((a, b) => a + b.quantity, 0)} paket)</span>
               <span className="font-semibold text-stone-900">{formatRupiah(subtotal)}</span>
             </div>
-            {deliveryType === 'delivery' && (
+            {isBelowMinOrder ? (
+              <div className="flex justify-between text-xs text-stone-600 items-center">
+                <span className="flex items-center gap-1">
+                  <span>Ongkos Kirim</span>
+                  <span className="text-[9px] bg-amber-100 text-amber-900 font-semibold px-1.5 py-0.2 rounded">
+                    Nonaktif (Di Bawah Min.)
+                  </span>
+                </span>
+                <span className="font-semibold text-emerald-700">Rp 0 (Ambil di Toko)</span>
+              </div>
+            ) : effectiveDeliveryType === 'delivery' ? (
               <div className="flex justify-between text-xs text-stone-600">
                 <span>Biaya Pengantaran</span>
                 <span className="font-semibold text-stone-900">{formatRupiah(rawDeliveryFee)}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between text-xs text-stone-600">
+                <span>Biaya Pengantaran (Ambil di Toko)</span>
+                <span className="font-semibold text-emerald-600">Gratis (Rp 0)</span>
               </div>
             )}
             {voucherDiscount > 0 && (
