@@ -51,7 +51,8 @@ import {
   ReceiptInfo,
   StorePromoInfo,
   CourierInfo,
-  BrandHeaderFooterConfig
+  BrandHeaderFooterConfig,
+  StaffUser
 } from './types';
 import { 
   PRODUCTS, 
@@ -63,7 +64,8 @@ import {
   INITIAL_RECEIPT_CONFIGS,
   INITIAL_STORE_PROMOS,
   INITIAL_COURIERS,
-  INITIAL_BRAND_CONFIG
+  INITIAL_BRAND_CONFIG,
+  INITIAL_STAFF_USERS
 } from './data/mockData';
 import { 
   getSupabase, 
@@ -78,7 +80,21 @@ import {
   deleteProductFromSupabase,
   saveStoreToSupabase,
   saveVoucherToSupabase,
-  updateProductSalesAndStockInSupabase
+  updateProductSalesAndStockInSupabase,
+  fetchBrandConfigFromSupabase,
+  saveBrandConfigToSupabase,
+  fetchReceiptConfigsFromSupabase,
+  saveReceiptConfigToSupabase,
+  deleteReceiptConfigFromSupabase,
+  fetchStorePromosFromSupabase,
+  saveStorePromoToSupabase,
+  deleteStorePromoFromSupabase,
+  fetchCouriersFromSupabase,
+  saveCourierToSupabase,
+  deleteCourierFromSupabase,
+  fetchStaffUsersFromSupabase,
+  saveStaffUserToSupabase,
+  deleteStaffUserFromSupabase
 } from './lib/supabase';
 import { 
   Zap, 
@@ -115,6 +131,7 @@ const STORAGE_RECEIPT_CONFIGS_KEY = 'nusamart_receipt_configs';
 const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
 const STORAGE_COURIERS_KEY = 'kuickmart_couriers';
 const STORAGE_BRAND_CONFIG_KEY = 'kuickmart_brand_config';
+const STORAGE_STAFF_USERS_KEY = 'kuickmart_staff_users';
 
 export default function App() {
   // Products & Catalogs
@@ -278,18 +295,48 @@ export default function App() {
     localStorage.setItem(STORAGE_COURIERS_KEY, JSON.stringify(couriers));
   }, [couriers]);
 
+  // Staff Users Management State (Admin, Supervisor, Kasir, Gudang)
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_STAFF_USERS_KEY);
+      return saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
+    } catch {
+      return INITIAL_STAFF_USERS;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_STAFF_USERS_KEY, JSON.stringify(staffUsers));
+  }, [staffUsers]);
+
   // Supabase State
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
-  // Load all live catalog data from Supabase
+  // Load all live catalog & system data from Supabase
   const loadAllFromSupabase = async () => {
     try {
-      const [dbProducts, dbStores, dbCategories, dbVouchers, dbOrders] = await Promise.all([
+      const [
+        dbProducts, 
+        dbStores, 
+        dbCategories, 
+        dbVouchers, 
+        dbOrders,
+        dbBrandConfig,
+        dbReceiptConfigs,
+        dbStorePromos,
+        dbCouriers,
+        dbStaffUsers
+      ] = await Promise.all([
         fetchProductsFromSupabase(),
         fetchStoresFromSupabase(),
         fetchCategoriesFromSupabase(),
         fetchVouchersFromSupabase(),
         fetchOrdersFromSupabase(),
+        fetchBrandConfigFromSupabase(),
+        fetchReceiptConfigsFromSupabase(),
+        fetchStorePromosFromSupabase(),
+        fetchCouriersFromSupabase(),
+        fetchStaffUsersFromSupabase()
       ]);
 
       if (dbProducts && dbProducts.length > 0) {
@@ -343,6 +390,25 @@ export default function App() {
           }
           return [...localOnly, ...dbOrders];
         });
+      }
+      // 1. Pengaturan Brand & Struk
+      if (dbBrandConfig) {
+        setBrandConfig(dbBrandConfig);
+      }
+      if (dbReceiptConfigs && dbReceiptConfigs.length > 0) {
+        setReceiptConfigs(dbReceiptConfigs);
+      }
+      // 2. Info Promo & Flash Sale
+      if (dbStorePromos && dbStorePromos.length > 0) {
+        setStorePromos(dbStorePromos);
+      }
+      // 3. Kurir & Armada
+      if (dbCouriers && dbCouriers.length > 0) {
+        setCouriers(dbCouriers);
+      }
+      // 4. Manajemen User / Staff
+      if (dbStaffUsers && dbStaffUsers.length > 0) {
+        setStaffUsers(dbStaffUsers);
       }
     } catch (e) {
       console.warn('Gagal memuat data dari Supabase:', e);
@@ -440,6 +506,52 @@ export default function App() {
     if (isSupabaseConnected) {
       newVouchers.forEach((v) => {
         saveVoucherToSupabase(v).catch(() => {});
+      });
+    }
+  };
+
+  const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
+    setBrandConfig((prev) => {
+      const next = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
+      if (isSupabaseConnected) {
+        saveBrandConfigToSupabase(next).catch(() => {});
+      }
+      return next;
+    });
+  };
+
+  const handleUpdateReceiptConfigs = (newConfigs: ReceiptInfo[]) => {
+    setReceiptConfigs(newConfigs);
+    if (isSupabaseConnected) {
+      newConfigs.forEach((r) => {
+        saveReceiptConfigToSupabase(r).catch(() => {});
+      });
+    }
+  };
+
+  const handleUpdateStorePromos = (newPromos: StorePromoInfo[]) => {
+    setStorePromos(newPromos);
+    if (isSupabaseConnected) {
+      newPromos.forEach((p) => {
+        saveStorePromoToSupabase(p).catch(() => {});
+      });
+    }
+  };
+
+  const handleUpdateCouriers = (newCouriers: CourierInfo[]) => {
+    setCouriers(newCouriers);
+    if (isSupabaseConnected) {
+      newCouriers.forEach((c) => {
+        saveCourierToSupabase(c).catch(() => {});
+      });
+    }
+  };
+
+  const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
+    setStaffUsers(newUsers);
+    if (isSupabaseConnected) {
+      newUsers.forEach((u) => {
+        saveStaffUserToSupabase(u).catch(() => {});
       });
     }
   };
@@ -1213,7 +1325,17 @@ export default function App() {
           }
         }}
         onRefreshData={loadAllFromSupabase}
-        currentData={{ products, stores, categories, vouchers }}
+        currentData={{ 
+          products, 
+          stores, 
+          categories, 
+          vouchers,
+          brandConfig,
+          receiptConfigs,
+          storePromos,
+          couriers,
+          staffUsers
+        }}
       />
 
       {/* 8. Admin & POS Store Management Panel Modal */}
@@ -1235,13 +1357,15 @@ export default function App() {
         onUpdateVouchers={handleUpdateVouchers}
         isSupabaseConnected={isSupabaseConnected}
         receiptConfigs={receiptConfigs}
-        onUpdateReceiptConfigs={setReceiptConfigs}
+        onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
         storePromos={storePromos}
-        onUpdateStorePromos={setStorePromos}
+        onUpdateStorePromos={handleUpdateStorePromos}
         couriers={couriers}
-        onUpdateCouriers={setCouriers}
+        onUpdateCouriers={handleUpdateCouriers}
         brandConfig={brandConfig}
-        onUpdateBrandConfig={setBrandConfig}
+        onUpdateBrandConfig={handleUpdateBrandConfig}
+        staffUsers={staffUsers}
+        onUpdateStaffUsers={handleUpdateStaffUsers}
         initialTab={adminPanelInitialTab}
         onOpenSupabaseModal={() => {
           setIsAdminPanelOpen(false);

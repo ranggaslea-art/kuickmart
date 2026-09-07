@@ -1,6 +1,29 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Product, Order, MemberProfile, Store, Category, Voucher, CartItem } from '../types';
-import { PRODUCTS, INITIAL_STORES, CATEGORIES, VOUCHERS } from '../data/mockData';
+import { 
+  Product, 
+  Order, 
+  MemberProfile, 
+  Store, 
+  Category, 
+  Voucher, 
+  CartItem,
+  BrandHeaderFooterConfig,
+  ReceiptInfo,
+  StorePromoInfo,
+  CourierInfo,
+  StaffUser
+} from '../types';
+import { 
+  PRODUCTS, 
+  INITIAL_STORES, 
+  CATEGORIES, 
+  VOUCHERS,
+  INITIAL_BRAND_CONFIG,
+  INITIAL_RECEIPT_CONFIGS,
+  INITIAL_STORE_PROMOS,
+  INITIAL_COURIERS,
+  INITIAL_STAFF_USERS
+} from '../data/mockData';
 
 const STORAGE_KEY_URL = 'nusamart_supabase_url';
 const STORAGE_KEY_KEY = 'nusamart_supabase_anon_key';
@@ -84,6 +107,11 @@ export async function seedDataToSupabase(customData?: {
   stores?: Store[];
   categories?: Category[];
   vouchers?: Voucher[];
+  brandConfig?: BrandHeaderFooterConfig;
+  receiptConfigs?: ReceiptInfo[];
+  storePromos?: StorePromoInfo[];
+  couriers?: CourierInfo[];
+  staffUsers?: StaffUser[];
 }): Promise<{ success: boolean; message: string; count?: number }> {
   const supabase = getSupabase();
   if (!supabase) {
@@ -94,6 +122,11 @@ export async function seedDataToSupabase(customData?: {
   const categoriesToSeed = customData?.categories && customData.categories.length > 0 ? customData.categories : CATEGORIES;
   const vouchersToSeed = customData?.vouchers && customData.vouchers.length > 0 ? customData.vouchers : VOUCHERS;
   const productsToSeed = customData?.products && customData.products.length > 0 ? customData.products : PRODUCTS;
+  const brandConfigToSeed = customData?.brandConfig || INITIAL_BRAND_CONFIG;
+  const receiptConfigsToSeed = customData?.receiptConfigs && customData.receiptConfigs.length > 0 ? customData.receiptConfigs : INITIAL_RECEIPT_CONFIGS;
+  const storePromosToSeed = customData?.storePromos && customData.storePromos.length > 0 ? customData.storePromos : INITIAL_STORE_PROMOS;
+  const couriersToSeed = customData?.couriers && customData.couriers.length > 0 ? customData.couriers : INITIAL_COURIERS;
+  const staffUsersToSeed = customData?.staffUsers && customData.staffUsers.length > 0 ? customData.staffUsers : INITIAL_STAFF_USERS;
 
   try {
     // 1. Seed Stores
@@ -161,12 +194,102 @@ export async function seedDataToSupabase(customData?: {
       is_popular: p.isPopular || false,
     }));
     const { error: prodError } = await supabase.from('products').upsert(productsPayload, { onConflict: 'id' });
-
     if (prodError) throw prodError;
+
+    // 5. Seed Brand Configuration (Header & Footer)
+    await supabase.from('brand_configs').upsert({
+      id: 'default',
+      config_json: brandConfigToSeed,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+    // 6. Seed Receipt Configurations (Struk Kasir)
+    const receiptsPayload = receiptConfigsToSeed.map((r) => ({
+      id: r.id,
+      store_id: r.storeId || null,
+      profile_name: r.profileName,
+      header_brand: r.headerBrand,
+      sub_header: r.subHeader || null,
+      store_name: r.storeName,
+      address: r.address,
+      city: r.city || null,
+      phone: r.phone,
+      tax_id_or_npwp: r.taxIdOrNpwp || null,
+      website_or_social: r.websiteOrSocial || null,
+      cashier_name: r.cashierName || null,
+      footer_message1: r.footerMessage1,
+      footer_message2: r.footerMessage2 || null,
+      cs_hotline: r.csHotline || null,
+      show_barcode: r.showBarcode ?? true,
+      show_store_logo: r.showStoreLogo ?? true,
+      paper_width: r.paperWidth || '58mm',
+      is_default: r.isDefault ?? false,
+      updated_at: new Date().toISOString()
+    }));
+    await supabase.from('receipt_configs').upsert(receiptsPayload, { onConflict: 'id' });
+
+    // 7. Seed Store Promos
+    const promosPayload = storePromosToSeed.map((p) => ({
+      id: p.id,
+      type: p.type,
+      title: p.title,
+      subtitle: p.subtitle || null,
+      badge_text: p.badgeText || null,
+      badge_color: p.badgeColor || null,
+      cta_text: p.ctaText || null,
+      target_category: p.targetCategory || null,
+      discount_value: p.discountValue || null,
+      bg_gradient: p.bgGradient || null,
+      image_url: p.imageUrl || null,
+      flash_hours: p.flashHours ?? 0,
+      flash_minutes: p.flashMinutes ?? 0,
+      is_active: p.isActive ?? true,
+      order_seq: p.orderSeq ?? 0,
+      valid_until: p.validUntil || null,
+      store_id: p.storeId || null,
+      updated_at: new Date().toISOString()
+    }));
+    await supabase.from('store_promos').upsert(promosPayload, { onConflict: 'id' });
+
+    // 8. Seed Couriers
+    const couriersPayload = couriersToSeed.map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      whatsapp: c.whatsapp || null,
+      vehicle_type: c.vehicleType,
+      vehicle_plate: c.vehiclePlate,
+      photo: c.photo || null,
+      is_verified: c.isVerified ?? true,
+      status: c.status || 'available',
+      rating: c.rating ?? 4.9,
+      total_deliveries: c.totalDeliveries ?? 0,
+      store_id: c.storeId || null,
+      notes: c.notes || null,
+      updated_at: new Date().toISOString()
+    }));
+    await supabase.from('couriers').upsert(couriersPayload, { onConflict: 'id' });
+
+    // 9. Seed Staff Users
+    const staffPayload = staffUsersToSeed.map((u) => ({
+      id: u.id,
+      username: u.username,
+      name: u.name,
+      role: u.role,
+      pin: u.pin,
+      phone: u.phone || null,
+      email: u.email || null,
+      store_id: u.storeId || null,
+      store_name: u.storeName || null,
+      is_active: u.isActive ?? true,
+      created_at: u.createdAt || new Date().toISOString(),
+      last_login: u.lastLogin || null
+    }));
+    await supabase.from('staff_users').upsert(staffPayload, { onConflict: 'id' });
 
     return { 
       success: true, 
-      message: `Berhasil sinkronisasi ${productsToSeed.length} produk & data master toko ke Supabase!`,
+      message: `Berhasil sinkronisasi ${productsToSeed.length} produk, brand config, struk, promo, kurir, dan user ke Supabase!`,
       count: productsToSeed.length 
     };
   } catch (err: any) {
@@ -694,6 +817,325 @@ export async function deleteVoucherFromSupabase(voucherId: string): Promise<bool
   if (!supabase) return false;
   try {
     const { error } = await supabase.from('vouchers').delete().eq('id', voucherId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 1. BRAND CONFIGURATION (Header & Footer Brand, Logo, Slogan)
+// -------------------------------------------------------------
+export async function fetchBrandConfigFromSupabase(): Promise<BrandHeaderFooterConfig | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('brand_configs').select('*').eq('id', 'default').maybeSingle();
+    if (error || !data || !data.config_json) return null;
+    return data.config_json as BrandHeaderFooterConfig;
+  } catch (e) {
+    console.warn('Gagal memuat brand config dari Supabase:', e);
+    return null;
+  }
+}
+
+export async function saveBrandConfigToSupabase(config: BrandHeaderFooterConfig): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('brand_configs').upsert({
+      id: 'default',
+      config_json: config,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 2. RECEIPT CONFIGURATIONS (Struk Toko & Kasir)
+// -------------------------------------------------------------
+export async function fetchReceiptConfigsFromSupabase(): Promise<ReceiptInfo[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('receipt_configs').select('*').order('updated_at', { ascending: false });
+    if (error || !data || data.length === 0) return null;
+    return data.map((row: any) => ({
+      id: row.id,
+      storeId: row.store_id || undefined,
+      profileName: row.profile_name,
+      headerBrand: row.header_brand,
+      subHeader: row.sub_header || undefined,
+      storeName: row.store_name,
+      address: row.address,
+      city: row.city || undefined,
+      phone: row.phone,
+      taxIdOrNpwp: row.tax_id_or_npwp || undefined,
+      websiteOrSocial: row.website_or_social || undefined,
+      cashierName: row.cashier_name || undefined,
+      footerMessage1: row.footer_message1,
+      footerMessage2: row.footer_message2 || undefined,
+      csHotline: row.cs_hotline || undefined,
+      showBarcode: row.show_barcode ?? true,
+      showStoreLogo: row.show_store_logo ?? true,
+      paperWidth: row.paper_width || '58mm',
+      isDefault: row.is_default ?? false,
+      updatedAt: row.updated_at,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function saveReceiptConfigToSupabase(receipt: ReceiptInfo): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: receipt.id,
+      store_id: receipt.storeId || null,
+      profile_name: receipt.profileName,
+      header_brand: receipt.headerBrand,
+      sub_header: receipt.subHeader || null,
+      store_name: receipt.storeName,
+      address: receipt.address,
+      city: receipt.city || null,
+      phone: receipt.phone,
+      tax_id_or_npwp: receipt.taxIdOrNpwp || null,
+      website_or_social: receipt.websiteOrSocial || null,
+      cashier_name: receipt.cashierName || null,
+      footer_message1: receipt.footerMessage1,
+      footer_message2: receipt.footerMessage2 || null,
+      cs_hotline: receipt.csHotline || null,
+      show_barcode: receipt.showBarcode ?? true,
+      show_store_logo: receipt.showStoreLogo ?? true,
+      paper_width: receipt.paperWidth || '58mm',
+      is_default: receipt.isDefault ?? false,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supabase.from('receipt_configs').upsert(payload, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteReceiptConfigFromSupabase(receiptId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('receipt_configs').delete().eq('id', receiptId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 3. STORE PROMOS & DISCOUNT BANNERS
+// -------------------------------------------------------------
+export async function fetchStorePromosFromSupabase(): Promise<StorePromoInfo[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('store_promos').select('*').order('order_seq', { ascending: true });
+    if (error || !data || data.length === 0) return null;
+    return data.map((row: any) => ({
+      id: row.id,
+      type: row.type,
+      title: row.title,
+      subtitle: row.subtitle || undefined,
+      badgeText: row.badge_text || undefined,
+      badgeColor: row.badge_color || undefined,
+      ctaText: row.cta_text || undefined,
+      targetCategory: row.target_category || undefined,
+      discountValue: row.discount_value || undefined,
+      bgGradient: row.bg_gradient || undefined,
+      imageUrl: row.image_url || undefined,
+      flashHours: row.flash_hours ?? undefined,
+      flashMinutes: row.flash_minutes ?? undefined,
+      isActive: row.is_active ?? true,
+      orderSeq: row.order_seq ?? 0,
+      validUntil: row.valid_until || undefined,
+      storeId: row.store_id || undefined,
+      updatedAt: row.updated_at,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function saveStorePromoToSupabase(promo: StorePromoInfo): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: promo.id,
+      type: promo.type,
+      title: promo.title,
+      subtitle: promo.subtitle || null,
+      badge_text: promo.badgeText || null,
+      badge_color: promo.badgeColor || null,
+      cta_text: promo.ctaText || null,
+      target_category: promo.targetCategory || null,
+      discount_value: promo.discountValue || null,
+      bg_gradient: promo.bgGradient || null,
+      image_url: promo.imageUrl || null,
+      flash_hours: promo.flashHours ?? 0,
+      flash_minutes: promo.flashMinutes ?? 0,
+      is_active: promo.isActive ?? true,
+      order_seq: promo.orderSeq ?? 0,
+      valid_until: promo.validUntil || null,
+      store_id: promo.storeId || null,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supabase.from('store_promos').upsert(payload, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteStorePromoFromSupabase(promoId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('store_promos').delete().eq('id', promoId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 4. COURIERS & FLEET MANAGEMENT (Kurir & Armada Pengantaran)
+// -------------------------------------------------------------
+export async function fetchCouriersFromSupabase(): Promise<CourierInfo[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('couriers').select('*').order('name', { ascending: true });
+    if (error || !data || data.length === 0) return null;
+    return data.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      phone: row.phone,
+      whatsapp: row.whatsapp || undefined,
+      vehicleType: row.vehicle_type,
+      vehiclePlate: row.vehicle_plate,
+      photo: row.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      isVerified: row.is_verified ?? true,
+      status: row.status || 'available',
+      rating: Number(row.rating || 4.9),
+      totalDeliveries: Number(row.total_deliveries || 0),
+      storeId: row.store_id || undefined,
+      notes: row.notes || undefined,
+      updatedAt: row.updated_at,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function saveCourierToSupabase(courier: CourierInfo): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: courier.id,
+      name: courier.name,
+      phone: courier.phone,
+      whatsapp: courier.whatsapp || null,
+      vehicle_type: courier.vehicleType,
+      vehicle_plate: courier.vehiclePlate,
+      photo: courier.photo || null,
+      is_verified: courier.isVerified ?? true,
+      status: courier.status || 'available',
+      rating: courier.rating ?? 4.9,
+      total_deliveries: courier.totalDeliveries ?? 0,
+      store_id: courier.storeId || null,
+      notes: courier.notes || null,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supabase.from('couriers').upsert(payload, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteCourierFromSupabase(courierId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('couriers').delete().eq('id', courierId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// 5. STAFF USERS (Manajemen User Staff/Kasir/Admin/Supervisor)
+// -------------------------------------------------------------
+export async function fetchStaffUsersFromSupabase(): Promise<StaffUser[] | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('staff_users').select('*').order('created_at', { ascending: false });
+    if (error || !data || data.length === 0) return null;
+    return data.map((row: any) => ({
+      id: row.id,
+      username: row.username,
+      name: row.name,
+      role: row.role,
+      pin: row.pin,
+      phone: row.phone || undefined,
+      email: row.email || undefined,
+      storeId: row.store_id || undefined,
+      storeName: row.store_name || undefined,
+      isActive: row.is_active ?? true,
+      createdAt: row.created_at,
+      lastLogin: row.last_login || undefined,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function saveStaffUserToSupabase(user: StaffUser): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      pin: user.pin,
+      phone: user.phone || null,
+      email: user.email || null,
+      store_id: user.storeId || null,
+      store_name: user.storeName || null,
+      is_active: user.isActive ?? true,
+      created_at: user.createdAt || new Date().toISOString(),
+      last_login: user.lastLogin || null,
+    };
+    const { error } = await supabase.from('staff_users').upsert(payload, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteStaffUserFromSupabase(userId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('staff_users').delete().eq('id', userId);
     return !error;
   } catch {
     return false;

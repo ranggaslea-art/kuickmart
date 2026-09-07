@@ -21,7 +21,17 @@ import {
   seedDataToSupabase 
 } from '../lib/supabase';
 import { SUPABASE_SQL_SCHEMA, SUPABASE_RLS_FIX_SQL } from '../lib/supabaseSchema';
-import { Product, Store, Category, Voucher } from '../types';
+import { 
+  Product, 
+  Store, 
+  Category, 
+  Voucher,
+  BrandHeaderFooterConfig,
+  ReceiptInfo,
+  StorePromoInfo,
+  CourierInfo,
+  StaffUser
+} from '../types';
 
 interface SupabaseModalProps {
   isOpen: boolean;
@@ -34,6 +44,11 @@ interface SupabaseModalProps {
     stores?: Store[];
     categories?: Category[];
     vouchers?: Voucher[];
+    brandConfig?: BrandHeaderFooterConfig;
+    receiptConfigs?: ReceiptInfo[];
+    storePromos?: StorePromoInfo[];
+    couriers?: CourierInfo[];
+    staffUsers?: StaffUser[];
   };
 }
 
@@ -331,23 +346,43 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
 
           {activeTab === 'guide' && (
             <div className="space-y-3 text-xs text-stone-700">
-              <h4 className="font-bold text-stone-900 text-sm">Skema Database NusaMart (Klik Indomaret/Alfagift Style):</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+              <h4 className="font-bold text-stone-900 text-sm">Skema Database NusaMart Terpusat (Multi-Device Cloud Sync):</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
                   <div className="font-bold text-blue-900">1. public.products</div>
                   <p className="text-[11px] text-stone-500 mt-0.5">Katalog barang minimarket, harga, diskon JSM, stok, unit, barcode.</p>
                 </div>
-                <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
                   <div className="font-bold text-blue-900">2. public.orders & order_items</div>
-                  <p className="text-[11px] text-stone-500 mt-0.5">Transaksi pemesanan, status timeline, metode pembayaran, live driver.</p>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Transaksi pemesanan, status timeline, item terjual, live driver tracker.</p>
                 </div>
-                <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
                   <div className="font-bold text-blue-900">3. public.members</div>
                   <p className="text-[11px] text-stone-500 mt-0.5">Poin loyalty, koleksi stamp, tier member, barcode fisik kartu.</p>
                 </div>
-                <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl">
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
                   <div className="font-bold text-blue-900">4. public.stores & vouchers</div>
-                  <p className="text-[11px] text-stone-500 mt-0.5">Daftar cabang minimarket, radius jarak, kupon diskon & gratis ongkir.</p>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Daftar cabang minimarket, radius jarak, kupon diskon & voucher promo.</p>
+                </div>
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
+                  <div className="font-bold text-emerald-900">5. public.brand_configs</div>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Pengaturan Brand, identitas toko, logo, header & footer tema aplikasi.</p>
+                </div>
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
+                  <div className="font-bold text-emerald-900">6. public.receipt_configs</div>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Template struk kasir, nama toko, pesan footer, hotline CS, lebar kertas.</p>
+                </div>
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
+                  <div className="font-bold text-emerald-900">7. public.store_promos</div>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Banner promo berjalan, flash sale timer, diskon kategori & badge promo.</p>
+                </div>
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl">
+                  <div className="font-bold text-emerald-900">8. public.couriers</div>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Armada & kurir pengantar barang, plat nomor, nomor WA, rating & status.</p>
+                </div>
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl sm:col-span-2">
+                  <div className="font-bold text-emerald-900">9. public.staff_users</div>
+                  <p className="text-[11px] text-stone-500 mt-0.5">Manajemen user kasir, supervisor, gudang, dan admin toko untuk login multi-perangkat.</p>
                 </div>
               </div>
             </div>

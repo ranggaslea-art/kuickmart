@@ -72,7 +72,7 @@ import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
 import { BrandInfoManager } from './BrandInfoManager';
-import { syncOrderToSupabase } from '../lib/supabase';
+import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -100,6 +100,8 @@ interface AdminPanelModalProps {
   onUpdateCouriers?: (couriers: CourierInfo[]) => void;
   brandConfig?: BrandHeaderFooterConfig;
   onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
+  staffUsers?: StaffUser[];
+  onUpdateStaffUsers?: (users: StaffUser[]) => void;
   initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info';
 }
 
@@ -142,10 +144,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateCouriers,
   brandConfig,
   onUpdateBrandConfig,
+  staffUsers: propStaffUsers,
+  onUpdateStaffUsers,
   initialTab,
 }) => {
-  // Staff Users State (Persistent in localStorage)
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
+  // Staff Users State (Persistent in localStorage & Supabase sync)
+  const [internalStaffUsers, setInternalStaffUsers] = useState<StaffUser[]>(() => {
     try {
       const saved = localStorage.getItem('kuickmart_staff_users');
       return saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
@@ -154,9 +158,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   });
 
-  useEffect(() => {
-    localStorage.setItem('kuickmart_staff_users', JSON.stringify(staffUsers));
-  }, [staffUsers]);
+  const staffUsers = propStaffUsers && propStaffUsers.length > 0 ? propStaffUsers : internalStaffUsers;
+  const setStaffUsers = (updateAction: StaffUser[] | ((prev: StaffUser[]) => StaffUser[])) => {
+    const updatedUsers = typeof updateAction === 'function' ? updateAction(staffUsers) : updateAction;
+    if (onUpdateStaffUsers) {
+      onUpdateStaffUsers(updatedUsers);
+    }
+    setInternalStaffUsers(updatedUsers);
+    try {
+      localStorage.setItem('kuickmart_staff_users', JSON.stringify(updatedUsers));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Internal fallback for receipt configs if not provided via props
   const [internalReceiptConfigs, setInternalReceiptConfigs] = useState<ReceiptInfo[]>(() => {
@@ -1092,6 +1106,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
       setStaffUsers(prev => prev.map(u => u.id === editingUser.id ? updated : u));
 
+      if (isSupabaseConnected) {
+        saveStaffUserToSupabase(updated).catch(() => {});
+      }
+
       if (currentUser?.username.toLowerCase() === editingUser.username.toLowerCase()) {
         const updatedAuth: AdminUser = {
           username: cleanUsername,
@@ -1118,6 +1136,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setStaffUsers(prev => [newUser, ...prev]);
+
+      if (isSupabaseConnected) {
+        saveStaffUserToSupabase(newUser).catch(() => {});
+      }
+
       setUserFeedback(`Pengguna baru "${newUser.name}" (@${newUser.username}) berhasil ditambahkan!`);
     }
 
@@ -1134,6 +1157,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
     const updated = staffUsers.map(item => item.id === u.id ? { ...item, isActive: !item.isActive } : item);
     setStaffUsers(updated);
+
+    if (isSupabaseConnected) {
+      saveStaffUserToSupabase({ ...u, isActive: !u.isActive }).catch(() => {});
+    }
+
     setUserFeedback(`Status akun "${u.name}" diubah menjadi ${!u.isActive ? 'AKTIF' : 'NONAKTIF'}.`);
     setTimeout(() => setUserFeedback(null), 3500);
   };
@@ -1152,6 +1180,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
     if (window.confirm(`Yakin ingin menghapus akun pengguna "${u.name}" (@${u.username}) secara permanen?`)) {
       setStaffUsers(prev => prev.filter(item => item.id !== u.id));
+
+      if (isSupabaseConnected) {
+        deleteStaffUserFromSupabase(u.id).catch(() => {});
+      }
+
       setUserFeedback(`Akun pengguna "${u.name}" telah berhasil dihapus.`);
       setTimeout(() => setUserFeedback(null), 3500);
     }
