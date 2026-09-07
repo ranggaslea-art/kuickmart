@@ -53,10 +53,11 @@ import {
   ExternalLink,
   Megaphone,
   Bike,
-  Loader2
+  Loader2,
+  Palette
 } from 'lucide-react';
-import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo } from '../types';
-import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS } from '../data/mockData';
+import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig } from '../types';
+import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS, INITIAL_BRAND_CONFIG } from '../data/mockData';
 import { formatRupiah } from '../utils/formatters';
 import { computeConversionChains, formatStockBreakdown, getProductUnitOptions } from '../utils/unitConversion';
 import { 
@@ -70,6 +71,7 @@ import {
 import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
+import { BrandInfoManager } from './BrandInfoManager';
 import { syncOrderToSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
@@ -96,7 +98,9 @@ interface AdminPanelModalProps {
   onUpdateStorePromos?: (promos: StorePromoInfo[]) => void;
   couriers?: CourierInfo[];
   onUpdateCouriers?: (couriers: CourierInfo[]) => void;
-  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers';
+  brandConfig?: BrandHeaderFooterConfig;
+  onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
+  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info';
 }
 
 interface AdminUser {
@@ -136,6 +140,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateStorePromos,
   couriers,
   onUpdateCouriers,
+  brandConfig,
+  onUpdateBrandConfig,
   initialTab,
 }) => {
   // Staff Users State (Persistent in localStorage)
@@ -221,6 +227,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
+  // Internal fallback for brand config if not provided via props
+  const [internalBrandConfig, setInternalBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_brand_config');
+      return saved ? JSON.parse(saved) : INITIAL_BRAND_CONFIG;
+    } catch {
+      return INITIAL_BRAND_CONFIG;
+    }
+  });
+
+  const activeBrandConfig = brandConfig || internalBrandConfig;
+  const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig) => {
+    if (onUpdateBrandConfig) {
+      onUpdateBrandConfig(newConfig);
+    }
+    setInternalBrandConfig(newConfig);
+    try {
+      localStorage.setItem('kuickmart_brand_config', JSON.stringify(newConfig));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Login Authentication State - Selalu minta login setiap dibuka
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
@@ -258,7 +287,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info'>(initialTab || 'products');
   
   useEffect(() => {
     if (initialTab) {
@@ -1491,6 +1520,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           >
             <Megaphone className="w-4 h-4 text-orange-600" />
             <span>Promo & Info Toko ({activeStorePromos.length})</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('brand_info'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
+            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'brand_info'
+                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+                : 'border-transparent text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Palette className="w-4 h-4 text-amber-500" />
+            <span>Info Brand & Footer</span>
           </button>
 
           <button
@@ -3655,6 +3696,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 couriers={activeCouriers}
                 stores={stores}
                 onUpdateCouriers={handleUpdateCouriers}
+              />
+            </div>
+          )}
+
+          {/* TAB 10: INFO BRAND, HEADER & FOOTER (KUSTOMISASI LOGO & FOOTER) */}
+          {activeTab === 'brand_info' && (
+            <div className="space-y-4">
+              <BrandInfoManager
+                brandConfig={activeBrandConfig}
+                onUpdateBrandConfig={handleUpdateBrandConfig}
               />
             </div>
           )}

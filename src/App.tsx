@@ -50,7 +50,8 @@ import {
   OrderStatus,
   ReceiptInfo,
   StorePromoInfo,
-  CourierInfo
+  CourierInfo,
+  BrandHeaderFooterConfig
 } from './types';
 import { 
   PRODUCTS, 
@@ -61,7 +62,8 @@ import {
   INITIAL_MEMBER,
   INITIAL_RECEIPT_CONFIGS,
   INITIAL_STORE_PROMOS,
-  INITIAL_COURIERS
+  INITIAL_COURIERS,
+  INITIAL_BRAND_CONFIG
 } from './data/mockData';
 import { 
   getSupabase, 
@@ -89,7 +91,14 @@ import {
   HelpCircle, 
   ShieldCheck, 
   Truck,
-  Layers
+  Layers,
+  Clock,
+  CheckCircle2,
+  MapPin,
+  Phone,
+  Heart,
+  Star,
+  CreditCard
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -102,6 +111,7 @@ const STORAGE_PRODUCTS_KEY = 'kuickmart_products_v2';
 const STORAGE_RECEIPT_CONFIGS_KEY = 'nusamart_receipt_configs';
 const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
 const STORAGE_COURIERS_KEY = 'kuickmart_couriers';
+const STORAGE_BRAND_CONFIG_KEY = 'kuickmart_brand_config';
 
 export default function App() {
   // Products & Catalogs
@@ -167,10 +177,24 @@ export default function App() {
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers'>('products');
+  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
+
+  // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
+  const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_BRAND_CONFIG_KEY);
+      return saved ? JSON.parse(saved) : INITIAL_BRAND_CONFIG;
+    } catch {
+      return INITIAL_BRAND_CONFIG;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(brandConfig));
+  }, [brandConfig]);
 
   // Store Receipt Configurations State (Add, Edit, Delete Struk Info Toko)
   const [receiptConfigs, setReceiptConfigs] = useState<ReceiptInfo[]>(() => {
@@ -653,6 +677,7 @@ export default function App() {
         allProducts={products}
         onSelectProduct={(p) => setSelectedProductDetail(p)}
         storePromos={storePromos}
+        brandConfig={brandConfig}
       />
 
       {/* Main View Container */}
@@ -892,60 +917,112 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-stone-200 bg-white py-8 px-4 sm:px-6 text-stone-600 mt-12">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6 text-xs">
+          {/* Brand Info Col */}
           <div>
             <div className="flex items-center gap-2 mb-2 font-black text-blue-900 text-base">
-              <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-black">
-                KM
+              {brandConfig.brandLogoImageUrl ? (
+                <img
+                  src={brandConfig.brandLogoImageUrl}
+                  alt={brandConfig.brandNamePart1 + ' ' + brandConfig.brandNamePart2}
+                  className="w-7 h-7 rounded-lg object-cover border border-stone-200 shadow-2xs"
+                />
+              ) : (
+                <div className={`w-7 h-7 rounded-lg bg-gradient-to-tr ${brandConfig.brandLogoBgGradient || 'from-blue-700 via-blue-600 to-amber-500'} text-white flex items-center justify-center text-xs font-black shadow-2xs`}>
+                  {brandConfig.brandLogoText || 'KM'}
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                <span>{brandConfig.brandNamePart1}</span>
+                <span className="text-amber-500">{brandConfig.brandNamePart2}</span>
+                {brandConfig.showBrandBadge && brandConfig.brandBadgeText && (
+                  <span className={`text-[9px] font-bold uppercase tracking-wider ${brandConfig.brandBadgeColor || 'bg-red-600'} text-white px-1 py-0.5 rounded ml-1`}>
+                    {brandConfig.brandBadgeText}
+                  </span>
+                )}
               </div>
-              <span>KUICK MART EXPRESS</span>
             </div>
             <p className="text-stone-500 leading-relaxed">
-              Platform belanja minimarket online modern seperti Klik Indomaret & Alfagift dengan integrasi Supabase cloud database, pengiriman instan 30 menit, dan promo JSM hemat.
+              {brandConfig.footerBrandDescription || 'Platform belanja minimarket online modern super cepat.'}
             </p>
           </div>
 
-          <div>
-            <h4 className="font-bold text-stone-900 mb-2">Keunggulan Layanan</h4>
-            <ul className="space-y-1.5 text-stone-500">
-              <li className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-blue-600" />
-                <span>Pengiriman Kilat 30 Menit</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>100% Barang Original & Expired Aman</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>Poin Member & Stamp Reward Tiap Belanja</span>
-              </li>
-            </ul>
-          </div>
+          {/* Dynamic Footer Sections */}
+          {brandConfig.footerSections && brandConfig.footerSections.map((section) => (
+            <div key={section.id}>
+              <h4 className="font-bold text-stone-900 mb-2">{section.title}</h4>
+              
+              {section.type === 'features' && section.features && (
+                <ul className="space-y-1.5 text-stone-500">
+                  {section.features.map((feat) => {
+                    const iconMap: Record<string, React.ReactNode> = {
+                      truck: <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />,
+                      'shield-check': <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />,
+                      sparkles: <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />,
+                      clock: <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />,
+                      check: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />,
+                      phone: <Phone className="w-3.5 h-3.5 text-blue-600 shrink-0" />,
+                      'map-pin': <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />,
+                      'credit-card': <CreditCard className="w-3.5 h-3.5 text-purple-600 shrink-0" />,
+                      star: <Star className="w-3.5 h-3.5 text-amber-500 shrink-0" />,
+                      heart: <Heart className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    };
+                    return (
+                      <li key={feat.id} className="flex items-center gap-1.5">
+                        {iconMap[feat.icon] || <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                        <span>{feat.text}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
 
-          <div>
-            <h4 className="font-bold text-stone-900 mb-2">Metode Pembayaran</h4>
-            <p className="text-stone-500 leading-relaxed">
-              Menerima QRIS (GoPay, OVO, ShopeePay, Dana), Virtual Account BCA/Mandiri/BRI, dan Bayar di Tempat (COD / Kasir Toko).
-            </p>
-          </div>
+              {section.type === 'text' && (
+                <div>
+                  {section.text && <p className="text-stone-500 leading-relaxed mb-1.5">{section.text}</p>}
+                  {section.subtext && <p className="text-stone-400 text-[11px]">{section.subtext}</p>}
+                </div>
+              )}
 
-          <div>
-            <h4 className="font-bold text-stone-900 mb-2">Jam Operasional & Bantuan</h4>
-            <p className="text-stone-500 leading-relaxed mb-1.5">
-              Buka setiap hari pk 07:00 - 22:00 WIB. Layanan siap antar kilat ke alamat Anda dalam 30 menit.
-            </p>
-            <p className="text-stone-400 text-[11px]">
-              Hubungi Customer Care 24/7 untuk bantuan pesanan & kendala pengiriman.
-            </p>
-          </div>
+              {section.type === 'links' && section.links && (
+                <ul className="space-y-1.5 text-stone-500">
+                  {section.links.map((lnk, i) => (
+                    <li key={i}>
+                      <a href={lnk.url || '#'} className="hover:text-blue-600 transition-colors">
+                        {lnk.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
 
         <div className="max-w-7xl mx-auto mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
-          <div>© 2026 KuickMart Express. All rights reserved.</div>
+          <div>{brandConfig.footerBottomText || '© 2026 KuickMart Express. All rights reserved.'}</div>
           <div className="flex items-center gap-4 mt-2 sm:mt-0">
-            <span>Syarat & Ketentuan</span>
-            <span>Kebijakan Privasi</span>
-            <span>Pusat Bantuan 24/7</span>
+            <button
+              onClick={() => {
+                setAdminPanelInitialTab('brand_info');
+                setIsAdminPanelOpen(true);
+              }}
+              className="text-blue-600 hover:text-blue-800 font-medium transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span>⚙️ Kelola Info Brand & Footer</span>
+            </button>
+            {brandConfig.footerBottomLinks && brandConfig.footerBottomLinks.length > 0 ? (
+              brandConfig.footerBottomLinks.map((item, i) => (
+                <a key={i} href={item.url || '#'} className="hover:text-stone-600 transition-colors">
+                  {item.title}
+                </a>
+              ))
+            ) : (
+              <>
+                <span>Syarat & Ketentuan</span>
+                <span>Kebijakan Privasi</span>
+                <span>Pusat Bantuan 24/7</span>
+              </>
+            )}
           </div>
         </div>
       </footer>
@@ -1077,6 +1154,8 @@ export default function App() {
         onUpdateStorePromos={setStorePromos}
         couriers={couriers}
         onUpdateCouriers={setCouriers}
+        brandConfig={brandConfig}
+        onUpdateBrandConfig={setBrandConfig}
         initialTab={adminPanelInitialTab}
         onOpenSupabaseModal={() => {
           setIsAdminPanelOpen(false);

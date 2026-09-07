@@ -197,7 +197,7 @@ export async function syncOrderToSupabase(order: Order): Promise<{ success: bool
       }
     }
 
-    // 3. Siapkan payload pesanan utama termasuk kolom items_json
+    // 3. Simpan payload pesanan utama dengan Self-Healing Schema Fallback
     const orderPayload: Record<string, any> = {
       id: order.id,
       order_number: order.orderNumber,
@@ -234,12 +234,30 @@ export async function syncOrderToSupabase(order: Order): Promise<{ success: bool
       created_at: order.createdAt,
     };
 
-    let { error: orderError } = await supabase.from('orders').upsert(orderPayload, { onConflict: 'id' });
-    if (orderError && orderError.message?.toLowerCase().includes('items_json')) {
-      // Jika kolom items_json belum dieksekusi di database, fallback simpan tanpa kolom items_json
-      const { items_json, ...withoutItemsJson } = orderPayload;
-      const retry = await supabase.from('orders').upsert(withoutItemsJson, { onConflict: 'id' });
-      orderError = retry.error;
+    // Self-Healing Upsert Loop: Otomatis mendeteksi kolom yang belum ada di tabel Supabase
+    // seperti 'customer_location', 'items_json', 'driver_json', dsb.
+    const currentPayload: Record<string, any> = { ...orderPayload };
+    let orderError: any = null;
+    const maxRetries = 8;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const res = await supabase.from('orders').upsert(currentPayload, { onConflict: 'id' });
+      orderError = res.error;
+
+      if (!orderError) {
+        break;
+      }
+
+      // Deteksi error jika kolom tidak ditemukan di tabel Supabase (misal: 'customer_location')
+      const missingColumnMatch = orderError.message?.match(/Could not find the '([^']+)' column of/i);
+      if (missingColumnMatch && missingColumnMatch[1]) {
+        const missingCol = missingColumnMatch[1];
+        console.warn(`Kolom '${missingCol}' belum ada di skema tabel 'orders' Supabase. Mengabaikan kolom '${missingCol}' dan menyimpan ulang...`);
+        delete currentPayload[missingCol];
+        continue;
+      }
+
+      break;
     }
 
     if (orderError) throw orderError;
@@ -316,14 +334,26 @@ export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
   if (!supabase) return null;
 
   try {
-    const { data: ordersData, error: ordersError } = await supabase
+    let ordersData: any[] | null = null;
+    const { data: withItems, error: relError } = await supabase
       .from('orders')
       .select('*, order_items(*)')
       .order('created_at', { ascending: false });
 
-    if (ordersError) {
-      console.warn('Gagal memuat pesanan dari Supabase:', ordersError.message);
-      return null;
+    if (!relError && withItems) {
+      ordersData = withItems;
+    } else {
+      // Fallback jika relasi order_items belum terbaca di PostgREST schema cache
+      const { data: fallbackOrders, error: fallbackError } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fallbackError) {
+        console.warn('Gagal memuat pesanan dari Supabase:', fallbackError.message);
+        return null;
+      }
+      ordersData = fallbackOrders;
     }
 
     if (!ordersData || ordersData.length === 0) return [];
@@ -409,7 +439,17 @@ export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
             }
           : undefined,
         customerNotes: row.customer_notes || undefined,
-        customerLocation: row.customer_location || undefined,
+        customerLocation: row.customer_location || row.address_json?.customerLocation || (
+          row.address_json?.latitude && row.address_json?.longitude
+            ? {
+                latitude: row.address_json.latitude,
+                longitude: row.address_json.longitude,
+                mapsUrl: row.address_json.mapsUrl,
+                recordedAt: row.address_json.recordedAt,
+                accuracy: row.address_json.accuracy,
+              }
+            : undefined
+        ),
         driver: row.driver_json || undefined,
         trackingSteps: Array.isArray(row.tracking_steps) ? row.tracking_steps : [],
       };

@@ -1,4 +1,81 @@
-import { Product, Category, Store, Voucher, Address, MemberProfile, StaffUser, ReceiptInfo, StorePromoInfo, CourierInfo } from '../types';
+import { Product, Category, Store, Voucher, Address, MemberProfile, StaffUser, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig } from '../types';
+
+export const INITIAL_BRAND_CONFIG: BrandHeaderFooterConfig = {
+  // 1. Header & Brand Identity
+  brandLogoText: 'KM',
+  brandLogoImageUrl: '',
+  brandLogoBgGradient: 'from-blue-700 via-blue-600 to-amber-500',
+  brandNamePart1: 'KUICK',
+  brandNamePart2: 'MART',
+  brandBadgeText: 'EXPRESS',
+  brandBadgeColor: 'bg-red-600',
+  showBrandBadge: true,
+  tagline: 'Minimarket Digital Super Cepat',
+  showTagline: true,
+  operatingHoursBadgeText: '24 Jam Nonstop',
+  showOperatingHoursBadge: true,
+
+  // 2. Footer Brand & Overview
+  footerBrandName: 'KUICK MART EXPRESS',
+  footerDescription: 'Platform belanja minimarket online modern seperti Klik Indomaret & Alfagift dengan integrasi Supabase cloud database, pengiriman instan 30 menit, dan promo JSM hemat.',
+
+  // 3. Footer Columns / Sections
+  sections: [
+    {
+      id: 'sec_advantages',
+      title: 'Keunggulan Layanan',
+      type: 'features_list',
+      orderSeq: 1,
+      isVisible: true,
+      items: [
+        {
+          id: 'feat_1',
+          icon: 'truck',
+          text: 'Pengiriman Kilat 30 Menit',
+          subtext: 'Kurir motor khusus siap mengantar belanjaan cepat ke pintu rumah Anda',
+        },
+        {
+          id: 'feat_2',
+          icon: 'shield-check',
+          text: '100% Barang Original & Expired Aman',
+          subtext: 'Jaminan produk resmi langsung dari distributor terpercaya',
+        },
+        {
+          id: 'feat_3',
+          icon: 'sparkles',
+          text: 'Poin Member & Stamp Reward Tiap Belanja',
+          subtext: 'Tukarkan poin loyalty dengan diskon belanja dan voucher gratis ongkir',
+        },
+      ],
+    },
+    {
+      id: 'sec_payment',
+      title: 'Metode Pembayaran',
+      type: 'payment_methods',
+      orderSeq: 2,
+      isVisible: true,
+      content: 'Menerima QRIS (GoPay, OVO, ShopeePay, Dana), Virtual Account BCA/Mandiri/BRI, dan Bayar di Tempat (COD / Kasir Toko).',
+      paymentTags: ['QRIS (GoPay, OVO, ShopeePay, Dana)', 'BCA Virtual Account', 'Mandiri VA', 'BRI VA', 'COD / Bayar di Tempat', 'Kasir Toko'],
+    },
+    {
+      id: 'sec_operational',
+      title: 'Jam Operasional & Bantuan',
+      type: 'contact_hours',
+      orderSeq: 3,
+      isVisible: true,
+      content: 'Buka setiap hari pk 07:00 - 22:00 WIB. Layanan siap antar kilat ke alamat Anda dalam 30 menit.',
+      subContent: 'Hubungi Customer Care 24/7 untuk bantuan pesanan & kendala pengiriman.',
+    },
+  ],
+
+  // 4. Footer Bottom Copyright & Links
+  copyrightText: '© 2026 KuickMart Express. All rights reserved.',
+  bottomLinks: [
+    { id: 'link_1', label: 'Syarat & Ketentuan', url: '#' },
+    { id: 'link_2', label: 'Kebijakan Privasi', url: '#' },
+    { id: 'link_3', label: 'Pusat Bantuan 24/7', url: '#' },
+  ],
+};
 
 export const INITIAL_COURIERS: CourierInfo[] = [
   {

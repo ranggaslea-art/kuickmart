@@ -279,3 +279,70 @@ export interface StorePromoInfo {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type FooterIconType = 
+  | 'truck' 
+  | 'shield-check' 
+  | 'sparkles' 
+  | 'clock' 
+  | 'credit-card' 
+  | 'store' 
+  | 'headphones' 
+  | 'badge-percent' 
+  | 'map-pin' 
+  | 'check-circle'
+  | 'heart'
+  | 'star';
+
+export interface FooterFeatureItem {
+  id: string;
+  icon: FooterIconType;
+  text: string;
+  subtext?: string;
+}
+
+export interface FooterSection {
+  id: string;
+  title: string;
+  type: 'features_list' | 'text_block' | 'payment_methods' | 'contact_hours';
+  items?: FooterFeatureItem[];
+  content?: string;
+  subContent?: string;
+  paymentTags?: string[];
+  orderSeq: number;
+  isVisible: boolean;
+}
+
+export interface FooterQuickLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export interface BrandHeaderFooterConfig {
+  // 1. Header & Brand Identity
+  brandLogoText: string;
+  brandLogoImageUrl?: string;
+  brandLogoBgGradient: string;
+  brandNamePart1: string;
+  brandNamePart2: string;
+  brandBadgeText: string;
+  brandBadgeColor: string;
+  showBrandBadge: boolean;
+  tagline: string;
+  showTagline: boolean;
+  operatingHoursBadgeText: string;
+  showOperatingHoursBadge: boolean;
+
+  // 2. Footer Brand & Overview
+  footerBrandName: string;
+  footerDescription: string;
+
+  // 3. Footer Columns / Sections
+  sections: FooterSection[];
+
+  // 4. Footer Bottom Copyright & Links
+  copyrightText: string;
+  bottomLinks: FooterQuickLink[];
+  updatedAt?: string;
+}

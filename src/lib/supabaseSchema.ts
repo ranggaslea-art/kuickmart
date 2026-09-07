@@ -192,6 +192,9 @@ CREATE POLICY "Allow public read/write on orders" ON public.orders FOR ALL USING
 DROP POLICY IF EXISTS "Allow public read/write on order_items" ON public.order_items;
 CREATE POLICY "Allow public read/write on order_items" ON public.order_items FOR ALL USING (true) WITH CHECK (true);
 
--- 2. Pastikan kolom items_json tersedia di tabel orders untuk menyimpan rincian barang terjual
+-- 2. Pastikan kolom-kolom baru tersedia di tabel orders untuk menyimpan rincian barang terjual & lokasi maps
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_location JSONB;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items_json JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_json JSONB;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tracking_steps JSONB DEFAULT '[]'::jsonb;
 `;

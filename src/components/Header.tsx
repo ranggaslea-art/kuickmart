@@ -15,7 +15,7 @@ import {
   Flame,
   Layers
 } from 'lucide-react';
-import { Store, MemberProfile, CartItem, Product, StorePromoInfo } from '../types';
+import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 
@@ -38,6 +38,7 @@ interface HeaderProps {
   allProducts: Product[];
   onSelectProduct: (p: Product) => void;
   storePromos?: StorePromoInfo[];
+  brandConfig?: BrandHeaderFooterConfig;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -59,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   allProducts,
   onSelectProduct,
   storePromos,
+  brandConfig,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
@@ -66,6 +68,21 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Dynamic active announcement
   const activeAnnouncement = storePromos?.find(p => p.type === 'announcement_bar' && p.isActive);
+
+  // Resolved brand identity
+  const logoText = brandConfig?.brandLogoText || 'KM';
+  const logoImageUrl = brandConfig?.brandLogoImageUrl || '';
+  const logoGradient = brandConfig?.brandLogoBgGradient || 'from-blue-700 via-blue-600 to-amber-500';
+  const namePart1 = brandConfig?.brandNamePart1 || 'KUICK';
+  const namePart2 = brandConfig?.brandNamePart2 || 'MART';
+  const badgeText = brandConfig?.brandBadgeText || 'EXPRESS';
+  const badgeColor = brandConfig?.brandBadgeColor || 'bg-red-600';
+  const showBadge = brandConfig ? brandConfig.showBrandBadge : true;
+  const tagline = brandConfig?.tagline || 'Minimarket Digital Super Cepat';
+  const showTagline = brandConfig ? brandConfig.showTagline : true;
+  const operatingHoursText = brandConfig?.showOperatingHoursBadge && brandConfig.operatingHoursBadgeText 
+    ? brandConfig.operatingHoursBadgeText 
+    : currentStore.openHours;
 
   // Filter products for quick search popup
   const searchResults = searchQuery.trim()
@@ -106,16 +123,30 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Logo Brand */}
           <div className="flex items-center gap-3 shrink-0">
             <div className="flex items-center gap-2 cursor-pointer">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-amber-500 flex items-center justify-center text-white shadow-sm font-black text-xl tracking-wider">
-                KM
-              </div>
+              {logoImageUrl ? (
+                <img
+                  src={logoImageUrl}
+                  alt={namePart1 + ' ' + namePart2}
+                  className="w-10 h-10 rounded-xl object-cover border border-stone-200 shadow-2xs"
+                />
+              ) : (
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${logoGradient} flex items-center justify-center text-white shadow-xs font-black text-xl tracking-wider`}>
+                  {logoText}
+                </div>
+              )}
               <div className="leading-tight hidden sm:block">
                 <div className="flex items-center gap-1">
-                  <span className="font-extrabold text-lg text-blue-900 tracking-tight">KUICK</span>
-                  <span className="font-black text-lg text-amber-500 tracking-tight">MART</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-red-600 text-white px-1.5 py-0.5 rounded ml-1">EXPRESS</span>
+                  <span className="font-extrabold text-lg text-blue-900 tracking-tight">{namePart1}</span>
+                  <span className="font-black text-lg text-amber-500 tracking-tight">{namePart2}</span>
+                  {showBadge && badgeText && (
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${badgeColor} text-white px-1.5 py-0.5 rounded ml-1`}>
+                      {badgeText}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[10px] font-medium text-stone-500">Minimarket Digital Super Cepat</p>
+                {showTagline && tagline && (
+                  <p className="text-[10px] font-medium text-stone-500">{tagline}</p>
+                )}
               </div>
             </div>
           </div>
@@ -306,10 +337,12 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {currentStore.openHours}
-          </span>
+          {(!brandConfig || brandConfig.showOperatingHoursBadge) && (
+            <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {operatingHoursText}
+            </span>
+          )}
         </div>
       </div>
     </header>
