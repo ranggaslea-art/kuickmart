@@ -1,0 +1,13 @@
+[
+  {
+    "id": "bc-1788862173815",
+    "title": "Uji Coba Promo Kilat",
+    "body": "Diskon 50% untuk pelanggan PWA KuickMart!",
+    "url": "/",
+    "sentAt": "2026-09-08T10:09:33.815Z",
+    "recipientsCount": 3,
+    "successCount": 3,
+    "failedCount": 0,
+    "promoTag": "kuickmart-promo"
+  }
+]

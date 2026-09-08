@@ -56,7 +56,8 @@ import {
   Loader2,
   Palette,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  BellRing
 } from 'lucide-react';
 import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig, SystemModuleKey, UserPermissions, ModulePermission } from '../types';
 import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS, INITIAL_BRAND_CONFIG } from '../data/mockData';
@@ -82,6 +83,7 @@ import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
 import { BrandInfoManager } from './BrandInfoManager';
+import { PushNotificationManager } from './PushNotificationManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
@@ -112,7 +114,7 @@ interface AdminPanelModalProps {
   onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
   staffUsers?: StaffUser[];
   onUpdateStaffUsers?: (users: StaffUser[]) => void;
-  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info';
+  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications';
 }
 
 interface AdminUser {
@@ -334,7 +336,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications'>(initialTab || 'products');
   
   useEffect(() => {
     if (initialTab) {
@@ -1703,6 +1705,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
             { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
             { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
+            { id: 'push_notifications', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
             { id: 'brand_info', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
             { id: 'couriers', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
             { id: 'vouchers', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
@@ -3877,6 +3880,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <BrandInfoManager
                 brandConfig={activeBrandConfig}
                 onUpdateBrandConfig={handleUpdateBrandConfig}
+              />
+            </div>
+          )}
+
+          {/* TAB 11: PUSH NOTIFIKASI PROMO PWA (VAPID) */}
+          {activeTab === 'push_notifications' && (
+            <div className="space-y-4">
+              <PushNotificationManager
+                canEdit={currentUserPermissions.push_notifications?.canEdit ?? true}
               />
             </div>
           )}

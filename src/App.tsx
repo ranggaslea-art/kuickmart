@@ -44,6 +44,9 @@ import {
 import { 
   LiveTrafficModal 
 } from './components/LiveTrafficModal';
+import { 
+  PushNotificationPrompt 
+} from './components/PushNotificationPrompt';
 import { cleanReceiptText } from './utils/sanitizeReceipt';
 import { 
   Product, 
@@ -269,7 +272,7 @@ export default function App() {
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info'>('products');
+  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
@@ -1575,6 +1578,9 @@ export default function App() {
         onClose={() => setIsLiveTrafficModalOpen(false)}
         staffUsers={staffUsers}
       />
+
+      {/* 10. Web Push PWA Notification Prompt Banner */}
+      <PushNotificationPrompt />
 
       {/* 9. Floating Bottom Cart Bar (Akses Cepat Keranjang Belanja) */}
       {cartItems.length > 0 && !isCartOpen && !isCheckoutOpen && (

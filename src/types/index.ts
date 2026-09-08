@@ -232,7 +232,37 @@ export type SystemModuleKey =
   | 'couriers'
   | 'vouchers'
   | 'users'
-  | 'bulk_import';
+  | 'bulk_import'
+  | 'push_notifications';
+
+export interface PushSubscriberInfo {
+  id: string;
+  customerName: string;
+  deviceType: string;
+  subscribedAt: string;
+  endpointSnippet: string;
+}
+
+export interface PushBroadcastHistoryItem {
+  id: string;
+  title: string;
+  body: string;
+  url?: string;
+  image?: string;
+  sentAt: string;
+  recipientsCount: number;
+  successCount: number;
+  failedCount: number;
+  promoTag?: string;
+}
+
+export interface PushBroadcastPayload {
+  title: string;
+  body: string;
+  url?: string;
+  image?: string;
+  tag?: string;
+}
 
 export interface ModulePermission {
   canView: boolean;

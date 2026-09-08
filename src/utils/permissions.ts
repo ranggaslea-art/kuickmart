@@ -90,6 +90,14 @@ export const SYSTEM_MODULES: SystemModuleDefinition[] = [
     iconName: 'FileSpreadsheet',
     adminNote: 'Untuk migrasi data massal oleh Admin atau Supervisor.',
   },
+  {
+    key: 'push_notifications',
+    name: 'Push Notifikasi Promo (PWA)',
+    category: 'Katalog & Penjualan',
+    description: 'Kirim siaran pesan promosi langsung ke layar HP pelanggan yang menginstal aplikasi PWA.',
+    iconName: 'BellRing',
+    adminNote: 'Dikelola oleh Admin & Supervisor untuk menyiarkan diskon kilat dan pengumuman.',
+  },
 ];
 
 // Hak akses standar bawaan per peran (Default Role Permissions)
@@ -105,6 +113,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     vouchers: { canView: true, canEdit: true },
     users: { canView: true, canEdit: true },
     bulk_import: { canView: true, canEdit: true },
+    push_notifications: { canView: true, canEdit: true },
   },
   supervisor: {
     products: { canView: true, canEdit: true },
@@ -117,6 +126,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     vouchers: { canView: true, canEdit: false }, // Hanya lihat voucher
     users: { canView: false, canEdit: false }, // Tidak bisa akses manajemen user
     bulk_import: { canView: true, canEdit: true }, // Bisa import produk
+    push_notifications: { canView: true, canEdit: true }, // Supervisor bisa broadcast promo
   },
   kasir: {
     products: { canView: true, canEdit: false }, // Kasir hanya bisa lihat produk & stok, tidak bisa ubah harga/hapus
@@ -129,6 +139,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     vouchers: { canView: true, canEdit: false }, // Kasir bisa cek voucher diskon pelanggan
     users: { canView: false, canEdit: false }, // Dibatasi dari manajemen user
     bulk_import: { canView: false, canEdit: false }, // Dibatasi dari import massal
+    push_notifications: { canView: true, canEdit: false }, // Kasir bisa lihat log siaran promo
   },
   gudang: {
     products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
@@ -141,6 +152,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     vouchers: { canView: false, canEdit: false },
     users: { canView: false, canEdit: false },
     bulk_import: { canView: true, canEdit: true },
+    push_notifications: { canView: false, canEdit: false },
   },
 };
 
