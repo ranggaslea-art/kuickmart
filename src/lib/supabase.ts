@@ -92,6 +92,21 @@ export function saveStoredSupabaseConfig(url: string, anonKey: string): void {
   else localStorage.removeItem(STORAGE_KEY_KEY);
 }
 
+// Helper to format any date string (including Indonesian format or WIB) into valid ISO timestamp for PostgreSQL
+export function formatSupabaseTimestamp(val?: string | null): string | null {
+  if (!val) return null;
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString();
+  }
+  const cleaned = val.replace(/\s*(WIB|WITA|WIT)\s*/gi, '').trim();
+  const d2 = new Date(cleaned);
+  if (!isNaN(d2.getTime())) {
+    return d2.toISOString();
+  }
+  return null;
+}
+
 let supabaseInstance: SupabaseClient | null = null;
 let currentConfigKey = '';
 
@@ -349,8 +364,8 @@ export async function seedDataToSupabase(customData?: {
       store_id: u.storeId || null,
       store_name: u.storeName || null,
       is_active: u.isActive ?? true,
-      created_at: u.createdAt || new Date().toISOString(),
-      last_login: u.lastLogin || null
+      created_at: formatSupabaseTimestamp(u.createdAt) || new Date().toISOString(),
+      last_login: formatSupabaseTimestamp(u.lastLogin)
     }));
     await supabase.from('staff_users').upsert(staffPayload, { onConflict: 'id' });
 
@@ -1209,21 +1224,27 @@ export async function saveStaffUserToSupabase(user: StaffUser): Promise<boolean>
       store_id: user.storeId || null,
       store_name: user.storeName || null,
       is_active: user.isActive ?? true,
-      created_at: user.createdAt || new Date().toISOString(),
-      last_login: user.lastLogin || null,
+      created_at: formatSupabaseTimestamp(user.createdAt) || new Date().toISOString(),
+      last_login: formatSupabaseTimestamp(user.lastLogin),
     };
     if (user.permissions) {
       payload.permissions = user.permissions;
     }
-    const { error } = await supabase.from('staff_users').upsert(payload, { onConflict: 'id' });
+    let { error } = await supabase.from('staff_users').upsert(payload, { onConflict: 'id' });
     if (error && error.message && error.message.includes('permissions')) {
       // If permissions column is not in DB table yet, retry without permissions field
       delete payload.permissions;
       const retry = await supabase.from('staff_users').upsert(payload, { onConflict: 'id' });
-      return !retry.error;
+      error = retry.error;
+    }
+    // If there's a unique constraint on username with different id, update by username
+    if (error && (error.message.includes('unique') || error.code === '23505')) {
+      const updateRes = await supabase.from('staff_users').update(payload).eq('username', user.username);
+      return !updateRes.error;
     }
     return !error;
-  } catch {
+  } catch (err) {
+    console.warn('saveStaffUserToSupabase error:', err);
     return false;
   }
 }

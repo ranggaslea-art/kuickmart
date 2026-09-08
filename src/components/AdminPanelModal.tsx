@@ -481,6 +481,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [userFeedback, setUserFeedback] = useState<string | null>(null);
   const [selectedUserForPermissions, setSelectedUserForPermissions] = useState<StaffUser | null>(null);
   const [userCustomPermissions, setUserCustomPermissions] = useState<UserPermissions>(() => DEFAULT_ROLE_PERMISSIONS.kasir);
+  const [showUserPinInTable, setShowUserPinInTable] = useState<Record<string, boolean>>({});
 
   // Hak akses user yang sedang login
   const currentUserPermissions: UserPermissions = useMemo(() => {
@@ -555,7 +556,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
   if (!isOpen) return null;
 
-  // Handle Login Action (Dynamic Authentication against staffUsers + DEFAULT_ACCOUNTS)
+  // Handle Login Action (Dynamic Authentication against staffUsers + fallback DEFAULT_ACCOUNTS only for unseeded users)
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoginError(null);
@@ -563,15 +564,35 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     const cleanInputUser = inputUsername.trim().toLowerCase();
     const cleanPin = inputPin.trim();
 
-    // Check staffUsers first, then fallback to DEFAULT_ACCOUNTS
-    const staffMatch = staffUsers.find(
-      u => u.username.toLowerCase() === cleanInputUser && u.pin === cleanPin
-    );
-    const defaultMatch = !staffMatch ? DEFAULT_ACCOUNTS.find(
-      acc => acc.username.toLowerCase() === cleanInputUser && acc.pin === cleanPin
-    ) : null;
+    if (!cleanInputUser || !cleanPin) {
+      setLoginError('Harap masukkan ID Pengguna dan Password/PIN.');
+      return;
+    }
 
-    const matchedAccount = staffMatch || defaultMatch;
+    // 1. Cek apakah pengguna terdaftar di daftar staffUsers aktif
+    const staffMatch = staffUsers.find(
+      u => u.username.toLowerCase() === cleanInputUser
+    );
+
+    let matchedAccount: StaffUser | typeof DEFAULT_ACCOUNTS[0] | null = null;
+
+    if (staffMatch) {
+      // Pengguna terdaftar dalam sistem: Wajib mencocokkan password/PIN terbaru dari staffUsers
+      if (String(staffMatch.pin).trim() === cleanPin) {
+        matchedAccount = staffMatch;
+      } else {
+        setLoginError('Password / PIN yang Anda masukkan salah. Silakan periksa kembali.');
+        return;
+      }
+    } else {
+      // 2. Hanya fallback ke DEFAULT_ACCOUNTS jika username ini belum ada di data staffUsers sama sekali
+      const defaultMatch = DEFAULT_ACCOUNTS.find(
+        acc => acc.username.toLowerCase() === cleanInputUser && String(acc.pin).trim() === cleanPin
+      );
+      if (defaultMatch) {
+        matchedAccount = defaultMatch;
+      }
+    }
 
     if (matchedAccount) {
       if (staffMatch && !staffMatch.isActive) {
@@ -616,7 +637,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         setActiveTab(firstViewable as any);
       }
     } else {
-      setLoginError('ID Pengguna atau Password/PIN salah. Silakan coba kembali.');
+      setLoginError('ID Pengguna tidak ditemukan atau Password/PIN salah. Silakan coba kembali.');
     }
   };
 
@@ -1201,7 +1222,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         isActive: userIsActive,
       };
 
-      setStaffUsers(prev => prev.map(u => u.id === editingUser.id ? updated : u));
+      setStaffUsers(prev => prev.map(u => 
+        (u.id === editingUser.id || u.username.toLowerCase() === editingUser.username.toLowerCase()) ? updated : u
+      ));
 
       if (isSupabaseConnected) {
         saveStaffUserToSupabase(updated).catch(() => {});
@@ -1217,7 +1240,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         setCurrentUser(updatedAuth);
       }
 
-      setUserFeedback(`Akun pengguna "${updated.name}" (@${updated.username}) berhasil diperbarui!`);
+      setUserFeedback(`Password dan data akun "${updated.name}" (@${updated.username}) berhasil disimpan dan aktif!`);
     } else {
       const newUser: StaffUser = {
         id: `usr_${Date.now()}`,
@@ -1491,57 +1514,100 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             {/* Quick Demo Switcher for Testing Role Permissions */}
             <div className="pt-3 border-t border-stone-100">
               <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span>Pilih Akun Demo untuk Uji Hak Akses:</span>
+                <span>Pilih Akun Cepat untuk Uji Hak Akses:</span>
                 <span className="text-[9px] text-blue-600 font-semibold">1-Klik Isi</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 text-left">
-                <button
-                  type="button"
-                  onClick={() => { setInputUsername('admin'); setInputPin('admin123'); }}
-                  className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[11px] transition-colors flex flex-col"
-                >
-                  <span className="font-bold text-amber-900 flex items-center gap-1">
-                    <span>👑 Admin</span>
-                    <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded font-mono">admin</span>
-                  </span>
-                  <span className="text-[10px] text-amber-700">Semua Modul (10 Penuh)</span>
-                </button>
+                {(() => {
+                  const getPin = (uname: string, defPin: string) => {
+                    const u = staffUsers.find(item => item.username.toLowerCase() === uname.toLowerCase());
+                    return u?.pin || defPin;
+                  };
+                  const isCustom = (uname: string, defPin: string) => {
+                    const u = staffUsers.find(item => item.username.toLowerCase() === uname.toLowerCase());
+                    return Boolean(u && u.pin !== defPin);
+                  };
 
-                <button
-                  type="button"
-                  onClick={() => { setInputUsername('spv'); setInputPin('spv2026'); }}
-                  className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[11px] transition-colors flex flex-col"
-                >
-                  <span className="font-bold text-blue-900 flex items-center gap-1">
-                    <span>👔 Supervisor</span>
-                    <span className="text-[9px] bg-blue-200 text-blue-800 px-1 rounded font-mono">spv</span>
-                  </span>
-                  <span className="text-[10px] text-blue-700">Katalog & Cabang Toko</span>
-                </button>
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setInputUsername('admin'); setInputPin(getPin('admin', 'admin123')); }}
+                        className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[11px] transition-colors flex flex-col"
+                      >
+                        <div className="font-bold text-amber-900 flex items-center justify-between w-full">
+                          <span className="flex items-center gap-1">
+                            <span>👑 Admin</span>
+                            <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded font-mono">admin</span>
+                          </span>
+                          {isCustom('admin', 'admin123') && (
+                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
+                              PIN Baru
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-amber-700">Semua Modul (10 Penuh)</span>
+                      </button>
 
-                <button
-                  type="button"
-                  onClick={() => { setInputUsername('kasir'); setInputPin('1234'); }}
-                  className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[11px] transition-colors flex flex-col"
-                >
-                  <span className="font-bold text-emerald-900 flex items-center gap-1">
-                    <span>💳 Kasir</span>
-                    <span className="text-[9px] bg-emerald-200 text-emerald-800 px-1 rounded font-mono">kasir</span>
-                  </span>
-                  <span className="text-[10px] text-emerald-700">Penjualan & Pesanan</span>
-                </button>
+                      <button
+                        type="button"
+                        onClick={() => { setInputUsername('spv'); setInputPin(getPin('spv', 'spv2026')); }}
+                        className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[11px] transition-colors flex flex-col"
+                      >
+                        <div className="font-bold text-blue-900 flex items-center justify-between w-full">
+                          <span className="flex items-center gap-1">
+                            <span>👔 Supervisor</span>
+                            <span className="text-[9px] bg-blue-200 text-blue-800 px-1 rounded font-mono">spv</span>
+                          </span>
+                          {isCustom('spv', 'spv2026') && (
+                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
+                              PIN Baru
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-blue-700">Katalog & Cabang Toko</span>
+                      </button>
 
-                <button
-                  type="button"
-                  onClick={() => { setInputUsername('gudang'); setInputPin('gudang2026'); }}
-                  className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[11px] transition-colors flex flex-col"
-                >
-                  <span className="font-bold text-orange-900 flex items-center gap-1">
-                    <span>📦 Gudang</span>
-                    <span className="text-[9px] bg-orange-200 text-orange-800 px-1 rounded font-mono">gudang</span>
-                  </span>
-                  <span className="text-[10px] text-orange-700">Stok & Katalog Produk</span>
-                </button>
+                      <button
+                        type="button"
+                        onClick={() => { setInputUsername('kasir'); setInputPin(getPin('kasir', '1234')); }}
+                        className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[11px] transition-colors flex flex-col"
+                      >
+                        <div className="font-bold text-emerald-900 flex items-center justify-between w-full">
+                          <span className="flex items-center gap-1">
+                            <span>💳 Kasir</span>
+                            <span className="text-[9px] bg-emerald-200 text-emerald-800 px-1 rounded font-mono">kasir</span>
+                          </span>
+                          {isCustom('kasir', '1234') && (
+                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
+                              PIN Baru
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-emerald-700">Penjualan & Pesanan</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setInputUsername('gudang'); setInputPin(getPin('gudang', 'gudang2026')); }}
+                        className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[11px] transition-colors flex flex-col"
+                      >
+                        <div className="font-bold text-orange-900 flex items-center justify-between w-full">
+                          <span className="flex items-center gap-1">
+                            <span>📦 Gudang</span>
+                            <span className="text-[9px] bg-orange-200 text-orange-800 px-1 rounded font-mono">gudang</span>
+                          </span>
+                          {isCustom('gudang', 'gudang2026') && (
+                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
+                              PIN Baru
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-orange-700">Stok & Katalog Produk</span>
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </form>
@@ -3547,7 +3613,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     </div>
 
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Password / PIN Akses:</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-stone-700">Password / PIN Akses:</label>
+                        {editingUser && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            userPin !== editingUser.pin 
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {userPin !== editingUser.pin ? 'Password diubah (siap simpan)' : 'Password saat ini tersimpan'}
+                          </span>
+                        )}
+                      </div>
                       <div className="relative">
                         <input
                           type={showUserPin ? 'text' : 'password'}
@@ -3555,16 +3632,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           value={userPin}
                           onChange={e => setUserPin(e.target.value)}
                           placeholder="Masukkan Password atau PIN 4-8 digit"
-                          className="w-full px-3 py-2 pr-10 border border-stone-300 rounded-xl bg-white font-mono text-stone-900"
+                          className="w-full px-3 py-2 pr-10 border border-stone-300 rounded-xl bg-white font-mono text-stone-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                         <button
                           type="button"
                           onClick={() => setShowUserPin(!showUserPin)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+                          title={showUserPin ? "Sembunyikan password" : "Lihat password"}
                         >
                           {showUserPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                      <p className="text-[11px] text-stone-500 mt-1">
+                        Password ini digunakan untuk login ke Panel Admin dan Kasir POS.
+                      </p>
                     </div>
 
                     <div>
@@ -3735,7 +3816,25 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                           </span>
                                         )}
                                       </div>
-                                      <div className="text-[10px] font-mono text-stone-500">@{u.username}</div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="text-[10px] font-mono text-stone-500">@{u.username}</span>
+                                        <span className="text-stone-300">•</span>
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
+                                          <KeyRound className="w-2.5 h-2.5 text-stone-400" />
+                                          <span>{showUserPinInTable[u.id] ? u.pin : '••••••'}</span>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setShowUserPinInTable(prev => ({ ...prev, [u.id]: !prev[u.id] }));
+                                            }}
+                                            className="text-stone-400 hover:text-stone-700 ml-0.5 p-0.5"
+                                            title={showUserPinInTable[u.id] ? "Sembunyikan password" : "Lihat password"}
+                                          >
+                                            {showUserPinInTable[u.id] ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                                          </button>
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
                                 </td>

@@ -171,16 +171,16 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       return;
     }
 
-    // Check staffUsers first, then fallback to DEFAULT_ACCOUNTS
+    // 1. Cek apakah pengguna ada di daftar staffUsers
     const staffMatch = staffUsers.find(
-      u => u.username.toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
+      u => u.username.toLowerCase() === cleanUser
     );
 
-    const defaultMatch = !staffMatch ? DEFAULT_ACCOUNTS.find(
-      u => u.username.toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
-    ) : null;
-
     if (staffMatch) {
+      if (String(staffMatch.pin).trim() !== cleanPin) {
+        setLoginError('Password / PIN yang Anda masukkan salah. Silakan coba kembali.');
+        return;
+      }
       if (!staffMatch.isActive) {
         setLoginError('Akun ini sedang dinonaktifkan oleh Administrator Toko.');
         return;
@@ -196,6 +196,11 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       fetchLiveStats();
       return;
     }
+
+    // 2. Fallback hanya jika username belum terdaftar sama sekali di staffUsers
+    const defaultMatch = DEFAULT_ACCOUNTS.find(
+      u => u.username.toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
+    );
 
     if (defaultMatch) {
       const userObj = {
@@ -222,32 +227,47 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
     setLoginError('ID Pengguna atau Password/PIN salah. Silakan coba kembali.');
   };
 
-  const handleQuickLogin = (user: string, pin: string) => {
+  const handleQuickLogin = (user: string, defaultPin: string) => {
+    const matchedStaff = staffUsers.find(u => u.username.toLowerCase() === user.toLowerCase());
+    const effectivePin = matchedStaff ? matchedStaff.pin : defaultPin;
+
     setUsernameInput(user);
-    setPinInput(pin);
+    setPinInput(effectivePin);
     setLoginError(null);
     setTimeout(() => {
-      const staffMatch = staffUsers.find(
-        u => u.username.toLowerCase() === user.toLowerCase() && String(u.pin).trim() === pin
-      );
-      const defaultMatch = !staffMatch ? DEFAULT_ACCOUNTS.find(
-        u => u.username.toLowerCase() === user.toLowerCase() && String(u.pin).trim() === pin
-      ) : null;
-
-      const matched = staffMatch || (defaultMatch ? {
-        id: `usr_${defaultMatch.username}`,
-        username: defaultMatch.username,
-        name: defaultMatch.name,
-        role: defaultMatch.role,
-        pin: defaultMatch.pin,
-        isActive: true,
-        createdAt: '01 Jan 2026',
-      } : null);
-
-      if (matched) {
-        setCurrentUser(matched);
+      if (matchedStaff) {
+        if (!matchedStaff.isActive) {
+          setLoginError('Akun ini sedang dinonaktifkan oleh Administrator Toko.');
+          return;
+        }
+        setCurrentUser(matchedStaff);
         try {
-          localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(matched));
+          localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(matchedStaff));
+          window.dispatchEvent(new Event('storage'));
+        } catch {}
+        setUsernameInput('');
+        setPinInput('');
+        setLoginError(null);
+        fetchLiveStats();
+        return;
+      }
+
+      const defaultMatch = DEFAULT_ACCOUNTS.find(
+        u => u.username.toLowerCase() === user.toLowerCase() && String(u.pin).trim() === effectivePin
+      );
+      if (defaultMatch) {
+        const userObj = {
+          id: `usr_${defaultMatch.username}`,
+          username: defaultMatch.username,
+          name: defaultMatch.name,
+          role: defaultMatch.role,
+          pin: defaultMatch.pin,
+          isActive: true,
+          createdAt: '01 Jan 2026',
+        };
+        setCurrentUser(userObj);
+        try {
+          localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(userObj));
           window.dispatchEvent(new Event('storage'));
         } catch {}
         setUsernameInput('');

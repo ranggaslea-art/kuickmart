@@ -661,6 +661,12 @@ export default function App() {
   };
 
   const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
+    // 1. Immediately persist synchronously to localStorage
+    try {
+      localStorage.setItem(STORAGE_STAFF_USERS_KEY, JSON.stringify(newUsers));
+    } catch {}
+
+    // 2. Sync to Supabase in background
     const newIds = new Set(newUsers.map(u => u.id));
     staffUsers.forEach(u => {
       if (!newIds.has(u.id)) {
@@ -670,6 +676,8 @@ export default function App() {
     newUsers.forEach((u) => {
       saveStaffUserToSupabase(u).catch(() => {});
     });
+
+    // 3. Update React state
     setStaffUsers(newUsers);
   };
 
