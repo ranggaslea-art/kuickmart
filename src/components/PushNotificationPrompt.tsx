@@ -12,6 +12,7 @@ export const PushNotificationPrompt: React.FC = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export const PushNotificationPrompt: React.FC = () => {
 
   const handleEnablePush = async () => {
     setIsLoading(true);
+    setErrorMessage(null);
     try {
       const result = await subscribeUserToPush('Pelanggan KuickMart Store');
       if (result.success) {
@@ -58,10 +60,12 @@ export const PushNotificationPrompt: React.FC = () => {
         setShowSuccessToast(true);
         setTimeout(() => setShowSuccessToast(false), 4000);
       } else {
-        alert(result.error || 'Izin notifikasi tidak diberikan');
+        setErrorMessage(result.error || 'Izin notifikasi belum disetujui');
+        setTimeout(() => setErrorMessage(null), 5000);
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal mengaktifkan notifikasi');
+      setErrorMessage(err.message || 'Gagal mengaktifkan notifikasi');
+      setTimeout(() => setErrorMessage(null), 5000);
     } finally {
       setIsLoading(false);
     }
@@ -117,6 +121,12 @@ export const PushNotificationPrompt: React.FC = () => {
                   Nanti Saja
                 </button>
               </div>
+
+              {errorMessage && (
+                <div className="mt-2 text-[10px] text-rose-400 bg-rose-950/60 border border-rose-800/60 px-2.5 py-1.5 rounded-xl font-medium">
+                  ⚠️ {errorMessage}
+                </div>
+              )}
             </div>
 
             <button

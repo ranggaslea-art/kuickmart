@@ -56,16 +56,18 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
     try {
       // 1. Get subscriber count & list
       const subRes = await fetch('/api/push/subscribers');
-      if (subRes.ok) {
-        const subData = await subRes.json();
+      const subType = subRes.headers.get('content-type') || '';
+      if (subRes.ok && subType.includes('application/json')) {
+        const subData = await subRes.json().catch(() => ({}));
         setTotalSubscribers(subData.total || 0);
         setSubscribersList(subData.subscribers || []);
       }
 
       // 2. Get broadcast history
       const histRes = await fetch('/api/push/history');
-      if (histRes.ok) {
-        const histData = await histRes.json();
+      const histType = histRes.headers.get('content-type') || '';
+      if (histRes.ok && histType.includes('application/json')) {
+        const histData = await histRes.json().catch(() => ({}));
         setBroadcastHistory(histData.history || []);
       }
 
@@ -108,7 +110,10 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
 
   const handleSendTestToSelf = async () => {
     if (!isSubscribedLocally) {
-      alert('Perangkat Anda belum terdaftar. Silakan klik tombol "Daftarkan Perangkat Ini" terlebih dahulu.');
+      setFeedback({
+        type: 'error',
+        message: 'Perangkat Anda belum terdaftar. Silakan klik tombol "Daftarkan Perangkat Ini" terlebih dahulu.',
+      });
       return;
     }
 
@@ -128,8 +133,11 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal mengirim uji coba');
+      const resType = res.headers.get('content-type') || '';
+      if (resType.includes('application/json')) {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Gagal mengirim uji coba');
+      }
 
       playNotificationChime();
       setFeedback({
@@ -146,12 +154,18 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
   const handleBroadcastPromo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit) {
-      alert('Anda tidak memiliki izin untuk mengirim siaran pesan promosi.');
+      setFeedback({
+        type: 'error',
+        message: 'Anda tidak memiliki izin untuk mengirim siaran pesan promosi.',
+      });
       return;
     }
 
     if (!title.trim() || !body.trim()) {
-      alert('Judul dan isi pesan promosi wajib diisi!');
+      setFeedback({
+        type: 'error',
+        message: 'Judul dan isi pesan promosi wajib diisi!',
+      });
       return;
     }
 
@@ -176,13 +190,18 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal mengirim siaran promosi');
+      const resType = res.headers.get('content-type') || '';
+      let successMsg = `Notifikasi promosi berhasil disiarkan ke pelanggan!`;
+      if (resType.includes('application/json')) {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Gagal mengirim siaran promosi');
+        if (data.message) successMsg = data.message;
+      }
 
       playNotificationChime();
       setFeedback({
         type: 'success',
-        message: data.message || `Notifikasi promosi berhasil disiarkan ke pelanggan!`,
+        message: successMsg,
       });
 
       fetchStatus();

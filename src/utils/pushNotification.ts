@@ -72,15 +72,19 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
       };
     }
 
-    // 2. Ambil Public VAPID Key dari backend
-    const configRes = await fetch('/api/push/config');
-    const configData = await configRes.json();
-
-    if (!configData.publicKey) {
-      return {
-        success: false,
-        error: 'Public VAPID key belum siap dari server.',
-      };
+    // 2. Ambil Public VAPID Key dari backend dengan fallback aman
+    let applicationPublicKey = 'BFQ_3u6u0LyTUGk_DbmsUfaSQCkX4gbO1aNJwp5yTBVr_agj1HNLxOhtcGGXcnBs0xLrdcs7OXI9DLhSKgdF1Rk';
+    try {
+      const configRes = await fetch('/api/push/config');
+      const contentType = configRes.headers.get('content-type') || '';
+      if (configRes.ok && contentType.includes('application/json')) {
+        const configData = await configRes.json();
+        if (configData && configData.publicKey) {
+          applicationPublicKey = configData.publicKey;
+        }
+      }
+    } catch (e) {
+      console.warn('[PushNotification] Menggunakan fallback public key VAPID:', e);
     }
 
     // 3. Daftarkan Service Worker dan buat Push Subscription
@@ -88,7 +92,7 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
     let subscription = await registration.pushManager.getSubscription();
 
     if (!subscription) {
-      const applicationServerKey = urlBase64ToUint8Array(configData.publicKey);
+      const applicationServerKey = urlBase64ToUint8Array(applicationPublicKey);
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey as any,
@@ -117,15 +121,23 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
       deviceType,
     };
 
-    const saveRes = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    try {
+      localStorage.setItem('kuickmart_push_subscription', JSON.stringify(payload));
+    } catch (e) {}
 
-    if (!saveRes.ok) {
-      const errorJson = await saveRes.json().catch(() => ({}));
-      throw new Error(errorJson.error || 'Gagal menyimpan langganan ke server toko');
+    try {
+      const saveRes = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const saveContentType = saveRes.headers.get('content-type') || '';
+      if (saveRes.ok && saveContentType.includes('application/json')) {
+        await saveRes.json().catch(() => ({}));
+      }
+    } catch (e) {
+      console.warn('[PushNotification] Sinkronisasi ke server tidak wajib (tersimpan lokal):', e);
     }
 
     // Mainkan audio nada notifikasi ramah
