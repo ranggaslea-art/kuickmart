@@ -35,12 +35,14 @@ interface PromoInfoManagerProps {
   stores: Store[];
   onUpdatePromos: (promos: StorePromoInfo[]) => void;
   onSelectCategory?: (categorySlug: string) => void;
+  canEdit?: boolean;
 }
 
 export const PromoInfoManager: React.FC<PromoInfoManagerProps> = ({
   promos,
   stores,
   onUpdatePromos,
+  canEdit = true,
 }) => {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | PromoType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -314,16 +316,18 @@ export const PromoInfoManager: React.FC<PromoInfoManagerProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => handleOpenAdd('banner')}
-            className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Promo Baru</span>
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => handleOpenAdd('banner')}
+              className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Promo Baru</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter Tabs & Search Bar */}
@@ -576,50 +580,58 @@ export const PromoInfoManager: React.FC<PromoInfoManagerProps> = ({
                       />
                     </label>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDuplicate(promo)}
-                      className="p-1.5 text-stone-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Duplikasi info promo ini"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEdit(promo)}
-                      className="px-2.5 py-1 bg-white hover:bg-orange-50 text-orange-700 hover:text-orange-800 border border-orange-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-2xs active:scale-95"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Ubah</span>
-                    </button>
-
-                    {deleteConfirmId === promo.id ? (
-                      <div className="flex items-center gap-1 bg-red-50 p-1 rounded-lg border border-red-200 animate-fade-in">
+                    {canEdit ? (
+                      <>
                         <button
                           type="button"
-                          onClick={() => handleDeletePromo(promo.id)}
-                          className="px-2 py-0.5 bg-red-600 text-white rounded text-[10px] font-bold hover:bg-red-700 transition-colors"
+                          onClick={() => handleDuplicate(promo)}
+                          className="p-1.5 text-stone-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Duplikasi info promo ini"
                         >
-                          Hapus
+                          <Copy className="w-3.5 h-3.5" />
                         </button>
+
                         <button
                           type="button"
-                          onClick={() => setDeleteConfirmId(null)}
-                          className="px-1.5 py-0.5 bg-stone-200 text-stone-700 rounded text-[10px] hover:bg-stone-300"
+                          onClick={() => handleOpenEdit(promo)}
+                          className="px-2.5 py-1 bg-white hover:bg-orange-50 text-orange-700 hover:text-orange-800 border border-orange-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-2xs active:scale-95"
                         >
-                          Batal
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Ubah</span>
                         </button>
-                      </div>
+
+                        {deleteConfirmId === promo.id ? (
+                          <div className="flex items-center gap-1 bg-red-50 p-1 rounded-lg border border-red-200 animate-fade-in">
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePromo(promo.id)}
+                              className="px-2 py-0.5 bg-red-600 text-white rounded text-[10px] font-bold hover:bg-red-700 transition-colors"
+                            >
+                              Hapus
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="px-1.5 py-0.5 bg-stone-200 text-stone-700 rounded text-[10px] hover:bg-stone-300"
+                            >
+                              Batal
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(promo.id)}
+                            className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Hapus promo ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmId(promo.id)}
-                        className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Hapus promo ini"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <span className="text-[10px] text-stone-400 font-medium italic px-2 py-1 bg-stone-100 rounded-lg">
+                        Hanya Lihat
+                      </span>
                     )}
                   </div>
                 </div>

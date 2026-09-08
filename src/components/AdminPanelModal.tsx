@@ -79,6 +79,7 @@ import {
   getRoleDisplayName 
 } from '../utils/permissions';
 import { ModulePermissionModal } from './ModulePermissionModal';
+import { UserAccessManager } from './UserAccessManager';
 import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
@@ -336,7 +337,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications'>(initialTab || 'products');
+  const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   useEffect(() => {
     if (initialTab) {
@@ -517,6 +519,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
     setUserFeedback(`Hak akses modul untuk "${targetUser?.name || 'Staff'}" berhasil diperbarui!`);
     setTimeout(() => setUserFeedback(null), 3500);
+  };
+
+  const handleUpdateStaffUsersFromAccessManager = (updatedUsers: StaffUser[]) => {
+    setStaffUsers(updatedUsers);
+    if (currentUser) {
+      const match = updatedUsers.find(u => u.username.toLowerCase() === currentUser.username.toLowerCase());
+      if (match) {
+        setCurrentUser(match);
+        try {
+          localStorage.setItem('pos_current_user', JSON.stringify(match));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    if (isSupabaseConnected) {
+      updatedUsers.forEach(u => saveStaffUserToSupabase(u).catch(console.error));
+    }
   };
 
   // Reset default akun & izin bawaan
@@ -1619,24 +1639,57 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
   // ==========================================
   // Helpers for RBAC enforcement
-  const renderAccessDenied = (moduleTitle: string) => (
-    <div className="p-8 sm:p-12 text-center bg-stone-50 border border-stone-200 rounded-3xl space-y-3">
-      <div className="w-14 h-14 bg-red-100 text-red-700 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
-        <ShieldAlert className="w-7 h-7" />
+  const renderAccessDenied = (moduleTitle: string) => {
+    const allowedModules = SYSTEM_MODULES.filter(m => currentUserPermissions[m.key]?.canView);
+
+    return (
+      <div className="p-8 sm:p-12 text-center bg-stone-50 border border-stone-200 rounded-3xl space-y-4 max-w-2xl mx-auto my-6 animate-in fade-in">
+        <div className="w-16 h-16 bg-red-100 text-red-700 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="font-extrabold text-base sm:text-lg text-stone-900">Akses Dibatasi: Modul {moduleTitle}</h3>
+          <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
+            Akun Anda dengan peran <strong>{getRoleDisplayName(currentUser?.role || 'kasir')}</strong> (@{currentUser?.username}) tidak memiliki izin untuk melihat modul ini.
+          </p>
+        </div>
+
+        <div className="p-3.5 bg-white border border-stone-200 rounded-2xl text-xs space-y-2 max-w-md mx-auto shadow-2xs">
+          <div className="font-bold text-stone-800 text-[11px] flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Modul yang Dapat Anda Akses Saat Ini:</span>
+          </div>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {allowedModules.length > 0 ? (
+              allowedModules.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setActiveTab(m.key as any)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <ExternalLink className="w-3 h-3 text-emerald-600" />
+                  <span>Buka {m.name.split('&')[0].trim()}</span>
+                </button>
+              ))
+            ) : (
+              <span className="text-stone-400 italic text-[11px]">Tidak ada modul yang diizinkan untuk akun ini.</span>
+            )}
+          </div>
+        </div>
+
+        <div className="pt-2 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+          >
+            Ganti Akun Login (Admin / SPV)
+          </button>
+        </div>
       </div>
-      <h3 className="font-extrabold text-base sm:text-lg text-stone-900">Akses Dibatasi: Modul {moduleTitle}</h3>
-      <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
-        Akun Anda dengan peran <strong>{getRoleDisplayName(currentUser?.role || 'kasir')}</strong> tidak memiliki izin untuk melihat modul ini.
-        Silakan hubungi Store Manager (Admin) untuk membuka hak akses.
-      </p>
-      <div className="pt-2">
-        <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" />
-          <span>Login Sebagai: @{currentUser?.username} ({getRoleDisplayName(currentUser?.role || 'kasir')})</span>
-        </span>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderReadOnlyBanner = (moduleTitle: string) => (
     <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-950 mb-4">
@@ -1776,6 +1829,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             { id: 'couriers', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
             { id: 'vouchers', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
             { id: 'users', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
+            { id: 'permissions', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
             { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
           ].map(item => {
             const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
@@ -1827,8 +1881,12 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
           
           {/* TAB 1: PRODUCTS MANAGEMENT */}
-          {activeTab === 'products' && (
+          {activeTab === 'products' && (!currentUserPermissions.products?.canView ? (
+            renderAccessDenied('Katalog & Stok Produk')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.products?.canEdit && renderReadOnlyBanner('Katalog & Stok Produk')}
+
               {productFeedback && (
                 <div className={`p-4 rounded-2xl text-xs font-semibold flex items-start justify-between gap-3 shadow-2xs transition-all ${
                   productFeedback.type === 'success' 
@@ -2401,21 +2459,25 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <span>Kalkulator & Simulasi Konversi</span>
                       </button>
 
-                      <button
-                        onClick={() => setActiveTab('bulk_import')}
-                        className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Import Excel</span>
-                      </button>
+                      {currentUserPermissions.bulk_import?.canView && (
+                        <button
+                          onClick={() => setActiveTab('bulk_import')}
+                          className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Import Excel</span>
+                        </button>
+                      )}
 
-                      <button
-                        onClick={handleOpenAdd}
-                        className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Tambah Produk</span>
-                      </button>
+                      {currentUserPermissions.products?.canEdit && (
+                        <button
+                          onClick={handleOpenAdd}
+                          className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Tambah Produk</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2497,20 +2559,28 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                 {p.barcode}
                               </td>
                               <td className="p-3 text-right space-x-1">
-                                <button
-                                  onClick={() => handleOpenEdit(p)}
-                                  className="p-1.5 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700"
-                                  title="Edit Produk"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(p.id)}
-                                  className="p-1.5 bg-red-50 hover:bg-red-100 rounded-lg text-red-600"
-                                  title="Hapus Produk"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {currentUserPermissions.products?.canEdit ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleOpenEdit(p)}
+                                      className="p-1.5 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700"
+                                      title="Edit Produk"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteProduct(p.id)}
+                                      className="p-1.5 bg-red-50 hover:bg-red-100 rounded-lg text-red-600"
+                                      title="Hapus Produk"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-stone-400 font-medium italic px-2 py-0.5 bg-stone-100 rounded">
+                                    Hanya Lihat
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -2521,11 +2591,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 </>
               )}
             </div>
-          )}
+          ))}
 
           {/* TAB 2: ORDERS MANAGEMENT */}
-          {activeTab === 'orders' && (
+          {activeTab === 'orders' && (!currentUserPermissions.orders?.canView ? (
+            renderAccessDenied('Pesanan Masuk & Kasir')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.orders?.canEdit && renderReadOnlyBanner('Pesanan Masuk & Kasir')}
+
               {/* Cloud Database Sync Status Card */}
               <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                 isSupabaseConnected 
@@ -2715,11 +2789,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 </div>
               )}
             </div>
-          )}
+          ))}
 
           {/* TAB 3: STORES MANAGEMENT (Full Edit & Add Branch) */}
-          {activeTab === 'stores' && (
+          {activeTab === 'stores' && (!currentUserPermissions.stores?.canView ? (
+            renderAccessDenied('Cabang Toko / Outlet')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.stores?.canEdit && renderReadOnlyBanner('Cabang Toko / Outlet')}
+
               {storeFeedback && (
                 <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -2983,14 +3061,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <span>Pengaturan Struk Toko</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={handleOpenAddStore}
-                        className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Tambah Cabang Baru</span>
-                      </button>
+                      {currentUserPermissions.stores?.canEdit && (
+                        <button
+                          type="button"
+                          onClick={handleOpenAddStore}
+                          className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Tambah Cabang Baru</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -3033,34 +3113,56 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
                             {/* Actions */}
                             <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => handleOpenEditStore(store)}
-                                className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors"
-                              >
-                                <Edit className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Edit Info Toko</span>
-                              </button>
+                              {currentUserPermissions.stores?.canEdit ? (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenEditStore(store)}
+                                    className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors"
+                                  >
+                                    <Edit className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Edit Info Toko</span>
+                                  </button>
 
-                              {!isCurrent ? (
-                                <button
-                                  onClick={() => {
-                                    onSelectStore(store);
-                                    setStoreFeedback(`Toko aktif berhasil diubah ke "${store.name}".`);
-                                    setTimeout(() => setStoreFeedback(null), 3500);
-                                  }}
-                                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors"
-                                >
-                                  Jadikan Toko Aktif
-                                </button>
-                              ) : null}
+                                  {!isCurrent ? (
+                                    <button
+                                      onClick={() => {
+                                        onSelectStore(store);
+                                        setStoreFeedback(`Toko aktif berhasil diubah ke "${store.name}".`);
+                                        setTimeout(() => setStoreFeedback(null), 3500);
+                                      }}
+                                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors"
+                                    >
+                                      Jadikan Toko Aktif
+                                    </button>
+                                  ) : null}
 
-                              <button
-                                onClick={() => handleDeleteStore(store.id, store.name)}
-                                className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl"
-                                title="Hapus Cabang"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                                  <button
+                                    onClick={() => handleDeleteStore(store.id, store.name)}
+                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl"
+                                    title="Hapus Cabang"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {!isCurrent ? (
+                                    <button
+                                      onClick={() => {
+                                        onSelectStore(store);
+                                        setStoreFeedback(`Toko aktif berhasil diubah ke "${store.name}".`);
+                                        setTimeout(() => setStoreFeedback(null), 3500);
+                                      }}
+                                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors"
+                                    >
+                                      Jadikan Toko Aktif
+                                    </button>
+                                  ) : null}
+                                  <span className="text-[10px] text-stone-400 font-medium italic px-2 py-1 bg-stone-100 rounded-lg">
+                                    Hanya Lihat
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -3093,11 +3195,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 </>
               )}
             </div>
-          )}
+          ))}
 
           {/* TAB 4: BULK IMPORT EXCEL */}
-          {activeTab === 'bulk_import' && (
+          {activeTab === 'bulk_import' && (!currentUserPermissions.bulk_import?.canView ? (
+            renderAccessDenied('Import Cepat Excel')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.bulk_import?.canEdit && renderReadOnlyBanner('Import Cepat Excel')}
+
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-xs text-emerald-950 space-y-1.5">
                 <div className="font-bold flex items-center gap-1.5 text-emerald-900">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
@@ -3116,7 +3222,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   rows={8}
                   value={bulkText}
                   onChange={e => setBulkText(e.target.value)}
-                  className="w-full p-3 font-mono text-xs border border-stone-300 rounded-2xl bg-white focus:ring-2 focus:ring-emerald-200"
+                  disabled={!currentUserPermissions.bulk_import?.canEdit}
+                  className="w-full p-3 font-mono text-xs border border-stone-300 rounded-2xl bg-white focus:ring-2 focus:ring-emerald-200 disabled:bg-stone-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -3132,20 +3239,26 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   Total baris yang akan diproses: {bulkText.split('\n').filter(l => l.trim().length > 0).length} produk
                 </span>
 
-                <button
-                  onClick={handleBulkImport}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm active:scale-95 transition-all"
-                >
-                  <UploadCloud className="w-4 h-4" />
-                  <span>Eksekusi & Masukkan ke Katalog</span>
-                </button>
+                {currentUserPermissions.bulk_import?.canEdit && (
+                  <button
+                    onClick={handleBulkImport}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Eksekusi & Masukkan ke Katalog</span>
+                  </button>
+                )}
               </div>
             </div>
-          )}
+          ))}
 
           {/* TAB 4: VOUCHERS & DISCOUNTS */}
-          {activeTab === 'vouchers' && (
+          {activeTab === 'vouchers' && (!currentUserPermissions.vouchers?.canView ? (
+            renderAccessDenied('Voucher & Diskon')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.vouchers?.canEdit && renderReadOnlyBanner('Voucher & Diskon')}
+
               {/* Feedback toast */}
               {voucherFeedback && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center justify-between animate-in fade-in">
@@ -3171,7 +3284,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   </p>
                 </div>
 
-                {!isAddingVoucher && (
+                {!isAddingVoucher && currentUserPermissions.vouchers?.canEdit && (
                   <button
                     onClick={handleOpenAddVoucher}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
@@ -3500,20 +3613,28 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
                         {/* Action buttons */}
                         <div className="flex items-center justify-end gap-1.5 mt-3 pt-2 border-t border-stone-100">
-                          <button
-                            onClick={() => handleOpenEditVoucher(v)}
-                            className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteVoucher(v.id, v.code)}
-                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Hapus</span>
-                          </button>
+                          {currentUserPermissions.vouchers?.canEdit ? (
+                            <>
+                              <button
+                                onClick={() => handleOpenEditVoucher(v)}
+                                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteVoucher(v.id, v.code)}
+                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Hapus</span>
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-stone-400 font-medium italic px-2 py-0.5 bg-stone-100 rounded">
+                              Hanya Lihat
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -3529,11 +3650,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 </>
               )}
             </div>
-          )}
+          ))}
 
           {/* TAB 5: USER MANAGEMENT */}
-          {activeTab === 'users' && (
+          {activeTab === 'users' && (!currentUserPermissions.users?.canView ? (
+            renderAccessDenied('Manajemen Pengguna & Hak Akses')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.users?.canEdit && renderReadOnlyBanner('Manajemen Pengguna & Hak Akses')}
+
               {/* Feedback toast */}
               {userFeedback && (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center justify-between animate-in fade-in">
@@ -3559,7 +3684,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   </p>
                 </div>
 
-                {!isAddingUser && (
+                {!isAddingUser && userSubTab === 'accounts' && currentUserPermissions.users?.canEdit && (
                   <button
                     onClick={handleOpenAddUser}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
@@ -3570,7 +3695,55 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 )}
               </div>
 
-              {isAddingUser ? (
+              {/* Subtabs: Akun Staff vs Matriks Akses */}
+              <div className="flex items-center gap-2 border-b border-stone-200 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setUserSubTab('accounts')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    userSubTab === 'accounts'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Daftar Akun Staff ({staffUsers.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserSubTab('permissions')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    userSubTab === 'permissions'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Matriks & Preset Hak Akses Modul</span>
+                </button>
+              </div>
+
+              {userSubTab === 'permissions' ? (
+                <UserAccessManager
+                  staffUsers={staffUsers}
+                  currentUser={currentUser || staffUsers[0]}
+                  onUpdateStaffUsers={handleUpdateStaffUsersFromAccessManager}
+                  onSwitchUser={(user) => {
+                    setCurrentUser(user);
+                    try {
+                      localStorage.setItem('pos_current_user', JSON.stringify(user));
+                    } catch (e) {
+                      console.error(e);
+                    }
+                    setUserFeedback(`Sesi simulasi beralih ke "${user.name}" (${user.role.toUpperCase()})`);
+                    setTimeout(() => setUserFeedback(null), 3500);
+                  }}
+                  onOpenAddUser={() => {
+                    setUserSubTab('accounts');
+                    handleOpenAddUser();
+                  }}
+                />
+              ) : isAddingUser ? (
                 /* ADD / EDIT USER FORM */
                 <form onSubmit={handleSaveUser} className="bg-stone-50 border border-stone-200 rounded-3xl p-5 space-y-4 animate-in fade-in">
                   <div className="flex items-center justify-between border-b border-stone-200 pb-3">
@@ -3905,6 +4078,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                     <Edit className="w-3.5 h-3.5" />
                                   </button>
 
+                                  {/* Permissions Modal Button */}
+                                  <button
+                                    onClick={() => setSelectedUserForPermissions(u)}
+                                    className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors"
+                                    title="Konfigurasi Hak Akses Modul"
+                                  >
+                                    <Shield className="w-3.5 h-3.5" />
+                                  </button>
+
                                   {/* Delete Button */}
                                   <button
                                     onClick={() => handleDeleteUser(u)}
@@ -3929,11 +4111,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 </>
               )}
             </div>
-          )}
+          ))}
 
           {/* TAB 7: STRUK INFO TOKO (RECEIPT SETTINGS & MANAGEMENT) */}
-          {activeTab === 'receipts' && (
+          {activeTab === 'receipts' && (!currentUserPermissions.receipts?.canView ? (
+            renderAccessDenied('Pengaturan Struk Toko')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.receipts?.canEdit && renderReadOnlyBanner('Pengaturan Struk Toko')}
               <ReceiptInfoManager
                 receiptConfigs={activeReceiptConfigs}
                 stores={stores}
@@ -3946,51 +4131,93 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 }}
               />
             </div>
-          )}
+          ))}
 
           {/* TAB 8: PROMO & INFO TOKO (DISCOUNT & STORE PROMOS MANAGEMENT) */}
-          {activeTab === 'promos' && (
+          {activeTab === 'promos' && (!currentUserPermissions.promos?.canView ? (
+            renderAccessDenied('Promo & Info Toko')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.promos?.canEdit && renderReadOnlyBanner('Promo & Info Toko')}
               <PromoInfoManager
                 promos={activeStorePromos}
                 stores={stores}
+                canEdit={currentUserPermissions.promos?.canEdit ?? true}
                 onUpdatePromos={handleUpdateStorePromos}
                 onSelectCategory={(cat) => {
                   onClose();
                 }}
               />
             </div>
-          )}
+          ))}
 
           {/* TAB 9: KURIR & ARMADA PENGIRIMAN (COURIER & FLEET MANAGEMENT) */}
-          {activeTab === 'couriers' && (
+          {activeTab === 'couriers' && (!currentUserPermissions.couriers?.canView ? (
+            renderAccessDenied('Kurir & Armada Pengiriman')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.couriers?.canEdit && renderReadOnlyBanner('Kurir & Armada Pengiriman')}
               <CourierManager
                 couriers={activeCouriers}
                 stores={stores}
                 onUpdateCouriers={handleUpdateCouriers}
               />
             </div>
-          )}
+          ))}
 
           {/* TAB 10: INFO BRAND, HEADER & FOOTER (KUSTOMISASI LOGO & FOOTER) */}
-          {activeTab === 'brand_info' && (
+          {activeTab === 'brand_info' && (!currentUserPermissions.brand_info?.canView ? (
+            renderAccessDenied('Informasi Brand & Footer')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.brand_info?.canEdit && renderReadOnlyBanner('Informasi Brand & Footer')}
               <BrandInfoManager
                 brandConfig={activeBrandConfig}
                 onUpdateBrandConfig={handleUpdateBrandConfig}
               />
             </div>
-          )}
+          ))}
 
           {/* TAB 11: PUSH NOTIFIKASI PROMO PWA (VAPID) */}
-          {activeTab === 'push_notifications' && (
+          {activeTab === 'push_notifications' && (!currentUserPermissions.push_notifications?.canView ? (
+            renderAccessDenied('Push Notifikasi Promo PWA')
+          ) : (
             <div className="space-y-4">
+              {!currentUserPermissions.push_notifications?.canEdit && renderReadOnlyBanner('Push Notifikasi Promo PWA')}
               <PushNotificationManager
                 canEdit={currentUserPermissions.push_notifications?.canEdit ?? true}
               />
             </div>
-          )}
+          ))}
+
+          {/* TAB 12: MANAJEMEN HAK AKSES MODUL (USER ACCESS CONTROL & RBAC) */}
+          {activeTab === 'permissions' && (!currentUserPermissions.users?.canView ? (
+            renderAccessDenied('Manajemen Hak Akses Pengguna')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.users?.canEdit && renderReadOnlyBanner('Manajemen Hak Akses Pengguna')}
+              <UserAccessManager
+                staffUsers={staffUsers}
+                currentUser={currentUser || staffUsers[0]}
+                onUpdateStaffUsers={handleUpdateStaffUsersFromAccessManager}
+                onSwitchUser={(user) => {
+                  setCurrentUser(user);
+                  try {
+                    localStorage.setItem('pos_current_user', JSON.stringify(user));
+                  } catch (e) {
+                    console.error(e);
+                  }
+                  setUserFeedback(`Sesi simulasi beralih ke "${user.name}" (${user.role.toUpperCase()})`);
+                  setTimeout(() => setUserFeedback(null), 3500);
+                }}
+                onOpenAddUser={() => {
+                  setActiveTab('users');
+                  setUserSubTab('accounts');
+                  handleOpenAddUser();
+                }}
+              />
+            </div>
+          ))}
 
         </div>
 
@@ -4255,6 +4482,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           </div>
         </div>
       )}
+      {/* USER MODULE PERMISSION MODAL */}
+      <ModulePermissionModal
+        isOpen={!!selectedUserForPermissions}
+        onClose={() => setSelectedUserForPermissions(null)}
+        user={selectedUserForPermissions}
+        onSavePermissions={handleSaveUserPermissions}
+        isCurrentUserAdmin={currentUser?.role === 'admin'}
+      />
     </div>
   );
 };

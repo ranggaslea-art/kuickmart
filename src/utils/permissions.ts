@@ -129,17 +129,18 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     push_notifications: { canView: true, canEdit: true }, // Supervisor bisa broadcast promo
   },
   kasir: {
-    products: { canView: true, canEdit: false }, // Kasir hanya bisa lihat produk & stok, tidak bisa ubah harga/hapus
-    orders: { canView: true, canEdit: true }, // Kasir memproses transaksi penjualan & pesanan
-    stores: { canView: false, canEdit: false }, // Dibatasi dari pengaturan cabang
-    receipts: { canView: true, canEdit: false }, // Kasir hanya melihat format struk
-    promos: { canView: true, canEdit: false }, // Kasir dapat melihat promo aktif untuk info pelanggan
-    brand_info: { canView: false, canEdit: false }, // Dibatasi dari konfigurasi brand
-    couriers: { canView: true, canEdit: false }, // Kasir bisa cek ketersediaan driver
-    vouchers: { canView: true, canEdit: false }, // Kasir bisa cek voucher diskon pelanggan
-    users: { canView: false, canEdit: false }, // Dibatasi dari manajemen user
-    bulk_import: { canView: false, canEdit: false }, // Dibatasi dari import massal
-    push_notifications: { canView: true, canEdit: false }, // Kasir bisa lihat log siaran promo
+    // Sesuai contoh akses: Kasir hanya dapat mengakses Produk & Promo toko
+    products: { canView: true, canEdit: false }, // Kasir dapat melihat katalog & stok produk
+    promos: { canView: true, canEdit: false }, // Kasir dapat melihat promo aktif
+    orders: { canView: false, canEdit: false }, // Terkunci
+    stores: { canView: false, canEdit: false }, // Terkunci
+    receipts: { canView: false, canEdit: false }, // Terkunci
+    brand_info: { canView: false, canEdit: false }, // Terkunci
+    couriers: { canView: false, canEdit: false }, // Terkunci
+    vouchers: { canView: false, canEdit: false }, // Terkunci
+    users: { canView: false, canEdit: false }, // Terkunci
+    bulk_import: { canView: false, canEdit: false }, // Terkunci
+    push_notifications: { canView: false, canEdit: false }, // Terkunci
   },
   gudang: {
     products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
@@ -155,6 +156,124 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     push_notifications: { canView: false, canEdit: false },
   },
 };
+
+export interface PermissionPreset {
+  id: string;
+  name: string;
+  badge: string;
+  description: string;
+  recommendedFor: string;
+  colorClass: string;
+  getPermissions: () => UserPermissions;
+}
+
+export const PERMISSION_PRESETS: PermissionPreset[] = [
+  {
+    id: 'admin_all',
+    name: '👑 Admin (Akses Semua Modul)',
+    badge: '11 Modul',
+    description: 'Akses penuh untuk melihat dan mengelola semua 11 modul sistem tanpa batasan.',
+    recommendedFor: 'Store Manager & Pemilik Toko',
+    colorClass: 'border-amber-300 bg-amber-50 text-amber-900',
+    getPermissions: (): UserPermissions => {
+      const full: UserPermissions = {} as UserPermissions;
+      SYSTEM_MODULES.forEach((m) => {
+        full[m.key] = { canView: true, canEdit: true };
+      });
+      return full;
+    },
+  },
+  {
+    id: 'kasir_produk_promo',
+    name: '🛒 Kasir (Hanya Produk & Promo)',
+    badge: '2 Modul',
+    description: 'Sesuai contoh akses: Kasir hanya dapat mengakses Katalog Produk dan Promo Toko.',
+    recommendedFor: 'Kasir Shift & Staff Frontline Toko',
+    colorClass: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    getPermissions: (): UserPermissions => ({
+      products: { canView: true, canEdit: false },
+      promos: { canView: true, canEdit: false },
+      orders: { canView: false, canEdit: false },
+      stores: { canView: false, canEdit: false },
+      receipts: { canView: false, canEdit: false },
+      brand_info: { canView: false, canEdit: false },
+      couriers: { canView: false, canEdit: false },
+      vouchers: { canView: false, canEdit: false },
+      users: { canView: false, canEdit: false },
+      bulk_import: { canView: false, canEdit: false },
+      push_notifications: { canView: false, canEdit: false },
+    }),
+  },
+  {
+    id: 'kasir_transaksi_lengkap',
+    name: '💳 Kasir Lengkap (Produk, Pesanan, & Promo)',
+    badge: '4 Modul',
+    description: 'Kasir yang memproses pesanan kasir POS, memeriksa stok produk, dan melihat promo & voucher.',
+    recommendedFor: 'Kasir Kasir Utama & POS Operator',
+    colorClass: 'border-blue-300 bg-blue-50 text-blue-900',
+    getPermissions: (): UserPermissions => ({
+      products: { canView: true, canEdit: false },
+      orders: { canView: true, canEdit: true },
+      promos: { canView: true, canEdit: false },
+      vouchers: { canView: true, canEdit: false },
+      stores: { canView: false, canEdit: false },
+      receipts: { canView: true, canEdit: false },
+      brand_info: { canView: false, canEdit: false },
+      couriers: { canView: true, canEdit: false },
+      users: { canView: false, canEdit: false },
+      bulk_import: { canView: false, canEdit: false },
+      push_notifications: { canView: false, canEdit: false },
+    }),
+  },
+  {
+    id: 'supervisor_operasional',
+    name: '👔 Supervisor Toko',
+    badge: '7 Modul',
+    description: 'Akses operasional toko: katalog, pesanan, promo, kurir, struk, dan broadcast pesan promo.',
+    recommendedFor: 'Supervisor Outlet & Asisten Manager',
+    colorClass: 'border-purple-300 bg-purple-50 text-purple-900',
+    getPermissions: (): UserPermissions => ({ ...DEFAULT_ROLE_PERMISSIONS.supervisor }),
+  },
+  {
+    id: 'gudang_logistik',
+    name: '📦 Staff Gudang & Stok',
+    badge: '3 Modul',
+    description: 'Akses stok produk, picking order pesanan, armada penjemput, dan import data massal.',
+    recommendedFor: 'Petugas Gudang, Picker, & Packer',
+    colorClass: 'border-orange-300 bg-orange-50 text-orange-900',
+    getPermissions: (): UserPermissions => ({ ...DEFAULT_ROLE_PERMISSIONS.gudang }),
+  },
+  {
+    id: 'view_only_all',
+    name: '👁️ Hanya Lihat Saja (Semua Modul)',
+    badge: '11 Modul (Read-Only)',
+    description: 'Dapat melihat seluruh data toko namun tidak diizinkan menambah, mengedit, atau menghapus.',
+    recommendedFor: 'Auditor, Viewer, & Trainee',
+    colorClass: 'border-stone-300 bg-stone-100 text-stone-800',
+    getPermissions: (): UserPermissions => {
+      const viewOnly: UserPermissions = {} as UserPermissions;
+      SYSTEM_MODULES.forEach((m) => {
+        viewOnly[m.key] = { canView: true, canEdit: false };
+      });
+      return viewOnly;
+    },
+  },
+  {
+    id: 'lock_all',
+    name: '🚫 Kunci Semua Modul',
+    badge: '0 Modul',
+    description: 'Menonaktifkan semua akses modul toko untuk akun ini sementara waktu.',
+    recommendedFor: 'Akun Ditangguhkan / Dibekukan',
+    colorClass: 'border-red-300 bg-red-50 text-red-800',
+    getPermissions: (): UserPermissions => {
+      const locked: UserPermissions = {} as UserPermissions;
+      SYSTEM_MODULES.forEach((m) => {
+        locked[m.key] = { canView: false, canEdit: false };
+      });
+      return locked;
+    },
+  },
+];
 
 /**
  * Mengambil hak akses efektif dari seorang user.
