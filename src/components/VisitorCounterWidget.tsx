@@ -80,8 +80,21 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
       } catch {}
     };
 
+    const handleVisitorUpdate = (e: any) => {
+      if (e.detail) {
+        if (e.detail.todayVisitorNumber !== undefined) setTodayVisitorNumber(e.detail.todayVisitorNumber);
+        if (e.detail.todayTotalVisitors !== undefined) setTodayTotalVisitors(e.detail.todayTotalVisitors);
+        if (e.detail.totalVisitors !== undefined) setTotalWebVisitors(e.detail.totalVisitors);
+        if (e.detail.detectedLocation) setDetectedLocation(e.detail.detectedLocation);
+      }
+    };
+
     window.addEventListener('storage', syncAuth);
-    return () => window.removeEventListener('storage', syncAuth);
+    window.addEventListener('kuickmart:visitor_updated', handleVisitorUpdate);
+    return () => {
+      window.removeEventListener('storage', syncAuth);
+      window.removeEventListener('kuickmart:visitor_updated', handleVisitorUpdate);
+    };
   }, []);
 
   // Initialize and register visit with server
@@ -150,6 +163,20 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
 
   useEffect(() => {
     registerVisit();
+    // Poll visitor stats every 15 seconds to keep counters fresh
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/visitors/stats?visitorId=${encodeURIComponent(visitorId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.todayTotalVisitors !== undefined) setTodayTotalVisitors(data.todayTotalVisitors);
+          if (data.totalVisitors !== undefined) setTotalWebVisitors(data.totalVisitors);
+          if (data.todayVisitorNumber !== undefined) setTodayVisitorNumber(data.todayVisitorNumber);
+        }
+      } catch {}
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [visitorId]);
 
   return (

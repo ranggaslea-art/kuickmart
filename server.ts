@@ -353,12 +353,25 @@ async function startServer() {
     locationCounts.set(loc.city, { count: loc.count, region: loc.region });
   });
 
+  const formatTimeAgo = (timestamp: number): string => {
+    const diffSec = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
+    if (diffSec < 10) return 'Baru saja';
+    if (diffSec < 60) return `${diffSec} dtk lalu`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} mnt lalu`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} jam lalu`;
+    return `${Math.floor(diffHour / 24)} hari lalu`;
+  };
+
   const recentVisitorsList: RecentVisitorLog[] = [
     { id: 'vis-seed-1', city: 'Pangandaran', region: 'Jawa Barat', timeAgo: 'Baru saja', device: 'Mobile Android', timestamp: Date.now() - 35000 },
     { id: 'vis-seed-2', city: 'Bandung', region: 'Jawa Barat', timeAgo: '2 mnt lalu', device: 'iOS iPhone', timestamp: Date.now() - 140000 },
     { id: 'vis-seed-3', city: 'Jakarta', region: 'DKI Jakarta', timeAgo: '6 mnt lalu', device: 'Chrome Desktop', timestamp: Date.now() - 380000 },
     { id: 'vis-seed-4', city: 'Pangandaran', region: 'Jawa Barat', timeAgo: '11 mnt lalu', device: 'Mobile Android', timestamp: Date.now() - 660000 },
     { id: 'vis-seed-5', city: 'Surabaya', region: 'Jawa Timur', timeAgo: '18 mnt lalu', device: 'Mobile Android', timestamp: Date.now() - 1080000 },
+    { id: 'vis-seed-6', city: 'Semarang', region: 'Jawa Tengah', timeAgo: '25 mnt lalu', device: 'Chrome Desktop', timestamp: Date.now() - 1500000 },
+    { id: 'vis-seed-7', city: 'Yogyakarta', region: 'DI Yogyakarta', timeAgo: '35 mnt lalu', device: 'iOS iPhone', timestamp: Date.now() - 2100000 },
   ];
 
   const buildTopOrigins = (): VisitorOriginStat[] => {
@@ -369,10 +382,22 @@ async function startServer() {
       entries.push({ city, region: val.region, count: val.count });
     });
     entries.sort((a, b) => b.count - a.count);
-    return entries.slice(0, 7).map(item => ({
+    return entries.slice(0, 10).map(item => ({
       ...item,
       percentage: total > 0 ? Math.round((item.count / total) * 100) : 0,
     }));
+  };
+
+  const getRecentVisitorsWithTimeAgo = (): RecentVisitorLog[] => {
+    return recentVisitorsList.slice(0, 10).map(item => ({
+      ...item,
+      timeAgo: formatTimeAgo(item.timestamp),
+    }));
+  };
+
+  const getOnlineNowCount = (): number => {
+    const recentActive = recentVisitorsList.filter(v => (Date.now() - v.timestamp) < 15 * 60 * 1000).length;
+    return Math.max(3, recentActive + 2);
   };
 
   // Helper to check day rollover
@@ -426,7 +451,7 @@ async function startServer() {
           timestamp: Date.now(),
           isCurrent: true,
         });
-        if (recentVisitorsList.length > 20) {
+        if (recentVisitorsList.length > 30) {
           recentVisitorsList.pop();
         }
       }
@@ -438,6 +463,7 @@ async function startServer() {
         todayVisitorNumber: assignedDailyNumber,
         todayTotalVisitors: dailyVisitorCounter,
         totalVisitors: totalWebVisitors,
+        onlineNow: getOnlineNowCount(),
         isFirstVisitToday: isFirstToday,
         detectedLocation: {
           city: resolvedCity,
@@ -445,11 +471,83 @@ async function startServer() {
           country: 'Indonesia',
         },
         topOrigins: buildTopOrigins(),
-        recentVisitors: recentVisitorsList.slice(0, 6),
+        recentVisitors: getRecentVisitorsWithTimeAgo(),
       });
     } catch (err: any) {
       console.error('Error tracking visitor:', err);
       res.status(500).json({ error: 'Gagal memproses data pengunjung', details: err.message });
+    }
+  });
+
+  // POST /api/visitors/simulate: Inject a simulated visitor for testing live traffic
+  app.post('/api/visitors/simulate', (req, res) => {
+    try {
+      checkDayRollover();
+      const INDONESIA_CITIES = [
+        { city: 'Pangandaran', region: 'Jawa Barat' },
+        { city: 'Bandung', region: 'Jawa Barat' },
+        { city: 'Jakarta', region: 'DKI Jakarta' },
+        { city: 'Surabaya', region: 'Jawa Timur' },
+        { city: 'Semarang', region: 'Jawa Tengah' },
+        { city: 'Yogyakarta', region: 'DI Yogyakarta' },
+        { city: 'Denpasar', region: 'Bali' },
+        { city: 'Medan', region: 'Sumatera Utara' },
+        { city: 'Makassar', region: 'Sulawesi Selatan' },
+        { city: 'Ciamis', region: 'Jawa Barat' },
+        { city: 'Tasikmalaya', region: 'Jawa Barat' },
+        { city: 'Malang', region: 'Jawa Timur' },
+        { city: 'Bogor', region: 'Jawa Barat' },
+      ];
+      const DEVICES = ['Mobile Android', 'iOS iPhone', 'Chrome Desktop', 'Safari Mac', 'Mobile Tablet'];
+
+      const randomTarget = INDONESIA_CITIES[Math.floor(Math.random() * INDONESIA_CITIES.length)];
+      const randomDevice = DEVICES[Math.floor(Math.random() * DEVICES.length)];
+
+      const resolvedCity = req.body?.city || randomTarget.city;
+      const resolvedRegion = req.body?.region || randomTarget.region;
+      const resolvedDevice = req.body?.device || randomDevice;
+
+      dailyVisitorCounter += 1;
+      totalWebVisitors += 1;
+
+      // Update location count
+      const existingLoc = locationCounts.get(resolvedCity);
+      if (existingLoc) {
+        locationCounts.set(resolvedCity, { count: existingLoc.count + 1, region: existingLoc.region || resolvedRegion });
+      } else {
+        locationCounts.set(resolvedCity, { count: 1, region: resolvedRegion });
+      }
+
+      // Add to recent list
+      const newLog: RecentVisitorLog = {
+        id: `vis-sim-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        city: resolvedCity,
+        region: resolvedRegion,
+        timeAgo: 'Baru saja',
+        device: resolvedDevice,
+        timestamp: Date.now(),
+        isCurrent: false,
+      };
+      recentVisitorsList.unshift(newLog);
+      if (recentVisitorsList.length > 30) {
+        recentVisitorsList.pop();
+      }
+
+      res.json({
+        success: true,
+        message: `Pengunjung baru dari ${resolvedCity} (${resolvedRegion}) berhasil disimulasikan`,
+        newVisitor: newLog,
+        todayDate: visitorDateKey,
+        todayDateFormatted: getWibDateFormatted(),
+        todayTotalVisitors: dailyVisitorCounter,
+        totalVisitors: totalWebVisitors,
+        onlineNow: getOnlineNowCount(),
+        topOrigins: buildTopOrigins(),
+        recentVisitors: getRecentVisitorsWithTimeAgo(),
+      });
+    } catch (err: any) {
+      console.error('Error simulating visitor:', err);
+      res.status(500).json({ error: 'Gagal melakukan simulasi pengunjung', details: err.message });
     }
   });
 
@@ -467,8 +565,10 @@ async function startServer() {
       todayVisitorNumber: assignedDailyNumber,
       todayTotalVisitors: dailyVisitorCounter,
       totalVisitors: totalWebVisitors,
+      onlineNow: getOnlineNowCount(),
       topOrigins: buildTopOrigins(),
-      recentVisitors: recentVisitorsList.slice(0, 6),
+      recentVisitors: getRecentVisitorsWithTimeAgo(),
+      lastUpdated: new Date().toISOString(),
     });
   });
 
