@@ -57,6 +57,7 @@ import {
   Palette,
   ShieldAlert,
   ShieldCheck,
+  RotateCcw,
   BellRing
 } from 'lucide-react';
 import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig, SystemModuleKey, UserPermissions, ModulePermission } from '../types';
@@ -318,23 +319,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [onUpdateBrandConfig]);
 
-  // Login Authentication State - Selalu minta login setiap dibuka
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  // Login Authentication State - Persist session if user previously logged in
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_admin_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Setiap kali tombol admin ditekan / modal dibuka, wajib login ulang
+  // Periksa sesi tersimpan saat modal dibuka
   useEffect(() => {
     if (isOpen) {
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
       setLoginError(null);
       try {
-        localStorage.removeItem('kuickmart_admin_user');
+        const saved = localStorage.getItem('kuickmart_admin_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.username && parsed.role) {
+            const match = (staffUsers || []).find(
+              u => (u?.username || '').toLowerCase() === parsed.username.toLowerCase()
+            );
+            if (!match || match.isActive) {
+              setCurrentUser(parsed);
+              return;
+            }
+          }
+        }
       } catch (e) {
         console.error(e);
       }
@@ -342,15 +359,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   }, [isOpen]);
 
   const handleClose = () => {
-    setCurrentUser(null);
-    setInputUsername('');
-    setInputPin('');
     setLoginError(null);
-    try {
-      localStorage.removeItem('kuickmart_admin_user');
-    } catch (e) {
-      console.error(e);
-    }
     onClose();
   };
 
@@ -663,6 +672,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
+      try {
+        localStorage.setItem('kuickmart_admin_user', JSON.stringify(authUser));
+      } catch (e) {
+        console.error(e);
+      }
       setLoginError(null);
       setInputPin('');
 
@@ -676,6 +690,87 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       }
     } else {
       setLoginError('ID Pengguna tidak ditemukan atau Password/PIN salah. Silakan coba kembali.');
+    }
+  };
+
+  // Quick Instant Login for seamless access / demo switching
+  const handleQuickLogin = (targetUsername: string, fallbackPin?: string) => {
+    setLoginError(null);
+    const cleanInputUser = targetUsername.trim().toLowerCase();
+
+    // 1. Cek di data staffUsers
+    const staffMatch = (staffUsers || []).find(
+      u => (u?.username || '').toLowerCase() === cleanInputUser
+    );
+    const defaultMatch = DEFAULT_ACCOUNTS.find(
+      acc => (acc?.username || '').toLowerCase() === cleanInputUser
+    );
+
+    const matchedAccount = staffMatch || defaultMatch;
+
+    if (matchedAccount) {
+      if (staffMatch && !staffMatch.isActive) {
+        // Auto-reactivate on explicit quick login
+        setStaffUsers(prev => prev.map(u => u.id === staffMatch.id ? { ...u, isActive: true } : u));
+      }
+
+      const nowStr = new Intl.DateTimeFormat('id-ID', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date());
+
+      if (staffMatch) {
+        setStaffUsers(prev => prev.map(u => 
+          u.id === staffMatch.id ? { ...u, lastLogin: `${nowStr} WIB`, isActive: true } : u
+        ));
+      }
+
+      const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role as keyof typeof DEFAULT_ROLE_PERMISSIONS] || DEFAULT_ROLE_PERMISSIONS.admin;
+
+      const authUser: AdminUser = {
+        username: matchedAccount.username,
+        role: matchedAccount.role,
+        name: matchedAccount.name,
+        permissions: userPerms,
+      };
+
+      setCurrentUser(authUser);
+      try {
+        localStorage.setItem('kuickmart_admin_user', JSON.stringify(authUser));
+      } catch (e) {
+        console.error(e);
+      }
+      setLoginError(null);
+      setInputUsername('');
+      setInputPin('');
+
+      // Auto-redirect if current activeTab is not permitted to view
+      const effPerms = getEffectivePermissions(matchedAccount.role, userPerms);
+      const currentModule = activeTab as SystemModuleKey;
+      if (!effPerms[currentModule]?.canView) {
+        const orderPriority: SystemModuleKey[] = ['products', 'orders', 'promos', 'couriers', 'receipts', 'stores', 'vouchers', 'users', 'brand_info', 'bulk_import'];
+        const firstViewable = orderPriority.find(k => effPerms[k]?.canView) || 'products';
+        setActiveTab(firstViewable as any);
+      }
+    } else {
+      setLoginError(`Akun "${targetUsername}" tidak ditemukan. Silakan reset ke akun bawaan.`);
+    }
+  };
+
+  const handleResetStaffToDefaults = () => {
+    if (window.confirm('Reset semua akun staff dan password ke konfigurasi bawaan (Admin: admin123, SPV: spv2026, Kasir: 1234, Gudang: gudang2026)?')) {
+      setStaffUsers(INITIAL_STAFF_USERS);
+      try {
+        localStorage.setItem('kuickmart_staff_users', JSON.stringify(INITIAL_STAFF_USERS));
+      } catch {}
+      setLoginError(null);
+      setInputUsername('admin');
+      setInputPin('admin123');
+      setUserFeedback('Data akun staff berhasil direset ke pengaturan default.');
+      setTimeout(() => setUserFeedback(null), 3500);
     }
   };
 
@@ -1500,9 +1595,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {/* Form Login (Clean tanpa label akun bawaan) */}
           <form onSubmit={handleLogin} className="p-6 space-y-4">
             {loginError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2 text-xs text-red-700">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                <span>{loginError}</span>
+              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl space-y-2 text-xs text-red-700">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <span>{loginError}</span>
+                </div>
+                <div className="pt-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleResetStaffToDefaults}
+                    className="text-[11px] font-bold text-red-800 hover:text-red-950 underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset Data Akun Staff ke Bawaan (Admin: admin123)</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1518,7 +1625,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   autoFocus
                   value={inputUsername}
                   onChange={e => setInputUsername(e.target.value)}
-                  placeholder="Masukkan username atau ID akun..."
+                  placeholder="Masukkan username (admin, spv, kasir, gudang)..."
                   className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 focus:border-blue-600 rounded-xl text-sm font-semibold text-stone-900 focus:outline-hidden focus:ring-2 focus:ring-blue-100"
                 />
               </div>
@@ -1559,8 +1666,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             {/* Quick Demo Switcher for Testing Role Permissions */}
             <div className="pt-3 border-t border-stone-100">
               <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span>Pilih Akun Cepat untuk Uji Hak Akses:</span>
-                <span className="text-[9px] text-blue-600 font-semibold">1-Klik Isi</span>
+                <span>Pilih Akun & Masuk Langsung (1-Klik):</span>
+                <span className="text-[9px] text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                  ⚡ Auto-Login
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 text-left">
                 {(() => {
@@ -1577,78 +1686,74 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     <>
                       <button
                         type="button"
-                        onClick={() => { setInputUsername('admin'); setInputPin(getPin('admin', 'admin123')); }}
-                        className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[11px] transition-colors flex flex-col"
+                        onClick={() => handleQuickLogin('admin', getPin('admin', 'admin123'))}
+                        className="p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
+                        title="Klik untuk langsung masuk sebagai Store Manager (Admin)"
                       >
                         <div className="font-bold text-amber-900 flex items-center justify-between w-full">
                           <span className="flex items-center gap-1">
                             <span>👑 Admin</span>
                             <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded font-mono">admin</span>
                           </span>
-                          {isCustom('admin', 'admin123') && (
-                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
-                              PIN Baru
-                            </span>
-                          )}
+                          <span className="text-[8px] bg-amber-200/80 text-amber-900 font-extrabold px-1 rounded">
+                            Masuk ➔
+                          </span>
                         </div>
-                        <span className="text-[10px] text-amber-700">Semua Modul (10 Penuh)</span>
+                        <span className="text-[10px] text-amber-700 mt-0.5">Akses Penuh Semua Modul</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => { setInputUsername('spv'); setInputPin(getPin('spv', 'spv2026')); }}
-                        className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[11px] transition-colors flex flex-col"
+                        onClick={() => handleQuickLogin('spv', getPin('spv', 'spv2026'))}
+                        className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
+                        title="Klik untuk langsung masuk sebagai Supervisor Toko"
                       >
                         <div className="font-bold text-blue-900 flex items-center justify-between w-full">
                           <span className="flex items-center gap-1">
                             <span>👔 Supervisor</span>
                             <span className="text-[9px] bg-blue-200 text-blue-800 px-1 rounded font-mono">spv</span>
                           </span>
-                          {isCustom('spv', 'spv2026') && (
-                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
-                              PIN Baru
-                            </span>
-                          )}
+                          <span className="text-[8px] bg-blue-200/80 text-blue-900 font-extrabold px-1 rounded">
+                            Masuk ➔
+                          </span>
                         </div>
-                        <span className="text-[10px] text-blue-700">Katalog & Cabang Toko</span>
+                        <span className="text-[10px] text-blue-700 mt-0.5">Katalog & Cabang Toko</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => { setInputUsername('kasir'); setInputPin(getPin('kasir', '1234')); }}
-                        className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[11px] transition-colors flex flex-col"
+                        onClick={() => handleQuickLogin('kasir', getPin('kasir', '1234'))}
+                        className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
+                        title="Klik untuk langsung masuk sebagai Kasir Toko"
                       >
                         <div className="font-bold text-emerald-900 flex items-center justify-between w-full">
                           <span className="flex items-center gap-1">
                             <span>💳 Kasir</span>
                             <span className="text-[9px] bg-emerald-200 text-emerald-800 px-1 rounded font-mono">kasir</span>
                           </span>
-                          {isCustom('kasir', '1234') && (
-                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
-                              PIN Baru
-                            </span>
-                          )}
+                          <span className="text-[8px] bg-emerald-200/80 text-emerald-900 font-extrabold px-1 rounded">
+                            Masuk ➔
+                          </span>
                         </div>
-                        <span className="text-[10px] text-emerald-700">Penjualan & Pesanan</span>
+                        <span className="text-[10px] text-emerald-700 mt-0.5">Penjualan & Pesanan POS</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => { setInputUsername('gudang'); setInputPin(getPin('gudang', 'gudang2026')); }}
-                        className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[11px] transition-colors flex flex-col"
+                        onClick={() => handleQuickLogin('gudang', getPin('gudang', 'gudang2026'))}
+                        className="p-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
+                        title="Klik untuk langsung masuk sebagai Staff Gudang"
                       >
                         <div className="font-bold text-orange-900 flex items-center justify-between w-full">
                           <span className="flex items-center gap-1">
                             <span>📦 Gudang</span>
                             <span className="text-[9px] bg-orange-200 text-orange-800 px-1 rounded font-mono">gudang</span>
                           </span>
-                          {isCustom('gudang', 'gudang2026') && (
-                            <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded border border-emerald-300">
-                              PIN Baru
-                            </span>
-                          )}
+                          <span className="text-[8px] bg-orange-200/80 text-orange-900 font-extrabold px-1 rounded">
+                            Masuk ➔
+                          </span>
                         </div>
-                        <span className="text-[10px] text-orange-700">Stok & Katalog Produk</span>
+                        <span className="text-[10px] text-orange-700 mt-0.5">Stok & Katalog Produk</span>
                       </button>
                     </>
                   );
@@ -1703,13 +1808,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           </div>
         </div>
 
-        <div className="pt-2 flex items-center justify-center gap-2">
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleQuickLogin('admin', 'admin123')}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>👑 Beralih ke Akun Store Manager (Admin)</span>
+          </button>
           <button
             type="button"
             onClick={handleLogout}
             className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
-            Ganti Akun Login (Admin / SPV)
+            Ganti Akun Lain
           </button>
         </div>
       </div>
