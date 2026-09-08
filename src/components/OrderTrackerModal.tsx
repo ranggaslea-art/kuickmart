@@ -70,7 +70,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       orderNumber: order.orderNumber,
       storeName: order.store.name,
       destinationAddress: order.address?.fullAddress,
-      customerName: order.address?.receiverName,
+      customerName: order.address?.recipientName,
       isCallRequest: false
     });
     
@@ -90,7 +90,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       orderNumber: order.orderNumber,
       storeName: order.store.name,
       destinationAddress: order.address?.fullAddress,
-      customerName: order.address?.receiverName,
+      customerName: order.address?.recipientName,
       isCallRequest: true
     });
     

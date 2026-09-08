@@ -17,6 +17,7 @@ export interface Product {
   subcategory?: string;
   price: number;
   originalPrice?: number;
+  costPrice?: number; // Harga Pokok Pembelian / Modal (HPP)
   discountPercent?: number;
   unit: string; // Satuan dasar terkecil (contoh: "Pcs", "Bks", "Botol", "Kg", dll)
   unitConversions?: ProductUnitConversion[]; // Konversi bertingkat / multi-satuan
@@ -233,7 +234,8 @@ export type SystemModuleKey =
   | 'vouchers'
   | 'users'
   | 'bulk_import'
-  | 'push_notifications';
+  | 'push_notifications'
+  | 'reports';
 
 export interface PushSubscriberInfo {
   id: string;

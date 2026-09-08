@@ -165,21 +165,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Helper to ensure all staff users have permissions and default accounts exist
   const ensureStaffPermissions = (users: StaffUser[]): StaffUser[] => {
     const defaultMap = new Map<string, StaffUser>();
-    INITIAL_STAFF_USERS.forEach(u => defaultMap.set(u.username.toLowerCase(), u));
+    INITIAL_STAFF_USERS.forEach(u => {
+      if (u && u.username) {
+        defaultMap.set(u.username.toLowerCase(), u);
+      }
+    });
 
-    const existingUsernames = new Set((users || []).map(u => (u.username || '').toLowerCase()));
+    const safeUsers = Array.isArray(users) ? users.filter(Boolean) : [];
+    const existingUsernames = new Set(safeUsers.map(u => (u?.username || '').toLowerCase()).filter(Boolean));
     const missingDefaults: StaffUser[] = [];
     INITIAL_STAFF_USERS.forEach(def => {
-      if (!existingUsernames.has(def.username.toLowerCase())) {
+      if (def?.username && !existingUsernames.has(def.username.toLowerCase())) {
         missingDefaults.push({ ...def });
       }
     });
 
-    const fullList = [...(users || []), ...missingDefaults];
-    return fullList.map(u => ({
-      ...u,
-      permissions: u.permissions || (defaultMap.get(u.username.toLowerCase())?.permissions) || DEFAULT_ROLE_PERMISSIONS[u.role] || DEFAULT_ROLE_PERMISSIONS.kasir,
-    }));
+    const fullList = [...safeUsers, ...missingDefaults];
+    return fullList.map(u => {
+      const uUsername = (u?.username || '').toLowerCase();
+      const defaultUser = defaultMap.get(uUsername);
+      const role = (u?.role || defaultUser?.role || 'kasir') as 'admin' | 'supervisor' | 'kasir' | 'gudang';
+      const roleFallback = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.kasir;
+
+      return {
+        ...u,
+        id: u?.id || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        username: u?.username || defaultUser?.username || `staff_${Date.now()}`,
+        name: u?.name || defaultUser?.name || 'Staff User',
+        role,
+        pin: u?.pin || defaultUser?.pin || '1234',
+        isActive: u?.isActive ?? true,
+        permissions: u?.permissions || defaultUser?.permissions || roleFallback,
+      };
+    });
   };
 
   // Staff Users State (Persistent in localStorage & Supabase sync)
@@ -513,7 +531,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       }).catch(console.error);
     }
 
-    if (targetUser && currentUser && currentUser.username.toLowerCase() === targetUser.username.toLowerCase()) {
+    if (targetUser && currentUser && (currentUser.username || '').toLowerCase() === (targetUser.username || '').toLowerCase()) {
       setCurrentUser(prev => prev ? { ...prev, permissions: newPermissions } : null);
     }
 
@@ -524,7 +542,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const handleUpdateStaffUsersFromAccessManager = (updatedUsers: StaffUser[]) => {
     setStaffUsers(updatedUsers);
     if (currentUser) {
-      const match = updatedUsers.find(u => u.username.toLowerCase() === currentUser.username.toLowerCase());
+      const match = (updatedUsers || []).find(u => (u?.username || '').toLowerCase() === (currentUser.username || '').toLowerCase());
       if (match) {
         setCurrentUser(match);
         try {
@@ -590,8 +608,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     }
 
     // 1. Cek apakah pengguna terdaftar di daftar staffUsers aktif
-    const staffMatch = staffUsers.find(
-      u => u.username.toLowerCase() === cleanInputUser
+    const staffMatch = (staffUsers || []).find(
+      u => (u?.username || '').toLowerCase() === cleanInputUser
     );
 
     let matchedAccount: StaffUser | typeof DEFAULT_ACCOUNTS[0] | null = null;
@@ -607,7 +625,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     } else {
       // 2. Hanya fallback ke DEFAULT_ACCOUNTS jika username ini belum ada di data staffUsers sama sekali
       const defaultMatch = DEFAULT_ACCOUNTS.find(
-        acc => acc.username.toLowerCase() === cleanInputUser && String(acc.pin).trim() === cleanPin
+        acc => (acc?.username || '').toLowerCase() === cleanInputUser && String(acc.pin).trim() === cleanPin
       );
       if (defaultMatch) {
         matchedAccount = defaultMatch;
@@ -635,7 +653,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         ));
       }
 
-      const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role];
+      const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role as keyof typeof DEFAULT_ROLE_PERMISSIONS] || DEFAULT_ROLE_PERMISSIONS.kasir;
 
       const authUser: AdminUser = {
         username: matchedAccount.username,
@@ -676,9 +694,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   };
 
   // Stats calculation
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.total : 0), 0);
-  const totalProducts = products.length;
-  const lowStockCount = products.filter(p => p.stock < 10).length;
+  const totalRevenue = (orders || []).reduce((sum, o) => sum + (o.status !== 'cancelled' ? (o.total || 0) : 0), 0);
+  const totalProducts = (products || []).length;
+  const lowStockCount = (products || []).filter(p => (p?.stock || 0) < 10).length;
 
   // PRODUCT ACTIONS
   const handleOpenAdd = () => {
@@ -1169,11 +1187,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     }
   };
 
-  const filteredCatalog = products.filter(p => 
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.brand.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.barcode.includes(productSearch)
-  );
+  const filteredCatalog = (products || []).filter(p => {
+    if (!p) return false;
+    const name = (p.name || '').toLowerCase();
+    const brand = (p.brand || '').toLowerCase();
+    const barcode = p.barcode || '';
+    const search = (productSearch || '').toLowerCase();
+    return name.includes(search) || brand.includes(search) || barcode.includes(productSearch);
+  });
 
   // USER MANAGEMENT HANDLERS
   const handleOpenAddUser = () => {
@@ -1216,8 +1237,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     const cleanUsername = userUsername.trim().toLowerCase();
 
     // Check duplicate username
-    const duplicate = staffUsers.find(
-      u => u.username.toLowerCase() === cleanUsername && (!editingUser || u.id !== editingUser.id)
+    const duplicate = (staffUsers || []).find(
+      u => (u?.username || '').toLowerCase() === cleanUsername && (!editingUser || u.id !== editingUser.id)
     );
     if (duplicate) {
       alert(`Username "${cleanUsername}" sudah digunakan! Silakan pilih username lain.`);
@@ -1243,14 +1264,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setStaffUsers(prev => prev.map(u => 
-        (u.id === editingUser.id || u.username.toLowerCase() === editingUser.username.toLowerCase()) ? updated : u
+        (u.id === editingUser.id || (u?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) ? updated : u
       ));
 
       if (isSupabaseConnected) {
         saveStaffUserToSupabase(updated).catch(() => {});
       }
 
-      if (currentUser?.username.toLowerCase() === editingUser.username.toLowerCase()) {
+      if ((currentUser?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) {
         const updatedAuth: AdminUser = {
           username: cleanUsername,
           role: userRole,
@@ -1292,7 +1313,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   };
 
   const handleToggleUserStatus = (u: StaffUser) => {
-    if (currentUser?.username.toLowerCase() === u.username.toLowerCase()) {
+    if ((currentUser?.username || '').toLowerCase() === (u?.username || '').toLowerCase()) {
       alert('Anda tidak dapat menonaktifkan akun yang sedang Anda gunakan saat ini!');
       return;
     }
@@ -1309,7 +1330,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   };
 
   const handleDeleteUser = (u: StaffUser) => {
-    if (currentUser?.username.toLowerCase() === u.username.toLowerCase()) {
+    if ((currentUser?.username || '').toLowerCase() === (u?.username || '').toLowerCase()) {
       alert('Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif digunakan!');
       return;
     }
@@ -1332,11 +1353,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     }
   };
 
-  const filteredUsers = staffUsers.filter(u => {
+  const filteredUsers = (staffUsers || []).filter(u => {
+    if (!u) return false;
+    const search = (userSearch || '').toLowerCase();
     const matchesSearch = 
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-      (u.phone && u.phone.includes(userSearch));
+      (u.name || '').toLowerCase().includes(search) ||
+      (u.username || '').toLowerCase().includes(search) ||
+      Boolean(u.phone && u.phone.includes(userSearch));
     const matchesRole = userFilterRole === 'all' || u.role === userFilterRole;
     return matchesSearch && matchesRole;
   });
@@ -1431,11 +1454,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setTimeout(() => setCopiedVoucherCode(null), 2000);
   };
 
-  const filteredVouchers = vouchers.filter(v => {
+  const filteredVouchers = (vouchers || []).filter(v => {
+    if (!v) return false;
+    const search = (voucherSearch || '').toLowerCase();
     const matchesSearch = 
-      v.code.toLowerCase().includes(voucherSearch.toLowerCase()) ||
-      v.title.toLowerCase().includes(voucherSearch.toLowerCase()) ||
-      v.description.toLowerCase().includes(voucherSearch.toLowerCase());
+      (v.code || '').toLowerCase().includes(search) ||
+      (v.title || '').toLowerCase().includes(search) ||
+      (v.description || '').toLowerCase().includes(search);
     const matchesType = voucherFilterType === 'all' || v.type === voucherFilterType;
     return matchesSearch && matchesType;
   });
@@ -1540,11 +1565,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <div className="grid grid-cols-2 gap-1.5 text-left">
                 {(() => {
                   const getPin = (uname: string, defPin: string) => {
-                    const u = staffUsers.find(item => item.username.toLowerCase() === uname.toLowerCase());
+                    const u = (staffUsers || []).find(item => (item?.username || '').toLowerCase() === uname.toLowerCase());
                     return u?.pin || defPin;
                   };
                   const isCustom = (uname: string, defPin: string) => {
-                    const u = staffUsers.find(item => item.username.toLowerCase() === uname.toLowerCase());
+                    const u = (staffUsers || []).find(item => (item?.username || '').toLowerCase() === uname.toLowerCase());
                     return Boolean(u && u.pin !== defPin);
                   };
 
@@ -3964,7 +3989,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         </thead>
                         <tbody className="divide-y divide-stone-100">
                           {filteredUsers.map(u => {
-                            const isCurrentSession = currentUser?.username.toLowerCase() === u.username.toLowerCase();
+                            const isCurrentSession = Boolean(currentUser?.username && u?.username && currentUser.username.toLowerCase() === u.username.toLowerCase());
                             return (
                               <tr key={u.id} className="hover:bg-stone-50 transition-colors">
                                 <td className="p-3">
@@ -3978,7 +4003,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                         ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                                         : 'bg-orange-100 text-orange-900 border border-orange-300'
                                     }`}>
-                                      {u.name.charAt(0).toUpperCase()}
+                                      {(u.name || 'S').charAt(0).toUpperCase()}
                                     </div>
                                     <div>
                                       <div className="font-bold text-stone-900 flex items-center gap-1.5">

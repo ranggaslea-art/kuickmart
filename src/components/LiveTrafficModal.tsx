@@ -172,8 +172,8 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
     }
 
     // 1. Cek apakah pengguna ada di daftar staffUsers
-    const staffMatch = staffUsers.find(
-      u => u.username.toLowerCase() === cleanUser
+    const staffMatch = (staffUsers || []).find(
+      u => (u?.username || '').toLowerCase() === cleanUser
     );
 
     if (staffMatch) {
@@ -199,7 +199,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
 
     // 2. Fallback hanya jika username belum terdaftar sama sekali di staffUsers
     const defaultMatch = DEFAULT_ACCOUNTS.find(
-      u => u.username.toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
+      u => (u?.username || '').toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
     );
 
     if (defaultMatch) {
@@ -228,7 +228,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
   };
 
   const handleQuickLogin = (user: string, defaultPin: string) => {
-    const matchedStaff = staffUsers.find(u => u.username.toLowerCase() === user.toLowerCase());
+    const matchedStaff = (staffUsers || []).find(u => (u?.username || '').toLowerCase() === user.toLowerCase());
     const effectivePin = matchedStaff ? matchedStaff.pin : defaultPin;
 
     setUsernameInput(user);
@@ -253,7 +253,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       }
 
       const defaultMatch = DEFAULT_ACCOUNTS.find(
-        u => u.username.toLowerCase() === user.toLowerCase() && String(u.pin).trim() === effectivePin
+        u => (u?.username || '').toLowerCase() === user.toLowerCase() && String(u.pin).trim() === effectivePin
       );
       if (defaultMatch) {
         const userObj = {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield,
   ShieldCheck,
@@ -19,6 +19,7 @@ import {
   Users,
   FileSpreadsheet,
   BellRing,
+  BarChart3,
   Sparkles,
   RotateCcw,
   Search,
@@ -39,45 +40,53 @@ import {
   countUserPermissions,
   getRoleDisplayName,
 } from '../utils/permissions';
+import { INITIAL_STAFF_USERS } from '../data/mockData';
 
 interface UserAccessManagerProps {
-  staffUsers: StaffUser[];
-  currentUser: StaffUser;
+  staffUsers?: StaffUser[];
+  currentUser?: StaffUser | { username: string; role: any; name: string; permissions?: any; id?: string };
   onUpdateStaffUsers: (updated: StaffUser[]) => void;
   onSwitchUser?: (user: StaffUser) => void;
   onOpenAddUser?: () => void;
 }
 
 export const UserAccessManager: React.FC<UserAccessManagerProps> = ({
-  staffUsers,
+  staffUsers = [],
   currentUser,
   onUpdateStaffUsers,
   onSwitchUser,
   onOpenAddUser,
 }) => {
+  const safeStaffUsers = useMemo(() => {
+    return Array.isArray(staffUsers) && staffUsers.length > 0
+      ? staffUsers.filter(Boolean)
+      : INITIAL_STAFF_USERS;
+  }, [staffUsers]);
+
   // Staff yang sedang dipilih untuk dikonfigurasi izinnya
   const [selectedUserId, setSelectedUserId] = useState<string>(() => {
     // Default pilih user kasir jika ada agar langsung terlihat contoh kasir produk & promo
-    const kasirUser = staffUsers.find(u => u.username.toLowerCase() === 'kasir');
-    return kasirUser ? kasirUser.id : (staffUsers[0]?.id || 'usr_admin');
+    const kasirUser = safeStaffUsers.find(u => (u?.username || '').toLowerCase() === 'kasir');
+    return kasirUser ? kasirUser.id : (safeStaffUsers[0]?.id || 'usr_admin');
   });
 
   // Salinan izin yang sedang diedit di form matriks
   const activeStaff = useMemo(() => {
-    return staffUsers.find(u => u.id === selectedUserId) || staffUsers[0];
-  }, [staffUsers, selectedUserId]);
+    return safeStaffUsers.find(u => u.id === selectedUserId) || safeStaffUsers[0] || INITIAL_STAFF_USERS[0];
+  }, [safeStaffUsers, selectedUserId]);
 
   const [localPermissions, setLocalPermissions] = useState<UserPermissions>(() => {
     if (!activeStaff) return DEFAULT_ROLE_PERMISSIONS.kasir;
     return getEffectivePermissions(activeStaff.role, activeStaff.permissions);
   });
 
-  // Sinkronkan local permissions saat user yang dipilih berganti
-  const [lastStaffId, setLastStaffId] = useState<string>(selectedUserId);
-  if (activeStaff && activeStaff.id !== lastStaffId) {
-    setLastStaffId(activeStaff.id);
-    setLocalPermissions(getEffectivePermissions(activeStaff.role, activeStaff.permissions));
-  }
+  // Sinkronkan local permissions saat user yang dipilih berganti via useEffect
+  useEffect(() => {
+    if (activeStaff) {
+      setLocalPermissions(getEffectivePermissions(activeStaff.role, activeStaff.permissions));
+      setHasUnsavedChanges(false);
+    }
+  }, [activeStaff?.id]);
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -183,6 +192,7 @@ export const UserAccessManager: React.FC<UserAccessManagerProps> = ({
       case 'Users': return <Users className="w-4 h-4 text-emerald-700" />;
       case 'FileSpreadsheet': return <FileSpreadsheet className="w-4 h-4 text-teal-600" />;
       case 'BellRing': return <BellRing className="w-4 h-4 text-rose-500" />;
+      case 'BarChart3': return <BarChart3 className="w-4 h-4 text-indigo-600" />;
       default: return <SlidersHorizontal className="w-4 h-4 text-stone-600" />;
     }
   };
@@ -366,24 +376,27 @@ export const UserAccessManager: React.FC<UserAccessManagerProps> = ({
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="font-extrabold text-base text-stone-900">
-                    {activeStaff.name}
+                    {activeStaff?.name || 'Staff'}
                   </h4>
                   <span className="text-xs font-mono text-stone-500">
-                    (@{activeStaff.username})
+                    (@{activeStaff?.username || 'user'})
                   </span>
                   <span className="text-[10px] bg-stone-200 text-stone-800 font-bold px-2 py-0.5 rounded-full">
-                    {getRoleDisplayName(activeStaff.role)}
+                    {getRoleDisplayName(activeStaff?.role || 'kasir')}
                   </span>
-                  {activeStaff.id === currentUser.id && (
+                  {Boolean(currentUser && activeStaff && (
+                    (currentUser.id && activeStaff.id === currentUser.id) ||
+                    (currentUser.username && activeStaff.username && currentUser.username.toLowerCase() === activeStaff.username.toLowerCase())
+                  )) && (
                     <span className="text-[9px] bg-blue-100 text-blue-700 font-extrabold px-2 py-0.5 rounded-full">
                       Akun Login Anda
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-stone-600 flex-wrap">
-                  <span>Cabang: <strong>{activeStaff.storeName || 'Semua Cabang'}</strong></span>
+                  <span>Cabang: <strong>{activeStaff?.storeName || 'Semua Cabang'}</strong></span>
                   <span>•</span>
-                  <span>PIN Akses: <strong className="font-mono">{activeStaff.pin}</strong></span>
+                  <span>PIN Akses: <strong className="font-mono">{activeStaff?.pin || '-'}</strong></span>
                   <span>•</span>
                   <span>Ringkasan: <strong className="text-blue-700">{activeStats.viewCount} Boleh Dilihat</strong>, <strong className="text-emerald-700">{activeStats.editCount} Boleh Diedit</strong></span>
                 </div>
@@ -392,7 +405,10 @@ export const UserAccessManager: React.FC<UserAccessManagerProps> = ({
 
             {/* Tombol Simpan & Uji Coba */}
             <div className="flex items-center gap-2 flex-wrap">
-              {onSwitchUser && activeStaff.id !== currentUser.id && (
+              {Boolean(onSwitchUser && activeStaff && (!currentUser || (
+                (currentUser.id && activeStaff.id !== currentUser.id) ||
+                (currentUser.username && activeStaff.username && currentUser.username.toLowerCase() !== activeStaff.username.toLowerCase())
+              ))) && (
                 <button
                   type="button"
                   onClick={() => onSwitchUser(activeStaff)}

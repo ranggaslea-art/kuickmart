@@ -98,6 +98,14 @@ export const SYSTEM_MODULES: SystemModuleDefinition[] = [
     iconName: 'BellRing',
     adminNote: 'Dikelola oleh Admin & Supervisor untuk menyiarkan diskon kilat dan pengumuman.',
   },
+  {
+    key: 'reports',
+    name: 'Laporan & Analisis Laba',
+    category: 'Katalog & Penjualan',
+    description: 'Laporan master barang (per kategori & merk), laporan laba kotor harian & periode tanggal, dan laporan penjualan per item, kategori, & merk.',
+    iconName: 'BarChart3',
+    adminNote: 'Akses laporan keuangan, laba kotor, HPP modal, dan performa penjualan.',
+  },
 ];
 
 // Hak akses standar bawaan per peran (Default Role Permissions)
@@ -114,6 +122,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     users: { canView: true, canEdit: true },
     bulk_import: { canView: true, canEdit: true },
     push_notifications: { canView: true, canEdit: true },
+    reports: { canView: true, canEdit: true },
   },
   supervisor: {
     products: { canView: true, canEdit: true },
@@ -127,6 +136,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     users: { canView: false, canEdit: false }, // Tidak bisa akses manajemen user
     bulk_import: { canView: true, canEdit: true }, // Bisa import produk
     push_notifications: { canView: true, canEdit: true }, // Supervisor bisa broadcast promo
+    reports: { canView: true, canEdit: true }, // Supervisor bisa pantau laporan
   },
   kasir: {
     // Sesuai contoh akses: Kasir hanya dapat mengakses Produk & Promo toko
@@ -141,6 +151,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     users: { canView: false, canEdit: false }, // Terkunci
     bulk_import: { canView: false, canEdit: false }, // Terkunci
     push_notifications: { canView: false, canEdit: false }, // Terkunci
+    reports: { canView: false, canEdit: false }, // Terkunci
   },
   gudang: {
     products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
@@ -154,6 +165,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     users: { canView: false, canEdit: false },
     bulk_import: { canView: true, canEdit: true },
     push_notifications: { canView: false, canEdit: false },
+    reports: { canView: false, canEdit: false },
   },
 };
 
@@ -202,6 +214,7 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       users: { canView: false, canEdit: false },
       bulk_import: { canView: false, canEdit: false },
       push_notifications: { canView: false, canEdit: false },
+      reports: { canView: false, canEdit: false },
     }),
   },
   {
@@ -223,6 +236,7 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       users: { canView: false, canEdit: false },
       bulk_import: { canView: false, canEdit: false },
       push_notifications: { canView: false, canEdit: false },
+      reports: { canView: false, canEdit: false },
     }),
   },
   {
@@ -280,15 +294,18 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
  * Jika user memiliki custom permissions, itu akan dioverride ke default peran.
  */
 export function getEffectivePermissions(
-  role: 'admin' | 'supervisor' | 'kasir' | 'gudang',
+  role?: string,
   customPermissions?: Partial<UserPermissions>
 ): UserPermissions {
-  const base = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.kasir;
-  if (!customPermissions) return { ...base };
+  const safeRole = (role && DEFAULT_ROLE_PERMISSIONS[role as keyof typeof DEFAULT_ROLE_PERMISSIONS])
+    ? (role as 'admin' | 'supervisor' | 'kasir' | 'gudang')
+    : 'kasir';
+  const base = DEFAULT_ROLE_PERMISSIONS[safeRole] || DEFAULT_ROLE_PERMISSIONS.kasir;
+  if (!customPermissions || typeof customPermissions !== 'object') return { ...base };
 
   const result: UserPermissions = { ...base };
   (Object.keys(base) as SystemModuleKey[]).forEach((key) => {
-    if (customPermissions[key]) {
+    if (customPermissions[key] && typeof customPermissions[key] === 'object') {
       const canEdit = !!customPermissions[key]?.canEdit;
       // Jika canEdit true, maka canView harus true
       const canView = canEdit ? true : !!customPermissions[key]?.canView;
@@ -302,7 +319,7 @@ export function getEffectivePermissions(
 /**
  * Menghitung ringkasan jumlah modul yang boleh dilihat & diedit.
  */
-export function countUserPermissions(permissions: UserPermissions): {
+export function countUserPermissions(permissions?: UserPermissions | null): {
   viewCount: number;
   editCount: number;
   total: number;
@@ -311,6 +328,10 @@ export function countUserPermissions(permissions: UserPermissions): {
   const total = SYSTEM_MODULES.length;
   let viewCount = 0;
   let editCount = 0;
+
+  if (!permissions || typeof permissions !== 'object') {
+    return { viewCount: 0, editCount: 0, total, isFullAdmin: false };
+  }
 
   SYSTEM_MODULES.forEach((mod) => {
     if (permissions[mod.key]?.canView) viewCount++;

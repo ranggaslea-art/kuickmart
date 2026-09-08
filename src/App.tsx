@@ -39,6 +39,9 @@ import {
   AdminPanelModal 
 } from './components/AdminPanelModal';
 import { 
+  ErrorBoundary 
+} from './components/ErrorBoundary';
+import { 
   VisitorCounterWidget 
 } from './components/VisitorCounterWidget';
 import { 
@@ -1546,46 +1549,50 @@ export default function App() {
       />
 
       {/* 8. Admin & POS Store Management Panel Modal */}
-      <AdminPanelModal
-        isOpen={isAdminPanelOpen}
-        onClose={() => setIsAdminPanelOpen(false)}
-        products={products}
-        onUpdateProducts={handleUpdateProducts}
-        onAddProduct={handleAddProduct}
-        onEditProduct={handleEditProduct}
-        onDeleteProduct={handleDeleteProduct}
-        orders={orders}
-        onUpdateOrderStatus={handleUpdateOrderStatus}
-        stores={stores}
-        currentStore={currentStore}
-        onSelectStore={setCurrentStore}
-        onUpdateStores={handleUpdateStores}
-        vouchers={vouchers}
-        onUpdateVouchers={handleUpdateVouchers}
-        isSupabaseConnected={isSupabaseConnected}
-        receiptConfigs={receiptConfigs}
-        onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
-        storePromos={storePromos}
-        onUpdateStorePromos={handleUpdateStorePromos}
-        couriers={couriers}
-        onUpdateCouriers={handleUpdateCouriers}
-        brandConfig={brandConfig}
-        onUpdateBrandConfig={handleUpdateBrandConfig}
-        staffUsers={staffUsers}
-        onUpdateStaffUsers={handleUpdateStaffUsers}
-        initialTab={adminPanelInitialTab}
-        onOpenSupabaseModal={() => {
-          setIsAdminPanelOpen(false);
-          setIsSupabaseModalOpen(true);
-        }}
-      />
+      <ErrorBoundary fallbackTitle="Kendala Memuat Panel Admin & Kasir">
+        <AdminPanelModal
+          isOpen={isAdminPanelOpen}
+          onClose={() => setIsAdminPanelOpen(false)}
+          products={products}
+          onUpdateProducts={handleUpdateProducts}
+          onAddProduct={handleAddProduct}
+          onEditProduct={handleEditProduct}
+          onDeleteProduct={handleDeleteProduct}
+          orders={orders}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          stores={stores}
+          currentStore={currentStore}
+          onSelectStore={setCurrentStore}
+          onUpdateStores={handleUpdateStores}
+          vouchers={vouchers}
+          onUpdateVouchers={handleUpdateVouchers}
+          isSupabaseConnected={isSupabaseConnected}
+          receiptConfigs={receiptConfigs}
+          onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
+          storePromos={storePromos}
+          onUpdateStorePromos={handleUpdateStorePromos}
+          couriers={couriers}
+          onUpdateCouriers={handleUpdateCouriers}
+          brandConfig={brandConfig}
+          onUpdateBrandConfig={handleUpdateBrandConfig}
+          staffUsers={staffUsers}
+          onUpdateStaffUsers={handleUpdateStaffUsers}
+          initialTab={adminPanelInitialTab}
+          onOpenSupabaseModal={() => {
+            setIsAdminPanelOpen(false);
+            setIsSupabaseModalOpen(true);
+          }}
+        />
+      </ErrorBoundary>
 
       {/* 9. Live Traffic Analytics Modal (Wajib Login) */}
-      <LiveTrafficModal
-        isOpen={isLiveTrafficModalOpen}
-        onClose={() => setIsLiveTrafficModalOpen(false)}
-        staffUsers={staffUsers}
-      />
+      <ErrorBoundary fallbackTitle="Kendala Memuat Modul Live Traffic">
+        <LiveTrafficModal
+          isOpen={isLiveTrafficModalOpen}
+          onClose={() => setIsLiveTrafficModalOpen(false)}
+          staffUsers={staffUsers}
+        />
+      </ErrorBoundary>
 
       {/* 10. Web Push PWA Notification Prompt Banner */}
       <PushNotificationPrompt />
