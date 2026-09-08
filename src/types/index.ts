@@ -222,6 +222,25 @@ export interface SupabaseConfig {
   errorMessage?: string;
 }
 
+export type SystemModuleKey =
+  | 'products'
+  | 'orders'
+  | 'stores'
+  | 'receipts'
+  | 'promos'
+  | 'brand_info'
+  | 'couriers'
+  | 'vouchers'
+  | 'users'
+  | 'bulk_import';
+
+export interface ModulePermission {
+  canView: boolean;
+  canEdit: boolean;
+}
+
+export type UserPermissions = Record<SystemModuleKey, ModulePermission>;
+
 export interface StaffUser {
   id: string;
   username: string;
@@ -235,6 +254,7 @@ export interface StaffUser {
   isActive: boolean;
   createdAt: string;
   lastLogin?: string;
+  permissions?: Partial<UserPermissions>;
 }
 
 export interface ReceiptInfo {

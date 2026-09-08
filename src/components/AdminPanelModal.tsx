@@ -54,9 +54,11 @@ import {
   Megaphone,
   Bike,
   Loader2,
-  Palette
+  Palette,
+  ShieldAlert,
+  ShieldCheck
 } from 'lucide-react';
-import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig } from '../types';
+import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig, SystemModuleKey, UserPermissions, ModulePermission } from '../types';
 import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS, INITIAL_BRAND_CONFIG } from '../data/mockData';
 import { formatRupiah } from '../utils/formatters';
 import { computeConversionChains, formatStockBreakdown, getProductUnitOptions } from '../utils/unitConversion';
@@ -68,6 +70,14 @@ import {
   compressImageFile, 
   COMMON_IMAGE_PRESETS 
 } from '../utils/imageHelper';
+import { 
+  SYSTEM_MODULES, 
+  DEFAULT_ROLE_PERMISSIONS, 
+  getEffectivePermissions, 
+  countUserPermissions, 
+  getRoleDisplayName 
+} from '../utils/permissions';
+import { ModulePermissionModal } from './ModulePermissionModal';
 import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
@@ -109,13 +119,14 @@ interface AdminUser {
   username: string;
   role: 'admin' | 'supervisor' | 'kasir' | 'gudang';
   name: string;
+  permissions?: Partial<UserPermissions>;
 }
 
 const DEFAULT_ACCOUNTS = [
-  { username: 'admin', pin: 'admin123', role: 'admin' as const, name: 'Store Manager (Admin)' },
-  { username: 'kasir', pin: '1234', role: 'kasir' as const, name: 'Kasir Shift Toko' },
-  { username: 'spv', pin: 'spv2026', role: 'supervisor' as const, name: 'Supervisor Toko' },
-  { username: 'gudang', pin: 'gudang2026', role: 'gudang' as const, name: 'Staff Gudang & Stok' },
+  { username: 'admin', pin: 'admin123', role: 'admin' as const, name: 'Store Manager (Admin)', permissions: DEFAULT_ROLE_PERMISSIONS.admin },
+  { username: 'kasir', pin: '1234', role: 'kasir' as const, name: 'Kasir Shift Toko', permissions: DEFAULT_ROLE_PERMISSIONS.kasir },
+  { username: 'spv', pin: 'spv2026', role: 'supervisor' as const, name: 'Supervisor Toko', permissions: DEFAULT_ROLE_PERMISSIONS.supervisor },
+  { username: 'gudang', pin: 'gudang2026', role: 'gudang' as const, name: 'Staff Gudang & Stok', permissions: DEFAULT_ROLE_PERMISSIONS.gudang },
 ];
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -148,17 +159,38 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateStaffUsers,
   initialTab,
 }) => {
+  // Helper to ensure all staff users have permissions and default accounts exist
+  const ensureStaffPermissions = (users: StaffUser[]): StaffUser[] => {
+    const defaultMap = new Map<string, StaffUser>();
+    INITIAL_STAFF_USERS.forEach(u => defaultMap.set(u.username.toLowerCase(), u));
+
+    const existingUsernames = new Set((users || []).map(u => (u.username || '').toLowerCase()));
+    const missingDefaults: StaffUser[] = [];
+    INITIAL_STAFF_USERS.forEach(def => {
+      if (!existingUsernames.has(def.username.toLowerCase())) {
+        missingDefaults.push({ ...def });
+      }
+    });
+
+    const fullList = [...(users || []), ...missingDefaults];
+    return fullList.map(u => ({
+      ...u,
+      permissions: u.permissions || (defaultMap.get(u.username.toLowerCase())?.permissions) || DEFAULT_ROLE_PERMISSIONS[u.role] || DEFAULT_ROLE_PERMISSIONS.kasir,
+    }));
+  };
+
   // Staff Users State (Persistent in localStorage & Supabase sync)
   const [internalStaffUsers, setInternalStaffUsers] = useState<StaffUser[]>(() => {
     try {
       const saved = localStorage.getItem('kuickmart_staff_users');
-      return saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
+      const parsed = saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
+      return ensureStaffPermissions(parsed);
     } catch {
-      return INITIAL_STAFF_USERS;
+      return ensureStaffPermissions(INITIAL_STAFF_USERS);
     }
   });
 
-  const staffUsers = propStaffUsers && propStaffUsers.length > 0 ? propStaffUsers : internalStaffUsers;
+  const staffUsers = propStaffUsers && propStaffUsers.length > 0 ? ensureStaffPermissions(propStaffUsers) : internalStaffUsers;
   const setStaffUsers = (updateAction: StaffUser[] | ((prev: StaffUser[]) => StaffUser[])) => {
     const updatedUsers = typeof updateAction === 'function' ? updateAction(staffUsers) : updateAction;
     if (onUpdateStaffUsers) {
@@ -445,6 +477,54 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [userSearch, setUserSearch] = useState('');
   const [userFilterRole, setUserFilterRole] = useState<string>('all');
   const [userFeedback, setUserFeedback] = useState<string | null>(null);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState<StaffUser | null>(null);
+  const [userCustomPermissions, setUserCustomPermissions] = useState<UserPermissions>(() => DEFAULT_ROLE_PERMISSIONS.kasir);
+
+  // Hak akses user yang sedang login
+  const currentUserPermissions: UserPermissions = useMemo(() => {
+    if (!currentUser) return DEFAULT_ROLE_PERMISSIONS.kasir;
+    return getEffectivePermissions(currentUser.role, currentUser.permissions);
+  }, [currentUser]);
+
+  // Simpan hak akses per modul untuk user tertentu
+  const handleSaveUserPermissions = async (targetUserId: string, newPermissions: UserPermissions) => {
+    const updatedList = staffUsers.map(u => {
+      if (u.id === targetUserId) {
+        return {
+          ...u,
+          permissions: newPermissions,
+        };
+      }
+      return u;
+    });
+
+    setStaffUsers(updatedList);
+
+    const targetUser = staffUsers.find(u => u.id === targetUserId);
+    if (targetUser && isSupabaseConnected) {
+      saveStaffUserToSupabase({
+        ...targetUser,
+        permissions: newPermissions,
+      }).catch(console.error);
+    }
+
+    if (targetUser && currentUser && currentUser.username.toLowerCase() === targetUser.username.toLowerCase()) {
+      setCurrentUser(prev => prev ? { ...prev, permissions: newPermissions } : null);
+    }
+
+    setUserFeedback(`Hak akses modul untuk "${targetUser?.name || 'Staff'}" berhasil diperbarui!`);
+    setTimeout(() => setUserFeedback(null), 3500);
+  };
+
+  // Reset default akun & izin bawaan
+  const handleResetDefaultStaffUsers = () => {
+    if (window.confirm('Sinkronkan & pastikan 4 akun peran bawaan (admin, spv, kasir, gudang) tersedia dengan izin standar? Akun kustom Anda tidak akan dihapus.')) {
+      const reset = ensureStaffPermissions(staffUsers);
+      setStaffUsers(reset);
+      setUserFeedback('Akun bawaan dan hak akses modul berhasil disinkronkan!');
+      setTimeout(() => setUserFeedback(null), 3500);
+    }
+  };
 
   // Voucher Management State
   const [isAddingVoucher, setIsAddingVoucher] = useState(false);
@@ -512,15 +592,27 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         ));
       }
 
+      const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role];
+
       const authUser: AdminUser = {
         username: matchedAccount.username,
         role: matchedAccount.role,
         name: matchedAccount.name,
+        permissions: userPerms,
       };
 
       setCurrentUser(authUser);
       setLoginError(null);
       setInputPin('');
+
+      // Auto-redirect if current activeTab is not permitted to view
+      const effPerms = getEffectivePermissions(matchedAccount.role, userPerms);
+      const currentModule = activeTab as SystemModuleKey;
+      if (!effPerms[currentModule]?.canView) {
+        const orderPriority: SystemModuleKey[] = ['products', 'orders', 'promos', 'couriers', 'receipts', 'stores', 'vouchers', 'users', 'brand_info', 'bulk_import'];
+        const firstViewable = orderPriority.find(k => effPerms[k]?.canView) || 'orders';
+        setActiveTab(firstViewable as any);
+      }
     } else {
       setLoginError('ID Pengguna atau Password/PIN salah. Silakan coba kembali.');
     }
@@ -1048,6 +1140,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setUserPin('');
     setShowUserPin(false);
     setUserRole('kasir');
+    setUserCustomPermissions(DEFAULT_ROLE_PERMISSIONS.kasir);
     setUserStoreId(stores.length > 0 ? stores[0].id : 'all');
     setUserPhone('');
     setUserEmail('');
@@ -1062,6 +1155,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setUserPin(u.pin);
     setShowUserPin(false);
     setUserRole(u.role);
+    setUserCustomPermissions(getEffectivePermissions(u.role, u.permissions));
     setUserStoreId(u.storeId || 'all');
     setUserPhone(u.phone || '');
     setUserEmail(u.email || '');
@@ -1097,6 +1191,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         username: cleanUsername,
         pin: userPin.trim(),
         role: userRole,
+        permissions: userCustomPermissions,
         storeId: userStoreId,
         storeName: storeDisplayName,
         phone: userPhone.trim(),
@@ -1115,6 +1210,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           username: cleanUsername,
           role: userRole,
           name: userName.trim(),
+          permissions: userCustomPermissions,
         };
         setCurrentUser(updatedAuth);
       }
@@ -1127,6 +1223,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         username: cleanUsername,
         pin: userPin.trim(),
         role: userRole,
+        permissions: userCustomPermissions,
         storeId: userStoreId,
         storeName: storeDisplayName,
         phone: userPhone.trim(),
@@ -1388,6 +1485,63 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <Lock className="w-4 h-4 text-amber-300" />
               <span>Masuk ke Panel Admin</span>
             </button>
+
+            {/* Quick Demo Switcher for Testing Role Permissions */}
+            <div className="pt-3 border-t border-stone-100">
+              <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Pilih Akun Demo untuk Uji Hak Akses:</span>
+                <span className="text-[9px] text-blue-600 font-semibold">1-Klik Isi</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-left">
+                <button
+                  type="button"
+                  onClick={() => { setInputUsername('admin'); setInputPin('admin123'); }}
+                  className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[11px] transition-colors flex flex-col"
+                >
+                  <span className="font-bold text-amber-900 flex items-center gap-1">
+                    <span>👑 Admin</span>
+                    <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded font-mono">admin</span>
+                  </span>
+                  <span className="text-[10px] text-amber-700">Semua Modul (10 Penuh)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setInputUsername('spv'); setInputPin('spv2026'); }}
+                  className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[11px] transition-colors flex flex-col"
+                >
+                  <span className="font-bold text-blue-900 flex items-center gap-1">
+                    <span>👔 Supervisor</span>
+                    <span className="text-[9px] bg-blue-200 text-blue-800 px-1 rounded font-mono">spv</span>
+                  </span>
+                  <span className="text-[10px] text-blue-700">Katalog & Cabang Toko</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setInputUsername('kasir'); setInputPin('1234'); }}
+                  className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[11px] transition-colors flex flex-col"
+                >
+                  <span className="font-bold text-emerald-900 flex items-center gap-1">
+                    <span>💳 Kasir</span>
+                    <span className="text-[9px] bg-emerald-200 text-emerald-800 px-1 rounded font-mono">kasir</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-700">Penjualan & Pesanan</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setInputUsername('gudang'); setInputPin('gudang2026'); }}
+                  className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[11px] transition-colors flex flex-col"
+                >
+                  <span className="font-bold text-orange-900 flex items-center gap-1">
+                    <span>📦 Gudang</span>
+                    <span className="text-[9px] bg-orange-200 text-orange-800 px-1 rounded font-mono">gudang</span>
+                  </span>
+                  <span className="text-[10px] text-orange-700">Stok & Katalog Produk</span>
+                </button>
+              </div>
+            </div>
           </form>
 
         </div>
@@ -1396,6 +1550,40 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   }
 
   // ==========================================
+  // Helpers for RBAC enforcement
+  const renderAccessDenied = (moduleTitle: string) => (
+    <div className="p-8 sm:p-12 text-center bg-stone-50 border border-stone-200 rounded-3xl space-y-3">
+      <div className="w-14 h-14 bg-red-100 text-red-700 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
+        <ShieldAlert className="w-7 h-7" />
+      </div>
+      <h3 className="font-extrabold text-base sm:text-lg text-stone-900">Akses Dibatasi: Modul {moduleTitle}</h3>
+      <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
+        Akun Anda dengan peran <strong>{getRoleDisplayName(currentUser?.role || 'kasir')}</strong> tidak memiliki izin untuk melihat modul ini.
+        Silakan hubungi Store Manager (Admin) untuk membuka hak akses.
+      </p>
+      <div className="pt-2">
+        <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
+          <Shield className="w-3.5 h-3.5" />
+          <span>Login Sebagai: @{currentUser?.username} ({getRoleDisplayName(currentUser?.role || 'kasir')})</span>
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderReadOnlyBanner = (moduleTitle: string) => (
+    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-950 mb-4">
+      <div className="flex items-center gap-2">
+        <Eye className="w-4 h-4 text-amber-700 shrink-0" />
+        <span>
+          <strong>Mode Akses Terbatas (Hanya Lihat):</strong> Anda memiliki izin melihat data <strong>{moduleTitle}</strong>, namun izin untuk menambah, mengubah, atau menghapus data dibatasi.
+        </span>
+      </div>
+      <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-md bg-amber-200 text-amber-900 shrink-0 uppercase tracking-wide">
+        Hanya Lihat
+      </span>
+    </div>
+  );
+
   // AUTHENTICATED ADMIN PANEL DASHBOARD
   // ==========================================
   return (
@@ -1409,14 +1597,27 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               KM
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight">
-                  Panel Admin & Kasir KuickMart Express
+                  Panel Admin & Kasir KuickMart
                 </h3>
-                <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
-                  <UserCheck className="w-3 h-3" />
-                  <span>{currentUser.name}</span>
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                    <UserCheck className="w-3 h-3" />
+                    <span>{currentUser.name}</span>
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                    currentUser.role === 'admin' ? 'bg-amber-400/20 text-amber-300 border-amber-400/30' :
+                    currentUser.role === 'supervisor' ? 'bg-blue-400/20 text-blue-300 border-blue-400/30' :
+                    currentUser.role === 'kasir' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/30' :
+                    'bg-orange-400/20 text-orange-300 border-orange-400/30'
+                  }`}>
+                    {getRoleDisplayName(currentUser.role)}
+                  </span>
+                  <span className="text-[10px] text-stone-300 bg-white/10 px-2 py-0.5 rounded-full">
+                    Akses: {Object.values(currentUserPermissions).filter(p => p?.canView).length}/10 Modul
+                  </span>
+                </div>
               </div>
               <p className="text-xs text-stone-300">
                 Kelola master produk, stok barang, transaksi masuk, cabang toko, & database
@@ -1494,127 +1695,63 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           </div>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation (Permission-Aware) */}
         <div className="flex border-b border-stone-200 px-4 sm:px-6 bg-white overflow-x-auto scrollbar-none">
-          <button
-            onClick={() => { setActiveTab('products'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'products'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            <span>Katalog & Stok ({products.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('orders'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'orders'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Receipt className="w-4 h-4" />
-            <span>Pesanan Masuk ({orders.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('stores'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'stores'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <StoreIcon className="w-4 h-4 text-purple-600" />
-            <span>Cabang Toko ({stores.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('receipts'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'receipts'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Receipt className="w-4 h-4 text-blue-600" />
-            <span>Struk Info Toko ({activeReceiptConfigs.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('promos'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'promos'
-                ? 'border-orange-600 text-orange-700 bg-orange-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Megaphone className="w-4 h-4 text-orange-600" />
-            <span>Promo & Info Toko ({activeStorePromos.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('brand_info'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'brand_info'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Palette className="w-4 h-4 text-amber-500" />
-            <span>Info Brand & Footer</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('couriers'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'couriers'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Bike className="w-4 h-4 text-blue-600" />
-            <span>Kurir & Armada ({activeCouriers.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('vouchers'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'vouchers'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Ticket className="w-4 h-4 text-amber-600" />
-            <span>Voucher & Diskon ({vouchers.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('users'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'users'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Users className="w-4 h-4 text-emerald-600" />
-            <span>Manajemen User ({staffUsers.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('bulk_import'); setIsAddingProduct(false); setIsAddingStore(false); setIsAddingUser(false); setIsAddingVoucher(false); }}
-            className={`px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'bulk_import'
-                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                : 'border-transparent text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Import Cepat Excel / Teks</span>
-          </button>
+          {[
+            { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
+            { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Masuk', icon: <Receipt className="w-4 h-4" />, count: orders.length },
+            { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
+            { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
+            { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
+            { id: 'brand_info', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
+            { id: 'couriers', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
+            { id: 'vouchers', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
+            { id: 'users', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
+            { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
+          ].map(item => {
+            const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  setIsAddingProduct(false);
+                  setIsAddingStore(false);
+                  setIsAddingUser(false);
+                  setIsAddingVoucher(false);
+                }}
+                className={`px-3.5 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  isActive
+                    ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+                    : !perm.canView
+                    ? 'border-transparent text-stone-400 hover:text-stone-600 bg-stone-50/40'
+                    : 'border-transparent text-stone-600 hover:text-stone-900'
+                }`}
+                title={
+                  !perm.canView
+                    ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser.role)}`
+                    : !perm.canEdit
+                    ? `Modul ${item.label} (Hanya Lihat)`
+                    : `Modul ${item.label} (Akses Penuh)`
+                }
+              >
+                {item.icon}
+                <span>
+                  {item.label} {item.count !== undefined ? `(${item.count})` : ''}
+                </span>
+                {!perm.canView ? (
+                  <span className="p-0.5 rounded bg-stone-200 text-stone-600" title="Terkunci">
+                    <Lock className="w-2.5 h-2.5" />
+                  </span>
+                ) : !perm.canEdit ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200" title="Hanya Lihat">
+                    Lihat
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab Body */}

@@ -1166,20 +1166,29 @@ export async function fetchStaffUsersFromSupabase(): Promise<StaffUser[] | null>
   try {
     const { data, error } = await supabase.from('staff_users').select('*').order('created_at', { ascending: false });
     if (error || !data || data.length === 0) return null;
-    return data.map((row: any) => ({
-      id: row.id,
-      username: row.username,
-      name: row.name,
-      role: row.role,
-      pin: row.pin,
-      phone: row.phone || undefined,
-      email: row.email || undefined,
-      storeId: row.store_id || undefined,
-      storeName: row.store_name || undefined,
-      isActive: row.is_active ?? true,
-      createdAt: row.created_at,
-      lastLogin: row.last_login || undefined,
-    }));
+    return data.map((row: any) => {
+      let parsedPermissions = undefined;
+      if (row.permissions) {
+        try {
+          parsedPermissions = typeof row.permissions === 'string' ? JSON.parse(row.permissions) : row.permissions;
+        } catch {}
+      }
+      return {
+        id: row.id,
+        username: row.username,
+        name: row.name,
+        role: row.role,
+        pin: row.pin,
+        phone: row.phone || undefined,
+        email: row.email || undefined,
+        storeId: row.store_id || undefined,
+        storeName: row.store_name || undefined,
+        isActive: row.is_active ?? true,
+        createdAt: row.created_at,
+        lastLogin: row.last_login || undefined,
+        permissions: parsedPermissions,
+      };
+    });
   } catch (e) {
     return null;
   }
@@ -1189,7 +1198,7 @@ export async function saveStaffUserToSupabase(user: StaffUser): Promise<boolean>
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
-    const payload = {
+    const payload: any = {
       id: user.id,
       username: user.username,
       name: user.name,
@@ -1203,7 +1212,16 @@ export async function saveStaffUserToSupabase(user: StaffUser): Promise<boolean>
       created_at: user.createdAt || new Date().toISOString(),
       last_login: user.lastLogin || null,
     };
+    if (user.permissions) {
+      payload.permissions = user.permissions;
+    }
     const { error } = await supabase.from('staff_users').upsert(payload, { onConflict: 'id' });
+    if (error && error.message && error.message.includes('permissions')) {
+      // If permissions column is not in DB table yet, retry without permissions field
+      delete payload.permissions;
+      const retry = await supabase.from('staff_users').upsert(payload, { onConflict: 'id' });
+      return !retry.error;
+    }
     return !error;
   } catch {
     return false;

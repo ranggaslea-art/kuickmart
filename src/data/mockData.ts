@@ -1,4 +1,5 @@
 import { Product, Category, Store, Voucher, Address, MemberProfile, StaffUser, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig } from '../types';
+import { DEFAULT_ROLE_PERMISSIONS } from '../utils/permissions';
 
 export const INITIAL_BRAND_CONFIG: BrandHeaderFooterConfig = {
   // 1. Header & Brand Identity
@@ -311,6 +312,7 @@ export const INITIAL_STAFF_USERS: StaffUser[] = [
     isActive: true,
     createdAt: '01 Jan 2026',
     lastLogin: '03 Sep 2026 09:30 WIB',
+    permissions: DEFAULT_ROLE_PERMISSIONS.admin,
   },
   {
     id: 'usr_kasir',
@@ -325,6 +327,7 @@ export const INITIAL_STAFF_USERS: StaffUser[] = [
     isActive: true,
     createdAt: '15 Jan 2026',
     lastLogin: '02 Sep 2026 14:15 WIB',
+    permissions: DEFAULT_ROLE_PERMISSIONS.kasir,
   },
   {
     id: 'usr_spv',
@@ -339,6 +342,7 @@ export const INITIAL_STAFF_USERS: StaffUser[] = [
     isActive: true,
     createdAt: '10 Jan 2026',
     lastLogin: '01 Sep 2026 11:00 WIB',
+    permissions: DEFAULT_ROLE_PERMISSIONS.supervisor,
   },
   {
     id: 'usr_gudang',
@@ -352,6 +356,7 @@ export const INITIAL_STAFF_USERS: StaffUser[] = [
     storeName: 'Semua Cabang',
     isActive: true,
     createdAt: '20 Jan 2026',
+    permissions: DEFAULT_ROLE_PERMISSIONS.gudang,
   },
 ];
 
