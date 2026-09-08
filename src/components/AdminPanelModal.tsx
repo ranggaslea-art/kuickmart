@@ -1865,12 +1865,12 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     <span>{currentUser.name}</span>
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
-                    currentUser.role === 'admin' ? 'bg-amber-400/20 text-amber-300 border-amber-400/30' :
-                    currentUser.role === 'supervisor' ? 'bg-blue-400/20 text-blue-300 border-blue-400/30' :
-                    currentUser.role === 'kasir' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/30' :
+                    currentUser?.role === 'admin' ? 'bg-amber-400/20 text-amber-300 border-amber-400/30' :
+                    currentUser?.role === 'supervisor' ? 'bg-blue-400/20 text-blue-300 border-blue-400/30' :
+                    currentUser?.role === 'kasir' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/30' :
                     'bg-orange-400/20 text-orange-300 border-orange-400/30'
                   }`}>
-                    {getRoleDisplayName(currentUser.role)}
+                    {getRoleDisplayName(currentUser?.role || 'kasir')}
                   </span>
                   <span className="text-[10px] text-stone-300 bg-white/10 px-2 py-0.5 rounded-full">
                     Akses: {Object.values(currentUserPermissions).filter(p => p?.canView).length}/10 Modul
@@ -1990,7 +1990,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 }`}
                 title={
                   !perm.canView
-                    ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser.role)}`
+                    ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser?.role || 'kasir')}`
                     : !perm.canEdit
                     ? `Modul ${item.label} (Hanya Lihat)`
                     : `Modul ${item.label} (Akses Penuh)`

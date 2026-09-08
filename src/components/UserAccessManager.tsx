@@ -582,7 +582,7 @@ export const UserAccessManager: React.FC<UserAccessManagerProps> = ({
                                 {mod.category}
                               </span>
                               {/* Highlight jika modul Produk atau Promo saat kasir */}
-                              {activeStaff.role === 'kasir' && (mod.key === 'products' || mod.key === 'promos') && (
+                              {activeStaff?.role === 'kasir' && (mod.key === 'products' || mod.key === 'promos') && (
                                 <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.2 rounded">
                                   Modul Kasir
                                 </span>

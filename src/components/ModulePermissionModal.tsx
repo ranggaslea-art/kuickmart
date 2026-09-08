@@ -36,7 +36,7 @@ import {
 interface ModulePermissionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: StaffUser;
+  user?: StaffUser | null;
   onSavePermissions: (userId: string, newPermissions: UserPermissions) => void;
   isCurrentUserAdmin: boolean;
 }
@@ -49,14 +49,23 @@ export const ModulePermissionModal: React.FC<ModulePermissionModalProps> = ({
   isCurrentUserAdmin,
 }) => {
   const [permissions, setPermissions] = useState<UserPermissions>(() => {
+    if (!user) return DEFAULT_ROLE_PERMISSIONS.kasir;
     return getEffectivePermissions(user.role, user.permissions);
   });
+
+  // Sinkronkan permissions saat user berganti
+  React.useEffect(() => {
+    if (user) {
+      setPermissions(getEffectivePermissions(user.role, user.permissions));
+      setSaveSuccess(false);
+    }
+  }, [user]);
 
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen || !user) return null;
 
   const handleToggle = (key: SystemModuleKey, type: 'canView' | 'canEdit') => {
     setPermissions((prev) => {
