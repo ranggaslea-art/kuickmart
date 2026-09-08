@@ -82,14 +82,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
   isLoading: propIsLoading = false,
 }) => {
   // Authentication State
-  const [currentUser, setCurrentUser] = useState<StaffUser | { name: string; username: string; role: string } | null>(() => {
-    try {
-      const saved = localStorage.getItem('kuickmart_traffic_auth');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState<StaffUser | { name: string; username: string; role: string } | null>(null);
 
   const [usernameInput, setUsernameInput] = useState('');
   const [pinInput, setPinInput] = useState('');
@@ -176,10 +169,13 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
+    // Selalu minta login ulang setiap kali modal dibuka
+    setCurrentUser(null);
+    setUsernameInput('');
+    setPinInput('');
     setLoginError(null);
     try {
-      const saved = localStorage.getItem('kuickmart_traffic_auth');
-      if (saved) setCurrentUser(JSON.parse(saved));
+      localStorage.removeItem('kuickmart_traffic_auth');
     } catch {}
 
     fetchLiveStats();

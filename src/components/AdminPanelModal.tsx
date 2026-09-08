@@ -319,39 +319,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [onUpdateBrandConfig]);
 
-  // Login Authentication State - Persist session if user previously logged in
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('kuickmart_admin_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  // Login Authentication State - Selalu wajib login setiap kali masuk modul admin
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Periksa sesi tersimpan saat modal dibuka
+  // Selalu reset sesi dan wajibkan login baru setiap kali modal dibuka
   useEffect(() => {
     if (isOpen) {
+      setCurrentUser(null);
+      setInputUsername('');
+      setInputPin('');
       setLoginError(null);
       try {
-        const saved = localStorage.getItem('kuickmart_admin_user');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.username && parsed.role) {
-            const match = (staffUsers || []).find(
-              u => (u?.username || '').toLowerCase() === parsed.username.toLowerCase()
-            );
-            if (!match || match.isActive) {
-              setCurrentUser(parsed);
-              return;
-            }
-          }
-        }
+        localStorage.removeItem('kuickmart_admin_user');
       } catch (e) {
         console.error(e);
       }
@@ -359,7 +343,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   }, [isOpen]);
 
   const handleClose = () => {
+    setCurrentUser(null);
+    setInputUsername('');
+    setInputPin('');
     setLoginError(null);
+    try {
+      localStorage.removeItem('kuickmart_admin_user');
+    } catch (e) {
+      console.error(e);
+    }
     onClose();
   };
 
@@ -672,11 +664,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
-      try {
-        localStorage.setItem('kuickmart_admin_user', JSON.stringify(authUser));
-      } catch (e) {
-        console.error(e);
-      }
       setLoginError(null);
       setInputPin('');
 
@@ -738,11 +725,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
-      try {
-        localStorage.setItem('kuickmart_admin_user', JSON.stringify(authUser));
-      } catch (e) {
-        console.error(e);
-      }
       setLoginError(null);
       setInputUsername('');
       setInputPin('');
