@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   PurchaseOrder, 
   PurchaseItem, 
@@ -30,7 +30,13 @@ import {
   Layers,
   X,
   Scale,
-  Boxes
+  Boxes,
+  Barcode,
+  ScanBarcode,
+  Camera,
+  CornerDownRight,
+  Check,
+  RotateCcw
 } from 'lucide-react';
 
 const COMMON_SUPPLIER_UNITS = [
@@ -100,25 +106,56 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [autoUpdateCostPrice, setAutoUpdateCostPrice] = useState(true);
   const [immediatelyReceiveStock, setImmediatelyReceiveStock] = useState(true);
 
-  // Items in current PO form
+  // Helper to create an empty draft row for inline table input
+  const createEmptyRow = (suffix?: string): PurchaseItem => ({
+    id: `pitem_${Date.now()}_${suffix || Math.random().toString(36).substr(2, 5)}`,
+    productId: '',
+    productName: '',
+    barcode: '',
+    unit: 'Pcs',
+    conversionMultiplier: 1,
+    baseUnit: 'Pcs',
+    quantity: 1,
+    costPrice: 0,
+    subtotal: 0,
+    baseQuantity: 1,
+  });
+
+  // Items directly inside the Purchase Order Table
   const [formItems, setFormItems] = useState<PurchaseItem[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [itemUnit, setItemUnit] = useState<string>('Pcs');
-  const [itemConversionMultiplier, setItemConversionMultiplier] = useState<number>(1);
-  const [isCustomUnit, setIsCustomUnit] = useState<boolean>(false);
-  const [itemQuantity, setItemQuantity] = useState<number>(10);
-  const [itemCostPrice, setItemCostPrice] = useState<number>(0);
+  const [quickBarcodeQuery, setQuickBarcodeQuery] = useState('');
+  const [barcodeFeedback, setBarcodeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
-  // Currently selected product in the form
-  const currentProduct = useMemo(() => {
-    return products.find(p => p.id === selectedProductId) || products[0];
-  }, [products, selectedProductId]);
+  // Input refs for seamless keyboard navigation across rows
+  const barcodeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const qtyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const priceInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const quickBarcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
-  // Unit options registered on the current product (Base unit + conversion tiers)
-  const currentUnitOptions = useMemo(() => {
-    if (!currentProduct) return [];
-    return getProductUnitOptions(currentProduct);
-  }, [currentProduct]);
+  // Subtle POS scanner beep using Web Audio API
+  const playScanBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch {
+      // Audio context not allowed or unsupported
+    }
+  };
 
   // Summary Metrics
   const metrics = useMemo(() => {
@@ -151,7 +188,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     });
   }, [purchases, searchQuery, selectedSupplierFilter, selectedStatusFilter, selectedPaymentFilter]);
 
-  // Handle open create modal
+  // Handle open create modal: Initialize with 1 empty row in the table ready for barcode/product input
   const handleOpenCreateModal = () => {
     const defaultSup = suppliers.find(s => s.isActive) || suppliers[0];
     setSupplierId(defaultSup ? defaultSup.id : '');
@@ -169,122 +206,404 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     setNotes('');
     setAutoUpdateCostPrice(true);
     setImmediatelyReceiveStock(true);
-    setFormItems([]);
-    
-    // Select first product
-    if (products.length > 0) {
-      const firstProd = products[0];
-      setSelectedProductId(firstProd.id);
-      const baseUnit = firstProd.unit || 'Pcs';
-      setItemUnit(baseUnit);
-      setItemConversionMultiplier(1);
-      setIsCustomUnit(false);
-      setItemQuantity(10);
-      setItemCostPrice(firstProd.costPrice || Math.round(firstProd.price * 0.75));
-    }
+    setQuickBarcodeQuery('');
+    setBarcodeFeedback(null);
+    setIsCameraScannerOpen(false);
 
+    // Initial draft row in the table
+    setFormItems([createEmptyRow('row_0')]);
     setIsCreateModalOpen(true);
+
+    // Auto-focus barcode input of first row
+    setTimeout(() => {
+      barcodeInputRefs.current[0]?.focus();
+    }, 150);
   };
 
-  // When selected product changes in form, prefill its unit and cost price
-  const handleSelectProduct = (prodId: string) => {
-    setSelectedProductId(prodId);
-    const prod = products.find(p => p.id === prodId);
-    if (prod) {
-      const baseUnit = prod.unit || 'Pcs';
-      setItemUnit(baseUnit);
-      setItemConversionMultiplier(1);
-      setIsCustomUnit(false);
-      setItemCostPrice(prod.costPrice || Math.round(prod.price * 0.75));
-    }
-  };
-
-  // When unit changes in form, automatically set conversion multiplier
-  const handleUnitChange = (newUnit: string) => {
-    setItemUnit(newUnit);
-    const matchedOpt = currentUnitOptions.find(o => o.unitName.toLowerCase() === newUnit.toLowerCase());
-    if (matchedOpt) {
-      setItemConversionMultiplier(matchedOpt.multiplier || 1);
-    } else {
-      const lower = newUnit.toLowerCase();
-      if (lower === 'lusin') {
-        setItemConversionMultiplier(12);
-      } else if (lower === 'kodi') {
-        setItemConversionMultiplier(20);
-      } else if (lower === 'gross') {
-        setItemConversionMultiplier(144);
-      } else {
-        setItemConversionMultiplier(1);
-      }
-    }
-  };
-
-  // Add item to PO draft
-  const handleAddItemToForm = () => {
-    const prod = products.find(p => p.id === selectedProductId);
-    if (!prod) return;
-    if (itemQuantity <= 0) {
-      alert('Kuantitas barang harus lebih besar dari 0');
-      return;
-    }
-    if (itemCostPrice < 0) {
-      alert('Harga modal beli tidak boleh negatif');
-      return;
-    }
-
-    const cleanUnit = itemUnit.trim() || prod.unit || 'Pcs';
+  // Populate row with matched product data
+  const applyProductToRow = (rowIndex: number, prod: Product, customBarcode?: string, customUnit?: string) => {
     const baseUnit = prod.unit || 'Pcs';
-    const multiplier = itemConversionMultiplier > 0 ? itemConversionMultiplier : 1;
-    const baseQty = itemQuantity * multiplier;
+    const unitToUse = customUnit || baseUnit;
+    let mult = 1;
+    if (customUnit) {
+      const opts = getProductUnitOptions(prod);
+      const matched = opts.find(o => o.unitName.toLowerCase() === customUnit.toLowerCase());
+      if (matched) mult = matched.multiplier || 1;
+    }
 
-    // Check if already in list with SAME unit
-    const existingIndex = formItems.findIndex(i => i.productId === prod.id && i.unit.toLowerCase() === cleanUnit.toLowerCase());
-    if (existingIndex >= 0) {
-      const updated = [...formItems];
-      updated[existingIndex].quantity += itemQuantity;
-      updated[existingIndex].costPrice = itemCostPrice;
-      updated[existingIndex].subtotal = updated[existingIndex].quantity * itemCostPrice;
-      updated[existingIndex].baseQuantity = (updated[existingIndex].baseQuantity || 0) + baseQty;
-      setFormItems(updated);
-    } else {
-      const newItem: PurchaseItem = {
-        id: `pitem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    const defaultCost = prod.costPrice ? prod.costPrice * mult : Math.round(prod.price * 0.75 * mult);
+
+    setFormItems(prev => {
+      const updated = [...prev];
+      const currentQty = updated[rowIndex]?.quantity > 0 ? updated[rowIndex].quantity : 1;
+      updated[rowIndex] = {
+        ...updated[rowIndex],
         productId: prod.id,
         productName: prod.name,
-        barcode: prod.barcode,
-        unit: cleanUnit,
-        quantity: itemQuantity,
-        costPrice: itemCostPrice,
-        subtotal: itemQuantity * itemCostPrice,
-        sellingPrice: prod.price,
-        conversionMultiplier: multiplier,
+        barcode: customBarcode || prod.barcode || '',
+        unit: unitToUse,
         baseUnit: baseUnit,
-        baseQuantity: baseQty,
+        conversionMultiplier: mult,
+        quantity: currentQty,
+        costPrice: defaultCost,
+        subtotal: currentQty * defaultCost,
+        baseQuantity: currentQty * mult,
       };
-      setFormItems([...formItems, newItem]);
+      return updated;
+    });
+  };
+
+  // 1. INLINE TABLE: Barcode change in row
+  const handleRowBarcodeChange = (rowIndex: number, val: string) => {
+    setFormItems(prev => {
+      const updated = [...prev];
+      updated[rowIndex] = {
+        ...updated[rowIndex],
+        barcode: val,
+      };
+      return updated;
+    });
+  };
+
+  // 2. INLINE TABLE: Barcode lookup by Enter or Blur
+  const handleRowBarcodeLookup = (rowIndex: number, barcodeValue?: string) => {
+    const rawCode = (barcodeValue ?? formItems[rowIndex]?.barcode ?? '').trim();
+    if (!rawCode) {
+      // If empty, shift focus to quantity or select
+      qtyInputRefs.current[rowIndex]?.focus();
+      return;
     }
 
-    // Reset qty
-    setItemQuantity(10);
+    // Search in products by barcode, id, or unit conversions
+    const matchedProd = products.find(p => 
+      (p.barcode && p.barcode.toLowerCase() === rawCode.toLowerCase()) ||
+      p.id.toLowerCase() === rawCode.toLowerCase() ||
+      p.unitConversions?.some(uc => uc.barcode && uc.barcode.toLowerCase() === rawCode.toLowerCase())
+    );
+
+    if (matchedProd) {
+      playScanBeep();
+      const matchedUc = matchedProd.unitConversions?.find(uc => uc.barcode && uc.barcode.toLowerCase() === rawCode.toLowerCase());
+      applyProductToRow(rowIndex, matchedProd, rawCode, matchedUc?.unitName);
+      
+      setBarcodeFeedback({
+        type: 'success',
+        message: `✓ Barcode terdeteksi: ${matchedProd.name} (${rawCode})`,
+      });
+      setTimeout(() => setBarcodeFeedback(null), 3000);
+
+      // Auto advance to Quantity field in this row
+      setTimeout(() => {
+        qtyInputRefs.current[rowIndex]?.focus();
+        qtyInputRefs.current[rowIndex]?.select();
+      }, 50);
+    } else {
+      setBarcodeFeedback({
+        type: 'error',
+        message: `Barcode "${rawCode}" tidak ditemukan di master produk. Silakan pilih dari dropdown atau ketik ulang.`,
+      });
+      setTimeout(() => setBarcodeFeedback(null), 4000);
+    }
   };
 
-  const handleRemoveFormItem = (index: number) => {
-    setFormItems(formItems.filter((_, idx) => idx !== index));
+  // 3. INLINE TABLE: Product selection via dropdown
+  const handleRowProductSelect = (rowIndex: number, prodId: string) => {
+    if (!prodId) {
+      setFormItems(prev => {
+        const updated = [...prev];
+        updated[rowIndex] = createEmptyRow();
+        return updated;
+      });
+      return;
+    }
+    const prod = products.find(p => p.id === prodId);
+    if (!prod) return;
+
+    applyProductToRow(rowIndex, prod, prod.barcode);
+
+    // Auto advance to Quantity field in this row
+    setTimeout(() => {
+      qtyInputRefs.current[rowIndex]?.focus();
+      qtyInputRefs.current[rowIndex]?.select();
+    }, 50);
   };
+
+  // 4. INLINE TABLE: Unit change in row
+  const handleRowUnitChange = (rowIndex: number, newUnit: string) => {
+    setFormItems(prev => {
+      const updated = [...prev];
+      const row = { ...updated[rowIndex] };
+      const prod = products.find(p => p.id === row.productId);
+      row.unit = newUnit;
+
+      let mult = 1;
+      if (prod) {
+        const opts = getProductUnitOptions(prod);
+        const matched = opts.find(o => o.unitName.toLowerCase() === newUnit.toLowerCase());
+        if (matched) {
+          mult = matched.multiplier || 1;
+        } else {
+          const lower = newUnit.toLowerCase();
+          if (lower === 'lusin') mult = 12;
+          else if (lower === 'kodi') mult = 20;
+          else if (lower === 'gross') mult = 144;
+          else if (lower === 'dus') mult = 24;
+          else if (lower === 'karton') mult = 40;
+          else if (lower === 'bal') mult = 50;
+          else mult = 1;
+        }
+      }
+      row.conversionMultiplier = mult;
+      row.baseQuantity = row.quantity * mult;
+      updated[rowIndex] = row;
+      return updated;
+    });
+  };
+
+  // 5. INLINE TABLE: Multiplier adjustment
+  const handleRowMultiplierChange = (rowIndex: number, mult: number) => {
+    setFormItems(prev => {
+      const updated = [...prev];
+      const row = { ...updated[rowIndex] };
+      row.conversionMultiplier = Math.max(1, mult);
+      row.baseQuantity = row.quantity * row.conversionMultiplier;
+      updated[rowIndex] = row;
+      return updated;
+    });
+  };
+
+  // 6. INLINE TABLE: Quantity change
+  const handleRowQtyChange = (rowIndex: number, qty: number) => {
+    setFormItems(prev => {
+      const updated = [...prev];
+      const row = { ...updated[rowIndex] };
+      row.quantity = Math.max(1, qty);
+      row.subtotal = row.quantity * row.costPrice;
+      row.baseQuantity = row.quantity * (row.conversionMultiplier || 1);
+      updated[rowIndex] = row;
+      return updated;
+    });
+  };
+
+  // 7. INLINE TABLE: Price change
+  const handleRowPriceChange = (rowIndex: number, price: number) => {
+    setFormItems(prev => {
+      const updated = [...prev];
+      const row = { ...updated[rowIndex] };
+      row.costPrice = Math.max(0, price);
+      row.subtotal = row.quantity * row.costPrice;
+      updated[rowIndex] = row;
+      return updated;
+    });
+  };
+
+  // 8. REQUIREMENT 2: "Input pembelian item barang bergeser ke baris berikutnya apabila telah selesai input item barang"
+  const advanceToNextRow = (currentIndex: number) => {
+    const nextIndex = currentIndex + 1;
+    setFormItems(prev => {
+      if (nextIndex >= prev.length) {
+        return [...prev, createEmptyRow(`row_${nextIndex}`)];
+      }
+      return prev;
+    });
+
+    // Focus next row's barcode input smoothly
+    setTimeout(() => {
+      barcodeInputRefs.current[nextIndex]?.focus();
+      barcodeInputRefs.current[nextIndex]?.select();
+    }, 60);
+  };
+
+  // Add a new empty row manually
+  const handleAddNewRow = () => {
+    setFormItems(prev => {
+      const nextIndex = prev.length;
+      setTimeout(() => {
+        barcodeInputRefs.current[nextIndex]?.focus();
+      }, 60);
+      return [...prev, createEmptyRow(`row_${nextIndex}`)];
+    });
+  };
+
+  // Remove row from table
+  const handleRemoveRow = (index: number) => {
+    setFormItems(prev => {
+      if (prev.length <= 1) {
+        // Keep at least 1 empty row
+        return [createEmptyRow('row_0')];
+      }
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  // 9. REQUIREMENT 3: Fast Quick Barcode Scanner Bar at top of table
+  const handleQuickBarcodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = quickBarcodeQuery.trim();
+    if (!code) return;
+
+    const matchedProd = products.find(p => 
+      (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) ||
+      p.id.toLowerCase() === code.toLowerCase() ||
+      p.unitConversions?.some(uc => uc.barcode && uc.barcode.toLowerCase() === code.toLowerCase())
+    );
+
+    if (matchedProd) {
+      playScanBeep();
+      const matchedUc = matchedProd.unitConversions?.find(uc => uc.barcode && uc.barcode.toLowerCase() === code.toLowerCase());
+      const baseUnit = matchedProd.unit || 'Pcs';
+      const unitName = matchedUc ? matchedUc.unitName : baseUnit;
+      const mult = matchedUc ? (matchedUc.totalMultiplier || 1) : 1;
+      const cost = matchedProd.costPrice ? matchedProd.costPrice * mult : Math.round(matchedProd.price * 0.75 * mult);
+
+      setFormItems(prev => {
+        // Find if the last row is empty (no productId)
+        const emptyIdx = prev.findIndex(r => !r.productId);
+        if (emptyIdx >= 0) {
+          const updated = [...prev];
+          updated[emptyIdx] = {
+            ...updated[emptyIdx],
+            productId: matchedProd.id,
+            productName: matchedProd.name,
+            barcode: code,
+            unit: unitName,
+            baseUnit: baseUnit,
+            conversionMultiplier: mult,
+            quantity: 1,
+            costPrice: cost,
+            subtotal: cost,
+            baseQuantity: mult,
+          };
+          // Automatically append next empty row ready for next scan
+          return [...updated, createEmptyRow()];
+        } else {
+          // Append this item and an empty row below it
+          const newItem: PurchaseItem = {
+            id: `pitem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            productId: matchedProd.id,
+            productName: matchedProd.name,
+            barcode: code,
+            unit: unitName,
+            baseUnit: baseUnit,
+            conversionMultiplier: mult,
+            quantity: 1,
+            costPrice: cost,
+            subtotal: cost,
+            baseQuantity: mult,
+          };
+          return [...prev, newItem, createEmptyRow()];
+        }
+      });
+
+      setBarcodeFeedback({
+        type: 'success',
+        message: `✓ [Barcode: ${code}] ${matchedProd.name} berhasil diinput ke tabel & bergeser ke baris baru!`,
+      });
+      setTimeout(() => setBarcodeFeedback(null), 3000);
+      setQuickBarcodeQuery('');
+
+      // Keep focus in quick scan input for rapid laser barcode scanning
+      setTimeout(() => {
+        quickBarcodeInputRef.current?.focus();
+      }, 50);
+    } else {
+      setBarcodeFeedback({
+        type: 'error',
+        message: `Barcode "${code}" tidak ditemukan di katalog produk master.`,
+      });
+      setTimeout(() => setBarcodeFeedback(null), 3500);
+    }
+  };
+
+  // Camera Barcode Scanner setup
+  useEffect(() => {
+    let active = true;
+    let stream: MediaStream | null = null;
+    let intervalId: any = null;
+
+    if (isCameraScannerOpen) {
+      setCameraError(null);
+      navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' } })
+        .then((s) => {
+          if (!active) {
+            s.getTracks().forEach(t => t.stop());
+            return;
+          }
+          stream = s;
+          cameraStreamRef.current = s;
+          if (cameraVideoRef.current) {
+            cameraVideoRef.current.srcObject = s;
+            cameraVideoRef.current.play().catch(() => {});
+          }
+
+          // Check if BarcodeDetector API is supported
+          if ('BarcodeDetector' in window) {
+            const barcodeDetector = new (window as any).BarcodeDetector({
+              formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code']
+            });
+
+            intervalId = setInterval(async () => {
+              if (cameraVideoRef.current && cameraVideoRef.current.readyState >= 2) {
+                try {
+                  const barcodes = await barcodeDetector.detect(cameraVideoRef.current);
+                  if (barcodes && barcodes.length > 0) {
+                    const rawVal = barcodes[0].rawValue;
+                    if (rawVal) {
+                      // Process barcode
+                      const fakeEvent = { preventDefault: () => {} } as any;
+                      setQuickBarcodeQuery(rawVal);
+                      setTimeout(() => {
+                        handleQuickBarcodeSubmit(fakeEvent);
+                      }, 50);
+                      // Pause briefly
+                      clearInterval(intervalId);
+                      setTimeout(() => {
+                        setIsCameraScannerOpen(false);
+                      }, 800);
+                    }
+                  }
+                } catch {
+                  // Ignore detection loop frame error
+                }
+              }
+            }, 300);
+          }
+        })
+        .catch(err => {
+          setCameraError('Kamera tidak dapat diakses atau izin ditolak. Anda tetap dapat mengetik barcode manual di tabel.');
+        });
+    }
+
+    return () => {
+      active = false;
+      if (intervalId) clearInterval(intervalId);
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
+    };
+  }, [isCameraScannerOpen]);
 
   // Save Purchase Order & Automatically Increase Stock!
   const handleSavePurchaseOrder = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formItems.length === 0) {
-      alert('Mohon tambahkan minimal 1 barang yang dibeli');
+
+    // Filter valid items that have a product selected and quantity > 0
+    const validItems = formItems.filter(item => item.productId && item.productName && item.quantity > 0);
+
+    if (validItems.length === 0) {
+      alert('Mohon isi minimal 1 baris barang pembelian di tabel (masukkan barcode atau pilih produk).');
       return;
     }
 
     const sup = suppliers.find(s => s.id === supplierId);
     const targetStore = stores.find(st => st.id === storeId) || stores[0];
 
-    const subtotal = formItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const totalQty = formItems.reduce((sum, item) => sum + item.quantity, 0);
+    const subtotal = validItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalQty = validItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalAmount = subtotal;
 
     const purchaseNum = `PO-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(purchases.length + 1).padStart(3, '0')}`;
@@ -299,7 +618,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       storeName: targetStore?.name || 'Toko Utama',
       orderDate,
       receivedDate: immediatelyReceiveStock ? receivedDate : undefined,
-      items: formItems,
+      items: validItems,
       totalQuantity: totalQty,
       subtotal,
       taxAmount: 0,
@@ -319,7 +638,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     // If immediately received, automatically increase physical stock and update HPP cost price in products!
     if (immediatelyReceiveStock) {
       const updatedProducts = products.map(prod => {
-        const matchingItems = formItems.filter(it => it.productId === prod.id);
+        const matchingItems = validItems.filter(it => it.productId === prod.id);
         if (matchingItems.length > 0) {
           const addedStock = matchingItems.reduce((sum, it) => {
             const mult = it.conversionMultiplier || 1;
@@ -727,7 +1046,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       {/* MODAL INPUT PEMBELIAN BARANG (TAMBAH STOK) */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-60 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-4 my-8 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-4 my-8 max-h-[94vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl">
@@ -735,7 +1054,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-stone-900 text-base">Faktur Pembelian Barang Masuk</h3>
-                  <p className="text-xs text-stone-500">Stok barang di katalog fisik akan otomatis bertambah saat disimpan</p>
+                  <p className="text-xs text-stone-500">Input barang langsung di tabel dengan barcode atau pilih produk, otomatis geser ke baris berikutnya</p>
                 </div>
               </div>
               <button
@@ -841,224 +1160,393 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 </div>
               </div>
 
-              {/* ITEM BUILDER SECTION */}
-              <div className="border border-stone-200 rounded-2xl p-4 bg-emerald-50/40 space-y-3">
-                <div className="font-bold text-stone-900 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <PackagePlus className="w-4 h-4 text-emerald-600" />
-                    Pilih & Tambah Barang yang Dibeli
-                  </span>
-                  <span className="text-[11px] text-stone-500 font-normal">
-                    Pilih produk dari katalog master
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-                  {/* 1. Pilih Produk */}
-                  <div className="sm:col-span-4">
-                    <label className="block font-semibold text-stone-700 mb-1">Pilih Produk *</label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => handleSelectProduct(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-semibold text-stone-900 truncate"
-                    >
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} (Stok: {p.stock || 0} {p.unit || 'Pcs'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* 2. Satuan Barang */}
-                  <div className="sm:col-span-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="font-semibold text-stone-700">Satuan Barang *</label>
-                      <button
-                        type="button"
-                        onClick={() => setIsCustomUnit(!isCustomUnit)}
-                        className="text-[10px] text-emerald-700 hover:underline font-bold"
-                      >
-                        {isCustomUnit ? 'Pilih Satuan' : '+ Ketik Baru'}
-                      </button>
+              {/* BARCODE SCANNER QUICK INPUT BAR */}
+              <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-stone-50 border border-emerald-200/80 rounded-2xl p-3 sm:p-3.5 space-y-2.5">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-xs">
+                      <ScanBarcode className="w-4 h-4" />
                     </div>
-
-                    {isCustomUnit ? (
-                      <input
-                        type="text"
-                        value={itemUnit}
-                        onChange={(e) => setItemUnit(e.target.value)}
-                        placeholder="Ketik satuan, misal: Karton, Bal..."
-                        className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-bold text-indigo-700"
-                      />
-                    ) : (
-                      <select
-                        value={itemUnit}
-                        onChange={(e) => handleUnitChange(e.target.value)}
-                        className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-bold text-indigo-700"
-                      >
-                        <optgroup label="Satuan Terdaftar Produk">
-                          {currentUnitOptions.map(opt => (
-                            <option key={opt.unitName} value={opt.unitName}>
-                              {opt.unitName} {opt.multiplier > 1 ? `(= ${opt.multiplier} ${currentProduct?.unit || 'Pcs'})` : '(Satuan Dasar)'}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Satuan Grosir / Kulakan Umum">
-                          {COMMON_SUPPLIER_UNITS.filter(u => !currentUnitOptions.some(o => o.unitName.toLowerCase() === u.toLowerCase())).map(u => (
-                            <option key={u} value={u}>{u}</option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    )}
-                  </div>
-
-                  {/* 3. Jumlah Qty */}
-                  <div className="sm:col-span-2">
-                    <label className="block font-semibold text-stone-700 mb-1">Jumlah Qty *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={itemQuantity}
-                      onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-bold text-center text-xs"
-                    />
-                  </div>
-
-                  {/* 4. Harga Modal per Satuan */}
-                  <div className="sm:col-span-3">
-                    <label className="block font-semibold text-stone-700 mb-1 truncate" title={`Harga Modal / ${itemUnit || 'Satuan'}`}>
-                      Harga Modal / {itemUnit || 'Satuan'} (Rp)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="100"
-                      value={itemCostPrice}
-                      onChange={(e) => setItemCostPrice(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-bold text-emerald-700 text-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* Konversi Satuan Masuk Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white rounded-xl border border-stone-200 text-xs">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <Scale className="w-3.5 h-3.5 text-stone-400" />
-                    <span className="text-stone-500 font-medium">Konversi Stok Fisik:</span>
-                    <span className="font-bold text-stone-800">
-                      1 {itemUnit || 'Satuan'} =
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={itemConversionMultiplier}
-                      onChange={(e) => setItemConversionMultiplier(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-14 px-1.5 py-0.5 border border-stone-200 rounded-lg text-center font-bold text-emerald-700 bg-stone-50"
-                    />
-                    <span className="font-bold text-stone-700">
-                      {currentProduct?.unit || 'Pcs'}
-                    </span>
-                    <span className="text-[11px] text-stone-400 ml-1">
-                      (Total masuk: <strong className="text-emerald-700 font-bold">+{itemQuantity * (itemConversionMultiplier || 1)} {currentProduct?.unit || 'Pcs'}</strong>)
-                    </span>
+                    <div>
+                      <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                        Scan Barcode Cepat (Barcode Scanner Gun / Kamera)
+                      </span>
+                      <p className="text-[11px] text-stone-500">Scan barcode untuk otomatis memasukkan produk ke tabel & menambah baris baru</p>
+                    </div>
                   </div>
 
                   <button
                     type="button"
-                    onClick={handleAddItemToForm}
-                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1 shadow-xs transition-colors ml-auto"
+                    onClick={() => setIsCameraScannerOpen(true)}
+                    className="px-3 py-1.5 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors text-xs text-stone-700"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Tambah Barang</span>
+                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>📷 Buka Kamera Scanner</span>
                   </button>
                 </div>
 
-                {/* Added Items Table */}
-                {formItems.length > 0 ? (
-                  <div className="border border-stone-200 rounded-xl bg-white overflow-hidden mt-3">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Barcode className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      ref={quickBarcodeInputRef}
+                      type="text"
+                      value={quickBarcodeQuery}
+                      onChange={(e) => setQuickBarcodeQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleQuickBarcodeSubmit(e);
+                        }
+                      }}
+                      placeholder="Arahkan Barcode Scanner ke sini atau ketik kode barcode lalu tekan Enter..."
+                      className="w-full pl-9 pr-24 py-2 border border-stone-200 rounded-xl bg-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleQuickBarcodeSubmit}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-colors"
+                    >
+                      + Masukkan
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barcode feedback banner */}
+                {barcodeFeedback && (
+                  <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-between animate-fadeIn ${
+                    barcodeFeedback.type === 'success' 
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                  }`}>
+                    <span>{barcodeFeedback.message}</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setBarcodeFeedback(null)} 
+                      className="text-stone-400 hover:text-stone-600 text-xs ml-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {/* Quick Sample Barcode Chips for instant testing */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] text-stone-400 font-medium">Tes Barcode Cepat:</span>
+                  {products.filter(p => p.barcode).slice(0, 4).map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setQuickBarcodeQuery(p.barcode || '');
+                        const fakeEvt = { preventDefault: () => {} } as any;
+                        // Trigger immediate lookup
+                        setTimeout(() => {
+                          const code = p.barcode || '';
+                          const matchedProd = p;
+                          playScanBeep();
+                          const baseUnit = matchedProd.unit || 'Pcs';
+                          const defaultCost = matchedProd.costPrice || Math.round(matchedProd.price * 0.75);
+                          setFormItems(prev => {
+                            const emptyIdx = prev.findIndex(r => !r.productId);
+                            if (emptyIdx >= 0) {
+                              const updated = [...prev];
+                              updated[emptyIdx] = {
+                                ...updated[emptyIdx],
+                                productId: matchedProd.id,
+                                productName: matchedProd.name,
+                                barcode: code,
+                                unit: baseUnit,
+                                baseUnit: baseUnit,
+                                conversionMultiplier: 1,
+                                quantity: 1,
+                                costPrice: defaultCost,
+                                subtotal: defaultCost,
+                                baseQuantity: 1,
+                              };
+                              return [...updated, createEmptyRow()];
+                            } else {
+                              const newItem: PurchaseItem = {
+                                id: `pitem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+                                productId: matchedProd.id,
+                                productName: matchedProd.name,
+                                barcode: code,
+                                unit: baseUnit,
+                                baseUnit: baseUnit,
+                                conversionMultiplier: 1,
+                                quantity: 1,
+                                costPrice: defaultCost,
+                                subtotal: defaultCost,
+                                baseQuantity: 1,
+                              };
+                              return [...prev, newItem, createEmptyRow()];
+                            }
+                          });
+                          setBarcodeFeedback({
+                            type: 'success',
+                            message: `✓ [Barcode: ${code}] ${matchedProd.name} dimasukkan ke tabel!`,
+                          });
+                          setTimeout(() => setBarcodeFeedback(null), 3000);
+                        }, 50);
+                      }}
+                      className="px-2 py-0.5 bg-white hover:bg-emerald-50 text-stone-600 hover:text-emerald-700 border border-stone-200 rounded-lg text-[10px] font-mono transition-colors"
+                      title={`Klik untuk tes scan barcode ${p.name}`}
+                    >
+                      {p.name.split(' ')[0]} ({p.barcode})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* TABEL PEMBELIAN BARANG (DIRECT INLINE TABLE INPUT) */}
+              <div className="space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                    <PackagePlus className="w-4 h-4 text-emerald-600" />
+                    <span>Daftar Barang Pembelian (Input di Tabel)</span>
+                    <span className="text-[11px] font-normal text-stone-400 ml-1">
+                      ({formItems.filter(r => r.productId).length} barang terdaftar)
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-stone-500 font-medium">
+                    💡 Tekan <kbd className="px-1.5 py-0.5 bg-stone-100 border border-stone-300 rounded font-mono text-[10px]">Enter</kbd> untuk bergeser antar kolom & baris
+                  </div>
+                </div>
+
+                <div className="border border-stone-200 rounded-2xl bg-white overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-semibold">
+                      <thead className="bg-stone-50 border-b border-stone-200 text-stone-700 font-bold uppercase text-[10px] tracking-wider">
                         <tr>
-                          <th className="px-3 py-2 text-center w-8">No</th>
-                          <th className="px-3 py-2">Nama Produk & Barcode</th>
-                          <th className="px-3 py-2 text-center">Jumlah Qty</th>
-                          <th className="px-3 py-2 text-center">Satuan Barang</th>
-                          <th className="px-3 py-2 text-center">Stok Masuk Fisik</th>
-                          <th className="px-3 py-2 text-right">Harga Modal / Satuan</th>
-                          <th className="px-3 py-2 text-right">Subtotal</th>
-                          <th className="px-3 py-2 text-center">Aksi</th>
+                          <th className="px-3 py-2.5 text-center w-8">No</th>
+                          <th className="px-3 py-2.5 min-w-[130px] w-36">Barcode Barang</th>
+                          <th className="px-3 py-2.5 min-w-[180px]">Nama Produk</th>
+                          <th className="px-3 py-2.5 min-w-[110px] w-28 text-center">Satuan</th>
+                          <th className="px-3 py-2.5 min-w-[130px] w-32 text-center">Konversi Fisik</th>
+                          <th className="px-3 py-2.5 min-w-[80px] w-20 text-center">Qty Beli</th>
+                          <th className="px-3 py-2.5 min-w-[120px] w-32 text-right">Harga Modal (Rp)</th>
+                          <th className="px-3 py-2.5 min-w-[110px] w-28 text-right">Subtotal</th>
+                          <th className="px-3 py-2.5 w-16 text-center">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
-                        {formItems.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-stone-50">
-                            <td className="px-3 py-2 text-center text-stone-400 font-medium">{idx + 1}</td>
-                            <td className="px-3 py-2">
-                              <div className="font-semibold text-stone-900">{item.productName}</div>
-                              {item.barcode && <div className="text-[10px] text-stone-400 font-mono">{item.barcode}</div>}
-                            </td>
-                            <td className="px-3 py-2 text-center font-bold text-stone-900">
-                              {item.quantity}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                {item.unit}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-center text-[11px] font-bold text-emerald-700">
-                              +{item.baseQuantity || (item.quantity * (item.conversionMultiplier || 1))} {item.baseUnit || 'Pcs'}
-                              {(item.conversionMultiplier || 1) > 1 && (
-                                <span className="block text-[10px] text-stone-400 font-normal">
-                                  (1 {item.unit} = {item.conversionMultiplier} {item.baseUnit})
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium">
-                              {formatRupiah(item.costPrice)} / {item.unit}
-                            </td>
-                            <td className="px-3 py-2 text-right font-bold text-stone-900">
-                              {formatRupiah(item.subtotal)}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveFormItem(idx)}
-                                className="p-1 text-rose-500 hover:bg-rose-50 rounded-md"
-                                title="Hapus baris barang"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {formItems.map((item, idx) => {
+                          const prod = products.find(p => p.id === item.productId);
+                          const unitOpts = prod ? getProductUnitOptions(prod) : [];
+
+                          return (
+                            <tr 
+                              key={item.id || idx} 
+                              className={`transition-colors ${item.productId ? 'bg-white hover:bg-stone-50/70' : 'bg-amber-50/30'}`}
+                            >
+                              {/* 1. No */}
+                              <td className="px-3 py-2 text-center text-stone-400 font-medium">
+                                {idx + 1}
+                              </td>
+
+                              {/* 2. Barcode Barang */}
+                              <td className="px-3 py-2">
+                                <div className="relative">
+                                  <input
+                                    ref={(el) => { barcodeInputRefs.current[idx] = el; }}
+                                    type="text"
+                                    value={item.barcode || ''}
+                                    onChange={(e) => handleRowBarcodeChange(idx, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleRowBarcodeLookup(idx);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      if (item.barcode && !item.productId) {
+                                        handleRowBarcodeLookup(idx);
+                                      }
+                                    }}
+                                    placeholder="Ketik/Scan..."
+                                    className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-xs font-mono focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                                  />
+                                </div>
+                              </td>
+
+                              {/* 3. Nama / Pilih Produk */}
+                              <td className="px-3 py-2">
+                                <select
+                                  value={item.productId || ''}
+                                  onChange={(e) => handleRowProductSelect(idx, e.target.value)}
+                                  className="w-full px-2.5 py-1.5 border border-stone-200 rounded-lg text-xs font-semibold text-stone-900 bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                >
+                                  <option value="">-- Pilih / Cari Produk Master --</option>
+                                  {products.map(p => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name} (Stok saat ini: {p.stock || 0} {p.unit || 'Pcs'})
+                                    </option>
+                                  ))}
+                                </select>
+                                {item.productName && !item.productId && (
+                                  <span className="text-[10px] text-amber-600 font-medium block mt-0.5">
+                                    {item.productName}
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* 4. Satuan Barang */}
+                              <td className="px-3 py-2 text-center">
+                                <select
+                                  value={item.unit || 'Pcs'}
+                                  onChange={(e) => handleRowUnitChange(idx, e.target.value)}
+                                  className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-xs font-bold text-indigo-700 bg-white focus:ring-1 focus:ring-emerald-500 text-center"
+                                >
+                                  {unitOpts.length > 0 && (
+                                    <optgroup label="Satuan Terdaftar">
+                                      {unitOpts.map(opt => (
+                                        <option key={opt.unitName} value={opt.unitName}>
+                                          {opt.unitName} {opt.multiplier > 1 ? `(= ${opt.multiplier})` : ''}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  <optgroup label="Satuan Grosir">
+                                    {COMMON_SUPPLIER_UNITS.filter(u => !unitOpts.some(o => o.unitName.toLowerCase() === u.toLowerCase())).map(u => (
+                                      <option key={u} value={u}>{u}</option>
+                                    ))}
+                                  </optgroup>
+                                </select>
+                              </td>
+
+                              {/* 5. Konversi Fisik */}
+                              <td className="px-3 py-2 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <span className="text-[10px] text-stone-400 font-medium">1 {item.unit} =</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={item.conversionMultiplier || 1}
+                                    onChange={(e) => handleRowMultiplierChange(idx, parseInt(e.target.value) || 1)}
+                                    className="w-11 px-1 py-1 border border-stone-200 rounded-md text-center font-bold text-xs text-emerald-700 bg-white"
+                                  />
+                                  <span className="text-[10px] text-stone-600 font-semibold">{item.baseUnit || 'Pcs'}</span>
+                                </div>
+                                <div className="text-[10px] font-bold text-emerald-700 mt-0.5">
+                                  +{item.baseQuantity || (item.quantity * (item.conversionMultiplier || 1))} fisik
+                                </div>
+                              </td>
+
+                              {/* 6. Qty Beli */}
+                              <td className="px-3 py-2 text-center">
+                                <input
+                                  ref={(el) => { qtyInputRefs.current[idx] = el; }}
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => handleRowQtyChange(idx, parseInt(e.target.value) || 1)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      priceInputRefs.current[idx]?.focus();
+                                      priceInputRefs.current[idx]?.select();
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-center font-bold text-xs text-stone-900 bg-white focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </td>
+
+                              {/* 7. Harga Modal (Rp) -> On Enter: GESER KE BARIS BERIKUTNYA */}
+                              <td className="px-3 py-2 text-right">
+                                <input
+                                  ref={(el) => { priceInputRefs.current[idx] = el; }}
+                                  type="number"
+                                  min="0"
+                                  step="100"
+                                  value={item.costPrice}
+                                  onChange={(e) => handleRowPriceChange(idx, parseInt(e.target.value) || 0)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      advanceToNextRow(idx);
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-right font-bold text-xs text-emerald-700 bg-white focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </td>
+
+                              {/* 8. Subtotal */}
+                              <td className="px-3 py-2 text-right font-bold text-stone-900">
+                                {formatRupiah(item.subtotal)}
+                              </td>
+
+                              {/* 9. Aksi */}
+                              <td className="px-3 py-2 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => advanceToNextRow(idx)}
+                                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-md"
+                                    title="Selesai & Geser ke baris berikutnya (Enter)"
+                                  >
+                                    <CornerDownRight className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveRow(idx)}
+                                    className="p-1 text-rose-500 hover:bg-rose-50 rounded-md"
+                                    title="Hapus baris ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
-                      <tfoot className="bg-stone-50 font-bold border-t border-stone-200">
+                      <tfoot className="bg-stone-50 font-bold border-t border-stone-200 text-stone-900">
                         <tr>
-                          <td className="px-3 py-2.5" colSpan={2}>Total Belanja Barang</td>
-                          <td className="px-3 py-2.5 text-center text-stone-900">
-                            {formItems.reduce((sum, i) => sum + i.quantity, 0)}
+                          <td className="px-3 py-3" colSpan={3}>
+                            <div className="flex items-center gap-2">
+                              <span>Total Transaksi Pembelian</span>
+                              <span className="text-[11px] font-normal text-stone-500">
+                                ({formItems.filter(i => i.productId).length} macam produk)
+                              </span>
+                            </div>
                           </td>
-                          <td className="px-3 py-2.5 text-center text-stone-500 text-[11px]">
-                            {Array.from(new Set(formItems.map(i => i.unit))).join(', ')}
+                          <td className="px-3 py-3 text-center text-stone-500 text-[11px]">
+                            {Array.from(new Set(formItems.filter(i => i.productId).map(i => i.unit))).join(', ') || '-'}
                           </td>
-                          <td className="px-3 py-2.5 text-center text-emerald-700">
-                            +{formItems.reduce((sum, i) => sum + (i.baseQuantity || (i.quantity * (i.conversionMultiplier || 1))), 0)} fisik
+                          <td className="px-3 py-3 text-center text-emerald-700">
+                            +{formItems.filter(i => i.productId).reduce((sum, i) => sum + (i.baseQuantity || (i.quantity * (i.conversionMultiplier || 1))), 0)} fisik
                           </td>
-                          <td></td>
-                          <td className="px-3 py-2.5 text-right text-stone-900 text-sm">
-                            {formatRupiah(formItems.reduce((sum, i) => sum + i.subtotal, 0))}
+                          <td className="px-3 py-3 text-center text-stone-900 text-sm">
+                            {formItems.filter(i => i.productId).reduce((sum, i) => sum + i.quantity, 0)}
+                          </td>
+                          <td className="px-3 py-3 text-right text-stone-500 text-[11px]">
+                            Total Bayar:
+                          </td>
+                          <td className="px-3 py-3 text-right text-emerald-700 font-extrabold text-sm">
+                            {formatRupiah(formItems.filter(i => i.productId).reduce((sum, i) => sum + i.subtotal, 0))}
                           </td>
                           <td></td>
                         </tr>
                       </tfoot>
                     </table>
                   </div>
-                ) : (
-                  <div className="text-center py-4 bg-white/70 rounded-xl border border-dashed border-stone-300 text-stone-400 text-xs">
-                    Belum ada barang dipilih. Silakan pilih produk di atas, tentukan satuan barang dan harga, lalu klik "+ Tambah Barang".
+                </div>
+
+                {/* Button to add next row manually */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddNewRow}
+                    className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>+ Tambah Baris Berikutnya (Atau tekan Enter di kolom Harga)</span>
+                  </button>
+
+                  <div className="flex items-center gap-1 text-[11px] text-stone-500 bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Alur: Scan/Ketik Barcode ➔ Enter (Qty) ➔ Enter (Harga Modal) ➔ Enter (Geser Baris Baru)</span>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Automatic Stock Increment & HPP Update options */}
