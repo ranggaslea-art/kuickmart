@@ -918,6 +918,13 @@ export default function App() {
     setTrackedOrder(newOrder);
   };
 
+  const handleAddOrder = (newOrder: Order) => {
+    setOrders((prev) => [newOrder, ...prev]);
+    syncOrderToSupabase(newOrder).catch((err) => {
+      console.warn('Gagal sinkronisasi transaksi kasir ke Supabase:', err);
+    });
+  };
+
   const handleUpdateOrderStatus = (orderId: string, newStatus: OrderStatus) => {
     setOrders((prev) =>
       prev.map((ord) => {
@@ -1569,6 +1576,7 @@ export default function App() {
           onDeleteProduct={handleDeleteProduct}
           orders={orders}
           onUpdateOrderStatus={handleUpdateOrderStatus}
+          onAddOrder={handleAddOrder}
           stores={stores}
           currentStore={currentStore}
           onSelectStore={setCurrentStore}

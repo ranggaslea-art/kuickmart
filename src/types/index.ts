@@ -117,7 +117,10 @@ export type PaymentMethod =
   | 'bni_va'
   | 'permata_va'
   | 'cod'
-  | 'pay_at_store';
+  | 'pay_at_store'
+  | 'cash'
+  | 'debit'
+  | 'tempo';
 
 export interface CourierInfo {
   id: string;

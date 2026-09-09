@@ -16,7 +16,8 @@ import {
   Layers,
   Maximize,
   Minimize,
-  Activity
+  Activity,
+  ScanBarcode
 } from 'lucide-react';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -32,6 +33,7 @@ interface HeaderProps {
   cartItems: CartItem[];
   onOpenCart: () => void;
   onOpenAdminPanel: () => void;
+  onOpenPosCashier?: () => void;
   onOpenLiveTrafficModal?: () => void;
   onOpenSupabaseModal?: () => void;
   isSupabaseConnected?: boolean;
@@ -59,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCart,
   onOpenSupabaseModal,
   onOpenAdminPanel,
+  onOpenPosCashier,
   onOpenLiveTrafficModal,
   isSupabaseConnected,
   searchQuery,
@@ -325,6 +328,18 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
                 <span className="hidden xl:inline">Live Traffic</span>
+              </button>
+            )}
+
+            {/* Kasir POS Minimarket Button */}
+            {onOpenPosCashier && (
+              <button
+                onClick={onOpenPosCashier}
+                title="Buka Modul Penjualan Kasir Minimarket (POS Display)"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-emerald-500/50"
+              >
+                <ScanBarcode className="w-3.5 h-3.5 text-emerald-200" />
+                <span className="hidden md:inline">Kasir POS</span>
               </button>
             )}
 

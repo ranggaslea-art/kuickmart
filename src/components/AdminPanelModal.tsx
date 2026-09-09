@@ -62,7 +62,8 @@ import {
   BarChart3,
   ShoppingBag,
   Coins,
-  Gift
+  Gift,
+  ScanBarcode
 } from 'lucide-react';
 import { 
   Product, 
@@ -124,6 +125,7 @@ import { SupplierManager } from './SupplierManager';
 import { PurchaseManager } from './PurchaseManager';
 import { CustomerManager } from './CustomerManager';
 import { PointsLoyaltyManager } from './PointsLoyaltyManager';
+import { PosCashierManager } from './PosCashierManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
@@ -136,6 +138,7 @@ interface AdminPanelModalProps {
   onDeleteProduct?: (productId: string) => Promise<{ success: boolean; error?: string }>;
   orders: Order[];
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  onAddOrder?: (order: Order) => void;
   stores: Store[];
   currentStore: Store;
   onSelectStore: (store: Store) => void;
@@ -166,7 +169,7 @@ interface AdminPanelModalProps {
   onUpdateRewardItems?: (items: RewardItem[]) => void;
   pointsLedger?: PointsLedgerEntry[];
   onUpdatePointsLedger?: (ledger: PointsLedgerEntry[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier';
 }
 
 interface AdminUser {
@@ -193,6 +196,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onDeleteProduct,
   orders,
   onUpdateOrderStatus,
+  onAddOrder,
   stores,
   currentStore,
   onSelectStore,
@@ -538,7 +542,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   useEffect(() => {
@@ -2140,11 +2144,12 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         {/* Tab Navigation (Permission-Aware) */}
         <div className="flex border-b border-stone-200 px-4 sm:px-6 bg-white overflow-x-auto scrollbar-none">
           {[
+            { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
             { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
             { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-emerald-600" />, count: activePurchases.length },
             { id: 'suppliers', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
             { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4" />, count: orders.length },
-            { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Data Pelanggan', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
+            { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
             { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
             { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
             { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
@@ -2206,6 +2211,28 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         {/* Tab Body */}
         <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
           
+          {/* TAB: PENJUALAN KASIR (POS MINIMARKET) DENGAN DISPLAY TOTAL BELANJA BESAR */}
+          {activeTab === 'pos_cashier' && (!currentUserPermissions.orders?.canView ? (
+            renderAccessDenied('Penjualan Kasir (POS)')
+          ) : (
+            <div className="space-y-4">
+              <PosCashierManager
+                products={products}
+                stores={stores}
+                currentStore={currentStore}
+                customers={activeCustomers}
+                orders={orders}
+                onUpdateProducts={onUpdateProducts}
+                onUpdateCustomers={handleUpdateCustomers}
+                onAddOrder={(newOrder) => {
+                  if (onAddOrder) {
+                    onAddOrder(newOrder);
+                  }
+                }}
+              />
+            </div>
+          ))}
+
           {/* TAB 1: PRODUCTS MANAGEMENT */}
           {activeTab === 'products' && (!currentUserPermissions.products?.canView ? (
             renderAccessDenied('Katalog & Stok Produk')
