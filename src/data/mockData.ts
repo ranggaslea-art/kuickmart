@@ -4,8 +4,8 @@ import { DEFAULT_ROLE_PERMISSIONS } from '../utils/permissions';
 export const INITIAL_BRAND_CONFIG: BrandHeaderFooterConfig = {
   // 1. Header & Brand Identity
   brandLogoText: 'KM',
-  brandLogoImageUrl: '',
-  brandLogoBgGradient: 'from-blue-700 via-blue-600 to-amber-500',
+  brandLogoImageUrl: '/logo.png',
+  brandLogoBgGradient: 'from-red-600 via-red-500 to-black',
   brandNamePart1: 'KUICK',
   brandNamePart2: 'MART',
   brandBadgeText: 'EXPRESS',

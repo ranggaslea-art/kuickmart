@@ -102,8 +102,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Resolved brand identity
   const logoText = brandConfig?.brandLogoText || 'KM';
-  const logoImageUrl = brandConfig?.brandLogoImageUrl || '';
-  const logoGradient = brandConfig?.brandLogoBgGradient || 'from-blue-700 via-blue-600 to-amber-500';
+  const logoImageUrl = brandConfig?.brandLogoImageUrl || '/logo.png';
+  const logoGradient = brandConfig?.brandLogoBgGradient || 'from-red-600 via-red-500 to-black';
   const namePart1 = brandConfig?.brandNamePart1 || 'KUICK';
   const namePart2 = brandConfig?.brandNamePart2 || 'MART';
   const badgeText = brandConfig?.brandBadgeText || 'EXPRESS';

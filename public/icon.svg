@@ -1,34 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0284c7" />
-      <stop offset="100%" stop-color="#0369a1" />
-    </linearGradient>
-    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b" />
-      <stop offset="100%" stop-color="#ea580c" />
-    </linearGradient>
-    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
-    </filter>
+    <!-- Top Arc for 'KUICK MART' -->
+    <path id="topArc" d="M 78 256 A 178 178 0 0 1 434 256" fill="none" />
+    <!-- Bottom Arc for 'PANGANDARAN' (tops of letters face inward towards center) -->
+    <path id="bottomArc" d="M 66 256 A 190 190 0 0 0 446 256" fill="none" />
   </defs>
 
-  <!-- Background rounded squircle -->
-  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  <!-- Canvas Background -->
+  <rect width="512" height="512" fill="#ffffff" rx="40" />
 
-  <!-- Shopping Bag & Cart Symbol -->
-  <g filter="url(#dropShadow)" transform="translate(40, 25)">
-    <!-- Cart / Bag Body -->
-    <path d="M 120 180 L 312 180 L 296 350 C 296 365 284 378 268 378 L 164 378 C 148 378 136 365 136 350 Z" fill="#ffffff" />
-    <!-- Handle -->
-    <path d="M 172 180 C 172 130 260 130 260 180" fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" />
-    <!-- Lightning Flash on Bag -->
-    <path d="M 226 210 L 180 290 L 216 290 L 196 360 L 254 275 L 218 275 Z" fill="url(#accentGrad)" />
+  <!-- Circular Outer Red Ring with Black Border -->
+  <circle cx="256" cy="256" r="242" fill="#E51A24" stroke="#000000" stroke-width="6" />
+
+  <!-- Inner White Circle with Black Border -->
+  <circle cx="256" cy="256" r="166" fill="#ffffff" stroke="#000000" stroke-width="6" />
+
+  <!-- Top Curved Text: KUICK MART -->
+  <text fill="#ffffff" font-family="'Arial Black', 'Impact', 'DejaVu Sans', 'Liberation Sans', sans-serif" font-weight="900" font-size="43" letter-spacing="3.5">
+    <textPath href="#topArc" startOffset="50%" text-anchor="middle">KUICK MART</textPath>
+  </text>
+
+  <!-- Bottom Curved Text: PANGANDARAN -->
+  <text fill="#ffffff" font-family="'Arial Black', 'Impact', 'DejaVu Sans', 'Liberation Sans', sans-serif" font-weight="900" font-size="35" letter-spacing="3.5">
+    <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">PANGANDARAN</textPath>
+  </text>
+
+  <!-- Center Graphic: Speed lines and Stylized K -->
+  <g id="centerSymbol">
+    <!-- 5 Horizontal Red Speed Lines (left aligned at x=146) -->
+    <!-- Line 1 (Top) -->
+    <polygon points="146,174 233,174 231,183 146,183" fill="#E51A24" />
+    <!-- Line 2 -->
+    <polygon points="146,211 224,211 222,220 146,220" fill="#E51A24" />
+    <!-- Line 3 -->
+    <polygon points="146,248 215,248 213,257 146,257" fill="#E51A24" />
+    <!-- Line 4 -->
+    <polygon points="146,285 206,285 204,294 146,294" fill="#E51A24" />
+    <!-- Line 5 (Bottom) -->
+    <polygon points="146,322 197,322 195,331 146,331" fill="#E51A24" />
+
+    <!-- Red Slanted Vertical Stem of K -->
+    <polygon points="230,170 266,170 228,335 192,335" fill="#E51A24" stroke="#000000" stroke-width="2.5" stroke-linejoin="miter" />
+
+    <!-- Black Diagonal Chevron Arms of K -->
+    <!-- Upper Arm -->
+    <polygon points="242,260 326,170 365,170 274,272" fill="#000000" stroke="#000000" stroke-width="1.5" stroke-linejoin="miter" />
+    <!-- Lower Arm -->
+    <polygon points="264,260 286,288 328,335 289,335 242,275" fill="#000000" stroke="#000000" stroke-width="1.5" stroke-linejoin="miter" />
   </g>
-
-  <!-- Speed Motion Lines -->
-  <circle cx="105" cy="420" r="16" fill="#f8fafc" opacity="0.9" />
-  <circle cx="330" cy="420" r="16" fill="#f8fafc" opacity="0.9" />
-  <circle cx="390" cy="420" r="8" fill="#f59e0b" />
-  <circle cx="65" cy="420" r="8" fill="#f59e0b" />
 </svg>

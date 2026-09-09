@@ -1281,9 +1281,9 @@ export default function App() {
           {/* Brand Info Col */}
           <div>
             <div className="flex items-center gap-2 mb-2 font-black text-blue-900 text-base">
-              {brandConfig.brandLogoImageUrl ? (
+              {(brandConfig.brandLogoImageUrl || '/logo.png') ? (
                 <img
-                  src={brandConfig.brandLogoImageUrl}
+                  src={brandConfig.brandLogoImageUrl || '/logo.png'}
                   alt={brandConfig.footerBrandName || (brandConfig.brandNamePart1 + ' ' + brandConfig.brandNamePart2)}
                   className="w-7 h-7 rounded-lg object-cover border border-stone-200 shadow-2xs"
                 />
