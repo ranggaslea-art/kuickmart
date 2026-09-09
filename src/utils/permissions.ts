@@ -106,6 +106,38 @@ export const SYSTEM_MODULES: SystemModuleDefinition[] = [
     iconName: 'BarChart3',
     adminNote: 'Akses laporan keuangan, laba kotor, HPP modal, dan performa penjualan.',
   },
+  {
+    key: 'purchases',
+    name: 'Pembelian & Stok Masuk',
+    category: 'Katalog & Penjualan',
+    description: 'Pencatatan pembelian barang dari supplier (Purchase Order / Faktur Beli) yang otomatis menambah stok barang fisik di katalog.',
+    iconName: 'ShoppingBag',
+    adminNote: 'Dikelola oleh Admin, Supervisor, dan Gudang untuk penerimaan barang masuk.',
+  },
+  {
+    key: 'suppliers',
+    name: 'Supplier / Pemasok Barang',
+    category: 'Katalog & Penjualan',
+    description: 'Master data supplier, kontak PIC, nomor telepon, alamat gudang supplier, rekening pembayaran, dan termin tempo.',
+    iconName: 'Truck',
+    adminNote: 'Dikelola oleh Admin dan Supervisor untuk data vendor pemasok toko.',
+  },
+  {
+    key: 'customers',
+    name: 'Pelanggan & Member',
+    category: 'Katalog & Penjualan',
+    description: 'Manajemen data pelanggan, status keanggotaan/member card, tier level, akumulasi belanja, dan riwayat pesanan.',
+    iconName: 'Users',
+    adminNote: 'Dikelola oleh Admin, Supervisor, dan Kasir untuk melayani loyalitas pelanggan.',
+  },
+  {
+    key: 'points_rewards',
+    name: 'Poin Belanja & Hadiah',
+    category: 'Katalog & Penjualan',
+    description: 'Pengaturan rasio perolehan poin belanja, nilai tukar diskon, mutasi poin, dan katalog hadiah penukaran.',
+    iconName: 'Sparkles',
+    adminNote: 'Dikelola oleh Admin dan Supervisor untuk program loyalitas toko.',
+  },
 ];
 
 // Hak akses standar bawaan per peran (Default Role Permissions)
@@ -123,6 +155,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     bulk_import: { canView: true, canEdit: true },
     push_notifications: { canView: true, canEdit: true },
     reports: { canView: true, canEdit: true },
+    purchases: { canView: true, canEdit: true },
+    suppliers: { canView: true, canEdit: true },
+    customers: { canView: true, canEdit: true },
+    points_rewards: { canView: true, canEdit: true },
   },
   supervisor: {
     products: { canView: true, canEdit: true },
@@ -137,11 +173,17 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     bulk_import: { canView: true, canEdit: true }, // Bisa import produk
     push_notifications: { canView: true, canEdit: true }, // Supervisor bisa broadcast promo
     reports: { canView: true, canEdit: true }, // Supervisor bisa pantau laporan
+    purchases: { canView: true, canEdit: true }, // Supervisor bisa proses pembelian
+    suppliers: { canView: true, canEdit: true }, // Supervisor bisa kelola supplier
+    customers: { canView: true, canEdit: true }, // Supervisor bisa kelola member
+    points_rewards: { canView: true, canEdit: true }, // Supervisor bisa atur poin
   },
   kasir: {
-    // Sesuai contoh akses: Kasir hanya dapat mengakses Produk & Promo toko
+    // Kasir dapat melihat katalog, promo, pelanggan, dan poin belanja
     products: { canView: true, canEdit: false }, // Kasir dapat melihat katalog & stok produk
     promos: { canView: true, canEdit: false }, // Kasir dapat melihat promo aktif
+    customers: { canView: true, canEdit: true }, // Kasir dapat mendaftar/mencari member
+    points_rewards: { canView: true, canEdit: false }, // Kasir dapat melihat info poin
     orders: { canView: false, canEdit: false }, // Terkunci
     stores: { canView: false, canEdit: false }, // Terkunci
     receipts: { canView: false, canEdit: false }, // Terkunci
@@ -152,10 +194,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     bulk_import: { canView: false, canEdit: false }, // Terkunci
     push_notifications: { canView: false, canEdit: false }, // Terkunci
     reports: { canView: false, canEdit: false }, // Terkunci
+    purchases: { canView: false, canEdit: false }, // Terkunci
+    suppliers: { canView: false, canEdit: false }, // Terkunci
   },
   gudang: {
     products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
     orders: { canView: true, canEdit: true }, // Gudang memproses status picking / pengemasan barang
+    purchases: { canView: true, canEdit: true }, // Gudang menerima pembelian barang & input stok masuk
+    suppliers: { canView: true, canEdit: false }, // Gudang melihat data pemasok
     stores: { canView: false, canEdit: false },
     receipts: { canView: false, canEdit: false },
     promos: { canView: false, canEdit: false },
@@ -166,6 +212,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     bulk_import: { canView: true, canEdit: true },
     push_notifications: { canView: false, canEdit: false },
     reports: { canView: false, canEdit: false },
+    customers: { canView: false, canEdit: false },
+    points_rewards: { canView: false, canEdit: false },
   },
 };
 
@@ -206,6 +254,10 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       products: { canView: true, canEdit: false },
       promos: { canView: true, canEdit: false },
       orders: { canView: false, canEdit: false },
+      purchases: { canView: false, canEdit: false },
+      suppliers: { canView: false, canEdit: false },
+      customers: { canView: false, canEdit: false },
+      points_rewards: { canView: false, canEdit: false },
       stores: { canView: false, canEdit: false },
       receipts: { canView: false, canEdit: false },
       brand_info: { canView: false, canEdit: false },
@@ -227,6 +279,10 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
     getPermissions: (): UserPermissions => ({
       products: { canView: true, canEdit: false },
       orders: { canView: true, canEdit: true },
+      purchases: { canView: false, canEdit: false },
+      suppliers: { canView: false, canEdit: false },
+      customers: { canView: true, canEdit: false },
+      points_rewards: { canView: true, canEdit: false },
       promos: { canView: true, canEdit: false },
       vouchers: { canView: true, canEdit: false },
       stores: { canView: false, canEdit: false },

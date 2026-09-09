@@ -59,10 +59,42 @@ import {
   ShieldCheck,
   RotateCcw,
   BellRing,
-  BarChart3
+  BarChart3,
+  ShoppingBag,
+  Coins,
+  Gift
 } from 'lucide-react';
-import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig, SystemModuleKey, UserPermissions, ModulePermission } from '../types';
+import { 
+  Product, 
+  Order, 
+  Store, 
+  Voucher, 
+  OrderStatus, 
+  StaffUser, 
+  ProductUnitConversion, 
+  ReceiptInfo, 
+  StorePromoInfo, 
+  CourierInfo, 
+  BrandHeaderFooterConfig, 
+  SystemModuleKey, 
+  UserPermissions, 
+  ModulePermission,
+  Supplier,
+  PurchaseOrder,
+  MemberProfile,
+  PointsConfig,
+  RewardItem,
+  PointsLedgerEntry
+} from '../types';
 import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS, INITIAL_BRAND_CONFIG } from '../data/mockData';
+import { 
+  INITIAL_SUPPLIERS, 
+  INITIAL_CUSTOMERS, 
+  INITIAL_POINTS_CONFIG, 
+  INITIAL_REWARD_ITEMS, 
+  INITIAL_POINTS_LEDGER, 
+  INITIAL_PURCHASES 
+} from '../data/mockSupplyAndLoyalty';
 import { formatRupiah } from '../utils/formatters';
 import { computeConversionChains, formatStockBreakdown, getProductUnitOptions } from '../utils/unitConversion';
 import { 
@@ -88,6 +120,10 @@ import { CourierManager } from './CourierManager';
 import { BrandInfoManager } from './BrandInfoManager';
 import { PushNotificationManager } from './PushNotificationManager';
 import { ReportsManager } from './ReportsManager';
+import { SupplierManager } from './SupplierManager';
+import { PurchaseManager } from './PurchaseManager';
+import { CustomerManager } from './CustomerManager';
+import { PointsLoyaltyManager } from './PointsLoyaltyManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
@@ -118,7 +154,19 @@ interface AdminPanelModalProps {
   onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
   staffUsers?: StaffUser[];
   onUpdateStaffUsers?: (users: StaffUser[]) => void;
-  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports';
+  suppliers?: Supplier[];
+  onUpdateSuppliers?: (suppliers: Supplier[]) => void;
+  purchases?: PurchaseOrder[];
+  onUpdatePurchases?: (purchases: PurchaseOrder[]) => void;
+  customers?: MemberProfile[];
+  onUpdateCustomers?: (customers: MemberProfile[]) => void;
+  pointsConfig?: PointsConfig;
+  onUpdatePointsConfig?: (config: PointsConfig) => void;
+  rewardItems?: RewardItem[];
+  onUpdateRewardItems?: (items: RewardItem[]) => void;
+  pointsLedger?: PointsLedgerEntry[];
+  onUpdatePointsLedger?: (ledger: PointsLedgerEntry[]) => void;
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports';
 }
 
 interface AdminUser {
@@ -163,6 +211,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateBrandConfig,
   staffUsers: propStaffUsers,
   onUpdateStaffUsers,
+  suppliers: propSuppliers,
+  onUpdateSuppliers,
+  purchases: propPurchases,
+  onUpdatePurchases,
+  customers: propCustomers,
+  onUpdateCustomers,
+  pointsConfig: propPointsConfig,
+  onUpdatePointsConfig,
+  rewardItems: propRewardItems,
+  onUpdateRewardItems,
+  pointsLedger: propPointsLedger,
+  onUpdatePointsLedger,
   initialTab,
 }) => {
   // Helper to ensure all staff users have permissions and default accounts exist
@@ -321,6 +381,126 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [onUpdateBrandConfig]);
 
+  // Suppliers State
+  const [internalSuppliers, setInternalSuppliers] = useState<Supplier[]>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_suppliers');
+      return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
+    } catch {
+      return INITIAL_SUPPLIERS;
+    }
+  });
+  const activeSuppliers = propSuppliers || internalSuppliers;
+  const handleUpdateSuppliers = (newSuppliers: Supplier[]) => {
+    if (onUpdateSuppliers) onUpdateSuppliers(newSuppliers);
+    setInternalSuppliers(newSuppliers);
+    try {
+      localStorage.setItem('kuickmart_suppliers', JSON.stringify(newSuppliers));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Purchases State
+  const [internalPurchases, setInternalPurchases] = useState<PurchaseOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_purchases');
+      return saved ? JSON.parse(saved) : INITIAL_PURCHASES;
+    } catch {
+      return INITIAL_PURCHASES;
+    }
+  });
+  const activePurchases = propPurchases || internalPurchases;
+  const handleUpdatePurchases = (newPurchases: PurchaseOrder[]) => {
+    if (onUpdatePurchases) onUpdatePurchases(newPurchases);
+    setInternalPurchases(newPurchases);
+    try {
+      localStorage.setItem('kuickmart_purchases', JSON.stringify(newPurchases));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Customers State
+  const [internalCustomers, setInternalCustomers] = useState<MemberProfile[]>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_customers');
+      return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
+    } catch {
+      return INITIAL_CUSTOMERS;
+    }
+  });
+  const activeCustomers = propCustomers || internalCustomers;
+  const handleUpdateCustomers = (newCustomers: MemberProfile[]) => {
+    if (onUpdateCustomers) onUpdateCustomers(newCustomers);
+    setInternalCustomers(newCustomers);
+    try {
+      localStorage.setItem('kuickmart_customers', JSON.stringify(newCustomers));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Points Config State
+  const [internalPointsConfig, setInternalPointsConfig] = useState<PointsConfig>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_points_config');
+      return saved ? JSON.parse(saved) : INITIAL_POINTS_CONFIG;
+    } catch {
+      return INITIAL_POINTS_CONFIG;
+    }
+  });
+  const activePointsConfig = propPointsConfig || internalPointsConfig;
+  const handleUpdatePointsConfig = (newConfig: PointsConfig) => {
+    if (onUpdatePointsConfig) onUpdatePointsConfig(newConfig);
+    setInternalPointsConfig(newConfig);
+    try {
+      localStorage.setItem('kuickmart_points_config', JSON.stringify(newConfig));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Reward Items State
+  const [internalRewardItems, setInternalRewardItems] = useState<RewardItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_reward_items');
+      return saved ? JSON.parse(saved) : INITIAL_REWARD_ITEMS;
+    } catch {
+      return INITIAL_REWARD_ITEMS;
+    }
+  });
+  const activeRewardItems = propRewardItems || internalRewardItems;
+  const handleUpdateRewardItems = (newItems: RewardItem[]) => {
+    if (onUpdateRewardItems) onUpdateRewardItems(newItems);
+    setInternalRewardItems(newItems);
+    try {
+      localStorage.setItem('kuickmart_reward_items', JSON.stringify(newItems));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Points Ledger State
+  const [internalPointsLedger, setInternalPointsLedger] = useState<PointsLedgerEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('kuickmart_points_ledger');
+      return saved ? JSON.parse(saved) : INITIAL_POINTS_LEDGER;
+    } catch {
+      return INITIAL_POINTS_LEDGER;
+    }
+  });
+  const activePointsLedger = propPointsLedger || internalPointsLedger;
+  const handleUpdatePointsLedger = (newLedger: PointsLedgerEntry[]) => {
+    if (onUpdatePointsLedger) onUpdatePointsLedger(newLedger);
+    setInternalPointsLedger(newLedger);
+    try {
+      localStorage.setItem('kuickmart_points_ledger', JSON.stringify(newLedger));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Login Authentication State - Selalu wajib login setiap kali masuk modul admin
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
@@ -358,7 +538,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   useEffect(() => {
@@ -1895,44 +2075,64 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         </div>
 
         {/* Quick KPI Stats Summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 p-4 bg-stone-50 border-b border-stone-200 text-xs">
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-3 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 p-4 bg-stone-50 border-b border-stone-200 text-xs">
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
               <Boxes className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-[10px] font-semibold text-stone-400 uppercase">Total Produk</div>
-              <div className="text-sm font-black text-stone-900">{totalProducts} Item</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Total Produk</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">{totalProducts} Item</div>
             </div>
           </div>
 
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-3 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
               <DollarSign className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-[10px] font-semibold text-stone-400 uppercase">Omzet Toko</div>
-              <div className="text-sm font-black text-emerald-700">{formatRupiah(totalRevenue)}</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Omzet Kasir</div>
+              <div className="text-xs sm:text-sm font-black text-emerald-700 truncate">{formatRupiah(totalRevenue)}</div>
             </div>
           </div>
 
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-3 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
               <Receipt className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-[10px] font-semibold text-stone-400 uppercase">Total Pesanan</div>
-              <div className="text-sm font-black text-stone-900">{orders.length} Transaksi</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Pesanan Penjualan</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">{orders.length} Order</div>
             </div>
           </div>
 
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-3 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-              <Building2 className="w-4 h-4" />
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold shrink-0">
+              <ShoppingBag className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-[10px] font-semibold text-stone-400 uppercase">Cabang Toko</div>
-              <div className="text-sm font-black text-purple-700">{stores.length} Outlet</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Pembelian Masuk</div>
+              <div className="text-xs sm:text-sm font-black text-teal-700 truncate">{activePurchases.length} PO Masuk</div>
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0">
+              <Truck className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Mitra Suplier</div>
+              <div className="text-xs sm:text-sm font-black text-indigo-700 truncate">{activeSuppliers.length} Suplier</div>
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold shrink-0">
+              <Users className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Member Aktif</div>
+              <div className="text-xs sm:text-sm font-black text-sky-700 truncate">{activeCustomers.length} Member</div>
             </div>
           </div>
         </div>
@@ -1941,7 +2141,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         <div className="flex border-b border-stone-200 px-4 sm:px-6 bg-white overflow-x-auto scrollbar-none">
           {[
             { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
-            { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Masuk', icon: <Receipt className="w-4 h-4" />, count: orders.length },
+            { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-emerald-600" />, count: activePurchases.length },
+            { id: 'suppliers', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
+            { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4" />, count: orders.length },
+            { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Data Pelanggan', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
+            { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
             { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
             { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
             { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
@@ -4353,6 +4557,79 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 stores={stores}
                 onUpdateProducts={onUpdateProducts}
                 canEdit={currentUserPermissions.reports?.canEdit ?? true}
+              />
+            </div>
+          ))}
+
+          {/* TAB: PEMBELIAN BARANG & STOK MASUK (PURCHASE ORDERS) */}
+          {activeTab === 'purchases' && (!currentUserPermissions.purchases?.canView ? (
+            renderAccessDenied('Pembelian Barang & Stok Masuk')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.purchases?.canEdit && renderReadOnlyBanner('Pembelian Barang & Stok Masuk')}
+              <PurchaseManager
+                purchases={activePurchases}
+                suppliers={activeSuppliers}
+                products={products}
+                stores={stores}
+                onUpdatePurchases={handleUpdatePurchases}
+                onUpdateProducts={onUpdateProducts}
+                canEdit={currentUserPermissions.purchases?.canEdit ?? true}
+              />
+            </div>
+          ))}
+
+          {/* TAB: SUPLIER BARANG (MASTER DATA & HUTANG DAGANG) */}
+          {activeTab === 'suppliers' && (!currentUserPermissions.suppliers?.canView ? (
+            renderAccessDenied('Master Supplier & Pemasok')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.suppliers?.canEdit && renderReadOnlyBanner('Master Supplier & Pemasok')}
+              <SupplierManager
+                suppliers={activeSuppliers}
+                onUpdateSuppliers={handleUpdateSuppliers}
+                onSelectSupplierForPurchase={(supplierId) => {
+                  setActiveTab('purchases');
+                }}
+                canEdit={currentUserPermissions.suppliers?.canEdit ?? true}
+              />
+            </div>
+          ))}
+
+          {/* TAB: DATA PELANGGAN & MEMBER LOYALITAS */}
+          {activeTab === 'customers' && (!currentUserPermissions.customers?.canView ? (
+            renderAccessDenied('Data Pelanggan & Member')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.customers?.canEdit && renderReadOnlyBanner('Data Pelanggan & Member')}
+              <CustomerManager
+                customers={activeCustomers}
+                orders={orders}
+                onUpdateCustomers={handleUpdateCustomers}
+                onSelectCustomerForPointsAdjustment={() => {
+                  setActiveTab('points_rewards');
+                }}
+                canEdit={currentUserPermissions.customers?.canEdit ?? true}
+              />
+            </div>
+          ))}
+
+          {/* TAB: POIN BELANJA, REWARDS & LOG TRANSAKSI */}
+          {activeTab === 'points_rewards' && (!currentUserPermissions.points_rewards?.canView ? (
+            renderAccessDenied('Poin Belanja & Loyalitas')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.points_rewards?.canEdit && renderReadOnlyBanner('Poin Belanja & Loyalitas')}
+              <PointsLoyaltyManager
+                pointsConfig={activePointsConfig}
+                rewardItems={activeRewardItems}
+                pointsLedger={activePointsLedger}
+                customers={activeCustomers}
+                onUpdatePointsConfig={handleUpdatePointsConfig}
+                onUpdateRewardItems={handleUpdateRewardItems}
+                onUpdatePointsLedger={handleUpdatePointsLedger}
+                onUpdateCustomers={handleUpdateCustomers}
+                canEdit={currentUserPermissions.points_rewards?.canEdit ?? true}
               />
             </div>
           ))}

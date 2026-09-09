@@ -212,6 +212,123 @@ export interface MemberProfile {
   stamps: number;
   tier: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
   joinedDate: string;
+  address?: string;
+  city?: string;
+  totalSpent?: number;
+  ordersCount?: number;
+  lastOrderDate?: string;
+  notes?: string;
+  status?: 'active' | 'inactive';
+}
+
+export type CustomerProfile = MemberProfile;
+
+// ==========================================
+// SUPPLIER / PEMASOK BARANG
+// ==========================================
+export interface Supplier {
+  id: string;
+  code: string; // e.g. 'SUP-001'
+  name: string; // e.g. 'PT Indofood Sukses Makmur'
+  contactPerson: string;
+  phone: string;
+  email?: string;
+  address: string;
+  city?: string;
+  category: string; // e.g. 'Sembako & Mie', 'Minuman', 'Toiletries'
+  bankAccount?: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+  };
+  paymentTerms: 'cash' | 'tempo_7' | 'tempo_14' | 'tempo_30' | 'tempo_60';
+  isActive: boolean;
+  notes?: string;
+  totalPurchases?: number;
+  lastPurchaseDate?: string;
+}
+
+// ==========================================
+// PURCHASE ORDER / PEMBELIAN BARANG (STOK MASUK)
+// ==========================================
+export interface PurchaseItem {
+  id: string;
+  productId: string;
+  productName: string;
+  barcode?: string;
+  unit: string;
+  quantity: number;
+  costPrice: number; // Harga beli modal dari supplier
+  subtotal: number; // quantity * costPrice
+  sellingPrice?: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  purchaseNumber: string; // e.g. 'FB-202609-001'
+  invoiceNumber?: string; // No Faktur Supplier
+  supplierId: string;
+  supplierName: string;
+  storeId: string;
+  storeName: string;
+  orderDate: string;
+  receivedDate?: string;
+  items: PurchaseItem[];
+  totalQuantity: number;
+  subtotal: number;
+  taxAmount?: number;
+  discountAmount?: number;
+  totalAmount: number;
+  status: 'draft' | 'ordered' | 'received' | 'cancelled';
+  paymentStatus: 'paid' | 'unpaid' | 'partial';
+  paymentMethod: 'cash' | 'transfer' | 'tempo';
+  dueDate?: string;
+  notes?: string;
+  stockUpdated: boolean; // Menandakan apakah stok sudah masuk ke katalog
+  receivedBy?: string;
+  createdAt: string;
+}
+
+// ==========================================
+// POIN BELANJA & REWARDS (LOYALTY)
+// ==========================================
+export interface PointsConfig {
+  spendPerPoint: number; // Belanja Rp X dapat 1 poin (e.g. 1000)
+  pointRedemptionValue: number; // 1 poin = Rp X potongan (e.g. 1)
+  minRedemptionPoints: number; // Minimal poin untuk ditukar (e.g. 100)
+  newMemberBonusPoints: number; // Bonus saat member baru mendaftar (e.g. 500)
+  tierMultipliers: {
+    Bronze: number;
+    Silver: number;
+    Gold: number;
+    Platinum: number;
+  };
+  enablePointRedemption: boolean;
+}
+
+export interface RewardItem {
+  id: string;
+  name: string;
+  category: 'voucher' | 'product' | 'merchandise';
+  pointsRequired: number;
+  stock: number;
+  image?: string;
+  description: string;
+  voucherValue?: number;
+  isActive: boolean;
+}
+
+export interface PointsLedgerEntry {
+  id: string;
+  customerId: string;
+  customerName: string;
+  memberNumber: string;
+  date: string;
+  type: 'earned' | 'redeemed' | 'bonus' | 'adjustment' | 'expired';
+  points: number; // Positif untuk tambah, negatif untuk pengurangan
+  balanceAfter: number;
+  description: string;
+  referenceNo?: string;
 }
 
 export interface SupabaseConfig {
@@ -235,7 +352,11 @@ export type SystemModuleKey =
   | 'users'
   | 'bulk_import'
   | 'push_notifications'
-  | 'reports';
+  | 'reports'
+  | 'purchases'
+  | 'suppliers'
+  | 'customers'
+  | 'points_rewards';
 
 export interface PushSubscriberInfo {
   id: string;
