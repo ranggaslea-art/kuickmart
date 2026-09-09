@@ -7,6 +7,7 @@ import {
   Store 
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
+import { getProductUnitOptions } from '../utils/unitConversion';
 import { 
   ShoppingBag, 
   Plus, 
@@ -27,8 +28,31 @@ import {
   TrendingUp,
   CreditCard,
   Layers,
-  X
+  X,
+  Scale,
+  Boxes
 } from 'lucide-react';
+
+const COMMON_SUPPLIER_UNITS = [
+  'Dus',
+  'Karton',
+  'Pak',
+  'Bal',
+  'Sak',
+  'Karung',
+  'Pcs',
+  'Pouch',
+  'Kg',
+  'Liter',
+  'Lusin',
+  'Kodi',
+  'Renceng',
+  'Botol',
+  'Kaleng',
+  'Boks',
+  'Roll',
+  'Strip',
+];
 
 interface PurchaseManagerProps {
   purchases: PurchaseOrder[];
@@ -79,8 +103,22 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   // Items in current PO form
   const [formItems, setFormItems] = useState<PurchaseItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [itemUnit, setItemUnit] = useState<string>('Pcs');
+  const [itemConversionMultiplier, setItemConversionMultiplier] = useState<number>(1);
+  const [isCustomUnit, setIsCustomUnit] = useState<boolean>(false);
   const [itemQuantity, setItemQuantity] = useState<number>(10);
   const [itemCostPrice, setItemCostPrice] = useState<number>(0);
+
+  // Currently selected product in the form
+  const currentProduct = useMemo(() => {
+    return products.find(p => p.id === selectedProductId) || products[0];
+  }, [products, selectedProductId]);
+
+  // Unit options registered on the current product (Base unit + conversion tiers)
+  const currentUnitOptions = useMemo(() => {
+    if (!currentProduct) return [];
+    return getProductUnitOptions(currentProduct);
+  }, [currentProduct]);
 
   // Summary Metrics
   const metrics = useMemo(() => {
@@ -103,7 +141,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         p.purchaseNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.invoiceNumber && p.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
         p.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.items.some(it => it.productName.toLowerCase().includes(searchQuery.toLowerCase()));
+        p.items.some(it => it.productName.toLowerCase().includes(searchQuery.toLowerCase()) || it.unit.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchSupplier = selectedSupplierFilter === 'all' || p.supplierId === selectedSupplierFilter;
       const matchStatus = selectedStatusFilter === 'all' || p.status === selectedStatusFilter;
@@ -135,9 +173,14 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     
     // Select first product
     if (products.length > 0) {
-      setSelectedProductId(products[0].id);
+      const firstProd = products[0];
+      setSelectedProductId(firstProd.id);
+      const baseUnit = firstProd.unit || 'Pcs';
+      setItemUnit(baseUnit);
+      setItemConversionMultiplier(1);
+      setIsCustomUnit(false);
       setItemQuantity(10);
-      setItemCostPrice(products[0].costPrice || Math.round(products[0].price * 0.75));
+      setItemCostPrice(firstProd.costPrice || Math.round(firstProd.price * 0.75));
     }
 
     setIsCreateModalOpen(true);
@@ -148,7 +191,31 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     setSelectedProductId(prodId);
     const prod = products.find(p => p.id === prodId);
     if (prod) {
+      const baseUnit = prod.unit || 'Pcs';
+      setItemUnit(baseUnit);
+      setItemConversionMultiplier(1);
+      setIsCustomUnit(false);
       setItemCostPrice(prod.costPrice || Math.round(prod.price * 0.75));
+    }
+  };
+
+  // When unit changes in form, automatically set conversion multiplier
+  const handleUnitChange = (newUnit: string) => {
+    setItemUnit(newUnit);
+    const matchedOpt = currentUnitOptions.find(o => o.unitName.toLowerCase() === newUnit.toLowerCase());
+    if (matchedOpt) {
+      setItemConversionMultiplier(matchedOpt.multiplier || 1);
+    } else {
+      const lower = newUnit.toLowerCase();
+      if (lower === 'lusin') {
+        setItemConversionMultiplier(12);
+      } else if (lower === 'kodi') {
+        setItemConversionMultiplier(20);
+      } else if (lower === 'gross') {
+        setItemConversionMultiplier(144);
+      } else {
+        setItemConversionMultiplier(1);
+      }
     }
   };
 
@@ -165,13 +232,19 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       return;
     }
 
-    // Check if already in list
-    const existingIndex = formItems.findIndex(i => i.productId === prod.id);
+    const cleanUnit = itemUnit.trim() || prod.unit || 'Pcs';
+    const baseUnit = prod.unit || 'Pcs';
+    const multiplier = itemConversionMultiplier > 0 ? itemConversionMultiplier : 1;
+    const baseQty = itemQuantity * multiplier;
+
+    // Check if already in list with SAME unit
+    const existingIndex = formItems.findIndex(i => i.productId === prod.id && i.unit.toLowerCase() === cleanUnit.toLowerCase());
     if (existingIndex >= 0) {
       const updated = [...formItems];
       updated[existingIndex].quantity += itemQuantity;
       updated[existingIndex].costPrice = itemCostPrice;
       updated[existingIndex].subtotal = updated[existingIndex].quantity * itemCostPrice;
+      updated[existingIndex].baseQuantity = (updated[existingIndex].baseQuantity || 0) + baseQty;
       setFormItems(updated);
     } else {
       const newItem: PurchaseItem = {
@@ -179,11 +252,14 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         productId: prod.id,
         productName: prod.name,
         barcode: prod.barcode,
-        unit: prod.unit || 'Pcs',
+        unit: cleanUnit,
         quantity: itemQuantity,
         costPrice: itemCostPrice,
         subtotal: itemQuantity * itemCostPrice,
         sellingPrice: prod.price,
+        conversionMultiplier: multiplier,
+        baseUnit: baseUnit,
+        baseQuantity: baseQty,
       };
       setFormItems([...formItems, newItem]);
     }
@@ -239,15 +315,23 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       createdAt: new Date().toISOString(),
     };
 
-    // CRITICAL REQUIREMENT: "stok barang bertambah"
+    // CRITICAL REQUIREMENT: "stok barang bertambah" with correct unit conversion
     // If immediately received, automatically increase physical stock and update HPP cost price in products!
     if (immediatelyReceiveStock) {
       const updatedProducts = products.map(prod => {
-        const matchingItem = formItems.find(it => it.productId === prod.id);
-        if (matchingItem) {
-          const newStock = (prod.stock || 0) + matchingItem.quantity;
-          const newCostPrice = autoUpdateCostPrice && matchingItem.costPrice > 0 
-            ? matchingItem.costPrice 
+        const matchingItems = formItems.filter(it => it.productId === prod.id);
+        if (matchingItems.length > 0) {
+          const addedStock = matchingItems.reduce((sum, it) => {
+            const mult = it.conversionMultiplier || 1;
+            return sum + (it.baseQuantity !== undefined ? it.baseQuantity : (it.quantity * mult));
+          }, 0);
+          const newStock = (prod.stock || 0) + addedStock;
+          
+          // Cost price per base unit
+          const lastItem = matchingItems[matchingItems.length - 1];
+          const mult = lastItem.conversionMultiplier || 1;
+          const newCostPrice = autoUpdateCostPrice && lastItem.costPrice > 0 
+            ? Math.round(lastItem.costPrice / mult)
             : (prod.costPrice || Math.round(prod.price * 0.75));
           
           return {
@@ -274,18 +358,26 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       return;
     }
 
-    if (!confirm(`Konfirmasi penerimaan barang untuk faktur ${po.purchaseNumber}? Stok barang di katalog akan bertambah sebanyak ${po.totalQuantity} unit.`)) {
+    if (!confirm(`Konfirmasi penerimaan barang untuk faktur ${po.purchaseNumber}? Stok barang di katalog akan bertambah sesuai kuantitas faktur.`)) {
       return;
     }
 
-    // Increase product stock
+    // Increase product stock respecting unit conversion
     const updatedProducts = products.map(prod => {
-      const matchingItem = po.items.find(it => it.productId === prod.id);
-      if (matchingItem) {
+      const matchingItems = po.items.filter(it => it.productId === prod.id);
+      if (matchingItems.length > 0) {
+        const addedStock = matchingItems.reduce((sum, it) => {
+          const mult = it.conversionMultiplier || 1;
+          return sum + (it.baseQuantity !== undefined ? it.baseQuantity : (it.quantity * mult));
+        }, 0);
+        const lastItem = matchingItems[matchingItems.length - 1];
+        const mult = lastItem.conversionMultiplier || 1;
+        const newCostPrice = lastItem.costPrice > 0 ? Math.round(lastItem.costPrice / mult) : prod.costPrice;
+
         return {
           ...prod,
-          stock: (prod.stock || 0) + matchingItem.quantity,
-          costPrice: matchingItem.costPrice > 0 ? matchingItem.costPrice : prod.costPrice,
+          stock: (prod.stock || 0) + addedStock,
+          costPrice: newCostPrice,
         };
       }
       return prod;
@@ -330,7 +422,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = ['No PO', 'No Faktur Supplier', 'Supplier', 'Cabang Toko', 'Tgl Pesan', 'Tgl Diterima', 'Total Qty', 'Subtotal (Rp)', 'Total (Rp)', 'Status Barang', 'Status Bayar', 'Metode Bayar', 'Stok Masuk'];
+    const headers = ['No PO', 'No Faktur Supplier', 'Supplier', 'Cabang Toko', 'Tgl Pesan', 'Tgl Diterima', 'Daftar Barang & Satuan', 'Satuan Barang', 'Total Qty', 'Subtotal (Rp)', 'Total (Rp)', 'Status Barang', 'Status Bayar', 'Metode Bayar', 'Stok Masuk'];
     const rows = filteredPurchases.map(p => [
       `"${p.purchaseNumber}"`,
       `"${p.invoiceNumber || '-'}"`,
@@ -338,6 +430,8 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       `"${p.storeName}"`,
       p.orderDate,
       p.receivedDate || '-',
+      `"${p.items.map(it => `${it.productName} (${it.quantity} ${it.unit})`).join('; ')}"`,
+      `"${Array.from(new Set(p.items.map(it => it.unit))).join(', ')}"`,
       p.totalQuantity,
       p.subtotal,
       p.totalAmount,
@@ -475,27 +569,29 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-semibold uppercase tracking-wider">
               <tr>
-                <th className="px-4 py-3">No. Faktur Beli</th>
-                <th className="px-4 py-3">Tanggal</th>
-                <th className="px-4 py-3">Supplier & Toko</th>
-                <th className="px-4 py-3">Rincian Barang</th>
-                <th className="px-4 py-3 text-right">Total Pembelian</th>
-                <th className="px-4 py-3 text-center">Status Stok</th>
-                <th className="px-4 py-3 text-center">Pembayaran</th>
-                <th className="px-4 py-3 text-center">Aksi</th>
+                <th className="px-3.5 py-3">No. Faktur Beli</th>
+                <th className="px-3.5 py-3">Tanggal</th>
+                <th className="px-3.5 py-3">Supplier & Toko</th>
+                <th className="px-3.5 py-3">Rincian Barang</th>
+                <th className="px-3.5 py-3 text-center">Satuan Barang</th>
+                <th className="px-3.5 py-3 text-center">Qty Pembelian</th>
+                <th className="px-3.5 py-3 text-right">Total Pembelian</th>
+                <th className="px-3.5 py-3 text-center">Status Stok</th>
+                <th className="px-3.5 py-3 text-center">Pembayaran</th>
+                <th className="px-3.5 py-3 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
               {filteredPurchases.map(po => (
                 <tr key={po.id} className="hover:bg-stone-50/70 transition-colors">
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-3">
                     <div className="font-mono font-bold text-stone-900">{po.purchaseNumber}</div>
                     {po.invoiceNumber && (
                       <div className="text-[11px] text-stone-500">Faktur: {po.invoiceNumber}</div>
                     )}
                   </td>
 
-                  <td className="px-4 py-3 text-stone-600 whitespace-nowrap">
+                  <td className="px-3.5 py-3 text-stone-600 whitespace-nowrap">
                     <div>{po.orderDate}</div>
                     {po.receivedDate && (
                       <div className="text-[10px] text-emerald-700 font-medium">
@@ -504,7 +600,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-3">
                     <div className="font-bold text-stone-900">{po.supplierName}</div>
                     <div className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
                       <Building2 className="w-3 h-3 text-stone-400" />
@@ -512,21 +608,47 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     </div>
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-3 max-w-xs">
                     <div className="font-semibold text-stone-800">
-                      {po.items.length} Macam Produk ({po.totalQuantity} unit)
+                      {po.items.length} Macam Produk
                     </div>
-                    <div className="text-[11px] text-stone-500 truncate max-w-xs">
-                      {po.items.map(it => `${it.productName} (${it.quantity})`).join(', ')}
+                    <div className="text-[11px] text-stone-500 truncate" title={po.items.map(it => it.productName).join(', ')}>
+                      {po.items.map(it => it.productName).join(', ')}
                     </div>
                   </td>
 
-                  <td className="px-4 py-3 text-right">
+                  {/* KOLOM SATUAN BARANG */}
+                  <td className="px-3.5 py-3 text-center">
+                    <div className="flex flex-wrap items-center justify-center gap-1 max-w-[130px] mx-auto">
+                      {Array.from(new Set(po.items.map(it => it.unit || 'Pcs'))).map((uName, uIdx) => (
+                        <span 
+                          key={uIdx}
+                          className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                        >
+                          {uName}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+
+                  {/* KOLOM QTY PEMBELIAN */}
+                  <td className="px-3.5 py-3 text-center">
+                    <div className="font-bold text-stone-900 text-xs">
+                      {po.items.map(it => `${it.quantity} ${it.unit || 'Pcs'}`).join(', ')}
+                    </div>
+                    {po.items.some(it => (it.conversionMultiplier && it.conversionMultiplier > 1)) && (
+                      <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                        (= +{po.items.reduce((sum, it) => sum + (it.baseQuantity || (it.quantity * (it.conversionMultiplier || 1))), 0)} {po.items[0]?.baseUnit || 'Pcs'} fisik)
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="px-3.5 py-3 text-right">
                     <div className="font-bold text-stone-900">{formatRupiah(po.totalAmount)}</div>
                     <div className="text-[10px] text-stone-500 uppercase">{po.paymentMethod}</div>
                   </td>
 
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-3.5 py-3 text-center">
                     {po.stockUpdated ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -540,7 +662,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     )}
                   </td>
 
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-3.5 py-3 text-center">
                     <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
                       po.paymentStatus === 'paid' 
                         ? 'bg-emerald-100 text-emerald-800' 
@@ -731,66 +853,139 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
-                  <div className="sm:col-span-6">
-                    <label className="block font-medium text-stone-600 mb-1">Pilih Produk</label>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                  {/* 1. Pilih Produk */}
+                  <div className="sm:col-span-4">
+                    <label className="block font-semibold text-stone-700 mb-1">Pilih Produk *</label>
                     <select
                       value={selectedProductId}
                       onChange={(e) => handleSelectProduct(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white"
+                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-semibold text-stone-900 truncate"
                     >
                       {products.map(p => (
                         <option key={p.id} value={p.id}>
-                          {p.name} (Stok Saat Ini: {p.stock || 0} {p.unit || 'Pcs'})
+                          {p.name} (Stok: {p.stock || 0} {p.unit || 'Pcs'})
                         </option>
                       ))}
                     </select>
                   </div>
 
+                  {/* 2. Satuan Barang */}
+                  <div className="sm:col-span-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-semibold text-stone-700">Satuan Barang *</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomUnit(!isCustomUnit)}
+                        className="text-[10px] text-emerald-700 hover:underline font-bold"
+                      >
+                        {isCustomUnit ? 'Pilih Satuan' : '+ Ketik Baru'}
+                      </button>
+                    </div>
+
+                    {isCustomUnit ? (
+                      <input
+                        type="text"
+                        value={itemUnit}
+                        onChange={(e) => setItemUnit(e.target.value)}
+                        placeholder="Ketik satuan, misal: Karton, Bal..."
+                        className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-bold text-indigo-700"
+                      />
+                    ) : (
+                      <select
+                        value={itemUnit}
+                        onChange={(e) => handleUnitChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-bold text-indigo-700"
+                      >
+                        <optgroup label="Satuan Terdaftar Produk">
+                          {currentUnitOptions.map(opt => (
+                            <option key={opt.unitName} value={opt.unitName}>
+                              {opt.unitName} {opt.multiplier > 1 ? `(= ${opt.multiplier} ${currentProduct?.unit || 'Pcs'})` : '(Satuan Dasar)'}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Satuan Grosir / Kulakan Umum">
+                          {COMMON_SUPPLIER_UNITS.filter(u => !currentUnitOptions.some(o => o.unitName.toLowerCase() === u.toLowerCase())).map(u => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* 3. Jumlah Qty */}
                   <div className="sm:col-span-2">
-                    <label className="block font-medium text-stone-600 mb-1">Jumlah Qty</label>
+                    <label className="block font-semibold text-stone-700 mb-1">Jumlah Qty *</label>
                     <input
                       type="number"
                       min="1"
                       value={itemQuantity}
                       onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-bold"
+                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-bold text-center text-xs"
                     />
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="block font-medium text-stone-600 mb-1">Harga Beli Modal (Rp)</label>
+                  {/* 4. Harga Modal per Satuan */}
+                  <div className="sm:col-span-3">
+                    <label className="block font-semibold text-stone-700 mb-1 truncate" title={`Harga Modal / ${itemUnit || 'Satuan'}`}>
+                      Harga Modal / {itemUnit || 'Satuan'} (Rp)
+                    </label>
                     <input
                       type="number"
                       min="0"
                       step="100"
                       value={itemCostPrice}
                       onChange={(e) => setItemCostPrice(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-bold text-emerald-700"
+                      className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-bold text-emerald-700 text-xs"
                     />
                   </div>
+                </div>
 
-                  <div className="sm:col-span-2">
-                    <button
-                      type="button"
-                      onClick={handleAddItemToForm}
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow-xs transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ Tambah</span>
-                    </button>
+                {/* Konversi Satuan Masuk Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white rounded-xl border border-stone-200 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Scale className="w-3.5 h-3.5 text-stone-400" />
+                    <span className="text-stone-500 font-medium">Konversi Stok Fisik:</span>
+                    <span className="font-bold text-stone-800">
+                      1 {itemUnit || 'Satuan'} =
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={itemConversionMultiplier}
+                      onChange={(e) => setItemConversionMultiplier(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-14 px-1.5 py-0.5 border border-stone-200 rounded-lg text-center font-bold text-emerald-700 bg-stone-50"
+                    />
+                    <span className="font-bold text-stone-700">
+                      {currentProduct?.unit || 'Pcs'}
+                    </span>
+                    <span className="text-[11px] text-stone-400 ml-1">
+                      (Total masuk: <strong className="text-emerald-700 font-bold">+{itemQuantity * (itemConversionMultiplier || 1)} {currentProduct?.unit || 'Pcs'}</strong>)
+                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddItemToForm}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1 shadow-xs transition-colors ml-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tambah Barang</span>
+                  </button>
                 </div>
 
                 {/* Added Items Table */}
                 {formItems.length > 0 ? (
                   <div className="border border-stone-200 rounded-xl bg-white overflow-hidden mt-3">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-stone-50 border-b border-stone-200 text-stone-600">
+                      <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-semibold">
                         <tr>
-                          <th className="px-3 py-2">Produk</th>
-                          <th className="px-3 py-2 text-center">Qty</th>
-                          <th className="px-3 py-2 text-right">Harga Beli (Modal)</th>
+                          <th className="px-3 py-2 text-center w-8">No</th>
+                          <th className="px-3 py-2">Nama Produk & Barcode</th>
+                          <th className="px-3 py-2 text-center">Jumlah Qty</th>
+                          <th className="px-3 py-2 text-center">Satuan Barang</th>
+                          <th className="px-3 py-2 text-center">Stok Masuk Fisik</th>
+                          <th className="px-3 py-2 text-right">Harga Modal / Satuan</th>
                           <th className="px-3 py-2 text-right">Subtotal</th>
                           <th className="px-3 py-2 text-center">Aksi</th>
                         </tr>
@@ -798,15 +993,29 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                       <tbody className="divide-y divide-stone-100">
                         {formItems.map((item, idx) => (
                           <tr key={idx} className="hover:bg-stone-50">
+                            <td className="px-3 py-2 text-center text-stone-400 font-medium">{idx + 1}</td>
                             <td className="px-3 py-2">
                               <div className="font-semibold text-stone-900">{item.productName}</div>
-                              <div className="text-[10px] text-stone-400 font-mono">{item.barcode}</div>
+                              {item.barcode && <div className="text-[10px] text-stone-400 font-mono">{item.barcode}</div>}
                             </td>
-                            <td className="px-3 py-2 text-center font-bold text-emerald-700">
-                              +{item.quantity} {item.unit}
+                            <td className="px-3 py-2 text-center font-bold text-stone-900">
+                              {item.quantity}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                {item.unit}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-center text-[11px] font-bold text-emerald-700">
+                              +{item.baseQuantity || (item.quantity * (item.conversionMultiplier || 1))} {item.baseUnit || 'Pcs'}
+                              {(item.conversionMultiplier || 1) > 1 && (
+                                <span className="block text-[10px] text-stone-400 font-normal">
+                                  (1 {item.unit} = {item.conversionMultiplier} {item.baseUnit})
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-right font-medium">
-                              {formatRupiah(item.costPrice)}
+                              {formatRupiah(item.costPrice)} / {item.unit}
                             </td>
                             <td className="px-3 py-2 text-right font-bold text-stone-900">
                               {formatRupiah(item.subtotal)}
@@ -816,6 +1025,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                 type="button"
                                 onClick={() => handleRemoveFormItem(idx)}
                                 className="p-1 text-rose-500 hover:bg-rose-50 rounded-md"
+                                title="Hapus baris barang"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -825,9 +1035,15 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                       </tbody>
                       <tfoot className="bg-stone-50 font-bold border-t border-stone-200">
                         <tr>
-                          <td className="px-3 py-2.5">Total Belanja Barang</td>
+                          <td className="px-3 py-2.5" colSpan={2}>Total Belanja Barang</td>
+                          <td className="px-3 py-2.5 text-center text-stone-900">
+                            {formItems.reduce((sum, i) => sum + i.quantity, 0)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center text-stone-500 text-[11px]">
+                            {Array.from(new Set(formItems.map(i => i.unit))).join(', ')}
+                          </td>
                           <td className="px-3 py-2.5 text-center text-emerald-700">
-                            +{formItems.reduce((sum, i) => sum + i.quantity, 0)} unit
+                            +{formItems.reduce((sum, i) => sum + (i.baseQuantity || (i.quantity * (i.conversionMultiplier || 1))), 0)} fisik
                           </td>
                           <td></td>
                           <td className="px-3 py-2.5 text-right text-stone-900 text-sm">
@@ -839,8 +1055,8 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     </table>
                   </div>
                 ) : (
-                  <div className="text-center py-4 bg-white/70 rounded-xl border border-dashed border-stone-300 text-stone-400">
-                    Belum ada barang dipilih. Silakan pilih produk di atas dan klik "+ Tambah".
+                  <div className="text-center py-4 bg-white/70 rounded-xl border border-dashed border-stone-300 text-stone-400 text-xs">
+                    Belum ada barang dipilih. Silakan pilih produk di atas, tentukan satuan barang dan harga, lalu klik "+ Tambah Barang".
                   </div>
                 )}
               </div>
@@ -961,7 +1177,9 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-semibold">
                   <tr>
                     <th className="px-3.5 py-2.5">Nama Produk</th>
-                    <th className="px-3.5 py-2.5 text-center">Qty Masuk</th>
+                    <th className="px-3.5 py-2.5 text-center">Qty Pembelian</th>
+                    <th className="px-3.5 py-2.5 text-center">Satuan Barang</th>
+                    <th className="px-3.5 py-2.5 text-center">Stok Masuk Fisik</th>
                     <th className="px-3.5 py-2.5 text-right">Harga Beli Modal</th>
                     <th className="px-3.5 py-2.5 text-right">Subtotal</th>
                   </tr>
@@ -973,10 +1191,25 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                         <div className="font-semibold text-stone-900">{it.productName}</div>
                         <div className="text-[10px] text-stone-400 font-mono">{it.barcode}</div>
                       </td>
-                      <td className="px-3.5 py-2.5 text-center font-bold text-emerald-700">
-                        +{it.quantity} {it.unit}
+                      <td className="px-3.5 py-2.5 text-center font-bold text-stone-900">
+                        {it.quantity}
                       </td>
-                      <td className="px-3.5 py-2.5 text-right">{formatRupiah(it.costPrice)}</td>
+                      <td className="px-3.5 py-2.5 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {it.unit || 'Pcs'}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-2.5 text-center text-emerald-700 font-bold">
+                        +{it.baseQuantity || (it.quantity * (it.conversionMultiplier || 1))} {it.baseUnit || 'Pcs'}
+                        {(it.conversionMultiplier || 1) > 1 && (
+                          <span className="block text-[10px] text-stone-400 font-normal">
+                            (1 {it.unit} = {it.conversionMultiplier} {it.baseUnit})
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right font-medium">
+                        {formatRupiah(it.costPrice)} / {it.unit}
+                      </td>
                       <td className="px-3.5 py-2.5 text-right font-bold text-stone-900">{formatRupiah(it.subtotal)}</td>
                     </tr>
                   ))}
@@ -984,8 +1217,14 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 <tfoot className="bg-stone-50 font-bold border-t border-stone-200">
                   <tr>
                     <td className="px-3.5 py-3">Total Pembelian</td>
+                    <td className="px-3.5 py-3 text-center text-stone-900">
+                      {selectedPurchaseDetail.totalQuantity}
+                    </td>
+                    <td className="px-3.5 py-3 text-center text-stone-500 text-[11px]">
+                      {Array.from(new Set(selectedPurchaseDetail.items.map(i => i.unit || 'Pcs'))).join(', ')}
+                    </td>
                     <td className="px-3.5 py-3 text-center text-emerald-700">
-                      +{selectedPurchaseDetail.totalQuantity} unit
+                      +{selectedPurchaseDetail.items.reduce((sum, it) => sum + (it.baseQuantity || (it.quantity * (it.conversionMultiplier || 1))), 0)} fisik
                     </td>
                     <td></td>
                     <td className="px-3.5 py-3 text-right text-stone-900 text-sm">

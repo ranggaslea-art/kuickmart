@@ -261,6 +261,9 @@ export interface PurchaseItem {
   costPrice: number; // Harga beli modal dari supplier
   subtotal: number; // quantity * costPrice
   sellingPrice?: number;
+  conversionMultiplier?: number; // e.g. 1 Karton = 40 Pcs (multiplier: 40)
+  baseUnit?: string; // Satuan dasar eceran produk (e.g. 'Pcs')
+  baseQuantity?: number; // Jumlah total dalam satuan dasar (quantity * conversionMultiplier)
 }
 
 export interface PurchaseOrder {
