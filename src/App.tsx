@@ -80,6 +80,7 @@ import {
   INITIAL_BRAND_CONFIG,
   INITIAL_STAFF_USERS
 } from './data/mockData';
+import { INITIAL_SAMPLE_ORDERS } from './data/mockOrders';
 import { 
   getSupabase, 
   testSupabaseConnection, 
@@ -251,7 +252,15 @@ export default function App() {
   // Orders State
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem(STORAGE_ORDERS_KEY);
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error('Failed to parse saved orders:', e);
+      }
+    }
+    return INITIAL_SAMPLE_ORDERS;
   });
 
   // Filters & Search
@@ -275,7 +284,7 @@ export default function App() {
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications'>('products');
+  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);

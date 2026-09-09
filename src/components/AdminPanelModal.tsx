@@ -58,7 +58,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   RotateCcw,
-  BellRing
+  BellRing,
+  BarChart3
 } from 'lucide-react';
 import { Product, Order, Store, Voucher, OrderStatus, StaffUser, ProductUnitConversion, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig, SystemModuleKey, UserPermissions, ModulePermission } from '../types';
 import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS, INITIAL_BRAND_CONFIG } from '../data/mockData';
@@ -86,6 +87,7 @@ import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
 import { BrandInfoManager } from './BrandInfoManager';
 import { PushNotificationManager } from './PushNotificationManager';
+import { ReportsManager } from './ReportsManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
@@ -116,7 +118,7 @@ interface AdminPanelModalProps {
   onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
   staffUsers?: StaffUser[];
   onUpdateStaffUsers?: (users: StaffUser[]) => void;
-  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications';
+  initialTab?: 'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports';
 }
 
 interface AdminUser {
@@ -356,7 +358,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   useEffect(() => {
@@ -1940,6 +1942,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {[
             { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
             { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Masuk', icon: <Receipt className="w-4 h-4" />, count: orders.length },
+            { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
             { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
             { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
             { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
@@ -4334,6 +4337,22 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   setUserSubTab('accounts');
                   handleOpenAddUser();
                 }}
+              />
+            </div>
+          ))}
+
+          {/* TAB: LAPORAN KEUANGAN & BISNIS (INFO BARANG, PENJUALAN PERIODE, LABA RUGI) */}
+          {activeTab === 'reports' && (!currentUserPermissions.reports?.canView ? (
+            renderAccessDenied('Laporan & Analisis Finansial')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.reports?.canEdit && renderReadOnlyBanner('Laporan & Analisis Finansial')}
+              <ReportsManager
+                products={products}
+                orders={orders}
+                stores={stores}
+                onUpdateProducts={onUpdateProducts}
+                canEdit={currentUserPermissions.reports?.canEdit ?? true}
               />
             </div>
           ))}
