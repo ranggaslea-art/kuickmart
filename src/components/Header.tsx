@@ -197,48 +197,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Delivery & Store Selector */}
-          <div className="hidden lg:flex items-center gap-2 bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
-            <button
-              onClick={() => onToggleDeliveryType('delivery')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                deliveryType === 'delivery'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Bike className="w-3.5 h-3.5" />
-              <span>Diantar ke Rumah</span>
-            </button>
-            <button
-              onClick={() => onToggleDeliveryType('pickup')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                deliveryType === 'pickup'
-                  ? 'bg-white text-red-600 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <StoreIcon className="w-3.5 h-3.5" />
-              <span>Ambil di Toko</span>
-            </button>
-
-            <div className="h-4 w-px bg-stone-300 mx-1" />
-
-            <button
-              onClick={onOpenStoreSelector}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-stone-700 hover:text-blue-700 font-medium group text-left max-w-[200px]"
-            >
-              <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-              <div className="truncate">
-                <span className="font-semibold block truncate">{currentStore.name}</span>
-                <span className="text-[10px] text-stone-500 font-normal">{currentStore.distanceKm} km • {currentStore.openHours}</span>
-              </div>
-              <ChevronDown className="w-3 h-3 text-stone-400 group-hover:text-stone-700 shrink-0" />
-            </button>
-          </div>
-
           {/* Search Bar */}
-          <div className="flex-1 relative min-w-[100px] sm:min-w-[140px] max-w-2xl">
+          <div className="flex-1 relative min-w-0 max-w-2xl">
             <div className="relative">
               <input
                 type="text"
@@ -307,9 +267,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Icons */}
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
-            {/* Offline Sync Status & Queue Badge */}
-            <OfflineSyncBadge />
-
             {/* Fullscreen Toggle Button */}
             <button
               onClick={toggleFullscreen}
@@ -374,9 +331,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenOrderHistory}
               title="Daftar Pesanan & Status Belanja"
-              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs"
+              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95"
             >
-              <Receipt className="w-4 h-4 text-blue-700" />
+              <Receipt className="w-4 h-4 text-blue-700 shrink-0" />
               <span className="text-xs font-bold text-stone-800 hidden sm:inline">Pesanan</span>
               {activeOrdersCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-600 text-white font-bold text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center animate-pulse shadow-xs">
@@ -391,7 +348,7 @@ export const Header: React.FC<HeaderProps> = ({
               title="Buka Keranjang Belanja"
               className="p-1.5 sm:px-3 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white flex items-center gap-1.5 sm:gap-2 shadow-sm font-semibold text-xs transition-all relative shrink-0 cursor-pointer"
             >
-              <div className="relative flex items-center justify-center">
+              <div className="relative flex items-center justify-center shrink-0">
                 <ShoppingBag className="w-4 h-4" />
                 {totalCartCount > 0 && (
                   <span className="sm:hidden absolute -top-1.5 -right-2 bg-red-500 text-white font-bold text-[10px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
@@ -407,32 +364,40 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile Outlet Selector */}
-        <div className="w-full flex lg:hidden items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs">
-          <div className="flex items-center gap-1.5">
+        {/* Sub-bar: Outlet Selector, Delivery, Cloud Online & Jam Operasional */}
+        <div className="w-full flex items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0">
             <button
               onClick={() => onToggleDeliveryType(deliveryType === 'delivery' ? 'pickup' : 'delivery')}
-              className="px-2 py-1 rounded bg-stone-100 font-semibold text-stone-700 flex items-center gap-1"
+              className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 font-semibold text-stone-700 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
             >
-              {deliveryType === 'delivery' ? <Bike className="w-3 h-3 text-blue-600" /> : <StoreIcon className="w-3 h-3 text-red-600" />}
+              {deliveryType === 'delivery' ? <Bike className="w-3.5 h-3.5 text-blue-600" /> : <StoreIcon className="w-3.5 h-3.5 text-red-600" />}
               <span>{deliveryType === 'delivery' ? 'Antar' : 'Ambil Toko'}</span>
             </button>
             <button
               onClick={onOpenStoreSelector}
-              className="flex items-center gap-1 text-stone-700 truncate max-w-[150px] font-medium"
+              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[150px] sm:max-w-[250px] md:max-w-[320px] font-medium transition-colors cursor-pointer"
+              title={currentStore.name}
             >
-              <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-              <span className="truncate">{currentStore.name}</span>
+              <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <span className="truncate font-semibold">{currentStore.name}</span>
+              <span className="text-[10px] text-stone-500 hidden sm:inline">({currentStore.distanceKm} km)</span>
               <ChevronDown className="w-3 h-3 text-stone-400 shrink-0" />
             </button>
           </div>
 
-          {(!brandConfig || brandConfig.showOperatingHoursBadge) && (
-            <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {operatingHoursText}
-            </span>
-          )}
+          {/* Samping 24 Jam Nonstop: Tombol Cloud Online */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Tombol Cloud Online diletakkan di samping 24 Jam Nonstop */}
+            <OfflineSyncBadge className="py-1 px-2.5 text-xs" />
+
+            {(!brandConfig || brandConfig.showOperatingHoursBadge) && (
+              <span className="text-[11px] sm:text-xs text-emerald-600 font-semibold flex items-center gap-1 shrink-0 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">
+                <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                {operatingHoursText}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </header>

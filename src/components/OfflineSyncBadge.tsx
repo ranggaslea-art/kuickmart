@@ -124,7 +124,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
             <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="font-medium whitespace-nowrap hidden sm:inline">
+            <span className="font-medium whitespace-nowrap">
               Cloud Online
             </span>
           </>
