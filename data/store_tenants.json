@@ -1,0 +1,22 @@
+{
+  "berkah-jaya": {
+    "storeSlug": "berkah-jaya",
+    "storeName": "Berkah Jaya Mart",
+    "dokuSettings": {
+      "isEnabled": true,
+      "environment": "sandbox",
+      "clientId": "BRN-0241-TEST",
+      "secretKey": "SK-TEST-123",
+      "merchantName": "Berkah Jaya Mart",
+      "notificationUrl": "",
+      "enableQris": true,
+      "enableBcaVa": true,
+      "enableMandiriVa": true,
+      "enableBriVa": true,
+      "enableBniVa": true,
+      "enablePermataVa": true,
+      "updatedAt": "2026-09-10T20:05:11.235Z"
+    },
+    "updatedAt": "2026-09-10T20:05:11.235Z"
+  }
+}

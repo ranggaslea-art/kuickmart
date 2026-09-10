@@ -676,3 +676,41 @@ export interface BrandHeaderFooterConfig {
   bottomLinks: FooterQuickLink[];
   updatedAt?: string;
 }
+
+// ==========================================
+// PENGATURAN IDENTITAS TOKO BEBAS & DOKU GATEWAY
+// ==========================================
+export interface DokuSettings {
+  isEnabled: boolean;
+  environment: 'sandbox' | 'production';
+  clientId: string; // Mall ID (e.g. BRN-0241-1788726490929)
+  secretKey: string; // Shared Key
+  merchantName: string; // Nama Merchant di Struk QRIS / VA DOKU
+  notificationUrl?: string; // Webhook URL untuk notifikasi pembayaran
+  enableQris: boolean;
+  enableBcaVa: boolean;
+  enableMandiriVa: boolean;
+  enableBriVa: boolean;
+  enableBniVa: boolean;
+  enablePermataVa: boolean;
+  updatedAt?: string;
+}
+
+export interface StoreTenantIdentity {
+  storeId: string;
+  storeSlug: string; // e.g. "berkah-mart"
+  storeName: string; // Bebas diisi nama toko apapun (e.g. "Toko Berkah Mandiri")
+  tagline: string; // Slogan toko (e.g. "Pusat Sembako Murah & Lengkap")
+  ownerName: string;
+  phone: string;
+  whatsapp: string;
+  address: string;
+  city: string;
+  logoUrl?: string;
+  logoText?: string;
+  primaryColor: string; // Warna tema toko (e.g. #2563eb, #dc2626)
+  dokuSettings: DokuSettings;
+  createdAt?: string;
+  updatedAt?: string;
+}
+

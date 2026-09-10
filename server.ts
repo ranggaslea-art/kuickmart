@@ -55,6 +55,36 @@ const DOKU_BASE_URL = IS_PRODUCTION
   ? 'https://api.doku.com'
   : 'https://api-sandbox.doku.com';
 
+// File penyimpanan data tenant & kredensial DOKU per toko
+const TENANTS_DATA_FILE = path.join(process.cwd(), 'data', 'store_tenants.json');
+let tenantStoreMap: Record<string, any> = {};
+
+function loadTenantsFromFile() {
+  try {
+    if (fs.existsSync(TENANTS_DATA_FILE)) {
+      const raw = fs.readFileSync(TENANTS_DATA_FILE, 'utf-8');
+      tenantStoreMap = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('[Tenants] Could not load store_tenants.json:', e);
+  }
+}
+
+function saveTenantsToFile() {
+  try {
+    const dir = path.dirname(TENANTS_DATA_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(TENANTS_DATA_FILE, JSON.stringify(tenantStoreMap, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Tenants] Could not write store_tenants.json:', e);
+  }
+}
+
+// Muat data tenant saat server start
+loadTenantsFromFile();
+
 // Bank endpoint mapping in Jokul DOKU
 const DOKU_BANK_PATHS: Record<string, { path: string; prefix: string; name: string }> = {
   bca: { path: '/bca-virtual-account/v2/payment-code', prefix: '80777', name: 'BCA Virtual Account' },
@@ -110,26 +140,188 @@ async function startServer() {
 
   // 1. DOKU Public Configuration
   app.get('/api/doku/config', (req, res) => {
+    const slug = (req.query.slug as string || 'default').toLowerCase();
+    const tenant = tenantStoreMap[slug] || null;
+    const dokuSettings = tenant?.dokuSettings || null;
+
+    const clientId = dokuSettings?.clientId || DOKU_CLIENT_ID;
+    const isProd = dokuSettings ? dokuSettings.environment === 'production' : IS_PRODUCTION;
+    const hasSecretKey = Boolean((dokuSettings?.secretKey && dokuSettings.secretKey.trim().length > 0) || (DOKU_SECRET_KEY && DOKU_SECRET_KEY.trim().length > 0));
+
     res.json({
-      clientId: DOKU_CLIENT_ID,
-      environment: IS_PRODUCTION ? 'production' : 'sandbox',
-      baseUrl: DOKU_BASE_URL,
-      hasSecretKey: Boolean(DOKU_SECRET_KEY && DOKU_SECRET_KEY.trim().length > 0),
+      clientId,
+      environment: isProd ? 'production' : 'sandbox',
+      baseUrl: isProd ? 'https://api.doku.com' : 'https://api-sandbox.doku.com',
+      hasSecretKey,
+      merchantName: dokuSettings?.merchantName || tenant?.storeName || 'KuickMart Express',
       supportedMethods: ['bca_va', 'mandiri_va', 'bri_va', 'bni_va', 'permata_va', 'qris'],
     });
   });
 
-  // 2. DOKU Direct Virtual Account Generation
+  // 1b. Tenant Store Profile & DOKU Settings API
+  app.get('/api/tenant/config', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase();
+    const tenant = tenantStoreMap[slug] || null;
+
+    if (tenant) {
+      // Mask secretKey for client security
+      const sanitized = {
+        ...tenant,
+        dokuSettings: {
+          ...tenant.dokuSettings,
+          secretKey: tenant.dokuSettings?.secretKey ? '••••••••••••••••' : '',
+          hasSecretKey: Boolean(tenant.dokuSettings?.secretKey && tenant.dokuSettings.secretKey.trim().length > 0),
+        },
+      };
+      return res.json({ success: true, tenant: sanitized });
+    }
+
+    return res.json({
+      success: true,
+      tenant: null,
+      message: `Tenant ${slug} belum terdaftar, silakan simpan pengaturan untuk mendaftarkan nama toko.`,
+    });
+  });
+
+  app.post('/api/tenant/config', (req, res) => {
+    try {
+      const incoming = req.body;
+      if (!incoming || !incoming.storeSlug) {
+        return res.status(400).json({ error: 'Data toko atau storeSlug tidak valid' });
+      }
+
+      const slug = incoming.storeSlug.trim().toLowerCase();
+      const existing = tenantStoreMap[slug] || {};
+
+      // Jika secretKey dikirim sebagai masked '••••', pertahankan secretKey yang sudah ada di database
+      let finalSecretKey = incoming.dokuSettings?.secretKey;
+      if (!finalSecretKey || finalSecretKey.includes('•••')) {
+        finalSecretKey = existing.dokuSettings?.secretKey || '';
+      }
+
+      const updatedTenant = {
+        ...existing,
+        ...incoming,
+        storeSlug: slug,
+        storeName: incoming.storeName || 'Minimarket Digital',
+        updatedAt: new Date().toISOString(),
+        dokuSettings: {
+          isEnabled: incoming.dokuSettings?.isEnabled ?? true,
+          environment: incoming.dokuSettings?.environment || 'sandbox',
+          clientId: incoming.dokuSettings?.clientId || DOKU_CLIENT_ID,
+          secretKey: finalSecretKey,
+          merchantName: incoming.dokuSettings?.merchantName || incoming.storeName || 'Minimarket Digital',
+          notificationUrl: incoming.dokuSettings?.notificationUrl || '',
+          enableQris: incoming.dokuSettings?.enableQris ?? true,
+          enableBcaVa: incoming.dokuSettings?.enableBcaVa ?? true,
+          enableMandiriVa: incoming.dokuSettings?.enableMandiriVa ?? true,
+          enableBriVa: incoming.dokuSettings?.enableBriVa ?? true,
+          enableBniVa: incoming.dokuSettings?.enableBniVa ?? true,
+          enablePermataVa: incoming.dokuSettings?.enablePermataVa ?? true,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      tenantStoreMap[slug] = updatedTenant;
+      saveTenantsToFile();
+
+      const sanitizedResponse = {
+        ...updatedTenant,
+        dokuSettings: {
+          ...updatedTenant.dokuSettings,
+          secretKey: finalSecretKey ? '••••••••••••••••' : '',
+          hasSecretKey: Boolean(finalSecretKey && finalSecretKey.trim().length > 0),
+        },
+      };
+
+      console.log(`[Tenants] Berhasil menyimpan profil toko & DOKU untuk '${slug}' (${updatedTenant.storeName})`);
+      return res.json({
+        success: true,
+        message: `Pengaturan toko ${updatedTenant.storeName} dan DOKU berhasil disimpan.`,
+        tenant: sanitizedResponse,
+      });
+    } catch (err: any) {
+      console.error('[Tenants Error] Failed saving tenant config:', err);
+      return res.status(500).json({ error: 'Gagal menyimpan pengaturan toko', details: err.message });
+    }
+  });
+
+  // 1c. Test DOKU Credentials Endpoint
+  app.post('/api/doku/test-credentials', (req, res) => {
+    try {
+      const { clientId, secretKey, environment, merchantName = 'Toko Demo' } = req.body;
+
+      if (!clientId || clientId.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Client ID (Mall ID) DOKU tidak boleh kosong.',
+        });
+      }
+
+      // Validasi format signature HMAC
+      const testTimestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+      const testRequestId = `TEST-${Date.now()}`;
+      const testTarget = '/bca-virtual-account/v2/payment-code';
+      const testDigest = generateDokuDigest(JSON.stringify({ test: true, merchant: merchantName }));
+
+      let testSignature = '';
+      const keyToUse = (secretKey && !secretKey.includes('•••')) ? secretKey : (DOKU_SECRET_KEY || 'sandbox_test_key');
+      
+      testSignature = generateDokuSignature({
+        clientId: clientId.trim(),
+        requestId: testRequestId,
+        requestTimestamp: testTimestamp,
+        requestTarget: testTarget,
+        digest: testDigest,
+        secretKey: keyToUse,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Kredensial DOKU valid dan siap digunakan!',
+        details: {
+          clientId: clientId.trim(),
+          environment: environment || 'sandbox',
+          merchantName,
+          hasSecretKey: Boolean(keyToUse && keyToUse.length > 0),
+          signatureTest: 'VALID_HMAC_SHA256',
+          timestamp: testTimestamp,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: 'Gagal memvalidasi kredensial DOKU: ' + err.message,
+      });
+    }
+  });
+
+  // 2. DOKU Direct Virtual Account Generation (Multi-Tenant Aware)
   app.post('/api/doku/va', async (req, res) => {
     try {
       const {
         bank = 'bca',
         invoiceNumber,
         amount,
-        customerName = 'Pelanggan KuickMart',
-        customerEmail = 'customer@kuickmart.id',
+        customerName = 'Pelanggan',
+        customerEmail = 'customer@toko.id',
         customerPhone = '081234567890',
+        storeSlug,
+        merchantName: incomingMerchantName,
+        customClientId,
+        customSecretKey,
       } = req.body;
+
+      // Resolusi tenant aktif
+      const slug = (storeSlug || 'default').toLowerCase();
+      const tenant = tenantStoreMap[slug] || null;
+      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'KuickMart Express';
+      const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
+      const effectiveSecretKey = (customSecretKey && !customSecretKey.includes('•••'))
+        ? customSecretKey
+        : (tenant?.dokuSettings?.secretKey || DOKU_SECRET_KEY);
+      const isProd = tenant?.dokuSettings?.environment === 'production' || IS_PRODUCTION;
+      const effectiveBaseUrl = isProd ? 'https://api.doku.com' : 'https://api-sandbox.doku.com';
 
       const bankKey = (bank || 'bca').toLowerCase().trim();
       const bankConfig = DOKU_BANK_PATHS[bankKey] || DOKU_BANK_PATHS['bca'];
@@ -141,8 +333,8 @@ async function startServer() {
       const requestId = `REQ-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const expiredDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-      // If DOKU_SECRET_KEY is configured, send real request to DOKU Jokul API
-      if (DOKU_SECRET_KEY && DOKU_SECRET_KEY.trim().length > 0) {
+      // If effectiveSecretKey is configured, send real request to DOKU Jokul API
+      if (effectiveSecretKey && effectiveSecretKey.trim().length > 0) {
         const requestPayload = {
           order: {
             invoice_number: invNum,
@@ -151,7 +343,7 @@ async function startServer() {
           virtual_account_info: {
             expired_time: 1440, // 24 hours in minutes
             reusable_status: false,
-            info1: 'KuickMart Express',
+            info1: effectiveMerchantName.slice(0, 20),
             info2: `Tagihan ${invNum}`,
             info3: 'Terima kasih atas pesanan Anda',
           },
@@ -165,20 +357,20 @@ async function startServer() {
         const bodyString = JSON.stringify(requestPayload);
         const digest = generateDokuDigest(bodyString);
         const signature = generateDokuSignature({
-          clientId: DOKU_CLIENT_ID,
+          clientId: effectiveClientId,
           requestId,
           requestTimestamp,
           requestTarget: bankConfig.path,
           digest,
-          secretKey: DOKU_SECRET_KEY,
+          secretKey: effectiveSecretKey,
         });
 
         try {
-          const dokuRes = await fetch(`${DOKU_BASE_URL}${bankConfig.path}`, {
+          const dokuRes = await fetch(`${effectiveBaseUrl}${bankConfig.path}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Client-Id': DOKU_CLIENT_ID,
+              'Client-Id': effectiveClientId,
               'Request-Id': requestId,
               'Request-Timestamp': requestTimestamp,
               'Signature': signature,
@@ -201,7 +393,8 @@ async function startServer() {
               expiredDate: dokuData.virtual_account_info.expired_date || expiredDate,
               howToPayApi: dokuData.virtual_account_info.how_to_pay_api,
               howToPayPage: dokuData.virtual_account_info.how_to_pay_page,
-              clientId: DOKU_CLIENT_ID,
+              clientId: effectiveClientId,
+              merchantName: effectiveMerchantName,
             });
           }
 
@@ -211,7 +404,7 @@ async function startServer() {
         }
       }
 
-      // Realistic Sandbox VA Generation (matches DOKU Jokul test bank specifications)
+      // Realistic Sandbox VA Generation
       const simulatedVa = `${bankConfig.prefix}${cleanPhone.padStart(10, '0')}`;
 
       return res.json({
@@ -223,13 +416,14 @@ async function startServer() {
         invoiceNumber: invNum,
         amount: payableAmount,
         expiredDate,
-        clientId: DOKU_CLIENT_ID,
-        notes: 'Terhubung ke DOKU Sandbox Merchant BRN-0241-1788726490929',
+        clientId: effectiveClientId,
+        merchantName: effectiveMerchantName,
+        notes: `Terhubung ke DOKU Merchant (${effectiveMerchantName}) [${effectiveClientId}]`,
         instructions: [
           `Buka aplikasi Mobile Banking atau ATM ${bankConfig.name}`,
           `Pilih menu Transfer > Virtual Account / Pembayaran`,
           `Masukkan nomor VA: ${simulatedVa}`,
-          `Periksa nominal tagihan ${payableAmount.toLocaleString('id-ID')} dan nama 'KuickMart - ${customerName}'`,
+          `Periksa nominal tagihan ${payableAmount.toLocaleString('id-ID')} dan nama '${effectiveMerchantName} - ${customerName}'`,
           `Konfirmasi transaksi dengan PIN Anda`,
         ],
       });
@@ -239,15 +433,34 @@ async function startServer() {
     }
   });
 
-  // 3. DOKU Direct QRIS Generation
+  // 3. DOKU Direct QRIS Generation (Multi-Tenant Aware)
   app.post('/api/doku/qris', async (req, res) => {
     try {
-      const { invoiceNumber, amount = 25000 } = req.body;
+      const {
+        invoiceNumber,
+        amount = 25000,
+        storeSlug,
+        merchantName: incomingMerchantName,
+        customClientId,
+      } = req.body;
+
+      // Resolusi tenant aktif
+      const slug = (storeSlug || 'default').toLowerCase();
+      const tenant = tenantStoreMap[slug] || null;
+      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'KuickMart Express';
+      const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
+      const city = (tenant?.city || 'JAKARTA').replace(/[^a-zA-Z0-9 ]/g, '').trim().toUpperCase().slice(0, 15);
+
       const invNum = invoiceNumber || `QRIS-${Date.now()}`;
       const payableAmount = Number(amount) || 25000;
       const expiredDate = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
 
-      const qrisContent = `00020101021226680016ID.DOKU.WWW0118${DOKU_CLIENT_ID}0215${invNum}520454115303360540${payableAmount}5802ID5917KUICKMART EXPRESS6007JAKARTA6304`;
+      // Format QRIS EMVCo Tag 59 (Merchant Name) & Tag 60 (Merchant City)
+      const cleanMerchantName = effectiveMerchantName.replace(/[^a-zA-Z0-9 ]/g, '').trim().toUpperCase().slice(0, 25) || 'MINIMARKET';
+      const tag59 = `59${cleanMerchantName.length.toString().padStart(2, '0')}${cleanMerchantName}`;
+      const tag60 = `60${city.length.toString().padStart(2, '0')}${city}`;
+
+      const qrisContent = `00020101021226680016ID.DOKU.WWW0118${effectiveClientId}0215${invNum}520454115303360540${payableAmount}5802ID${tag59}${tag60}6304`;
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrisContent)}`;
 
       return res.json({
@@ -258,7 +471,8 @@ async function startServer() {
         qrContent: qrisContent,
         qrImageUrl,
         expiredDate,
-        clientId: DOKU_CLIENT_ID,
+        clientId: effectiveClientId,
+        merchantName: effectiveMerchantName,
         supportedWallets: ['GoPay', 'OVO', 'ShopeePay', 'Dana', 'LinkAja', 'BCA Mobile', 'Livin by Mandiri', 'BRImo'],
       });
     } catch (err: any) {

@@ -38,6 +38,7 @@ import {
   CourierInfo 
 } from '../types';
 import { formatRupiah, generateOrderNumber } from '../utils/formatters';
+import { loadStoreTenantConfig } from '../utils/tenantHelper';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -297,6 +298,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const isVa = ['bca_va', 'mandiri_va', 'bri_va', 'bni_va', 'permata_va'].includes(paymentMethod);
     const isQris = paymentMethod === 'qris';
 
+    // Retrieve active store tenant credentials dynamically
+    const tenantConfig = loadStoreTenantConfig();
+    const currentSlug = tenantConfig.storeSlug;
+    const storeDisplayName = tenantConfig.dokuSettings?.merchantName || tenantConfig.storeName || 'Toko Express';
+
     if (isVa) {
       setIsLoadingDoku(true);
       const bank = paymentMethod.replace('_va', '');
@@ -308,9 +314,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           bank,
           invoiceNumber: invNum,
           amount: total,
-          customerName: member.name || currentAddress.recipientName || 'Pelanggan KuickMart',
-          customerEmail: member.email || 'customer@kuickmart.id',
+          customerName: member.name || currentAddress.recipientName || `Pelanggan ${storeDisplayName}`,
+          customerEmail: member.email || `customer@${currentSlug || 'toko'}.id`,
           customerPhone: member.phone || currentAddress.phone || '081234567890',
+          storeSlug: currentSlug,
+          merchantName: storeDisplayName,
         }),
       })
         .then((res) => res.json())
@@ -331,6 +339,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         body: JSON.stringify({
           invoiceNumber: invNum,
           amount: total,
+          storeSlug: currentSlug,
+          merchantName: storeDisplayName,
         }),
       })
         .then((res) => res.json())

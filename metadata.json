@@ -1,6 +1,6 @@
 {
   "name": "KuickMart Express",
-  "description": "Aplikasi pemesanan belanja online minimarket cerdas mirip Klik Indomaret & Alfagift dengan integrasi Supabase, sistem login admin kasir, pengiriman instan/ambil di toko, promo JSM, poin loyalty, dan tracking pesanan real-time.",
+  "description": "Aplikasi pemesanan belanja online minimarket cerdas multi-tenant dengan kustomisasi nama toko bebas, DOKU payment gateway per-tenant (Client ID & Secret Key), integrasi Supabase, sistem login admin kasir, dan tracking pesanan real-time.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

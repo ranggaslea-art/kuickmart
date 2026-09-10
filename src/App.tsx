@@ -138,6 +138,12 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
+import { 
+  autoProvisionStoreTenant, 
+  getStoreSlugFromUrl, 
+  syncBrandConfigFromTenant,
+  loadStoreTenantConfig
+} from './utils/tenantHelper';
 
 const STORAGE_CART_KEY = 'nusamart_cart';
 const STORAGE_ORDERS_KEY = 'nusamart_orders';
@@ -284,7 +290,7 @@ export default function App() {
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations'>('products');
+  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
@@ -338,6 +344,34 @@ export default function App() {
     return () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('brand_config_updated', handleCustom as EventListener);
+    };
+  }, []);
+
+  // Multi-Tenant Auto-Provisioning & Dynamic Store Branding Sync
+  useEffect(() => {
+    const slug = getStoreSlugFromUrl();
+    autoProvisionStoreTenant(slug).then((tenant) => {
+      if (tenant) {
+        setBrandConfig((prev) => syncBrandConfigFromTenant(tenant, prev));
+        if (typeof document !== 'undefined') {
+          document.title = `${tenant.storeName} - Belanja & Kasir Online`;
+        }
+      }
+    });
+
+    const handleTenantUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setBrandConfig((prev) => syncBrandConfigFromTenant(customEvent.detail, prev));
+        if (typeof document !== 'undefined') {
+          document.title = `${customEvent.detail.storeName} - Belanja & Kasir Online`;
+        }
+      }
+    };
+
+    window.addEventListener('store_tenant_updated', handleTenantUpdated);
+    return () => {
+      window.removeEventListener('store_tenant_updated', handleTenantUpdated);
     };
   }, []);
 
@@ -1423,7 +1457,17 @@ export default function App() {
         {/* Footer Bottom Bar */}
         <div className="w-full mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
           <div>{brandConfig.copyrightText || '© 2026 KuickMart Express. All rights reserved.'}</div>
-          <div className="flex items-center gap-4 mt-2 sm:mt-0">
+          <div className="flex items-center gap-4 mt-2 sm:mt-0 flex-wrap justify-center sm:justify-end">
+            <button
+              onClick={() => {
+                setAdminPanelInitialTab('store_doku_settings');
+                setIsAdminPanelOpen(true);
+              }}
+              className="text-red-600 hover:text-red-800 font-bold transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+              title="Konfigurasi Nama Toko Bebas & Client ID / Secret Key DOKU"
+            >
+              <span>💳 Nama Toko & DOKU</span>
+            </button>
             <button
               onClick={() => {
                 setAdminPanelInitialTab('brand_info');
@@ -1431,7 +1475,7 @@ export default function App() {
               }}
               className="text-blue-600 hover:text-blue-800 font-bold transition-colors cursor-pointer flex items-center gap-1 hover:underline"
             >
-              <span>⚙️ Kelola Info Brand & Footer</span>
+              <span>⚙️ Kelola Info Brand</span>
             </button>
             {brandConfig.bottomLinks && brandConfig.bottomLinks.length > 0 ? (
               brandConfig.bottomLinks.map((item) => (
