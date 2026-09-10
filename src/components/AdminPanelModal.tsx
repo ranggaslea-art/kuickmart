@@ -788,6 +788,50 @@ MLD BLACK 16 | 31000 | 55 | rokok-tembakau | Djarum
 DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
 
+  // Sub-forms & active editor modal tracker
+  const isAnySubFormOpen = Boolean(
+    isAddingProduct || 
+    editingProduct || 
+    isAddingStore || 
+    editingStore || 
+    isAddingVoucher || 
+    editingVoucher || 
+    isAddingUser || 
+    editingUser || 
+    showConversionCalculator || 
+    selectedUserForPermissions
+  );
+
+  // Menutup form/panel editor aktif saja tanpa keluar dari modul admin
+  const handleCloseSubForm = () => {
+    setIsAddingProduct(false);
+    setEditingProduct(null);
+    setIsAddingStore(false);
+    setEditingStore(null);
+    setIsAddingVoucher(false);
+    setEditingVoucher(null);
+    setIsAddingUser(false);
+    setEditingUser(null);
+    setShowConversionCalculator(false);
+    setSelectedUserForPermissions(null);
+  };
+
+  // Keyboard Escape shortcut: tutup form aktif terlebih dahulu, atau keluar panel admin
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isAnySubFormOpen) {
+          handleCloseSubForm();
+        } else {
+          handleClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isAnySubFormOpen]);
+
   if (!isOpen) return null;
 
   // Handle Login Action (Dynamic Authentication against staffUsers + fallback DEFAULT_ACCOUNTS only for unseeded users)
@@ -952,16 +996,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   };
 
   const handleLogout = () => {
-    if (window.confirm('Yakin ingin keluar dari sesi Admin KuickMart?')) {
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
-      setLoginError(null);
-      try {
-        localStorage.removeItem('kuickmart_admin_user');
-      } catch (e) {
-        console.error(e);
-      }
+    if (window.confirm('Yakin ingin keluar dari sesi Admin KuickMart dan kembali ke beranda toko belanja?')) {
+      handleClose();
     }
   };
 
@@ -1742,13 +1778,25 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // ==========================================
   if (!currentUser) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-        <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200">
+      <div 
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleClose();
+          }
+        }}
+        className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+      >
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200"
+        >
           
           {/* Header Login */}
           <div className="p-6 bg-gradient-to-br from-stone-900 via-stone-800 to-blue-950 text-white relative">
             <button
+              type="button"
               onClick={handleClose}
+              title="Tutup & Kembali ke Beranda Toko"
               className="absolute right-4 top-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -1937,6 +1985,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 })()}
               </div>
             </div>
+
+            {/* Tombol Tutup & Kembali ke Toko Belanja */}
+            <div className="pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="w-full py-2.5 px-4 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-98"
+              >
+                <StoreIcon className="w-4 h-4 text-stone-500" />
+                <span>Tutup & Kembali ke Beranda Toko</span>
+              </button>
+            </div>
           </form>
 
         </div>
@@ -2022,8 +2082,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // AUTHENTICATED ADMIN PANEL DASHBOARD
   // ==========================================
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200">
+    <div 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+      className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200"
+      >
         
         {/* Top Header */}
         <div className="p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between">
@@ -2064,24 +2134,28 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             <OfflineSyncBadge />
 
             <button
+              type="button"
               onClick={onOpenSupabaseModal}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white border border-white/10"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white border border-white/10 cursor-pointer"
             >
               <Database className="w-3.5 h-3.5 text-emerald-400" />
               <span>{isSupabaseConnected ? 'DB Terhubung' : 'DB Supabase'}</span>
             </button>
 
             <button
+              type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-bold"
-              title="Keluar / Logout"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
+              title="Keluar Sesi & Kembali ke Toko"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Logout</span>
             </button>
 
             <button
+              type="button"
               onClick={handleClose}
+              title="Tutup Panel Admin & Kembali ke Toko"
               className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -4675,24 +4749,54 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-stone-100 bg-stone-50 flex items-center justify-between text-xs">
-          <div className="text-stone-500 flex items-center gap-1.5">
+        <div className="p-4 border-t border-stone-100 bg-stone-50 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="text-stone-500 flex items-center gap-1.5 flex-wrap">
             <Settings className="w-3.5 h-3.5 text-stone-400" />
             <span>KuickMart POS & Inventory Management v2.5</span>
+            {isAnySubFormOpen && (
+              <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span>⚠️</span>
+                <span>Form Editor Sedang Terbuka</span>
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Tombol Khusus: Tutup Form/Panel Editor tanpa keluar dari Modul Admin */}
+            {isAnySubFormOpen && (
+              <button
+                type="button"
+                onClick={handleCloseSubForm}
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-extrabold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                title="Tutup form/editor yang aktif tanpa keluar dari modul admin"
+              >
+                <X className="w-4 h-4" />
+                <span>Tutup Form / Batal</span>
+              </button>
+            )}
+
             <button
+              type="button"
               onClick={handleLogout}
-              className="px-4 py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold"
+              className="px-4 py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+              title="Keluar dari sesi akun dan tutup modul admin"
             >
-              Keluar Sesi
+              <LogOut className="w-3.5 h-3.5 text-stone-600" />
+              <span>Keluar Sesi</span>
             </button>
+
             <button
-              onClick={onClose}
-              className="px-5 py-2 rounded-xl bg-stone-900 text-white font-bold hover:bg-black"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleClose();
+              }}
+              className="px-5 py-2 rounded-xl bg-stone-900 text-white font-bold hover:bg-black transition-all cursor-pointer flex items-center gap-2 shadow-sm active:scale-95"
+              title="Tutup modul admin dan kembali ke halaman toko belanja"
             >
-              Tutup Panel
+              <StoreIcon className="w-4 h-4 text-amber-400" />
+              <span>Tutup Panel & Kembali ke Toko</span>
             </button>
           </div>
         </div>
