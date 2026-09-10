@@ -40,7 +40,8 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
-  Check
+  Check,
+  Package
 } from 'lucide-react';
 
 export interface PosRowItem {
@@ -167,8 +168,46 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     },
   ]);
 
-  // Quick Barcode Scanning State
+  // Quick Barcode & Product Name Search State
   const [quickBarcodeInput, setQuickBarcodeInput] = useState('');
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
+  const searchDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Search results for autocomplete (searching by name, brand, barcode, SKU)
+  const searchResults = useMemo(() => {
+    const q = quickBarcodeInput.trim().toLowerCase();
+    if (!q) return [];
+    return products.filter((p) => {
+      const matchName = p.name.toLowerCase().includes(q);
+      const matchBarcode = p.barcode && p.barcode.toLowerCase().includes(q);
+      const matchBrand = p.brand && p.brand.toLowerCase().includes(q);
+      const matchCategory = p.category && p.category.toLowerCase().includes(q);
+      const matchConversions = p.unitConversions?.some(
+        (uc) =>
+          (uc.barcode && uc.barcode.toLowerCase().includes(q)) ||
+          uc.unitName.toLowerCase().includes(q)
+      );
+      return matchName || matchBarcode || matchBrand || matchCategory || matchConversions;
+    }).slice(0, 10);
+  }, [quickBarcodeInput, products]);
+
+  // Click outside to close search dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        searchDropdownRef.current &&
+        !searchDropdownRef.current.contains(e.target as Node) &&
+        quickBarcodeInputRef.current &&
+        !quickBarcodeInputRef.current.contains(e.target as Node)
+      ) {
+        setIsSearchDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const [lastScannedItemInfo, setLastScannedItemInfo] = useState<{
     name: string;
     qty: number;
@@ -349,8 +388,8 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // Search by product barcode, id, or multi-tier packaging barcode
-    const matched = products.find((p) => {
+    // 1. Search by product barcode, id, or multi-tier packaging barcode
+    let matched = products.find((p) => {
       if (p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) return true;
       if (p.id.toLowerCase() === trimmed.toLowerCase()) return true;
       if (
@@ -362,6 +401,14 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       }
       return false;
     });
+
+    // 2. If not found by barcode, search by product name / brand
+    if (!matched) {
+      matched = products.find((p) =>
+        p.name.toLowerCase().includes(trimmed.toLowerCase()) ||
+        (p.brand && p.brand.toLowerCase().includes(trimmed.toLowerCase()))
+      );
+    }
 
     if (matched) {
       playScanBeep();
@@ -377,7 +424,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
         qtyInputRefs.current[rowIndex]?.select();
       }, 50);
     } else {
-      alert(`Produk dengan barcode "${trimmed}" tidak ditemukan.`);
+      alert(`Produk dengan barcode atau nama "${trimmed}" tidak ditemukan.`);
     }
   };
 
@@ -545,20 +592,180 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   };
 
   // ==========================================
-  // QUICK BARCODE SCANNER (Top Bar)
+  // ADD PRODUCT TO TRANSACTION CART
+  // ==========================================
+  const addProductToCart = (
+    matchedProd: Product,
+    customBarcode?: string,
+    customUnit?: string,
+    customQty: number = 1
+  ) => {
+    playScanBeep();
+    const baseUnit = matchedProd.unit || 'Pcs';
+    const matchedUc = customUnit
+      ? matchedProd.unitConversions?.find(
+          (uc) => uc.unitName.toLowerCase() === customUnit.toLowerCase()
+        )
+      : matchedProd.unitConversions?.find(
+          (uc) =>
+            uc.barcode &&
+            customBarcode &&
+            uc.barcode.toLowerCase() === customBarcode.toLowerCase()
+        );
+    const unitName = matchedUc ? matchedUc.unitName : customUnit || baseUnit;
+    const mult = matchedUc ? matchedUc.totalMultiplier || 1 : 1;
+    const unitPrice = matchedUc
+      ? matchedUc.price || Math.round(matchedProd.price * mult)
+      : matchedProd.price * mult;
+    const barcodeToSave = customBarcode || matchedUc?.barcode || matchedProd.barcode || '';
+
+    setRows((prev) => {
+      const existingIdx = prev.findIndex(
+        (r) =>
+          r.productId === matchedProd.id &&
+          r.unit.toLowerCase() === unitName.toLowerCase()
+      );
+
+      if (existingIdx >= 0) {
+        // Increment quantity
+        const updated = [...prev];
+        const curr = updated[existingIdx];
+        const newQty = curr.quantity + customQty;
+        const newSub = Math.max(
+          0,
+          curr.sellingPrice * newQty - curr.discountAmount
+        );
+        updated[existingIdx] = {
+          ...curr,
+          quantity: newQty,
+          subtotal: newSub,
+          baseQuantity: newQty * (curr.conversionMultiplier || 1),
+        };
+
+        setLastScannedItemInfo({
+          name: matchedProd.name,
+          qty: newQty,
+          unit: unitName,
+          price: curr.sellingPrice,
+          subtotal: newSub,
+        });
+
+        return updated;
+      }
+
+      // Check if there's an empty row to take
+      const emptyIdx = prev.findIndex((r) => !r.productId);
+      if (emptyIdx >= 0) {
+        const updated = [...prev];
+        updated[emptyIdx] = {
+          id: `row_${Date.now()}_${emptyIdx}`,
+          productId: matchedProd.id,
+          productName: matchedProd.name,
+          barcode: barcodeToSave,
+          unit: unitName,
+          quantity: customQty,
+          sellingPrice: unitPrice,
+          discountAmount: 0,
+          subtotal: unitPrice * customQty,
+          costPrice:
+            matchedProd.costPrice || Math.round(matchedProd.price * 0.75),
+          conversionMultiplier: mult,
+          baseUnit,
+          baseQuantity: customQty * mult,
+          stockAvailable: matchedProd.stock || 0,
+        };
+
+        setLastScannedItemInfo({
+          name: matchedProd.name,
+          qty: customQty,
+          unit: unitName,
+          price: unitPrice,
+          subtotal: unitPrice * customQty,
+        });
+
+        return updated;
+      }
+
+      // Otherwise append new row
+      const newRow: PosRowItem = {
+        id: `row_${Date.now()}_${prev.length}`,
+        productId: matchedProd.id,
+        productName: matchedProd.name,
+        barcode: barcodeToSave,
+        unit: unitName,
+        quantity: customQty,
+        sellingPrice: unitPrice,
+        discountAmount: 0,
+        subtotal: unitPrice * customQty,
+        costPrice:
+          matchedProd.costPrice || Math.round(matchedProd.price * 0.75),
+        conversionMultiplier: mult,
+        baseUnit,
+        baseQuantity: customQty * mult,
+        stockAvailable: matchedProd.stock || 0,
+      };
+
+      setLastScannedItemInfo({
+        name: matchedProd.name,
+        qty: customQty,
+        unit: unitName,
+        price: unitPrice,
+        subtotal: unitPrice * customQty,
+      });
+
+      return [...prev, newRow];
+    });
+
+    setQuickBarcodeInput('');
+    setIsSearchDropdownOpen(false);
+    setSelectedSearchIndex(0);
+  };
+
+  // Keyboard navigation for search dropdown
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (!isSearchDropdownOpen || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSearchIndex((prev) => (prev + 1) % searchResults.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSearchIndex(
+        (prev) => (prev - 1 + searchResults.length) % searchResults.length
+      );
+    } else if (e.key === 'Escape') {
+      setIsSearchDropdownOpen(false);
+    }
+  };
+
+  // ==========================================
+  // QUICK BARCODE & PRODUCT NAME SEARCH (Top Bar)
+  // Kasir bisa mencari lewat barcode ATAU nama barang
   // ==========================================
   const handleQuickBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const code = quickBarcodeInput.trim();
-    if (!code) return;
+    const query = quickBarcodeInput.trim();
+    if (!query) return;
 
-    // Search product
-    const matchedProd = products.find((p) => {
-      if (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) return true;
-      if (p.id.toLowerCase() === code.toLowerCase()) return true;
+    // If dropdown is open and user pressed enter with selected item
+    if (
+      isSearchDropdownOpen &&
+      searchResults.length > 0 &&
+      selectedSearchIndex >= 0 &&
+      selectedSearchIndex < searchResults.length
+    ) {
+      addProductToCart(searchResults[selectedSearchIndex]);
+      return;
+    }
+
+    // 1. Search by exact barcode or SKU/ID
+    const barcodeMatch = products.find((p) => {
+      if (p.barcode && p.barcode.toLowerCase() === query.toLowerCase())
+        return true;
+      if (p.id.toLowerCase() === query.toLowerCase()) return true;
       if (
         p.unitConversions?.some(
-          (uc) => uc.barcode && uc.barcode.toLowerCase() === code.toLowerCase()
+          (uc) => uc.barcode && uc.barcode.toLowerCase() === query.toLowerCase()
         )
       ) {
         return true;
@@ -566,110 +773,27 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       return false;
     });
 
-    if (matchedProd) {
-      playScanBeep();
-      const matchedUc = matchedProd.unitConversions?.find(
-        (uc) => uc.barcode && uc.barcode.toLowerCase() === code.toLowerCase()
-      );
-      const baseUnit = matchedProd.unit || 'Pcs';
-      const unitName = matchedUc ? matchedUc.unitName : baseUnit;
-      const mult = matchedUc ? matchedUc.totalMultiplier || 1 : 1;
-      const unitPrice = matchedUc ? matchedUc.price || Math.round(matchedProd.price * mult) : matchedProd.price * mult;
+    if (barcodeMatch) {
+      addProductToCart(barcodeMatch, query);
+      return;
+    }
 
-      // Check if product with same unit already exists in the table
-      setRows((prev) => {
-        const existingIdx = prev.findIndex(
-          (r) => r.productId === matchedProd.id && r.unit.toLowerCase() === unitName.toLowerCase()
-        );
+    // 2. Search by exact or partial product name
+    const nameMatches = products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        (p.brand && p.brand.toLowerCase().includes(query.toLowerCase()))
+    );
 
-        if (existingIdx >= 0) {
-          // Increment quantity
-          const updated = [...prev];
-          const curr = updated[existingIdx];
-          const newQty = curr.quantity + 1;
-          const newSub = Math.max(0, curr.sellingPrice * newQty - curr.discountAmount);
-          updated[existingIdx] = {
-            ...curr,
-            quantity: newQty,
-            subtotal: newSub,
-            baseQuantity: newQty * (curr.conversionMultiplier || 1),
-          };
-
-          setLastScannedItemInfo({
-            name: matchedProd.name,
-            qty: newQty,
-            unit: unitName,
-            price: curr.sellingPrice,
-            subtotal: newSub,
-          });
-
-          return updated;
-        }
-
-        // Check if there's an empty row to take
-        const emptyIdx = prev.findIndex((r) => !r.productId);
-        if (emptyIdx >= 0) {
-          const updated = [...prev];
-          updated[emptyIdx] = {
-            id: `row_${Date.now()}_${emptyIdx}`,
-            productId: matchedProd.id,
-            productName: matchedProd.name,
-            barcode: code,
-            unit: unitName,
-            quantity: 1,
-            sellingPrice: unitPrice,
-            discountAmount: 0,
-            subtotal: unitPrice,
-            costPrice: matchedProd.costPrice || Math.round(matchedProd.price * 0.75),
-            conversionMultiplier: mult,
-            baseUnit,
-            baseQuantity: mult,
-            stockAvailable: matchedProd.stock || 0,
-          };
-
-          setLastScannedItemInfo({
-            name: matchedProd.name,
-            qty: 1,
-            unit: unitName,
-            price: unitPrice,
-            subtotal: unitPrice,
-          });
-
-          return updated;
-        }
-
-        // Otherwise append new row
-        const newRow: PosRowItem = {
-          id: `row_${Date.now()}_${prev.length}`,
-          productId: matchedProd.id,
-          productName: matchedProd.name,
-          barcode: code,
-          unit: unitName,
-          quantity: 1,
-          sellingPrice: unitPrice,
-          discountAmount: 0,
-          subtotal: unitPrice,
-          costPrice: matchedProd.costPrice || Math.round(matchedProd.price * 0.75),
-          conversionMultiplier: mult,
-          baseUnit,
-          baseQuantity: mult,
-          stockAvailable: matchedProd.stock || 0,
-        };
-
-        setLastScannedItemInfo({
-          name: matchedProd.name,
-          qty: 1,
-          unit: unitName,
-          price: unitPrice,
-          subtotal: unitPrice,
-        });
-
-        return [...prev, newRow];
-      });
-
-      setQuickBarcodeInput('');
+    if (nameMatches.length === 1) {
+      // Exactly 1 match found by name, immediately add to cart
+      addProductToCart(nameMatches[0]);
+    } else if (nameMatches.length > 1) {
+      // Multiple matches: show dropdown and highlight first
+      setIsSearchDropdownOpen(true);
+      setSelectedSearchIndex(0);
     } else {
-      alert(`Produk dengan barcode "${code}" tidak terdaftar di katalog.`);
+      alert(`Produk dengan barcode atau nama "${query}" tidak ditemukan di katalog.`);
     }
   };
 
@@ -1274,26 +1398,114 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
         </div>
 
         {/* ============================================================ */}
-        {/* 3. QUICK SCAN BAR & HARDWARE SCANNER INPUT                   */}
+        {/* 3. QUICK SEARCH & BARCODE SCANNER (NAMA / BARCODE)          */}
         {/* ============================================================ */}
         <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col md:flex-row items-center gap-3">
-          <form onSubmit={handleQuickBarcodeSubmit} className="relative flex-1 w-full">
-            <ScanBarcode className="w-5 h-5 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              ref={quickBarcodeInputRef}
-              type="text"
-              value={quickBarcodeInput}
-              onChange={(e) => setQuickBarcodeInput(e.target.value)}
-              placeholder="Scan Barcode (Laser Gun / Ketik Barcode / ID Barang lalu tekan Enter)... [F2]"
-              className="w-full pl-11 pr-24 py-3 bg-stone-50 hover:bg-stone-100/70 focus:bg-white border-2 border-emerald-300 focus:border-emerald-600 rounded-xl text-sm font-mono font-bold focus:outline-hidden focus:ring-4 focus:ring-emerald-100 transition-all shadow-inner"
-            />
-            <button
-              type="submit"
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
-            >
-              Enter
-            </button>
-          </form>
+          <div className="relative flex-1 w-full" ref={searchDropdownRef}>
+            <form onSubmit={handleQuickBarcodeSubmit} className="relative w-full">
+              <Search className="w-5 h-5 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={quickBarcodeInputRef}
+                type="text"
+                value={quickBarcodeInput}
+                onChange={(e) => {
+                  setQuickBarcodeInput(e.target.value);
+                  setIsSearchDropdownOpen(e.target.value.trim().length > 0);
+                  setSelectedSearchIndex(0);
+                }}
+                onFocus={() => {
+                  if (quickBarcodeInput.trim().length > 0) {
+                    setIsSearchDropdownOpen(true);
+                  }
+                }}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Ketik Nama Barang atau Scan Barcode (Contoh: Indomie, Aqua, Beras, Minyak...) [F2]"
+                className="w-full pl-11 pr-28 py-3 bg-stone-50 hover:bg-stone-100/70 focus:bg-white border-2 border-emerald-300 focus:border-emerald-600 rounded-xl text-sm font-semibold focus:outline-hidden focus:ring-4 focus:ring-emerald-100 transition-all shadow-inner"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {quickBarcodeInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickBarcodeInput('');
+                      setIsSearchDropdownOpen(false);
+                    }}
+                    className="p-1 hover:bg-stone-200 text-stone-400 hover:text-stone-600 rounded-lg text-xs"
+                    title="Hapus pencarian"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  Enter
+                </button>
+              </div>
+            </form>
+
+            {/* Instant Autocomplete Suggestions Popover */}
+            {isSearchDropdownOpen && searchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-stone-200 z-50 overflow-hidden divide-y divide-stone-100 max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-2 bg-stone-50 text-[11px] font-bold text-stone-500 uppercase tracking-wider flex items-center justify-between">
+                  <span>Pencarian Barang ({searchResults.length} ditemukan)</span>
+                  <span className="text-[10px] text-stone-400 font-normal">Gunakan ↑ ↓ lalu Enter untuk memilih</span>
+                </div>
+                {searchResults.map((prod, sIdx) => {
+                  const isSelected = sIdx === selectedSearchIndex;
+                  return (
+                    <div
+                      key={prod.id}
+                      onClick={() => addProductToCart(prod)}
+                      onMouseEnter={() => setSelectedSearchIndex(sIdx)}
+                      className={`p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-emerald-50/80 text-emerald-950' : 'hover:bg-stone-50 text-stone-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {prod.image ? (
+                          <img
+                            src={prod.image}
+                            alt={prod.name}
+                            className="w-10 h-10 rounded-xl object-cover bg-stone-100 border border-stone-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center shrink-0 text-stone-400">
+                            <Package className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs sm:text-sm truncate text-stone-900">
+                            {prod.name}
+                          </div>
+                          <div className="text-[11px] text-stone-500 flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="font-mono bg-stone-100 px-1.5 py-0.2 rounded text-stone-600 font-medium">
+                              {prod.barcode || 'ID: ' + prod.id.slice(-6)}
+                            </span>
+                            {prod.brand && <span className="font-medium">• {prod.brand}</span>}
+                            <span>•</span>
+                            <span className={prod.stock && prod.stock > 10 ? 'text-emerald-700 font-semibold' : 'text-amber-700 font-bold'}>
+                              Stok: {prod.stock || 0} {prod.unit || 'Pcs'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="font-mono font-black text-sm text-emerald-700">
+                          {formatRupiah(prod.price)}
+                        </div>
+                        <span className="text-[10px] text-stone-400 font-medium">
+                          per {prod.unit || 'Pcs'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Live Camera Scanner Button */}
           <button

@@ -138,6 +138,30 @@ export const SYSTEM_MODULES: SystemModuleDefinition[] = [
     iconName: 'Sparkles',
     adminNote: 'Dikelola oleh Admin dan Supervisor untuk program loyalitas toko.',
   },
+  {
+    key: 'stock_opname',
+    name: 'Opname Stok Barang',
+    category: 'Operasional',
+    description: 'Pemeriksaan fisik stok berkala, bandingkan stok buku vs hitungan nyata, hitung selisih fisik & rupiah, serta sesuaikan stok.',
+    iconName: 'ClipboardCheck',
+    adminNote: 'Admin, Supervisor, dan Gudang dapat melakukan audit & penyesuaian stok opname.',
+  },
+  {
+    key: 'returns',
+    name: 'Retur Jual & Retur Beli',
+    category: 'Operasional',
+    description: 'Pencatatan retur barang dari konsumen (retur penjualan) dan pengembalian barang rusak/expired ke suplier (retur pembelian).',
+    iconName: 'Undo2',
+    adminNote: 'Admin, Supervisor, dan Kasir dapat memproses retur penjualan. Gudang & Admin memproses retur pembelian.',
+  },
+  {
+    key: 'stock_mutations',
+    name: 'Mutasi Barang Antar Cabang',
+    category: 'Operasional',
+    description: 'Transfer perpindahan stok produk antar cabang minimarket atau dari gudang pusat ke gerai cabang.',
+    iconName: 'ArrowLeftRight',
+    adminNote: 'Dikelola oleh Admin, Supervisor, dan Gudang untuk mengontrol distribusi stok antar outlet.',
+  },
 ];
 
 // Hak akses standar bawaan per peran (Default Role Permissions)
@@ -159,6 +183,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     suppliers: { canView: true, canEdit: true },
     customers: { canView: true, canEdit: true },
     points_rewards: { canView: true, canEdit: true },
+    stock_opname: { canView: true, canEdit: true },
+    returns: { canView: true, canEdit: true },
+    stock_mutations: { canView: true, canEdit: true },
   },
   supervisor: {
     products: { canView: true, canEdit: true },
@@ -177,13 +204,17 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     suppliers: { canView: true, canEdit: true }, // Supervisor bisa kelola supplier
     customers: { canView: true, canEdit: true }, // Supervisor bisa kelola member
     points_rewards: { canView: true, canEdit: true }, // Supervisor bisa atur poin
+    stock_opname: { canView: true, canEdit: true }, // Supervisor bisa audit opname
+    returns: { canView: true, canEdit: true }, // Supervisor bisa kelola retur
+    stock_mutations: { canView: true, canEdit: true }, // Supervisor bisa mutasi barang
   },
   kasir: {
-    // Kasir dapat melihat katalog, promo, pelanggan, dan poin belanja
+    // Kasir dapat melihat katalog, promo, pelanggan, dan poin belanja, serta retur penjualan
     products: { canView: true, canEdit: false }, // Kasir dapat melihat katalog & stok produk
     promos: { canView: true, canEdit: false }, // Kasir dapat melihat promo aktif
     customers: { canView: true, canEdit: true }, // Kasir dapat mendaftar/mencari member
     points_rewards: { canView: true, canEdit: false }, // Kasir dapat melihat info poin
+    returns: { canView: true, canEdit: true }, // Kasir dapat menerima retur barang jual dari pembeli
     orders: { canView: false, canEdit: false }, // Terkunci
     stores: { canView: false, canEdit: false }, // Terkunci
     receipts: { canView: false, canEdit: false }, // Terkunci
@@ -196,13 +227,18 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     reports: { canView: false, canEdit: false }, // Terkunci
     purchases: { canView: false, canEdit: false }, // Terkunci
     suppliers: { canView: false, canEdit: false }, // Terkunci
+    stock_opname: { canView: false, canEdit: false }, // Terkunci
+    stock_mutations: { canView: false, canEdit: false }, // Terkunci
   },
   gudang: {
     products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
     orders: { canView: true, canEdit: true }, // Gudang memproses status picking / pengemasan barang
     purchases: { canView: true, canEdit: true }, // Gudang menerima pembelian barang & input stok masuk
     suppliers: { canView: true, canEdit: false }, // Gudang melihat data pemasok
-    stores: { canView: false, canEdit: false },
+    stock_opname: { canView: true, canEdit: true }, // Gudang berhak penuh opname stok
+    returns: { canView: true, canEdit: true }, // Gudang memproses retur barang
+    stock_mutations: { canView: true, canEdit: true }, // Gudang memproses mutasi antar cabang
+    stores: { canView: true, canEdit: false }, // Gudang melihat cabang untuk mutasi
     receipts: { canView: false, canEdit: false },
     promos: { canView: false, canEdit: false },
     brand_info: { canView: false, canEdit: false },
@@ -267,6 +303,9 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       bulk_import: { canView: false, canEdit: false },
       push_notifications: { canView: false, canEdit: false },
       reports: { canView: false, canEdit: false },
+      stock_opname: { canView: false, canEdit: false },
+      returns: { canView: false, canEdit: false },
+      stock_mutations: { canView: false, canEdit: false },
     }),
   },
   {
@@ -293,6 +332,9 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       bulk_import: { canView: false, canEdit: false },
       push_notifications: { canView: false, canEdit: false },
       reports: { canView: false, canEdit: false },
+      stock_opname: { canView: false, canEdit: false },
+      returns: { canView: false, canEdit: false },
+      stock_mutations: { canView: false, canEdit: false },
     }),
   },
   {

@@ -67,7 +67,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ClipboardCheck,
+  Undo2,
+  ArrowLeftRight
 } from 'lucide-react';
 import { 
   Product, 
@@ -131,6 +134,9 @@ import { PurchaseManager } from './PurchaseManager';
 import { CustomerManager } from './CustomerManager';
 import { PointsLoyaltyManager } from './PointsLoyaltyManager';
 import { PosCashierManager } from './PosCashierManager';
+import { StockOpnameManager } from './StockOpnameManager';
+import { ReturnsManager } from './ReturnsManager';
+import { StockMutationManager } from './StockMutationManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
@@ -174,7 +180,7 @@ interface AdminPanelModalProps {
   onUpdateRewardItems?: (items: RewardItem[]) => void;
   pointsLedger?: PointsLedgerEntry[];
   onUpdatePointsLedger?: (ledger: PointsLedgerEntry[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations';
 }
 
 interface AdminUser {
@@ -555,7 +561,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
@@ -2115,15 +2121,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           handleClose();
         }
       }}
-      className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 z-50 overflow-hidden bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-1 sm:p-3"
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl w-full max-w-[1550px] h-[97vh] max-h-[97vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200"
       >
         
-        {/* Top Header */}
-        <div className="shrink-0 p-3 sm:p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between gap-3">
+        {/* Top Header - Selalu Menempel di Atas (Shrink-0) */}
+        <div className="shrink-0 p-3 sm:p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between gap-3 z-30">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-amber-400 text-stone-950 flex items-center justify-center font-black shadow-md shrink-0 text-sm sm:text-base">
               KM
@@ -2147,7 +2153,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     {getRoleDisplayName(currentUser?.role || 'kasir')}
                   </span>
                   <span className="hidden md:inline-block text-[10px] text-stone-300 bg-white/10 px-2 py-0.5 rounded-full">
-                    Akses: {Object.values(currentUserPermissions).filter(p => p?.canView).length}/10 Modul
+                    Akses: {Object.values(currentUserPermissions).filter(p => p?.canView).length}/{SYSTEM_MODULES.length} Modul
                   </span>
                 </div>
               </div>
@@ -2207,7 +2213,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         </div>
 
         {/* Tab Navigation (Permission-Aware) - Ditempatkan tepat di bawah Header, Selalu Terlihat & Tidak Pernah Tertutup Modul */}
-        <div className="shrink-0 sticky top-0 z-20 bg-white border-b border-stone-200 shadow-2xs">
+        <div className="shrink-0 sticky top-0 z-30 bg-white border-b border-stone-200 shadow-2xs">
           <div className="flex items-center justify-between px-1.5 sm:px-3">
             {/* Tombol Geser Kiri Tab Menu */}
             <button
@@ -2226,10 +2232,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             >
               {[
                 { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
-                { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
-                { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-emerald-600" />, count: activePurchases.length },
+                { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: products.length },
+                { id: 'stock_opname', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
+                { id: 'returns', moduleKey: 'returns' as SystemModuleKey, label: 'Retur Jual & Beli', icon: <Undo2 className="w-4 h-4 text-rose-600" /> },
+                { id: 'stock_mutations', moduleKey: 'stock_mutations' as SystemModuleKey, label: 'Mutasi Antar Cabang', icon: <ArrowLeftRight className="w-4 h-4 text-purple-600" /> },
+                { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-teal-600" />, count: activePurchases.length },
                 { id: 'suppliers', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
-                { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4" />, count: orders.length },
+                { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4 text-stone-700" />, count: orders.length },
                 { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
                 { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
                 { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
@@ -4857,6 +4866,54 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 onUpdatePointsLedger={handleUpdatePointsLedger}
                 onUpdateCustomers={handleUpdateCustomers}
                 canEdit={currentUserPermissions.points_rewards?.canEdit ?? true}
+              />
+            </div>
+          ))}
+
+          {/* TAB: OPNAME STOK BARANG */}
+          {activeTab === 'stock_opname' && (!currentUserPermissions.stock_opname?.canView ? (
+            renderAccessDenied('Opname Stok Barang')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.stock_opname?.canEdit && renderReadOnlyBanner('Opname Stok Barang')}
+              <StockOpnameManager
+                products={products}
+                stores={stores}
+                currentStore={currentStore}
+                onUpdateProducts={onUpdateProducts}
+              />
+            </div>
+          ))}
+
+          {/* TAB: RETUR BARANG (JUAL & BELI) */}
+          {activeTab === 'returns' && (!currentUserPermissions.returns?.canView ? (
+            renderAccessDenied('Retur Barang Jual & Beli')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.returns?.canEdit && renderReadOnlyBanner('Retur Barang Jual & Beli')}
+              <ReturnsManager
+                products={products}
+                stores={stores}
+                currentStore={currentStore}
+                orders={orders}
+                suppliers={activeSuppliers}
+                purchases={activePurchases}
+                onUpdateProducts={onUpdateProducts}
+              />
+            </div>
+          ))}
+
+          {/* TAB: MUTASI STOK ANTAR CABANG */}
+          {activeTab === 'stock_mutations' && (!currentUserPermissions.stock_mutations?.canView ? (
+            renderAccessDenied('Mutasi Stok Antar Cabang')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.stock_mutations?.canEdit && renderReadOnlyBanner('Mutasi Stok Antar Cabang')}
+              <StockMutationManager
+                products={products}
+                stores={stores}
+                currentStore={currentStore}
+                onUpdateProducts={onUpdateProducts}
               />
             </div>
           ))}

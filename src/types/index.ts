@@ -362,7 +362,153 @@ export type SystemModuleKey =
   | 'purchases'
   | 'suppliers'
   | 'customers'
-  | 'points_rewards';
+  | 'points_rewards'
+  | 'stock_opname'
+  | 'returns'
+  | 'stock_mutations';
+
+// ==========================================
+// 1. MODUL OPNAME STOK BARANG (STOCK OPNAME)
+// ==========================================
+export interface StockOpnameItem {
+  id: string;
+  productId: string;
+  productName: string;
+  barcode: string;
+  category: string;
+  unit: string;
+  systemStock: number; // Stok buku / sistem saat opname dimulai
+  physicalStock: number; // Stok fisik hasil hitungan nyata
+  differenceQty: number; // physicalStock - systemStock
+  costPrice: number; // Harga Pokok / Modal (HPP)
+  differenceAmount: number; // differenceQty * costPrice
+  notes?: string; // Alasan: Rusak, Expired, Hilang, Kemasan Bocor, Sesuai
+}
+
+export interface StockOpnameRecord {
+  id: string;
+  opnameNumber: string; // cth: 'OPN-202609-001'
+  date: string;
+  storeId: string;
+  storeName: string;
+  auditorName: string;
+  status: 'draft' | 'posted'; // posted = stok katalog sudah disesuaikan
+  items: StockOpnameItem[];
+  totalItemsCounted: number;
+  itemsMatchedCount: number;
+  itemsDiscrepancyCount: number;
+  totalSurplusQty: number;
+  totalDeficitQty: number;
+  netDifferenceAmount: number; // Net total rupiah selisih
+  notes?: string;
+  createdAt: string;
+  postedAt?: string;
+}
+
+// ==========================================
+// 2. MODUL RETUR BARANG JUAL & BELI
+// ==========================================
+export interface SalesReturnItem {
+  id: string;
+  productId: string;
+  productName: string;
+  barcode?: string;
+  unit: string;
+  quantity: number;
+  sellingPrice: number;
+  subtotal: number;
+  condition: 'good' | 'damaged' | 'expired'; // 'good' = bisa restock, 'damaged'/'expired' = afkir
+  reason: string; // Salah beli, Rusak, Basi/Expired, Cacat pabrik, dll.
+  restocked: boolean; // Apakah stok barang sudah dimasukkan kembali ke katalog
+}
+
+export interface SalesReturn {
+  id: string;
+  returnNumber: string; // cth: 'RJ-202609-001'
+  orderId?: string; // ID transaksi/order asli jika ada
+  orderNumber?: string; // No Nota asli cth: 'ORD-202609-001'
+  date: string;
+  storeId: string;
+  storeName: string;
+  customerName: string;
+  customerPhone?: string;
+  cashierName: string;
+  items: SalesReturnItem[];
+  totalQuantity: number;
+  totalAmount: number;
+  refundMethod: 'cash' | 'exchange' | 'credit_note' | 'points';
+  status: 'completed' | 'cancelled';
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PurchaseReturnItem {
+  id: string;
+  productId: string;
+  productName: string;
+  barcode?: string;
+  unit: string;
+  quantity: number;
+  costPrice: number; // Harga beli modal
+  subtotal: number;
+  reason: string; // Rusak saat tiba, Mendekati expired, Salah kirim dari suplier, Kelebihan kirim
+  stockReduced: boolean; // Stok sudah dikurangkan dari katalog
+}
+
+export interface PurchaseReturn {
+  id: string;
+  returnNumber: string; // cth: 'RB-202609-001'
+  purchaseId?: string; // ID transaksi pembelian PO asli
+  purchaseNumber?: string; // No Faktur Beli cth: 'FB-202609-001'
+  supplierId: string;
+  supplierName: string;
+  date: string;
+  storeId: string;
+  storeName: string;
+  items: PurchaseReturnItem[];
+  totalQuantity: number;
+  totalAmount: number;
+  resolutionType: 'deduct_invoice' | 'cash_refund' | 'replacement'; // Potong utang, Refund dana, Ganti barang
+  status: 'pending' | 'completed' | 'cancelled';
+  handledBy: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// ==========================================
+// 3. MODUL MUTASI BARANG (STOCK TRANSFER)
+// ==========================================
+export interface StockMutationItem {
+  id: string;
+  productId: string;
+  productName: string;
+  barcode?: string;
+  unit: string;
+  quantity: number;
+  conversionMultiplier?: number;
+  baseUnit?: string;
+  baseQuantity?: number;
+  availableStockOrigin?: number;
+  notes?: string;
+}
+
+export interface StockMutation {
+  id: string;
+  mutationNumber: string; // cth: 'MUT-202609-001'
+  date: string;
+  sourceStoreId: string; // Cabang Asal
+  sourceStoreName: string;
+  destStoreId: string; // Cabang Tujuan
+  destStoreName: string;
+  items: StockMutationItem[];
+  totalQuantity: number;
+  status: 'draft' | 'in_transit' | 'completed' | 'cancelled';
+  transferredBy: string; // Staff/Kasir yang memutasikan
+  receivedBy?: string; // Penerima di cabang tujuan
+  shippingNotes?: string;
+  createdAt: string;
+  completedAt?: string;
+}
 
 export interface PushSubscriberInfo {
   id: string;
