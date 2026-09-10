@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   X, 
   Settings, 
@@ -63,7 +63,11 @@ import {
   ShoppingBag,
   Coins,
   Gift,
-  ScanBarcode
+  ScanBarcode,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { 
   Product, 
@@ -554,11 +558,34 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'push_notifications' | 'reports' | 'pos_cashier'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
+  // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
+  const [showKpiSummary, setShowKpiSummary] = useState(false);
+  const tabScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabScrollRef.current) {
+      tabScrollRef.current.scrollBy({
+        left: direction === 'left' ? -220 : 220,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
     }
   }, [initialTab]);
+
+  // Auto-scroll tab aktif ke posisi tengah agar tab selalu terlihat
+  useEffect(() => {
+    if (tabScrollRef.current) {
+      const activeBtn = tabScrollRef.current.querySelector('[data-active="true"]');
+      if (activeBtn) {
+        activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [activeTab]);
 
   const [productSearch, setProductSearch] = useState('');
   
@@ -2096,20 +2123,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       >
         
         {/* Top Header */}
-        <div className="p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-stone-950 flex items-center justify-center font-black shadow-md">
+        <div className="shrink-0 p-3 sm:p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-amber-400 text-stone-950 flex items-center justify-center font-black shadow-md shrink-0 text-sm sm:text-base">
               KM
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h3 className="font-extrabold text-sm sm:text-lg text-white tracking-tight truncate">
                   Panel Admin & Kasir KuickMart
                 </h3>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                     <UserCheck className="w-3 h-3" />
-                    <span>{currentUser.name}</span>
+                    <span className="truncate max-w-[100px]">{currentUser.name}</span>
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
                     currentUser?.role === 'admin' ? 'bg-amber-400/20 text-amber-300 border-amber-400/30' :
@@ -2119,24 +2146,40 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   }`}>
                     {getRoleDisplayName(currentUser?.role || 'kasir')}
                   </span>
-                  <span className="text-[10px] text-stone-300 bg-white/10 px-2 py-0.5 rounded-full">
+                  <span className="hidden md:inline-block text-[10px] text-stone-300 bg-white/10 px-2 py-0.5 rounded-full">
                     Akses: {Object.values(currentUserPermissions).filter(p => p?.canView).length}/10 Modul
                   </span>
                 </div>
               </div>
-              <p className="text-xs text-stone-300">
+              <p className="text-[11px] text-stone-300 hidden sm:block truncate">
                 Kelola master produk, stok barang, transaksi masuk, cabang toko, & database
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <OfflineSyncBadge />
+
+            {/* Tombol Toggle Ringkasan KPI Bisnis */}
+            <button
+              type="button"
+              onClick={() => setShowKpiSummary(prev => !prev)}
+              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                showKpiSummary 
+                  ? 'bg-amber-400 text-stone-950 border-amber-300 font-bold shadow-xs' 
+                  : 'bg-white/10 hover:bg-white/20 text-white border-white/10'
+              }`}
+              title={showKpiSummary ? 'Sembunyikan Panel Ringkasan KPI' : 'Tampilkan Panel Ringkasan KPI'}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>{showKpiSummary ? 'Tutup KPI' : 'Ringkasan KPI'}</span>
+              {showKpiSummary ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
 
             <button
               type="button"
               onClick={onOpenSupabaseModal}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white border border-white/10 cursor-pointer"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white border border-white/10 cursor-pointer"
             >
               <Database className="w-3.5 h-3.5 text-emerald-400" />
               <span>{isSupabaseConnected ? 'DB Terhubung' : 'DB Supabase'}</span>
@@ -2145,7 +2188,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
               title="Keluar Sesi & Kembali ke Toko"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -2156,145 +2199,217 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               type="button"
               onClick={handleClose}
               title="Tutup Panel Admin & Kembali ke Toko"
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {/* Quick KPI Stats Summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 p-4 bg-stone-50 border-b border-stone-200 text-xs">
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
-              <Boxes className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Total Produk</div>
-              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">{totalProducts} Item</div>
-            </div>
-          </div>
+        {/* Tab Navigation (Permission-Aware) - Ditempatkan tepat di bawah Header, Selalu Terlihat & Tidak Pernah Tertutup Modul */}
+        <div className="shrink-0 sticky top-0 z-20 bg-white border-b border-stone-200 shadow-2xs">
+          <div className="flex items-center justify-between px-1.5 sm:px-3">
+            {/* Tombol Geser Kiri Tab Menu */}
+            <button
+              type="button"
+              onClick={() => scrollTabs('left')}
+              className="hidden sm:flex items-center justify-center w-7 h-7 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 shrink-0 cursor-pointer transition-colors"
+              title="Geser Tab ke Kiri"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
 
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
-              <DollarSign className="w-4 h-4" />
+            {/* Baris Tab Modul Admin - Scroll Horizontal Mulus */}
+            <div 
+              ref={tabScrollRef}
+              className="flex items-center gap-1 overflow-x-auto scrollbar-none py-2 px-1 scroll-smooth w-full"
+            >
+              {[
+                { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
+                { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
+                { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-emerald-600" />, count: activePurchases.length },
+                { id: 'suppliers', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
+                { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4" />, count: orders.length },
+                { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
+                { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
+                { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
+                { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
+                { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
+                { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
+                { id: 'push_notifications', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
+                { id: 'brand_info', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
+                { id: 'couriers', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
+                { id: 'vouchers', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
+                { id: 'users', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
+                { id: 'permissions', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
+                { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
+              ].map(item => {
+                const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    data-active={isActive ? "true" : "false"}
+                    onClick={() => {
+                      setActiveTab(item.id as any);
+                      setIsAddingProduct(false);
+                      setIsAddingStore(false);
+                      setIsAddingUser(false);
+                      setIsAddingVoucher(false);
+                    }}
+                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-xs font-extrabold ring-2 ring-blue-600/30'
+                        : !perm.canView
+                        ? 'text-stone-400 hover:text-stone-600 hover:bg-stone-100 bg-stone-50/50'
+                        : 'text-stone-700 hover:text-stone-950 hover:bg-stone-100'
+                    }`}
+                    title={
+                      !perm.canView
+                        ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser?.role || 'kasir')}`
+                        : !perm.canEdit
+                        ? `Modul ${item.label} (Hanya Lihat)`
+                        : `Modul ${item.label} (Akses Penuh)`
+                    }
+                  >
+                    {item.icon}
+                    <span>
+                      {item.label} {item.count !== undefined ? `(${item.count})` : ''}
+                    </span>
+                    {!perm.canView ? (
+                      <span className="p-0.5 rounded bg-stone-200/80 text-stone-600" title="Terkunci">
+                        <Lock className="w-2.5 h-2.5" />
+                      </span>
+                    ) : !perm.canEdit ? (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                        isActive ? 'bg-blue-500 text-white border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-200'
+                      }`} title="Hanya Lihat">
+                        Lihat
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Omzet Kasir</div>
-              <div className="text-xs sm:text-sm font-black text-emerald-700 truncate">{formatRupiah(totalRevenue)}</div>
-            </div>
-          </div>
 
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
-              <Receipt className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Pesanan Penjualan</div>
-              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">{orders.length} Order</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold shrink-0">
-              <ShoppingBag className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Pembelian Masuk</div>
-              <div className="text-xs sm:text-sm font-black text-teal-700 truncate">{activePurchases.length} PO Masuk</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0">
-              <Truck className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Mitra Suplier</div>
-              <div className="text-xs sm:text-sm font-black text-indigo-700 truncate">{activeSuppliers.length} Suplier</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
-            <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold shrink-0">
-              <Users className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Member Aktif</div>
-              <div className="text-xs sm:text-sm font-black text-sky-700 truncate">{activeCustomers.length} Member</div>
-            </div>
+            {/* Tombol Geser Kanan Tab Menu */}
+            <button
+              type="button"
+              onClick={() => scrollTabs('right')}
+              className="hidden sm:flex items-center justify-center w-7 h-7 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 shrink-0 cursor-pointer transition-colors"
+              title="Geser Tab ke Kanan"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Tab Navigation (Permission-Aware) */}
-        <div className="flex border-b border-stone-200 px-4 sm:px-6 bg-white overflow-x-auto scrollbar-none">
-          {[
-            { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
-            { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4" />, count: products.length },
-            { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-emerald-600" />, count: activePurchases.length },
-            { id: 'suppliers', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
-            { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4" />, count: orders.length },
-            { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
-            { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
-            { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
-            { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
-            { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
-            { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
-            { id: 'push_notifications', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
-            { id: 'brand_info', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
-            { id: 'couriers', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
-            { id: 'vouchers', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
-            { id: 'users', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
-            { id: 'permissions', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
-            { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
-          ].map(item => {
-            const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
-            const isActive = activeTab === item.id;
-            return (
+        {/* Quick KPI Stats Summary (Collapsible & Compact) */}
+        {showKpiSummary && (
+          <div className="shrink-0 bg-stone-50 border-b border-stone-200 p-3 sm:px-6 text-xs transition-all animate-in fade-in duration-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5 text-stone-500" />
+                <span>Ringkasan Performa & Indikator Toko</span>
+              </div>
               <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id as any);
-                  setIsAddingProduct(false);
-                  setIsAddingStore(false);
-                  setIsAddingUser(false);
-                  setIsAddingVoucher(false);
-                }}
-                className={`px-3.5 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  isActive
-                    ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                    : !perm.canView
-                    ? 'border-transparent text-stone-400 hover:text-stone-600 bg-stone-50/40'
-                    : 'border-transparent text-stone-600 hover:text-stone-900'
-                }`}
-                title={
-                  !perm.canView
-                    ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser?.role || 'kasir')}`
-                    : !perm.canEdit
-                    ? `Modul ${item.label} (Hanya Lihat)`
-                    : `Modul ${item.label} (Akses Penuh)`
-                }
+                type="button"
+                onClick={() => setShowKpiSummary(false)}
+                className="text-[11px] font-bold text-stone-500 hover:text-stone-800 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-stone-200 cursor-pointer transition-colors"
+                title="Sembunyikan panel metrik untuk memperluas area modul"
               >
-                {item.icon}
-                <span>
-                  {item.label} {item.count !== undefined ? `(${item.count})` : ''}
-                </span>
-                {!perm.canView ? (
-                  <span className="p-0.5 rounded bg-stone-200 text-stone-600" title="Terkunci">
-                    <Lock className="w-2.5 h-2.5" />
-                  </span>
-                ) : !perm.canEdit ? (
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200" title="Hanya Lihat">
-                    Lihat
-                  </span>
-                ) : null}
+                <span>Sembunyikan</span>
+                <ChevronUp className="w-3 h-3" />
               </button>
-            );
-          })}
-        </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+              <div className="bg-white p-2.5 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
+                  <Boxes className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Total Produk</div>
+                  <div className="text-xs sm:text-sm font-black text-stone-900 truncate">{totalProducts} Item</div>
+                </div>
+              </div>
 
-        {/* Tab Body */}
-        <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
+              <div className="bg-white p-2.5 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Omzet Kasir</div>
+                  <div className="text-xs sm:text-sm font-black text-emerald-700 truncate">{formatRupiah(totalRevenue)}</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
+                  <Receipt className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Pesanan Penjualan</div>
+                  <div className="text-xs sm:text-sm font-black text-stone-900 truncate">{orders.length} Order</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center font-bold shrink-0">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Pembelian Masuk</div>
+                  <div className="text-xs sm:text-sm font-black text-teal-700 truncate">{activePurchases.length} PO Masuk</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Mitra Suplier</div>
+                  <div className="text-xs sm:text-sm font-black text-indigo-700 truncate">{activeSuppliers.length} Suplier</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-2xl border border-stone-200 flex items-center gap-2.5 shadow-2xs">
+                <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold shrink-0">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold text-stone-400 uppercase truncate">Member Aktif</div>
+                  <div className="text-xs sm:text-sm font-black text-sky-700 truncate">{activeCustomers.length} Member</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mini KPI Bar saat panel metrik diciutkan (Menghemat ruang vertikal layar untuk modul) */}
+        {!showKpiSummary && (
+          <div className="shrink-0 bg-stone-50/90 border-b border-stone-200 px-3 sm:px-6 py-1.5 flex items-center justify-between text-[11px] text-stone-500">
+            <div className="flex items-center gap-2 sm:gap-4 overflow-hidden truncate">
+              <span className="font-semibold text-stone-700">Omzet: <strong className="text-emerald-700">{formatRupiah(totalRevenue)}</strong></span>
+              <span className="text-stone-300">•</span>
+              <span><strong>{orders.length}</strong> Pesanan</span>
+              <span className="text-stone-300">•</span>
+              <span className="hidden sm:inline"><strong>{totalProducts}</strong> Produk</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowKpiSummary(true)}
+              className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer transition-colors shrink-0 text-xs ml-2"
+              title="Buka panel ringkasan indikator lengkap"
+            >
+              <span>Metrik Toko</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Tab Body - Area modul yang dapat digulir mandiri tanpa pernah menutup tab menu */}
+        <div className="p-3 sm:p-6 flex-1 min-h-0 overflow-y-auto relative">
           
           {/* TAB: PENJUALAN KASIR (POS MINIMARKET) DENGAN DISPLAY TOTAL BELANJA BESAR */}
           {activeTab === 'pos_cashier' && (!currentUserPermissions.orders?.canView ? (

@@ -1079,7 +1079,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   const theme = getThemeStyles();
 
   return (
-    <div className="flex flex-col h-full min-h-[90vh] bg-stone-100 text-stone-900 font-sans select-none">
+    <div className="flex flex-col h-full bg-stone-100 text-stone-900 font-sans select-none">
       {/* ============================================================ */}
       {/* 1. TOP CASHIER HEADER & OPERATIONAL BAR */}
       {/* ============================================================ */}
