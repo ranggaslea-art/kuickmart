@@ -2441,6 +2441,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     onAddOrder(newOrder);
                   }
                 }}
+                receiptConfigs={activeReceiptConfigs}
+                onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
               />
             </div>
           ))}

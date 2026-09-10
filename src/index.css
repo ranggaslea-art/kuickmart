@@ -36,11 +36,37 @@ body {
 }
 
 @media print {
-  body {
+  @page {
+    size: 76mm auto;
+    margin: 0;
+  }
+  
+  html, body {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background-color: #ffffff !important;
     color: #000000 !important;
+    font-family: 'Courier New', Courier, 'Lucida Console', Monaco, monospace !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  button, select, input, .no-print {
+
+  button, select, input, textarea, .no-print {
     display: none !important;
+  }
+
+  /* Monospace Dot Matrix font rendering */
+  .dotmatrix-receipt-area {
+    width: 70mm !important;
+    max-width: 70mm !important;
+    margin: 0 auto !important;
+    padding: 2mm 1mm !important;
+    font-family: 'Courier New', Courier, 'Lucida Console', Monaco, monospace !important;
+    color: #000000 !important;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    font-weight: bold !important;
   }
 }

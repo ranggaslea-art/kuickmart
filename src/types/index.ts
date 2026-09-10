@@ -146,6 +146,7 @@ export interface Order {
   createdAt: string;
   items: CartItem[];
   store: Store;
+  pickupStoreName?: string;
   deliveryType: 'delivery' | 'pickup';
   deliverySlot?: string;
   pickupTime?: string;
@@ -580,9 +581,29 @@ export interface ReceiptInfo {
   csHotline?: string; // Nomor CS Hotline
   showBarcode?: boolean; // Tampilkan Barcode Transaksi
   showStoreLogo?: boolean; // Tampilkan Logo / Simbol Toko
-  paperWidth?: '58mm' | '80mm'; // Format Lebar Kertas Struk
+  paperWidth?: '58mm' | '80mm' | '70mm_dotmatrix'; // Format Lebar Kertas Struk (58mm, 80mm, atau 70mm Dot Matrix TM-U220)
   isDefault?: boolean; // Menjadi Struk Aktif Utama
   updatedAt?: string;
+
+  // Fitur Khusus Dot Matrix Epson TM-U220 (70mm) & Modul Customizer POS
+  printerType?: 'thermal' | 'dot_matrix_tmu220'; // Jenis printer
+  charactersPerLine?: 40 | 33 | 42 | 48 | 32 | number; // Jumlah kolom karakter per baris (TM-U220: Font A = 40 kol, Font B = 33 kol)
+  dividerChar?: '=' | '-' | '*'; // Karakter garis pemisah dot matrix
+  itemRowStyle?: 'two_rows' | 'single_row'; // Format baris item: 2 baris (nama di atas, qty x harga di bawah) atau 1 baris
+  feedLinesBeforeCut?: number; // Jarak gulung kertas sebelum potong/sobek (3-8 baris)
+  showItemCode?: boolean; // Tampilkan kode produk / barcode
+  showItemUnit?: boolean; // Tampilkan satuan item (Pcs, Dus, dll.)
+  showItemDiscount?: boolean; // Tampilkan diskon per item
+  showTaxSummary?: boolean; // Tampilkan kalkulasi PPN
+  taxRatePercent?: number; // Persentase PPN (misal 11)
+  taxEnabled?: boolean; // Status aktif pajak di POS
+  taxPercentage?: number; // Persentase pajak di POS
+  showPaymentDetail?: boolean; // Tampilkan rincian tunai & kembalian
+  showCustomerName?: boolean; // Tampilkan nama pelanggan
+  showCashierName?: boolean; // Tampilkan nama kasir
+  showMemberPoints?: boolean; // Tampilkan poin perolehan member
+  fontSize?: 'compact' | 'normal' | 'large';
+  headerCustomNote?: string; // Teks catatan khusus di bawah header
 }
 
 export type PromoType = 'banner' | 'flash_sale' | 'announcement_bar' | 'perk_card';

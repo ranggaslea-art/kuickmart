@@ -20,11 +20,13 @@ import {
   FileCheck2, 
   QrCode,
   X,
-  RotateCcw
+  RotateCcw,
+  Sliders
 } from 'lucide-react';
 import { ReceiptInfo, Store } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { cleanReceiptText } from '../utils/sanitizeReceipt';
+import { PosReceiptEditorModal } from './PosReceiptEditorModal';
 
 interface ReceiptInfoManagerProps {
   receiptConfigs: ReceiptInfo[];
@@ -41,6 +43,8 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isDotMatrixEditorOpen, setIsDotMatrixEditorOpen] = useState(false);
+  const [activeConfigForEditor, setActiveConfigForEditor] = useState<ReceiptInfo | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [selectedPreviewId, setSelectedPreviewId] = useState<string>(() => {
     const def = receiptConfigs.find(r => r.isDefault) || receiptConfigs[0];
@@ -64,7 +68,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
   const [csHotline, setCsHotline] = useState('1500-888');
   const [showBarcode, setShowBarcode] = useState(true);
   const [showStoreLogo, setShowStoreLogo] = useState(true);
-  const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>('58mm');
+  const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm' | '70mm_dotmatrix'>('58mm');
   const [isDefault, setIsDefault] = useState(false);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
@@ -226,6 +230,11 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
             showBarcode,
             showStoreLogo,
             paperWidth,
+            printerType: paperWidth === '70mm_dotmatrix' ? 'dot_matrix_tmu220' : (r.printerType || 'thermal'),
+            charactersPerLine: paperWidth === '70mm_dotmatrix' ? (r.charactersPerLine || 40) : (paperWidth === '80mm' ? 48 : 32),
+            dividerChar: r.dividerChar || (paperWidth === '70mm_dotmatrix' ? '=' : '-'),
+            itemRowStyle: r.itemRowStyle || (paperWidth === '70mm_dotmatrix' ? 'two_rows' : 'two_rows'),
+            feedLinesBeforeCut: r.feedLinesBeforeCut ?? (paperWidth === '70mm_dotmatrix' ? 5 : 3),
             isDefault: isDefault || r.isDefault,
             updatedAt: nowFormatted,
           };
@@ -239,6 +248,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     } else {
       // Create new
       const newId = `rcp_${Date.now()}`;
+      const isDotMatrix = paperWidth === '70mm_dotmatrix';
       const newReceipt: ReceiptInfo = {
         id: newId,
         profileName: profileName.trim() || `Struk ${storeName}`,
@@ -258,6 +268,11 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         showBarcode,
         showStoreLogo,
         paperWidth,
+        printerType: isDotMatrix ? 'dot_matrix_tmu220' : 'thermal',
+        charactersPerLine: isDotMatrix ? 40 : (paperWidth === '80mm' ? 48 : 32),
+        dividerChar: isDotMatrix ? '=' : '-',
+        itemRowStyle: 'two_rows',
+        feedLinesBeforeCut: isDotMatrix ? 5 : 3,
         isDefault: isDefault || receiptConfigs.length === 0,
         updatedAt: nowFormatted,
       };
@@ -349,13 +364,27 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         </div>
 
         {!isEditing && (
-          <button
-            onClick={handleOpenAdd}
-            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 shrink-0"
-          >
-            <Plus className="w-4 h-4 text-stone-900" />
-            <span>Tambah Info Struk Baru</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                const tmuConfig = receiptConfigs.find(r => r.printerType === 'dot_matrix_tmu220' || r.paperWidth === '70mm_dotmatrix') || receiptConfigs[0];
+                setActiveConfigForEditor(tmuConfig);
+                setIsDotMatrixEditorOpen(true);
+              }}
+              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 border border-white/20 transition-all active:scale-95 shrink-0"
+              title="Buka Editor Struk Dot Matrix Khusus Epson TM-U220 (70mm)"
+            >
+              <Printer className="w-4 h-4 text-amber-300" />
+              <span>Editor Epson TM-U220 (70mm)</span>
+            </button>
+            <button
+              onClick={handleOpenAdd}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 shrink-0"
+            >
+              <Plus className="w-4 h-4 text-stone-900" />
+              <span>Tambah Info Struk Baru</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -631,32 +660,84 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">
-                    Lebar Kertas Struk Thermal:
+                    Lebar Kertas & Jenis Printer:
                   </label>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     <button
                       type="button"
                       onClick={() => setPaperWidth('58mm')}
-                      className={`flex-1 py-2 rounded-xl font-bold border text-xs transition-all ${
+                      className={`py-2 px-1 rounded-xl font-bold border text-[11px] transition-all text-center ${
                         paperWidth === '58mm'
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
                       }`}
                     >
-                      58mm (Kecil / Mobile POS)
+                      58mm Thermal
                     </button>
                     <button
                       type="button"
                       onClick={() => setPaperWidth('80mm')}
-                      className={`flex-1 py-2 rounded-xl font-bold border text-xs transition-all ${
+                      className={`py-2 px-1 rounded-xl font-bold border text-[11px] transition-all text-center ${
                         paperWidth === '80mm'
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
                       }`}
                     >
-                      80mm (Standar Kasir Desktop)
+                      80mm Thermal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaperWidth('70mm_dotmatrix')}
+                      className={`py-2 px-1 rounded-xl font-bold border text-[11px] transition-all text-center ${
+                        paperWidth === '70mm_dotmatrix'
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                          : 'bg-amber-50/50 text-amber-900 border-amber-200 hover:bg-amber-100'
+                      }`}
+                    >
+                      70mm Dot Matrix
                     </button>
                   </div>
+                  {paperWidth === '70mm_dotmatrix' && (
+                    <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-center justify-between gap-2">
+                      <span>Dioptimalkan untuk Epson TM-U220 (Pita impact, 40 kolom, font Courier).</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentConfig: ReceiptInfo = {
+                            id: editingId || 'temp_editor',
+                            profileName,
+                            storeId,
+                            headerBrand,
+                            subHeader,
+                            storeName,
+                            address,
+                            city,
+                            phone,
+                            taxIdOrNpwp,
+                            websiteOrSocial,
+                            cashierName,
+                            footerMessage1,
+                            footerMessage2,
+                            csHotline,
+                            showBarcode,
+                            showStoreLogo,
+                            paperWidth: '70mm_dotmatrix',
+                            printerType: 'dot_matrix_tmu220',
+                            charactersPerLine: 40,
+                            dividerChar: '=',
+                            itemRowStyle: 'two_rows',
+                            feedLinesBeforeCut: 5,
+                            isDefault,
+                          };
+                          setActiveConfigForEditor(currentConfig);
+                          setIsDotMatrixEditorOpen(true);
+                        }}
+                        className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] shrink-0"
+                      >
+                        Buka Editor TM-U220
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col justify-end space-y-2 pt-1">
@@ -803,6 +884,20 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
 
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                      {(item.printerType === 'dot_matrix_tmu220' || item.paperWidth === '70mm_dotmatrix') && (
+                        <button
+                          onClick={() => {
+                            setActiveConfigForEditor(item);
+                            setIsDotMatrixEditorOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors border border-amber-200"
+                          title="Buka Editor Format Dot Matrix Epson TM-U220"
+                        >
+                          <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="hidden sm:inline">Desain TM-U220</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => handleOpenEdit(item)}
                         className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors border border-blue-200"
@@ -852,11 +947,24 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                   Pratinjau Struk: {activePreviewData.profileName}
                 </div>
                 <div className="text-[10px] text-stone-400">
-                  {activePreviewData.isDefault ? '⭐ Profil Struk Aktif Utama' : 'Pilihan profil struk alternatif'}
+                  {activePreviewData.paperWidth === '70mm_dotmatrix' ? '70mm Dot Matrix (Epson TM-U220)' : activePreviewData.paperWidth} • {activePreviewData.isDefault ? '⭐ Struk Aktif Utama' : 'Pilihan profil struk alternatif'}
                 </div>
               </div>
 
               <div className="flex items-center gap-1.5">
+                {(activePreviewData.printerType === 'dot_matrix_tmu220' || activePreviewData.paperWidth === '70mm_dotmatrix') && (
+                  <button
+                    onClick={() => {
+                      setActiveConfigForEditor(activePreviewData);
+                      setIsDotMatrixEditorOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-[11px] rounded-xl flex items-center gap-1 transition-colors"
+                    title="Desain layout struk TM-U220"
+                  >
+                    <Sliders className="w-3 h-3" />
+                    <span>Editor TM-U220</span>
+                  </button>
+                )}
                 <button
                   onClick={() => handleOpenEdit(activePreviewData)}
                   className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-bold text-[11px] flex items-center gap-1 transition-colors"
@@ -877,6 +985,24 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
             <ReceiptVisualCard receipt={activePreviewData} isLivePreview={false} />
           </div>
         </div>
+      )}
+
+      {/* Epson TM-U220 Dedicated Editor Modal */}
+      {isDotMatrixEditorOpen && activeConfigForEditor && (
+        <PosReceiptEditorModal
+          isOpen={isDotMatrixEditorOpen}
+          onClose={() => {
+            setIsDotMatrixEditorOpen(false);
+            setActiveConfigForEditor(null);
+          }}
+          activeConfig={activeConfigForEditor}
+          stores={stores}
+          onSaveConfig={(saved) => {
+            const updated = receiptConfigs.map(r => r.id === saved.id ? saved : r);
+            onUpdateReceiptConfigs(updated);
+            showNotification(`Format struk TM-U220 "${saved.profileName}" berhasil disimpan!`);
+          }}
+        />
       )}
     </div>
   );

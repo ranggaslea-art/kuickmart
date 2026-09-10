@@ -5,10 +5,20 @@ import {
   Order, 
   MemberProfile, 
   CartItem,
-  PaymentMethod
+  PaymentMethod,
+  ReceiptInfo
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { getProductUnitOptions } from '../utils/unitConversion';
+import { cleanReceiptText } from '../utils/sanitizeReceipt';
+import { 
+  generateRawPosReceiptText, 
+  generateDotMatrixReceiptHtml, 
+  printPosReceiptViaIframe,
+  downloadPosReceiptTxtFile,
+  copyPosReceiptText
+} from '../utils/posPrinterHelper';
+import { PosReceiptEditorModal } from './PosReceiptEditorModal';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { 
   ScanBarcode, 
@@ -41,7 +51,11 @@ import {
   ArrowRight,
   ShieldCheck,
   Check,
-  Package
+  Package,
+  Sliders,
+  Copy,
+  Download,
+  FileText
 } from 'lucide-react';
 
 export interface PosRowItem {
@@ -80,6 +94,8 @@ interface PosCashierManagerProps {
   onUpdateCustomers: (customers: MemberProfile[]) => void;
   onAddOrder: (order: Order) => void;
   onClose?: () => void;
+  receiptConfigs?: ReceiptInfo[];
+  onUpdateReceiptConfigs?: (configs: ReceiptInfo[]) => void;
 }
 
 // Audio Beep for Barcode Scanner
@@ -135,10 +151,87 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   onUpdateCustomers,
   onAddOrder,
   onClose,
+  receiptConfigs,
+  onUpdateReceiptConfigs,
 }) => {
   // Store & Cashier Operator
   const [selectedStoreId, setSelectedStoreId] = useState(currentStore?.id || stores[0]?.id || 'store_1');
   const [cashierName] = useState('Kasir 01 (Budi Santoso)');
+
+  // Receipt Configuration & Epson TM-U220 Printer State
+  const [isReceiptEditorModalOpen, setIsReceiptEditorModalOpen] = useState(false);
+  const [receiptPrintFeedback, setReceiptPrintFeedback] = useState<string | null>(null);
+  const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
+  const [localReceiptConfigs, setLocalReceiptConfigs] = useState<ReceiptInfo[]>(() => {
+    if (receiptConfigs && receiptConfigs.length > 0) return receiptConfigs;
+    try {
+      const saved = localStorage.getItem('nusamart_receipt_configs');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    if (receiptConfigs && receiptConfigs.length > 0) {
+      setLocalReceiptConfigs(receiptConfigs);
+    }
+  }, [receiptConfigs]);
+
+  // Active Receipt Config (prioritizing Epson TM-U220 Dot Matrix 70mm)
+  const activeReceiptConfig = useMemo<ReceiptInfo>(() => {
+    const list = localReceiptConfigs.length > 0 ? localReceiptConfigs : (receiptConfigs || []);
+    const tmu220 = list.find(r => r.printerType === 'dot_matrix_tmu220' || r.paperWidth === '70mm_dotmatrix');
+    if (tmu220 && tmu220.isDefault) return tmu220;
+    const def = list.find(r => r.isDefault);
+    if (def) return def;
+    if (tmu220) return tmu220;
+    if (list.length > 0) return list[0];
+    return {
+      id: 'rcp_tmu220_default',
+      profileName: 'Struk Dot Matrix Epson TM-U220 (70mm)',
+      headerBrand: 'NUSA MART EXPRESS',
+      subHeader: 'MINIMARKET & KASIR POINT OF SALE',
+      storeName: currentStore?.name || 'KuickMart Express',
+      address: currentStore?.address || 'Jl. Jendral Sudirman No. 18, Menteng',
+      phone: currentStore?.phone || '021-5551234',
+      taxIdOrNpwp: 'NPWP: 01.345.678.9-012.000',
+      paperWidth: '70mm_dotmatrix',
+      printerType: 'dot_matrix_tmu220',
+      charactersPerLine: 40,
+      dividerChar: '=',
+      itemRowStyle: 'two_rows',
+      feedLinesBeforeCut: 5,
+      showCashierName: true,
+      showCustomerName: true,
+      showPaymentDetail: true,
+      showMemberPoints: true,
+      showBarcode: true,
+      footerMessage1: 'TERIMA KASIH TELAH BERBELANJA',
+      footerMessage2: 'BARANG YANG SUDAH DIBELI DAPAT DITUKAR MAKS 1X24 JAM DENGAN STRUK ASLI.',
+      csHotline: 'CALL CENTER: 1500-888',
+      websiteOrSocial: 'www.nusamart.id • WA: 0812-3456-7890',
+      isDefault: true,
+    };
+  }, [localReceiptConfigs, receiptConfigs, currentStore]);
+
+  const handleSaveReceiptConfig = (updated: ReceiptInfo) => {
+    const existingIndex = localReceiptConfigs.findIndex(r => r.id === updated.id);
+    let newList: ReceiptInfo[];
+    if (existingIndex >= 0) {
+      newList = localReceiptConfigs.map((r, i) => i === existingIndex ? updated : r);
+    } else {
+      newList = [updated, ...localReceiptConfigs];
+    }
+    setLocalReceiptConfigs(newList);
+    try {
+      localStorage.setItem('nusamart_receipt_configs', JSON.stringify(newList));
+    } catch {}
+    if (onUpdateReceiptConfigs) {
+      onUpdateReceiptConfigs(newList);
+    }
+    setReceiptPrintFeedback('Desain struk POS berhasil disimpan!');
+    setTimeout(() => setReceiptPrintFeedback(null), 3500);
+  };
 
   // Customer / Member selection
   const [selectedCustomer, setSelectedCustomer] = useState<MemberProfile | null>(null);
@@ -1165,9 +1258,57 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     setCashReceived(amount);
   };
 
-  // Print Struk Thermal directly
-  const handlePrintReceipt = () => {
-    window.print();
+  // Print Struk (Epson TM-U220 Dot Matrix 70mm or Thermal)
+  const handlePrintReceipt = async () => {
+    if (!completedOrder) {
+      window.print();
+      return;
+    }
+    setIsPrintingReceipt(true);
+    try {
+      const html = generateDotMatrixReceiptHtml(
+        completedOrder, 
+        activeReceiptConfig, 
+        cashierName, 
+        { cashReceived, changeAmount }
+      );
+      await printPosReceiptViaIframe(html);
+    } catch (err) {
+      console.error('Print iframe fallback:', err);
+      window.print();
+    } finally {
+      setIsPrintingReceipt(false);
+    }
+  };
+
+  // Copy RAW ASCII 40-col Receipt Text
+  const handleCopyRawReceipt = async () => {
+    if (!completedOrder) return;
+    const raw = generateRawPosReceiptText(
+      completedOrder, 
+      activeReceiptConfig, 
+      cashierName, 
+      { cashReceived, changeAmount }
+    );
+    const ok = await copyPosReceiptText(raw);
+    if (ok) {
+      setReceiptPrintFeedback('Teks struk RAW 40 kolom berhasil disalin ke clipboard!');
+      setTimeout(() => setReceiptPrintFeedback(null), 3000);
+    }
+  };
+
+  // Download .TXT receipt for direct spooler
+  const handleDownloadTxtReceipt = () => {
+    if (!completedOrder) return;
+    const raw = generateRawPosReceiptText(
+      completedOrder, 
+      activeReceiptConfig, 
+      cashierName, 
+      { cashReceived, changeAmount }
+    );
+    downloadPosReceiptTxtFile(raw, completedOrder.orderNumber);
+    setReceiptPrintFeedback('File struk .txt berhasil diunduh!');
+    setTimeout(() => setReceiptPrintFeedback(null), 3000);
   };
 
   // Display Theme CSS Classes
@@ -1260,6 +1401,17 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
             <span className="hidden sm:inline">Reset</span>
           </button>
 
+          {/* Desain & Format Struk Epson TM-U220 70mm */}
+          <button
+            onClick={() => setIsReceiptEditorModalOpen(true)}
+            className="px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-stone-900 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+            title="Buka Editor Struk POS (Epson TM-U220 70mm)"
+          >
+            <Printer className="w-4 h-4 text-amber-600" />
+            <span className="hidden md:inline">Desain Struk TM-U220</span>
+            <span className="md:hidden">Struk</span>
+          </button>
+
           {/* Close POS if modal */}
           {onClose && (
             <button
@@ -1272,6 +1424,19 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           )}
         </div>
       </div>
+
+      {/* POS Notification Feedback Banner */}
+      {receiptPrintFeedback && (
+        <div className="bg-amber-100 border-b border-amber-300 px-4 py-2 text-xs font-bold text-amber-950 flex items-center justify-between animate-slideDown">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>{receiptPrintFeedback}</span>
+          </div>
+          <button onClick={() => setReceiptPrintFeedback(null)} className="text-amber-800 hover:text-amber-950">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="p-3 sm:p-5 flex-1 flex flex-col gap-4 overflow-y-auto">
         {/* ============================================================ */}
@@ -2372,138 +2537,299 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       )}
 
       {/* ============================================================ */}
-      {/* MODAL: STRUK BELANJA THERMAL MINIMARKET (RECEIPT PREVIEW)    */}
+      {/* MODAL: STRUK BELANJA EPSON TM-U220 70mm / POS RECEIPT PREVIEW */}
       {/* ============================================================ */}
       {isReceiptModalOpen && completedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[90vh]">
-            <div className="text-center pb-3 border-b border-dashed border-stone-300">
-              <div className="w-10 h-10 mx-auto rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
-                <CheckCircle2 className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[92vh]">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-stone-900 tracking-tight">
+                    TRANSAKSI KASIR BERHASIL
+                  </h3>
+                  <p className="text-[11px] text-stone-500">Stok fisik produk otomatis terpotong</p>
+                </div>
               </div>
-              <h3 className="text-base font-black text-stone-900 tracking-tight">
-                TRANSAKSI KASIR BERHASIL
-              </h3>
-              <p className="text-xs text-stone-500">Stok fisik produk berhasil dikurangkan dari katalog</p>
+              <button
+                type="button"
+                onClick={() => setIsReceiptEditorModalOpen(true)}
+                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl border border-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+                title="Buka Editor Struk & Pengaturan TM-U220"
+              >
+                <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                <span>Desain Struk</span>
+              </button>
             </div>
 
-            {/* Thermal Receipt Paper Card */}
-            <div className="my-4 p-4 bg-stone-50 border border-stone-200 rounded-2xl font-mono text-xs text-stone-800 space-y-3 overflow-y-auto">
-              <div className="text-center border-b border-dashed border-stone-300 pb-2">
-                <div className="font-bold text-sm tracking-wider uppercase">{activeStore.name}</div>
-                <div className="text-[10px] text-stone-500">{activeStore.address}</div>
-                <div className="text-[10px] text-stone-500">Telp: {activeStore.phone}</div>
+            {/* Profile Info Badge */}
+            <div className="mt-3 px-3 py-1.5 bg-stone-100 rounded-xl border border-stone-200 flex items-center justify-between text-[11px] text-stone-600">
+              <span className="font-semibold truncate">
+                Format: <strong className="text-stone-900">{activeReceiptConfig.profileName}</strong>
+              </span>
+              <span className="px-2 py-0.5 bg-white text-stone-700 font-mono font-bold rounded border border-stone-200 shrink-0">
+                {activeReceiptConfig.paperWidth === '70mm_dotmatrix' ? '70mm Dot Matrix' : activeReceiptConfig.paperWidth} • {activeReceiptConfig.charactersPerLine || 40}c
+              </span>
+            </div>
+
+            {/* Epson TM-U220 70mm Dot Matrix Receipt Canvas */}
+            <div className="my-3 p-4 bg-stone-50 border border-stone-300 rounded-2xl font-mono text-xs text-stone-900 space-y-2 overflow-y-auto max-h-[50vh] shadow-inner">
+              
+              {/* Header Toko & Brand */}
+              <div className="text-center space-y-0.5 pb-1">
+                <div className="font-black text-sm tracking-wider uppercase">
+                  {cleanReceiptText(activeReceiptConfig.headerBrand || activeStore.name)}
+                </div>
+                {activeReceiptConfig.subHeader && (
+                  <div className="text-[11px] text-stone-600 font-semibold">
+                    {cleanReceiptText(activeReceiptConfig.subHeader)}
+                  </div>
+                )}
+                <div className="text-[11px] text-stone-700">
+                  {cleanReceiptText(activeReceiptConfig.storeName || activeStore.name)}
+                </div>
+                <div className="text-[10px] text-stone-500">
+                  {cleanReceiptText(activeReceiptConfig.address || activeStore.address)}
+                </div>
+                {(activeReceiptConfig.phone || activeStore.phone) && (
+                  <div className="text-[10px] text-stone-500">
+                    Telp: {cleanReceiptText(activeReceiptConfig.phone || activeStore.phone)}
+                  </div>
+                )}
+                {activeReceiptConfig.taxIdOrNpwp && (
+                  <div className="text-[10px] text-stone-500 font-semibold">
+                    {cleanReceiptText(activeReceiptConfig.taxIdOrNpwp)}
+                  </div>
+                )}
               </div>
 
-              <div className="text-[11px] text-stone-600 border-b border-dashed border-stone-300 pb-2 space-y-0.5">
+              {/* Monospace Divider */}
+              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
+                {(activeReceiptConfig.dividerChar || '=').repeat(activeReceiptConfig.charactersPerLine || 40)}
+              </div>
+
+              {/* Order Metadata */}
+              <div className="text-[11px] text-stone-700 space-y-0.5">
                 <div className="flex justify-between">
-                  <span>No. Struk:</span>
+                  <span>No. Struk</span>
                   <span className="font-bold text-stone-900">{completedOrder.orderNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tanggal:</span>
+                  <span>Tanggal</span>
                   <span>{new Date(completedOrder.createdAt).toLocaleString('id-ID')}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Kasir:</span>
-                  <span>{cashierName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Pelanggan:</span>
-                  <span className="font-bold">{completedOrder.customerName}</span>
-                </div>
-              </div>
-
-              {/* Items */}
-              <div className="border-b border-dashed border-stone-300 pb-2 space-y-1.5">
-                {completedOrder.items.map((it, idx) => (
-                  <div key={idx} className="text-xs">
-                    <div className="font-bold truncate text-stone-900">{it.product.name}</div>
-                    <div className="flex justify-between text-stone-500 text-[11px]">
-                      <span>
-                        {it.quantity} {it.selectedUnit || 'Pcs'} × {formatRupiah(it.unitPrice || it.product.price)}
-                      </span>
-                      <span className="font-bold text-stone-900">
-                        {formatRupiah((it.unitPrice || it.product.price) * it.quantity)}
-                      </span>
-                    </div>
+                {activeReceiptConfig.showCashierName !== false && (
+                  <div className="flex justify-between">
+                    <span>Kasir</span>
+                    <span>{cleanReceiptText(cashierName)}</span>
                   </div>
-                ))}
+                )}
+                {activeReceiptConfig.showCustomerName !== false && (
+                  <div className="flex justify-between">
+                    <span>Pelanggan</span>
+                    <span className="font-bold">{cleanReceiptText(completedOrder.customerName)}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Summary */}
-              <div className="border-b border-dashed border-stone-300 pb-2 space-y-1">
-                <div className="flex justify-between">
+              {/* Monospace Divider */}
+              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
+                {(activeReceiptConfig.dividerChar || '-').repeat(activeReceiptConfig.charactersPerLine || 40)}
+              </div>
+
+              {/* Item List (2-row format typical for TM-U220 70mm) */}
+              <div className="space-y-1.5 text-xs">
+                {completedOrder.items.map((it, idx) => {
+                  const itemTotal = (it.unitPrice || it.product.price) * it.quantity;
+                  return (
+                    <div key={idx} className="space-y-0.5">
+                      <div className="font-bold truncate text-stone-900 uppercase">
+                        {cleanReceiptText(it.product.name)}
+                      </div>
+                      <div className="flex justify-between text-stone-600 text-[11px]">
+                        <span>
+                          {it.quantity} {it.selectedUnit || 'Pcs'} x {formatRupiah(it.unitPrice || it.product.price)}
+                        </span>
+                        <span className="font-bold text-stone-900">
+                          {formatRupiah(itemTotal)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Monospace Divider */}
+              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
+                {(activeReceiptConfig.dividerChar || '-').repeat(activeReceiptConfig.charactersPerLine || 40)}
+              </div>
+
+              {/* Calculations & Totals */}
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between text-stone-700">
                   <span>Subtotal:</span>
                   <span>{formatRupiah(completedOrder.subtotal)}</span>
                 </div>
                 {completedOrder.discountAmount > 0 && (
-                  <div className="flex justify-between text-red-600">
+                  <div className="flex justify-between text-red-600 font-bold">
                     <span>Diskon:</span>
                     <span>-{formatRupiah(completedOrder.discountAmount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-sm text-stone-900 pt-1">
+                {activeReceiptConfig.taxEnabled && (
+                  <div className="flex justify-between text-stone-600 text-[11px]">
+                    <span>PPN ({activeReceiptConfig.taxPercentage || 11}%):</span>
+                    <span>{formatRupiah(Math.round((completedOrder.subtotal - (completedOrder.discountAmount || 0)) * ((activeReceiptConfig.taxPercentage || 11) / 100)))}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-black text-sm text-stone-900 pt-0.5">
                   <span>TOTAL:</span>
                   <span>{formatRupiah(completedOrder.total)}</span>
                 </div>
-                <div className="flex justify-between text-stone-600 pt-1">
-                  <span>Metode:</span>
-                  <span className="uppercase">{completedOrder.paymentMethod}</span>
-                </div>
-                {completedOrder.paymentMethod === 'cash' && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Tunai Diterima:</span>
-                      <span>{formatRupiah(cashReceived)}</span>
+
+                {activeReceiptConfig.showPaymentDetail !== false && (
+                  <div className="pt-1 border-t border-dashed border-stone-300 space-y-0.5 text-[11px]">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Metode Pembayaran:</span>
+                      <span className="uppercase font-bold text-stone-900">{completedOrder.paymentMethod}</span>
                     </div>
-                    <div className="flex justify-between font-bold text-emerald-700">
-                      <span>Kembalian:</span>
-                      <span>{formatRupiah(changeAmount)}</span>
-                    </div>
-                  </>
+                    {completedOrder.paymentMethod === 'cash' && (
+                      <>
+                        <div className="flex justify-between">
+                          <span>Tunai Diterima:</span>
+                          <span>{formatRupiah(cashReceived)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-emerald-700 text-xs">
+                          <span>Kembalian:</span>
+                          <span>{formatRupiah(changeAmount)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
 
               {/* Member Points Earned */}
-              {completedOrder.pointsEarned > 0 && (
-                <div className="p-2 bg-amber-50 rounded-lg text-center text-amber-900 text-[11px] font-bold">
-                  ⭐ Anda mendapatkan +{completedOrder.pointsEarned} Poin Member!
+              {activeReceiptConfig.showMemberPoints !== false && completedOrder.pointsEarned > 0 && (
+                <div className="p-2 bg-amber-50 rounded-lg text-center text-amber-900 text-[11px] font-bold border border-amber-200">
+                  ⭐ +{completedOrder.pointsEarned} Poin Member NusaMart
                 </div>
               )}
 
-              <div className="text-center text-[10px] text-stone-400 pt-1">
-                TERIMA KASIH TELAH BERBELANJA DI KUICKMART EXPRESS<br />
-                BARANG YANG SUDAH DIBELI DAPAT DITUKAR DALAM 1X24 JAM DENGAN STRUK ASLI.
+              {/* Monospace Divider */}
+              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
+                {(activeReceiptConfig.dividerChar || '=').repeat(activeReceiptConfig.charactersPerLine || 40)}
+              </div>
+
+              {/* Footer Messages */}
+              <div className="text-center text-[10px] text-stone-600 space-y-1 pt-1">
+                {activeReceiptConfig.footerMessage1 && (
+                  <div>{cleanReceiptText(activeReceiptConfig.footerMessage1)}</div>
+                )}
+                {activeReceiptConfig.footerMessage2 && (
+                  <div className="text-stone-500">{cleanReceiptText(activeReceiptConfig.footerMessage2)}</div>
+                )}
+                {activeReceiptConfig.csHotline && (
+                  <div className="font-semibold text-stone-700">{cleanReceiptText(activeReceiptConfig.csHotline)}</div>
+                )}
+                {activeReceiptConfig.websiteOrSocial && (
+                  <div className="text-stone-500">{cleanReceiptText(activeReceiptConfig.websiteOrSocial)}</div>
+                )}
+              </div>
+
+              {/* Transaction Barcode Simulation */}
+              {activeReceiptConfig.showBarcode !== false && (
+                <div className="pt-2 text-center select-none">
+                  <div className="font-mono text-[11px] tracking-widest text-stone-900 font-bold bg-white py-1 px-3 border border-stone-300 rounded inline-block">
+                    * {completedOrder.orderNumber} *
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Actions for Cashier */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintReceipt}
+                  disabled={isPrintingReceipt}
+                  className="flex-1 py-3 bg-stone-900 hover:bg-stone-800 active:scale-[0.99] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50"
+                  title="Kirim ke Printer Epson TM-U220 (Kertas 70mm / 76mm)"
+                >
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                  <span>{isPrintingReceipt ? 'Mempersiapkan Cetak...' : 'Cetak Struk (Epson TM-U220)'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReceiptModalOpen(false);
+                    setCompletedOrder(null);
+                    quickBarcodeInputRef.current?.focus();
+                  }}
+                  className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all shrink-0"
+                  title="Mulai Transaksi Baru (Shortcut F2)"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Transaksi Baru (F2)</span>
+                </button>
+              </div>
+
+              {/* Raw Print & Spooler Utility Tools */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200 text-xs">
+                <button
+                  type="button"
+                  onClick={handleCopyRawReceipt}
+                  className="px-3 py-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg flex items-center gap-1.5 transition-colors font-medium text-[11px]"
+                  title="Salin teks ASCII mentah 40 kolom untuk spooler atau serial port"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Salin RAW (ASCII)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadTxtReceipt}
+                  className="px-3 py-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg flex items-center gap-1.5 transition-colors font-medium text-[11px]"
+                  title="Unduh file .txt untuk dicetak via USB PRN / command line lpr / type file.txt > PRN"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh .TXT</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsReceiptEditorModalOpen(true)}
+                  className="px-3 py-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-50 rounded-lg flex items-center gap-1.5 transition-colors font-bold text-[11px]"
+                  title="Ubah font, divider, pesan footer, dan margin Epson TM-U220"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Edit Format</span>
+                </button>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePrintReceipt}
-                className="flex-1 py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Cetak Struk (Print)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsReceiptModalOpen(false);
-                  setCompletedOrder(null);
-                  quickBarcodeInputRef.current?.focus();
-                }}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Transaksi Baru (F2)</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
+
+      {/* ============================================================ */}
+      {/* MODAL: POS RECEIPT EDITOR & EPSON TM-U220 CONFIGURATOR       */}
+      {/* ============================================================ */}
+      <PosReceiptEditorModal
+        isOpen={isReceiptEditorModalOpen}
+        onClose={() => setIsReceiptEditorModalOpen(false)}
+        activeConfig={activeReceiptConfig}
+        stores={stores}
+        onSaveConfig={handleSaveReceiptConfig}
+        sampleOrder={completedOrder || (orders && orders[0]) || undefined}
+        cashierName={cashierName}
+      />
     </div>
   );
 };
