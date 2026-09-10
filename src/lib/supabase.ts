@@ -3,6 +3,7 @@ import {
   Product, 
   Order, 
   MemberProfile, 
+  PurchaseOrder,
   Store, 
   Category, 
   Voucher, 
@@ -13,6 +14,7 @@ import {
   CourierInfo,
   StaffUser
 } from '../types';
+import { addToOfflineQueue, isBrowserOnline, isNetworkError } from './offlineSync';
 import { 
   PRODUCTS, 
   INITIAL_STORES, 
@@ -380,8 +382,24 @@ export async function seedDataToSupabase(customData?: {
 }
 
 // Save order to Supabase (Termasuk Menyimpan Rincian Barang yang Terjual & Mengurangi Stok)
-export async function syncOrderToSupabase(order: Order): Promise<{ success: boolean; error?: string }> {
+export async function syncOrderToSupabase(
+  order: Order,
+  options?: { skipQueue?: boolean }
+): Promise<{ success: boolean; error?: string; offlineQueued?: boolean }> {
+  const isOnline = isBrowserOnline();
   const supabase = getSupabase();
+
+  // If completely offline or Supabase not yet configured, queue transparently into local Outbox
+  if (!options?.skipQueue && (!isOnline || !supabase)) {
+    addToOfflineQueue(
+      'SYNC_ORDER',
+      order,
+      `Pesanan Kasir #${order.orderNumber || order.id.slice(0, 8)}`,
+      `${order.items?.length || 0} item • Rp ${(order.total || 0).toLocaleString('id-ID')}`
+    );
+    return { success: true, offlineQueued: true };
+  }
+
   if (!supabase) return { success: false, error: 'Supabase belum terhubung' };
 
   try {
@@ -511,6 +529,15 @@ export async function syncOrderToSupabase(order: Order): Promise<{ success: bool
     return { success: true };
   } catch (err: any) {
     console.warn('Sync order error:', err);
+    if (!options?.skipQueue && isNetworkError(err)) {
+      addToOfflineQueue(
+        'SYNC_ORDER',
+        order,
+        `Pesanan Kasir #${order.orderNumber || order.id.slice(0, 8)}`,
+        `${order.items?.length || 0} item • Rp ${(order.total || 0).toLocaleString('id-ID')}`
+      );
+      return { success: true, offlineQueued: true };
+    }
     return { success: false, error: err.message || String(err) };
   }
 }
@@ -790,8 +817,23 @@ export async function fetchVouchersFromSupabase(): Promise<Voucher[] | null> {
 }
 
 // Save single product to Supabase
-export async function saveProductToSupabase(product: Product): Promise<{ success: boolean; error?: string }> {
+export async function saveProductToSupabase(
+  product: Product,
+  options?: { skipQueue?: boolean }
+): Promise<{ success: boolean; error?: string; offlineQueued?: boolean }> {
+  const isOnline = isBrowserOnline();
   const supabase = getSupabase();
+
+  if (!options?.skipQueue && (!isOnline || !supabase)) {
+    addToOfflineQueue(
+      'SYNC_PRODUCT',
+      product,
+      `Update Produk: ${product.name}`,
+      `Stok: ${product.stock} • Rp ${product.price.toLocaleString('id-ID')}`
+    );
+    return { success: true, offlineQueued: true };
+  }
+
   if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
   try {
     const payload = {
@@ -815,29 +857,190 @@ export async function saveProductToSupabase(product: Product): Promise<{ success
     };
     const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
     if (error) {
+      if (!options?.skipQueue && isNetworkError(error)) {
+        addToOfflineQueue(
+          'SYNC_PRODUCT',
+          product,
+          `Update Produk: ${product.name}`,
+          `Stok: ${product.stock} • Rp ${product.price.toLocaleString('id-ID')}`
+        );
+        return { success: true, offlineQueued: true };
+      }
       console.error('Supabase upsert product error:', error);
       return { success: false, error: error.message };
     }
     return { success: true };
   } catch (err: any) {
+    if (!options?.skipQueue && isNetworkError(err)) {
+      addToOfflineQueue(
+        'SYNC_PRODUCT',
+        product,
+        `Update Produk: ${product.name}`,
+        `Stok: ${product.stock} • Rp ${product.price.toLocaleString('id-ID')}`
+      );
+      return { success: true, offlineQueued: true };
+    }
     console.error('Supabase save product exception:', err);
     return { success: false, error: err?.message || String(err) };
   }
 }
 
 // Delete product from Supabase
-export async function deleteProductFromSupabase(productId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteProductFromSupabase(
+  productId: string,
+  options?: { skipQueue?: boolean }
+): Promise<{ success: boolean; error?: string; offlineQueued?: boolean }> {
+  const isOnline = isBrowserOnline();
   const supabase = getSupabase();
+
+  if (!options?.skipQueue && (!isOnline || !supabase)) {
+    addToOfflineQueue('DELETE_PRODUCT', productId, `Hapus Produk ID #${productId}`);
+    return { success: true, offlineQueued: true };
+  }
+
   if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
   try {
     const { error } = await supabase.from('products').delete().eq('id', productId);
     if (error) {
+      if (!options?.skipQueue && isNetworkError(error)) {
+        addToOfflineQueue('DELETE_PRODUCT', productId, `Hapus Produk ID #${productId}`);
+        return { success: true, offlineQueued: true };
+      }
       console.error('Supabase delete product error:', error);
       return { success: false, error: error.message };
     }
     return { success: true };
   } catch (err: any) {
+    if (!options?.skipQueue && isNetworkError(err)) {
+      addToOfflineQueue('DELETE_PRODUCT', productId, `Hapus Produk ID #${productId}`);
+      return { success: true, offlineQueued: true };
+    }
     console.error('Supabase delete product exception:', err);
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+// Save Member / Customer Profile to Supabase
+export async function saveCustomerToSupabase(
+  customer: MemberProfile,
+  options?: { skipQueue?: boolean }
+): Promise<{ success: boolean; error?: string; offlineQueued?: boolean }> {
+  const isOnline = isBrowserOnline();
+  const supabase = getSupabase();
+
+  if (!options?.skipQueue && (!isOnline || !supabase)) {
+    addToOfflineQueue(
+      'SYNC_CUSTOMER',
+      customer,
+      `Data Pelanggan: ${customer.name}`,
+      `No Member: ${customer.memberNumber || '-'} • Poin: ${customer.points || 0}`
+    );
+    return { success: true, offlineQueued: true };
+  }
+
+  if (!supabase) return { success: false, error: 'Supabase belum terhubung' };
+
+  try {
+    const payload = {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || null,
+      member_number: customer.memberNumber || null,
+      barcode: customer.barcode || null,
+      points: Number(customer.points || 0),
+      stamps: Number(customer.stamps || 0),
+      tier: customer.tier || 'Bronze',
+      joined_date: formatSupabaseTimestamp(customer.joinedDate) || new Date().toISOString(),
+      address: customer.address || null,
+      city: customer.city || null,
+      notes: customer.notes || null,
+      status: customer.status || 'active',
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('customers').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      if (error.code === '42P01') {
+        // Table doesn't exist yet in Supabase SQL schema, save in local smoothly
+        return { success: true };
+      }
+      if (!options?.skipQueue && isNetworkError(error)) {
+        addToOfflineQueue('SYNC_CUSTOMER', customer, `Data Pelanggan: ${customer.name}`);
+        return { success: true, offlineQueued: true };
+      }
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    if (!options?.skipQueue && isNetworkError(err)) {
+      addToOfflineQueue('SYNC_CUSTOMER', customer, `Data Pelanggan: ${customer.name}`);
+      return { success: true, offlineQueued: true };
+    }
+    return { success: false, error: err?.message || String(err) };
+  }
+}
+
+// Save Purchase Order (Stok Masuk) to Supabase
+export async function savePurchaseToSupabase(
+  purchase: PurchaseOrder,
+  options?: { skipQueue?: boolean }
+): Promise<{ success: boolean; error?: string; offlineQueued?: boolean }> {
+  const isOnline = isBrowserOnline();
+  const supabase = getSupabase();
+
+  if (!options?.skipQueue && (!isOnline || !supabase)) {
+    addToOfflineQueue(
+      'SYNC_PURCHASE',
+      purchase,
+      `Pembelian Stok #${purchase.purchaseNumber}`,
+      `Supplier: ${purchase.supplierName} • Total: Rp ${(purchase.totalAmount || 0).toLocaleString('id-ID')}`
+    );
+    return { success: true, offlineQueued: true };
+  }
+
+  if (!supabase) return { success: false, error: 'Supabase belum terhubung' };
+
+  try {
+    const payload = {
+      id: purchase.id,
+      purchase_number: purchase.purchaseNumber,
+      invoice_number: purchase.invoiceNumber || null,
+      supplier_id: purchase.supplierId || null,
+      supplier_name: purchase.supplierName,
+      store_id: purchase.storeId || 'store_01',
+      store_name: purchase.storeName,
+      order_date: formatSupabaseTimestamp(purchase.orderDate) || new Date().toISOString(),
+      received_date: formatSupabaseTimestamp(purchase.receivedDate),
+      items_json: purchase.items,
+      total_quantity: purchase.totalQuantity || 0,
+      subtotal: purchase.subtotal || 0,
+      total_amount: purchase.totalAmount || 0,
+      status: purchase.status || 'draft',
+      payment_status: purchase.paymentStatus || 'paid',
+      payment_method: purchase.paymentMethod || 'cash',
+      stock_updated: purchase.stockUpdated ?? true,
+      created_at: formatSupabaseTimestamp(purchase.createdAt) || new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('purchases').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      if (error.code === '42P01') {
+        // Table not created yet
+        return { success: true };
+      }
+      if (!options?.skipQueue && isNetworkError(error)) {
+        addToOfflineQueue('SYNC_PURCHASE', purchase, `Pembelian Stok #${purchase.purchaseNumber}`);
+        return { success: true, offlineQueued: true };
+      }
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    if (!options?.skipQueue && isNetworkError(err)) {
+      addToOfflineQueue('SYNC_PURCHASE', purchase, `Pembelian Stok #${purchase.purchaseNumber}`);
+      return { success: true, offlineQueued: true };
+    }
     return { success: false, error: err?.message || String(err) };
   }
 }

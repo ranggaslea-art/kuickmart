@@ -19,6 +19,7 @@ import {
   Activity,
   ScanBarcode
 } from 'lucide-react';
+import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
@@ -306,6 +307,9 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Icons */}
           <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
+            {/* Offline Sync Status & Queue Badge */}
+            <OfflineSyncBadge />
+
             {/* Fullscreen Toggle Button */}
             <button
               onClick={toggleFullscreen}

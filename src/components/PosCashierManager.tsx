@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { getProductUnitOptions } from '../utils/unitConversion';
+import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { 
   ScanBarcode, 
   Camera, 
@@ -1107,6 +1108,9 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
         {/* Action Controls in Header */}
         <div className="flex items-center gap-2">
+          {/* Offline Sync Status & Queue Badge */}
+          <OfflineSyncBadge />
+
           {/* Held Bills Badge & Button */}
           <button
             onClick={() => setIsHeldModalOpen(true)}

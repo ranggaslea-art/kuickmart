@@ -96,6 +96,7 @@ import {
   INITIAL_POINTS_LEDGER, 
   INITIAL_PURCHASES 
 } from '../data/mockSupplyAndLoyalty';
+import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { formatRupiah } from '../utils/formatters';
 import { computeConversionChains, formatStockBreakdown, getProductUnitOptions } from '../utils/unitConversion';
 import { 
@@ -126,7 +127,7 @@ import { PurchaseManager } from './PurchaseManager';
 import { CustomerManager } from './CustomerManager';
 import { PointsLoyaltyManager } from './PointsLoyaltyManager';
 import { PosCashierManager } from './PosCashierManager';
-import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '../lib/supabase';
+import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -423,6 +424,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     } catch (e) {
       console.error(e);
     }
+    // Sync each purchase to Supabase (or offline queue if disconnected)
+    newPurchases.forEach((p) => {
+      savePurchaseToSupabase(p).catch(() => {});
+    });
   };
 
   // Customers State
@@ -443,6 +448,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     } catch (e) {
       console.error(e);
     }
+    // Sync each customer to Supabase (or offline queue if disconnected)
+    newCustomers.forEach((c) => {
+      saveCustomerToSupabase(c).catch(() => {});
+    });
   };
 
   // Points Config State
@@ -2052,6 +2061,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           </div>
 
           <div className="flex items-center gap-2">
+            <OfflineSyncBadge />
+
             <button
               onClick={onOpenSupabaseModal}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white border border-white/10"
