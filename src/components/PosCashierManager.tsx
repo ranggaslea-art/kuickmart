@@ -12,11 +12,11 @@ import { formatRupiah } from '../utils/formatters';
 import { getProductUnitOptions } from '../utils/unitConversion';
 import { cleanReceiptText } from '../utils/sanitizeReceipt';
 import { 
-  generateRawPosReceiptText, 
   generateDotMatrixReceiptHtml, 
   printPosReceiptViaIframe,
   downloadPosReceiptTxtFile,
-  copyPosReceiptText
+  copyPosReceiptText,
+  generateRawPosReceiptText
 } from '../utils/posPrinterHelper';
 import { PosReceiptEditorModal } from './PosReceiptEditorModal';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
@@ -25,38 +25,40 @@ import {
   Camera, 
   Search, 
   Plus, 
+  Minus,
   Trash2, 
   CheckCircle2, 
   Printer, 
   RotateCcw, 
   PauseCircle, 
   PlayCircle, 
-  Coins, 
   CreditCard, 
   QrCode, 
   Banknote, 
   User, 
   Award, 
   X, 
-  Store as StoreIcon, 
-  ChevronDown, 
   Sparkles, 
-  ShoppingBag, 
-  CornerDownRight, 
-  Maximize, 
-  Minimize, 
-  Info,
-  Calendar,
-  Layers,
-  ArrowRight,
-  ShieldCheck,
-  Check,
   Package,
   Sliders,
+  Coins,
   Copy,
-  Download,
-  FileText
+  Download
 } from 'lucide-react';
+
+interface PosCashierManagerProps {
+  products: Product[];
+  stores: Store[];
+  currentStore?: Store;
+  customers: MemberProfile[];
+  orders?: Order[];
+  onUpdateProducts: (products: Product[]) => void;
+  onUpdateCustomers: (customers: MemberProfile[]) => void;
+  onAddOrder: (order: Order) => void;
+  onClose?: () => void;
+  receiptConfigs?: ReceiptInfo[];
+  onUpdateReceiptConfigs?: (configs: ReceiptInfo[]) => void;
+}
 
 export interface PosRowItem {
   id: string;
@@ -84,20 +86,6 @@ export interface HeldTransaction {
   note?: string;
 }
 
-interface PosCashierManagerProps {
-  products: Product[];
-  stores: Store[];
-  currentStore: Store;
-  customers: MemberProfile[];
-  orders: Order[];
-  onUpdateProducts: (products: Product[]) => void;
-  onUpdateCustomers: (customers: MemberProfile[]) => void;
-  onAddOrder: (order: Order) => void;
-  onClose?: () => void;
-  receiptConfigs?: ReceiptInfo[];
-  onUpdateReceiptConfigs?: (configs: ReceiptInfo[]) => void;
-}
-
 // Audio Beep for Barcode Scanner
 function playScanBeep() {
   try {
@@ -115,7 +103,7 @@ function playScanBeep() {
     osc.start();
     osc.stop(ctx.currentTime + 0.12);
   } catch {
-    // ignore audio block
+    // ignore
   }
 }
 
@@ -128,8 +116,8 @@ function playCashSuccessSound() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
     gain.gain.setValueAtTime(0.2, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
     osc.connect(gain);
@@ -155,13 +143,12 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   onUpdateReceiptConfigs,
 }) => {
   // Store & Cashier Operator
-  const [selectedStoreId, setSelectedStoreId] = useState(currentStore?.id || stores[0]?.id || 'store_1');
+  const [selectedStoreId] = useState(currentStore?.id || stores[0]?.id || 'store_1');
   const [cashierName] = useState('Kasir 01 (Budi Santoso)');
 
-  // Receipt Configuration & Epson TM-U220 Printer State
+  // Receipt Configuration (Default: Epson TM-U220 Dot Matrix 70mm)
   const [isReceiptEditorModalOpen, setIsReceiptEditorModalOpen] = useState(false);
   const [receiptPrintFeedback, setReceiptPrintFeedback] = useState<string | null>(null);
-  const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [localReceiptConfigs, setLocalReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     if (receiptConfigs && receiptConfigs.length > 0) return receiptConfigs;
     try {
@@ -229,7 +216,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     if (onUpdateReceiptConfigs) {
       onUpdateReceiptConfigs(newList);
     }
-    setReceiptPrintFeedback('Desain struk POS berhasil disimpan!');
+    setReceiptPrintFeedback('Desain struk Epson TM-U220 berhasil diperbarui!');
     setTimeout(() => setReceiptPrintFeedback(null), 3500);
   };
 
@@ -301,27 +288,13 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const [lastScannedItemInfo, setLastScannedItemInfo] = useState<{
-    name: string;
-    qty: number;
-    unit: string;
-    price: number;
-    subtotal: number;
-  } | null>(null);
-
   // Camera Barcode Scanner
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Display Theme: 'vfd-green' | 'amber' | 'cyan' | 'white'
-  const [displayTheme, setDisplayTheme] = useState<'vfd-green' | 'amber' | 'cyan'>('vfd-green');
-
-  // Input Focus Refs for rapid keyboard entry
+  // Input Focus Refs
   const quickBarcodeInputRef = useRef<HTMLInputElement | null>(null);
-  const barcodeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const qtyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const priceInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const cashInputRef = useRef<HTMLInputElement | null>(null);
 
   // Payment State
@@ -341,9 +314,8 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   });
   const [isHeldModalOpen, setIsHeldModalOpen] = useState(false);
 
-  // Completed Receipt Modal
+  // Last Completed Order (for 1-click re-print directly to TM-U220)
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   // Active Store object
   const activeStore = useMemo(() => {
@@ -415,276 +387,6 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   }, [heldTransactions]);
 
   // ==========================================
-  // ROW DATA MANIPULATION & UNIT CONVERSION
-  // ==========================================
-  const applyProductToRow = (
-    rowIndex: number,
-    prod: Product,
-    customBarcode?: string,
-    customUnit?: string
-  ) => {
-    const baseUnit = prod.unit || 'Pcs';
-    const unitToUse = customUnit || baseUnit;
-    let mult = 1;
-    let unitPrice = prod.price;
-
-    if (customUnit) {
-      const opts = getProductUnitOptions(prod);
-      const matched = opts.find((o) => o.unitName.toLowerCase() === customUnit.toLowerCase());
-      if (matched) {
-        mult = matched.multiplier || 1;
-        unitPrice = matched.price || Math.round(prod.price * mult);
-      }
-    }
-
-    setRows((prev) => {
-      const updated = [...prev];
-      const target = updated[rowIndex] || {
-        id: `row_${Date.now()}_${rowIndex}`,
-        quantity: 1,
-        discountAmount: 0,
-      };
-
-      const qty = target.quantity > 0 ? target.quantity : 1;
-      const sub = Math.max(0, unitPrice * qty - (target.discountAmount || 0));
-
-      updated[rowIndex] = {
-        ...target,
-        productId: prod.id,
-        productName: prod.name,
-        barcode: customBarcode || prod.barcode || '',
-        unit: unitToUse,
-        quantity: qty,
-        sellingPrice: unitPrice,
-        discountAmount: target.discountAmount || 0,
-        subtotal: sub,
-        costPrice: prod.costPrice || Math.round(prod.price * 0.75),
-        conversionMultiplier: mult,
-        baseUnit,
-        baseQuantity: qty * mult,
-        stockAvailable: prod.stock || 0,
-      };
-
-      return updated;
-    });
-
-    setLastScannedItemInfo({
-      name: prod.name,
-      qty: 1,
-      unit: unitToUse,
-      price: unitPrice,
-      subtotal: unitPrice,
-    });
-  };
-
-  const handleRowBarcodeLookup = (rowIndex: number, code: string) => {
-    const trimmed = code.trim();
-    if (!trimmed) return;
-
-    // 1. Search by product barcode, id, or multi-tier packaging barcode
-    let matched = products.find((p) => {
-      if (p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) return true;
-      if (p.id.toLowerCase() === trimmed.toLowerCase()) return true;
-      if (
-        p.unitConversions?.some(
-          (uc) => uc.barcode && uc.barcode.toLowerCase() === trimmed.toLowerCase()
-        )
-      ) {
-        return true;
-      }
-      return false;
-    });
-
-    // 2. If not found by barcode, search by product name / brand
-    if (!matched) {
-      matched = products.find((p) =>
-        p.name.toLowerCase().includes(trimmed.toLowerCase()) ||
-        (p.brand && p.brand.toLowerCase().includes(trimmed.toLowerCase()))
-      );
-    }
-
-    if (matched) {
-      playScanBeep();
-      const matchedConv = matched.unitConversions?.find(
-        (uc) => uc.barcode && uc.barcode.toLowerCase() === trimmed.toLowerCase()
-      );
-      const unitName = matchedConv ? matchedConv.unitName : matched.unit || 'Pcs';
-      applyProductToRow(rowIndex, matched, trimmed, unitName);
-
-      // Advance focus to Qty
-      setTimeout(() => {
-        qtyInputRefs.current[rowIndex]?.focus();
-        qtyInputRefs.current[rowIndex]?.select();
-      }, 50);
-    } else {
-      alert(`Produk dengan barcode atau nama "${trimmed}" tidak ditemukan.`);
-    }
-  };
-
-  const handleRowUnitChange = (rowIndex: number, newUnit: string) => {
-    const currentRow = rows[rowIndex];
-    if (!currentRow || !currentRow.productId) return;
-
-    const prod = products.find((p) => p.id === currentRow.productId);
-    if (!prod) return;
-
-    const opts = getProductUnitOptions(prod);
-    const matchedOpt = opts.find((o) => o.unitName.toLowerCase() === newUnit.toLowerCase());
-    const mult = matchedOpt ? matchedOpt.multiplier || 1 : 1;
-    const unitPrice = matchedOpt ? matchedOpt.price || Math.round(prod.price * mult) : prod.price * mult;
-    const baseUnit = prod.unit || 'Pcs';
-    const sub = Math.max(0, unitPrice * currentRow.quantity - currentRow.discountAmount);
-
-    setRows((prev) => {
-      const updated = [...prev];
-      updated[rowIndex] = {
-        ...currentRow,
-        unit: newUnit,
-        conversionMultiplier: mult,
-        sellingPrice: unitPrice,
-        subtotal: sub,
-        baseUnit,
-        baseQuantity: currentRow.quantity * mult,
-      };
-      return updated;
-    });
-  };
-
-  const handleRowQtyChange = (rowIndex: number, rawQty: number) => {
-    const qty = isNaN(rawQty) || rawQty < 1 ? 1 : rawQty;
-    setRows((prev) => {
-      const updated = [...prev];
-      const r = updated[rowIndex];
-      if (!r) return prev;
-      const sub = Math.max(0, r.sellingPrice * qty - r.discountAmount);
-      updated[rowIndex] = {
-        ...r,
-        quantity: qty,
-        subtotal: sub,
-        baseQuantity: qty * (r.conversionMultiplier || 1),
-      };
-      return updated;
-    });
-  };
-
-  const handleRowPriceChange = (rowIndex: number, rawPrice: number) => {
-    const price = isNaN(rawPrice) || rawPrice < 0 ? 0 : rawPrice;
-    setRows((prev) => {
-      const updated = [...prev];
-      const r = updated[rowIndex];
-      if (!r) return prev;
-      const sub = Math.max(0, price * r.quantity - r.discountAmount);
-      updated[rowIndex] = {
-        ...r,
-        sellingPrice: price,
-        subtotal: sub,
-      };
-      return updated;
-    });
-  };
-
-  const handleRowDiscountChange = (rowIndex: number, rawDiscount: number) => {
-    const discount = isNaN(rawDiscount) || rawDiscount < 0 ? 0 : rawDiscount;
-    setRows((prev) => {
-      const updated = [...prev];
-      const r = updated[rowIndex];
-      if (!r) return prev;
-      const sub = Math.max(0, r.sellingPrice * r.quantity - discount);
-      updated[rowIndex] = {
-        ...r,
-        discountAmount: discount,
-        subtotal: sub,
-      };
-      return updated;
-    });
-  };
-
-  // ==========================================
-  // AUTO ADVANCING FOCUS TO NEXT ROW (MANDATORY REQUIREMENT)
-  // ==========================================
-  const advanceToNextRow = (currentIndex: number) => {
-    const currentRow = rows[currentIndex];
-    if (!currentRow || !currentRow.productId) {
-      barcodeInputRefs.current[currentIndex]?.focus();
-      return;
-    }
-
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= rows.length) {
-      // Append a new blank row
-      const newRow: PosRowItem = {
-        id: `row_${Date.now()}_${nextIndex}`,
-        productId: '',
-        productName: '',
-        barcode: '',
-        unit: 'Pcs',
-        quantity: 1,
-        sellingPrice: 0,
-        discountAmount: 0,
-        subtotal: 0,
-        costPrice: 0,
-        conversionMultiplier: 1,
-        baseUnit: 'Pcs',
-        baseQuantity: 1,
-      };
-      setRows((prev) => [...prev, newRow]);
-    }
-
-    setTimeout(() => {
-      barcodeInputRefs.current[nextIndex]?.focus();
-      barcodeInputRefs.current[nextIndex]?.select();
-    }, 50);
-  };
-
-  const handleAddBlankRow = () => {
-    const newRow: PosRowItem = {
-      id: `row_${Date.now()}_${rows.length + 1}`,
-      productId: '',
-      productName: '',
-      barcode: '',
-      unit: 'Pcs',
-      quantity: 1,
-      sellingPrice: 0,
-      discountAmount: 0,
-      subtotal: 0,
-      costPrice: 0,
-      conversionMultiplier: 1,
-      baseUnit: 'Pcs',
-      baseQuantity: 1,
-    };
-    setRows((prev) => [...prev, newRow]);
-    setTimeout(() => {
-      barcodeInputRefs.current[rows.length]?.focus();
-    }, 50);
-  };
-
-  const handleRemoveRow = (index: number) => {
-    if (rows.length <= 1) {
-      // Keep one blank row
-      setRows([
-        {
-          id: `row_${Date.now()}_0`,
-          productId: '',
-          productName: '',
-          barcode: '',
-          unit: 'Pcs',
-          quantity: 1,
-          sellingPrice: 0,
-          discountAmount: 0,
-          subtotal: 0,
-          costPrice: 0,
-          conversionMultiplier: 1,
-          baseUnit: 'Pcs',
-          baseQuantity: 1,
-        },
-      ]);
-      setLastScannedItemInfo(null);
-      return;
-    }
-    setRows((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // ==========================================
   // ADD PRODUCT TO TRANSACTION CART
   // ==========================================
   const addProductToCart = (
@@ -734,15 +436,6 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           subtotal: newSub,
           baseQuantity: newQty * (curr.conversionMultiplier || 1),
         };
-
-        setLastScannedItemInfo({
-          name: matchedProd.name,
-          qty: newQty,
-          unit: unitName,
-          price: curr.sellingPrice,
-          subtotal: newSub,
-        });
-
         return updated;
       }
 
@@ -767,15 +460,6 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           baseQuantity: customQty * mult,
           stockAvailable: matchedProd.stock || 0,
         };
-
-        setLastScannedItemInfo({
-          name: matchedProd.name,
-          qty: customQty,
-          unit: unitName,
-          price: unitPrice,
-          subtotal: unitPrice * customQty,
-        });
-
         return updated;
       }
 
@@ -797,14 +481,6 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
         baseQuantity: customQty * mult,
         stockAvailable: matchedProd.stock || 0,
       };
-
-      setLastScannedItemInfo({
-        name: matchedProd.name,
-        qty: customQty,
-        unit: unitName,
-        price: unitPrice,
-        subtotal: unitPrice * customQty,
-      });
 
       return [...prev, newRow];
     });
@@ -831,16 +507,12 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     }
   };
 
-  // ==========================================
-  // QUICK BARCODE & PRODUCT NAME SEARCH (Top Bar)
-  // Kasir bisa mencari lewat barcode ATAU nama barang
-  // ==========================================
+  // Quick Barcode & Product Name Search
   const handleQuickBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const query = quickBarcodeInput.trim();
     if (!query) return;
 
-    // If dropdown is open and user pressed enter with selected item
     if (
       isSearchDropdownOpen &&
       searchResults.length > 0 &&
@@ -871,7 +543,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       return;
     }
 
-    // 2. Search by exact or partial product name
+    // 2. Search by product name
     const nameMatches = products.filter(
       (p) =>
         p.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -879,10 +551,8 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     );
 
     if (nameMatches.length === 1) {
-      // Exactly 1 match found by name, immediately add to cart
       addProductToCart(nameMatches[0]);
     } else if (nameMatches.length > 1) {
-      // Multiple matches: show dropdown and highlight first
       setIsSearchDropdownOpen(true);
       setSelectedSearchIndex(0);
     } else {
@@ -890,173 +560,132 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     }
   };
 
-  // ==========================================
-  // CAMERA BARCODE SCANNER
-  // ==========================================
-  const startCameraScan = async () => {
-    setIsCameraOpen(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-
-      if ('BarcodeDetector' in window) {
-        const barcodeDetector = new (window as any).BarcodeDetector({
-          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a'],
-        });
-
-        const scanInterval = setInterval(async () => {
-          if (!videoRef.current || !streamRef.current) {
-            clearInterval(scanInterval);
-            return;
-          }
-          try {
-            const detected = await barcodeDetector.detect(videoRef.current);
-            if (detected && detected.length > 0) {
-              const code = detected[0].rawValue;
-              stopCameraScan();
-              setQuickBarcodeInput(code);
-              // auto trigger quick scan
-              setTimeout(() => {
-                const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-                setQuickBarcodeInput(code);
-                // process lookup directly
-                const matchedProd = products.find(
-                  (p) =>
-                    p.barcode === code ||
-                    p.id === code ||
-                    p.unitConversions?.some((uc) => uc.barcode === code)
-                );
-                if (matchedProd) {
-                  playScanBeep();
-                  setRows((prev) => {
-                    const emptyIdx = prev.findIndex((r) => !r.productId);
-                    const baseUnit = matchedProd.unit || 'Pcs';
-                    const newRow: PosRowItem = {
-                      id: `row_${Date.now()}`,
-                      productId: matchedProd.id,
-                      productName: matchedProd.name,
-                      barcode: code,
-                      unit: baseUnit,
-                      quantity: 1,
-                      sellingPrice: matchedProd.price,
-                      discountAmount: 0,
-                      subtotal: matchedProd.price,
-                      costPrice: matchedProd.costPrice || Math.round(matchedProd.price * 0.75),
-                      conversionMultiplier: 1,
-                      baseUnit,
-                      baseQuantity: 1,
-                      stockAvailable: matchedProd.stock || 0,
-                    };
-                    if (emptyIdx >= 0) {
-                      const upd = [...prev];
-                      upd[emptyIdx] = newRow;
-                      return upd;
-                    }
-                    return [...prev, newRow];
-                  });
-                }
-              }, 100);
-              clearInterval(scanInterval);
-            }
-          } catch {
-            // frame detect pass
-          }
-        }, 300);
-      }
-    } catch (err) {
-      console.warn('Gagal membuka kamera scanner:', err);
-      alert('Tidak dapat mengakses kamera. Pastikan izin kamera aktif.');
-      setIsCameraOpen(false);
-    }
+  // Table Row Edits
+  const handleRowQtyChange = (rowIndex: number, deltaOrValue: number, isAbsolute: boolean = false) => {
+    setRows((prev) => {
+      const updated = [...prev];
+      const r = updated[rowIndex];
+      if (!r) return prev;
+      let newQty = isAbsolute ? deltaOrValue : r.quantity + deltaOrValue;
+      if (newQty < 1) newQty = 1;
+      const sub = Math.max(0, r.sellingPrice * newQty - r.discountAmount);
+      updated[rowIndex] = {
+        ...r,
+        quantity: newQty,
+        subtotal: sub,
+        baseQuantity: newQty * (r.conversionMultiplier || 1),
+      };
+      return updated;
+    });
   };
 
-  const stopCameraScan = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setIsCameraOpen(false);
+  const handleRowUnitChange = (rowIndex: number, newUnit: string) => {
+    const currentRow = rows[rowIndex];
+    if (!currentRow || !currentRow.productId) return;
+    const prod = products.find((p) => p.id === currentRow.productId);
+    if (!prod) return;
+
+    const opts = getProductUnitOptions(prod);
+    const matchedOpt = opts.find((o) => o.unitName.toLowerCase() === newUnit.toLowerCase());
+    const mult = matchedOpt ? matchedOpt.multiplier || 1 : 1;
+    const unitPrice = matchedOpt ? matchedOpt.price || Math.round(prod.price * mult) : prod.price * mult;
+    const baseUnit = prod.unit || 'Pcs';
+    const sub = Math.max(0, unitPrice * currentRow.quantity - currentRow.discountAmount);
+
+    setRows((prev) => {
+      const updated = [...prev];
+      updated[rowIndex] = {
+        ...currentRow,
+        unit: newUnit,
+        conversionMultiplier: mult,
+        sellingPrice: unitPrice,
+        subtotal: sub,
+        baseUnit,
+        baseQuantity: currentRow.quantity * mult,
+      };
+      return updated;
+    });
   };
 
-  // Quick preset sample barcode
-  const sampleBarcodes = [
-    { label: 'Minyak Bimoli 2L', code: '8992345112233' },
-    { label: 'Beras Pandan Wangi 5kg', code: '8993456789012' },
-    { label: 'Indomie Goreng', code: '8998866200225' },
-    { label: 'Ultra Milk Coklat 1L', code: '8991001100223' },
-    { label: 'Telur Ayam 1kg', code: '8994567890123' },
-  ];
+  const handleRowPriceChange = (rowIndex: number, rawPrice: number) => {
+    const price = isNaN(rawPrice) || rawPrice < 0 ? 0 : rawPrice;
+    setRows((prev) => {
+      const updated = [...prev];
+      const r = updated[rowIndex];
+      if (!r) return prev;
+      const sub = Math.max(0, price * r.quantity - r.discountAmount);
+      updated[rowIndex] = {
+        ...r,
+        sellingPrice: price,
+        subtotal: sub,
+      };
+      return updated;
+    });
+  };
 
-  // ==========================================
-  // HOLD & RECALL BILL (TAHAN / PANGGIL TRANSAKSI)
-  // ==========================================
-  const handleHoldTransaction = () => {
-    if (validRows.length === 0) {
-      alert('Tidak ada barang di keranjang kasir untuk ditahan.');
+  const handleRowDiscountChange = (rowIndex: number, rawDiscount: number) => {
+    const discount = isNaN(rawDiscount) || rawDiscount < 0 ? 0 : rawDiscount;
+    setRows((prev) => {
+      const updated = [...prev];
+      const r = updated[rowIndex];
+      if (!r) return prev;
+      const sub = Math.max(0, r.sellingPrice * r.quantity - discount);
+      updated[rowIndex] = {
+        ...r,
+        discountAmount: discount,
+        subtotal: sub,
+      };
+      return updated;
+    });
+  };
+
+  const handleRemoveRow = (index: number) => {
+    if (rows.length <= 1) {
+      setRows([
+        {
+          id: `row_${Date.now()}_0`,
+          productId: '',
+          productName: '',
+          barcode: '',
+          unit: 'Pcs',
+          quantity: 1,
+          sellingPrice: 0,
+          discountAmount: 0,
+          subtotal: 0,
+          costPrice: 0,
+          conversionMultiplier: 1,
+          baseUnit: 'Pcs',
+          baseQuantity: 1,
+        },
+      ]);
       return;
     }
+    setRows((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    const newHold: HeldTransaction = {
-      id: `hold_${Date.now()}`,
-      heldAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      customer: selectedCustomer,
-      items: [...validRows],
-      totalAmount: grandTotal,
-      note: `Ditahan oleh ${cashierName}`,
+  const handleAddBlankRow = () => {
+    const newRow: PosRowItem = {
+      id: `row_${Date.now()}_${rows.length + 1}`,
+      productId: '',
+      productName: '',
+      barcode: '',
+      unit: 'Pcs',
+      quantity: 1,
+      sellingPrice: 0,
+      discountAmount: 0,
+      subtotal: 0,
+      costPrice: 0,
+      conversionMultiplier: 1,
+      baseUnit: 'Pcs',
+      baseQuantity: 1,
     };
-
-    setHeldTransactions((prev) => [newHold, ...prev]);
-    // Reset active cart
-    setRows([
-      {
-        id: `row_${Date.now()}_0`,
-        productId: '',
-        productName: '',
-        barcode: '',
-        unit: 'Pcs',
-        quantity: 1,
-        sellingPrice: 0,
-        discountAmount: 0,
-        subtotal: 0,
-        costPrice: 0,
-        conversionMultiplier: 1,
-        baseUnit: 'Pcs',
-        baseQuantity: 1,
-      },
-    ]);
-    setSelectedCustomer(null);
-    setLastScannedItemInfo(null);
-    alert(`Transaksi berhasil ditahan (${newHold.items.length} item). Anda dapat melayani pelanggan berikutnya.`);
+    setRows((prev) => [...prev, newRow]);
   };
 
-  const handleRecallTransaction = (held: HeldTransaction) => {
-    if (validRows.length > 0) {
-      if (!confirm('Keranjang kasir saat ini memiliki barang. Ganti dengan transaksi yang dipanggil?')) {
-        return;
-      }
-    }
-
-    setRows(held.items);
-    setSelectedCustomer(held.customer);
-    setHeldTransactions((prev) => prev.filter((h) => h.id !== held.id));
-    setIsHeldModalOpen(false);
-    quickBarcodeInputRef.current?.focus();
-  };
-
-  // ==========================================
-  // RESET / BATALKAN TRANSAKSI
-  // ==========================================
+  // Reset Transaction
   const handleResetTransaction = () => {
     if (validRows.length > 0) {
-      if (!confirm('Batalkan seluruh transaksi kasir ini? Keranjang belanja akan dikosongkan.')) {
-        return;
-      }
+      if (!confirm('Kosongkan keranjang transaksi saat ini?')) return;
     }
     setRows([
       {
@@ -1076,28 +705,28 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       },
     ]);
     setSelectedCustomer(null);
-    setLastScannedItemInfo(null);
     setCashReceived(0);
     setUseCustomerPoints(false);
     quickBarcodeInputRef.current?.focus();
   };
 
-  // ==========================================
-  // FINALISASI PENJUALAN & CETAK STRUK
-  // ==========================================
+  // ===============================================================
+  // 1. DIRECT PRINT TO EPSON TM-U220 (NO MODAL / MODUL PANGGILAN)
+  // ===============================================================
   const handleFinalizeSale = () => {
     if (validRows.length === 0) {
       alert('Mohon masukkan minimal 1 barang sebelum menyelesaikan transaksi.');
+      quickBarcodeInputRef.current?.focus();
       return;
     }
 
     if (paymentMethod === 'cash' && cashReceived < grandTotal) {
-      alert(`Uang tunai yang diterima (Rp ${cashReceived.toLocaleString('id-ID')}) kurang dari total belanja (Rp ${grandTotal.toLocaleString('id-ID')}).`);
+      alert(`Uang tunai diterima (Rp ${cashReceived.toLocaleString('id-ID')}) kurang dari total belanja (Rp ${grandTotal.toLocaleString('id-ID')}).`);
       cashInputRef.current?.focus();
       return;
     }
 
-    // 1. DEDUCT PHYSICAL STOCK IN CATALOG (STOK BERKURANG SECARA OTOMATIS)
+    // A. Potong Stok Fisik Produk
     const updatedProducts = products.map((prod) => {
       const matchingRows = validRows.filter((r) => r.productId === prod.id);
       if (matchingRows.length > 0) {
@@ -1114,7 +743,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     });
     onUpdateProducts(updatedProducts);
 
-    // 2. UPDATE CUSTOMER PROFILE & LOYALTY POINTS IN MASTER PELANGGAN
+    // B. Update Poin & Transaksi Member
     if (selectedCustomer) {
       const updatedCustomers = customers.map((c) => {
         if (c.id === selectedCustomer.id) {
@@ -1124,7 +753,6 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           const newSpent = (c.totalSpent || 0) + grandTotal;
           const newOrdersCount = (c.ordersCount || 0) + 1;
 
-          // Tier progression check
           let newTier = c.tier;
           if (newSpent >= 10000000) newTier = 'Platinum';
           else if (newSpent >= 4000000) newTier = 'Gold';
@@ -1144,7 +772,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       onUpdateCustomers(updatedCustomers);
     }
 
-    // 3. CREATE COMPLETED ORDER IN SYSTEM
+    // C. Buat Dokumen Transaksi Order
     const orderNum = `POS-${Date.now().toString().slice(-6)}`;
     const cartItemsFromRows: CartItem[] = validRows.map((r) => {
       const p = products.find((prod) => prod.id === r.productId)!;
@@ -1192,11 +820,29 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     onAddOrder(newOrder);
     playCashSuccessSound();
 
-    // Show thermal receipt modal
+    // D. Simpan order terakhir untuk opsi cetak ulang langsung
     setCompletedOrder(newOrder);
-    setIsReceiptModalOpen(true);
 
-    // Reset table for next transaction
+    // E. LANGSUNG CETAK KE EPSON TM-U220 VIA IFRAME TANPA MODAL ATAU MODUL LAIN!
+    try {
+      const html = generateDotMatrixReceiptHtml(
+        newOrder, 
+        activeReceiptConfig, 
+        cashierName, 
+        { cashReceived: paymentMethod === 'cash' ? cashReceived : grandTotal, changeAmount }
+      );
+      printPosReceiptViaIframe(html);
+    } catch (err) {
+      console.error('Direct TM-U220 print trigger error:', err);
+    }
+
+    // F. Tampilkan feedback ringkas di status bar
+    setReceiptPrintFeedback(
+      `✅ Transaksi #${orderNum} Selesai (${formatRupiah(grandTotal)}) • Struk langsung dikirim ke printer Epson TM-U220.`
+    );
+    setTimeout(() => setReceiptPrintFeedback(null), 6000);
+
+    // G. Reset keranjang belanja kasir seketika & kembalikan fokus ke scan barcode
     setRows([
       {
         id: `row_${Date.now()}_0`,
@@ -1214,18 +860,102 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
         baseQuantity: 1,
       },
     ]);
+    setSelectedCustomer(null);
     setCashReceived(0);
     setUseCustomerPoints(false);
+
+    setTimeout(() => {
+      quickBarcodeInputRef.current?.focus();
+    }, 80);
   };
 
-  // Register New Customer on the fly
+  // Direct Re-Print last order to Epson TM-U220 without modal
+  const handleDirectReprintLastOrder = async () => {
+    if (!completedOrder) {
+      alert('Belum ada transaksi sebelumnya untuk dicetak ulang.');
+      return;
+    }
+    try {
+      const html = generateDotMatrixReceiptHtml(
+        completedOrder, 
+        activeReceiptConfig, 
+        cashierName, 
+        { cashReceived, changeAmount }
+      );
+      await printPosReceiptViaIframe(html);
+      setReceiptPrintFeedback(`🖨️ Struk #${completedOrder.orderNumber} kembali dicetak ke printer Epson TM-U220!`);
+      setTimeout(() => setReceiptPrintFeedback(null), 4000);
+    } catch (err) {
+      console.error('Direct reprint error:', err);
+    }
+  };
+
+  // Quick cash helper
+  const handleSetQuickCash = (amount: number) => {
+    setCashReceived(amount);
+  };
+
+  // Hold & Recall Bill
+  const handleHoldTransaction = () => {
+    if (validRows.length === 0) {
+      alert('Tidak ada barang di keranjang kasir untuk ditahan.');
+      return;
+    }
+
+    const newHold: HeldTransaction = {
+      id: `hold_${Date.now()}`,
+      heldAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      customer: selectedCustomer,
+      items: [...validRows],
+      totalAmount: grandTotal,
+      note: `Ditahan oleh ${cashierName}`,
+    };
+
+    setHeldTransactions((prev) => [newHold, ...prev]);
+    setRows([
+      {
+        id: `row_${Date.now()}_0`,
+        productId: '',
+        productName: '',
+        barcode: '',
+        unit: 'Pcs',
+        quantity: 1,
+        sellingPrice: 0,
+        discountAmount: 0,
+        subtotal: 0,
+        costPrice: 0,
+        conversionMultiplier: 1,
+        baseUnit: 'Pcs',
+        baseQuantity: 1,
+      },
+    ]);
+    setSelectedCustomer(null);
+    setCashReceived(0);
+    setReceiptPrintFeedback(`Transaksi berhasil ditahan (${newHold.items.length} macam barang). Siap melayani pelanggan berikutnya.`);
+    setTimeout(() => setReceiptPrintFeedback(null), 4000);
+    quickBarcodeInputRef.current?.focus();
+  };
+
+  const handleRecallTransaction = (held: HeldTransaction) => {
+    if (validRows.length > 0) {
+      if (!confirm('Keranjang kasir saat ini memiliki barang. Ganti dengan transaksi yang dipanggil?')) {
+        return;
+      }
+    }
+    setRows(held.items);
+    setSelectedCustomer(held.customer);
+    setHeldTransactions((prev) => prev.filter((h) => h.id !== held.id));
+    setIsHeldModalOpen(false);
+    quickBarcodeInputRef.current?.focus();
+  };
+
+  // Quick Customer Register
   const handleQuickRegisterCustomer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustName.trim() || !newCustPhone.trim()) {
       alert('Nama dan No. WhatsApp wajib diisi');
       return;
     }
-
     const nextNum = customers.length + 1;
     const newCust: MemberProfile = {
       id: `usr_${Date.now()}`,
@@ -1234,7 +964,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       email: `${newCustName.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
       memberNumber: `KM-2024-${String(nextNum).padStart(3, '0')}`,
       barcode: String(Date.now()).slice(-12),
-      points: 500, // Bonus member baru
+      points: 500,
       stamps: 1,
       tier: 'Bronze',
       joinedDate: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
@@ -1250,117 +980,137 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     setNewCustName('');
     setNewCustPhone('');
     setNewCustCity('');
-    alert(`Member baru "${newCust.name}" berhasil didaftarkan! Bonus 500 poin telah ditambahkan.`);
+    setReceiptPrintFeedback(`Member baru "${newCust.name}" berhasil didaftarkan! (+500 poin)`);
+    setTimeout(() => setReceiptPrintFeedback(null), 3500);
   };
 
-  // Quick cash helper
-  const handleSetQuickCash = (amount: number) => {
-    setCashReceived(amount);
-  };
+  // Keyboard Shortcuts (F2, F4, F8, F9, F10, F12, Esc)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F2: Focus Barcode / Search
+      if (e.key === 'F2') {
+        e.preventDefault();
+        quickBarcodeInputRef.current?.focus();
+        quickBarcodeInputRef.current?.select();
+      }
+      // F4: Pilih Member
+      else if (e.key === 'F4') {
+        e.preventDefault();
+        setIsCustomerModalOpen((prev) => !prev);
+      }
+      // F8: Tahan / Panggil
+      else if (e.key === 'F8') {
+        e.preventDefault();
+        setIsHeldModalOpen((prev) => !prev);
+      }
+      // F9: Uang Pas
+      else if (e.key === 'F9') {
+        e.preventDefault();
+        if (grandTotal > 0) {
+          setCashReceived(grandTotal);
+        }
+      }
+      // F10: Cetak Ulang Terakhir Langsung ke TM-U220
+      else if (e.key === 'F10') {
+        e.preventDefault();
+        handleDirectReprintLastOrder();
+      }
+      // F12: Bayar & Cetak Langsung
+      else if (e.key === 'F12') {
+        e.preventDefault();
+        handleFinalizeSale();
+      }
+      // Escape: Tutup dropdown / modal
+      else if (e.key === 'Escape') {
+        if (isSearchDropdownOpen) {
+          setIsSearchDropdownOpen(false);
+        } else if (isCustomerModalOpen) {
+          setIsCustomerModalOpen(false);
+        } else if (isHeldModalOpen) {
+          setIsHeldModalOpen(false);
+        }
+      }
+    };
 
-  // Print Struk (Epson TM-U220 Dot Matrix 70mm or Thermal)
-  const handlePrintReceipt = async () => {
-    if (!completedOrder) {
-      window.print();
-      return;
-    }
-    setIsPrintingReceipt(true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [grandTotal, isSearchDropdownOpen, isCustomerModalOpen, isHeldModalOpen, completedOrder, activeReceiptConfig, cashierName, cashReceived, changeAmount, validRows]);
+
+  // Camera Barcode Scanner
+  const startCameraScan = async () => {
+    setIsCameraOpen(true);
     try {
-      const html = generateDotMatrixReceiptHtml(
-        completedOrder, 
-        activeReceiptConfig, 
-        cashierName, 
-        { cashReceived, changeAmount }
-      );
-      await printPosReceiptViaIframe(html);
-    } catch (err) {
-      console.error('Print iframe fallback:', err);
-      window.print();
-    } finally {
-      setIsPrintingReceipt(false);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+
+      if ('BarcodeDetector' in window) {
+        const barcodeDetector = new (window as any).BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a'],
+        });
+
+        const scanInterval = setInterval(async () => {
+          if (!videoRef.current || !streamRef.current) {
+            clearInterval(scanInterval);
+            return;
+          }
+          try {
+            const detected = await barcodeDetector.detect(videoRef.current);
+            if (detected && detected.length > 0) {
+              const code = detected[0].rawValue;
+              stopCameraScan();
+              setQuickBarcodeInput(code);
+              const matchedProd = products.find(
+                (p) =>
+                  p.barcode === code ||
+                  p.id === code ||
+                  p.unitConversions?.some((uc) => uc.barcode === code)
+              );
+              if (matchedProd) {
+                addProductToCart(matchedProd, code);
+              }
+              clearInterval(scanInterval);
+            }
+          } catch {}
+        }, 300);
+      }
+    } catch {
+      alert('Tidak dapat mengakses kamera. Pastikan izin kamera telah diberikan.');
+      setIsCameraOpen(false);
     }
   };
 
-  // Copy RAW ASCII 40-col Receipt Text
-  const handleCopyRawReceipt = async () => {
-    if (!completedOrder) return;
-    const raw = generateRawPosReceiptText(
-      completedOrder, 
-      activeReceiptConfig, 
-      cashierName, 
-      { cashReceived, changeAmount }
-    );
-    const ok = await copyPosReceiptText(raw);
-    if (ok) {
-      setReceiptPrintFeedback('Teks struk RAW 40 kolom berhasil disalin ke clipboard!');
-      setTimeout(() => setReceiptPrintFeedback(null), 3000);
+  const stopCameraScan = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
+    setIsCameraOpen(false);
   };
-
-  // Download .TXT receipt for direct spooler
-  const handleDownloadTxtReceipt = () => {
-    if (!completedOrder) return;
-    const raw = generateRawPosReceiptText(
-      completedOrder, 
-      activeReceiptConfig, 
-      cashierName, 
-      { cashReceived, changeAmount }
-    );
-    downloadPosReceiptTxtFile(raw, completedOrder.orderNumber);
-    setReceiptPrintFeedback('File struk .txt berhasil diunduh!');
-    setTimeout(() => setReceiptPrintFeedback(null), 3000);
-  };
-
-  // Display Theme CSS Classes
-  const getThemeStyles = () => {
-    switch (displayTheme) {
-      case 'amber':
-        return {
-          container: 'bg-stone-950 text-amber-400 border-amber-900/60 shadow-[0_0_40px_rgba(245,158,11,0.2)]',
-          totalText: 'text-amber-400 drop-shadow-[0_0_18px_rgba(245,158,11,0.5)]',
-          subText: 'text-amber-300/80',
-          badge: 'bg-amber-950 text-amber-300 border border-amber-700/50',
-          changeText: 'text-amber-300',
-        };
-      case 'cyan':
-        return {
-          container: 'bg-stone-950 text-cyan-400 border-cyan-900/60 shadow-[0_0_40px_rgba(6,182,212,0.2)]',
-          totalText: 'text-cyan-400 drop-shadow-[0_0_18px_rgba(6,182,212,0.5)]',
-          subText: 'text-cyan-300/80',
-          badge: 'bg-cyan-950 text-cyan-300 border border-cyan-700/50',
-          changeText: 'text-cyan-300',
-        };
-      default: // vfd-green
-        return {
-          container: 'bg-stone-950 text-emerald-400 border-emerald-950 shadow-[0_0_50px_rgba(16,185,129,0.25)]',
-          totalText: 'text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.55)]',
-          subText: 'text-emerald-300/80',
-          badge: 'bg-emerald-950 text-emerald-300 border border-emerald-800/60',
-          changeText: 'text-emerald-300',
-        };
-    }
-  };
-
-  const theme = getThemeStyles();
 
   return (
-    <div className="flex flex-col h-full bg-stone-100 text-stone-900 font-sans select-none">
+    <div className="flex flex-col h-full bg-stone-100 text-stone-900 font-sans select-none overflow-hidden">
       {/* ============================================================ */}
-      {/* 1. TOP CASHIER HEADER & OPERATIONAL BAR */}
+      {/* 1. TOP BAR: KASIR & PRINTER TM-U220 STATUS (SIMPLE & CLEAN)  */}
       {/* ============================================================ */}
-      <div className="bg-white border-b border-stone-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+      <header className="bg-white border-b border-stone-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black shadow-xs">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-xs">
             <ScanBarcode className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black text-stone-900 tracking-tight">
-                Penjualan Kasir Minimarket (POS)
+              <h1 className="text-sm sm:text-base font-extrabold text-stone-900 tracking-tight">
+                POS Kasir Minimarket
               </h1>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                POS AKTIF
+                ONLINE
               </span>
             </div>
             <div className="text-xs text-stone-500 flex items-center gap-2">
@@ -1371,19 +1121,40 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           </div>
         </div>
 
-        {/* Action Controls in Header */}
-        <div className="flex items-center gap-2">
-          {/* Offline Sync Status & Queue Badge */}
+        {/* PRINTER TM-U220 DIRECT STATUS CHIP */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+            </span>
+            <Printer className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Epson TM-U220 (70mm Dot Matrix) • Cetak Langsung</span>
+          </div>
+
+          {/* Quick 1-Click Re-print button */}
+          {completedOrder && (
+            <button
+              onClick={handleDirectReprintLastOrder}
+              className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+              title="Cetak ulang struk sebelumnya ke TM-U220 tanpa popup [F10]"
+            >
+              <Printer className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Cetak Ulang (F10)</span>
+            </button>
+          )}
+
+          {/* Offline Sync Status */}
           <OfflineSyncBadge />
 
-          {/* Held Bills Badge & Button */}
+          {/* Held Bills Button */}
           <button
             onClick={() => setIsHeldModalOpen(true)}
-            className="relative px-3 py-2 rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-            title="Panggil Transaksi yang Ditahan"
+            className="relative px-3 py-1.5 rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Panggil Transaksi Ditahan [F8]"
           >
-            <PauseCircle className="w-4 h-4 text-amber-600" />
-            <span>Tahan/Panggil ({heldTransactions.length})</span>
+            <PauseCircle className="w-3.5 h-3.5 text-amber-600" />
+            <span>Tahan ({heldTransactions.length}) [F8]</span>
             {heldTransactions.length > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-bounce">
                 {heldTransactions.length}
@@ -1394,227 +1165,119 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           {/* Reset Bill */}
           <button
             onClick={handleResetTransaction}
-            className="px-3 py-2 rounded-xl border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-            title="Kosongkan Keranjang Kasir"
+            className="px-3 py-1.5 rounded-xl border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Kosongkan Keranjang Kasir [Esc]"
           >
-            <RotateCcw className="w-4 h-4 text-red-500" />
+            <RotateCcw className="w-3.5 h-3.5 text-red-500" />
             <span className="hidden sm:inline">Reset</span>
           </button>
 
-          {/* Desain & Format Struk Epson TM-U220 70mm */}
+          {/* Receipt Editor Settings Button */}
           <button
             onClick={() => setIsReceiptEditorModalOpen(true)}
-            className="px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-stone-900 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
-            title="Buka Editor Struk POS (Epson TM-U220 70mm)"
+            className="p-2 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 transition-colors"
+            title="Pengaturan Format Struk TM-U220"
           >
-            <Printer className="w-4 h-4 text-amber-600" />
-            <span className="hidden md:inline">Desain Struk TM-U220</span>
-            <span className="md:hidden">Struk</span>
+            <Sliders className="w-4 h-4 text-stone-600" />
           </button>
 
-          {/* Close POS if modal */}
+          {/* Close button if modal */}
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-600"
+              className="p-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-600 cursor-pointer"
               title="Tutup Kasir"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
-      </div>
+      </header>
 
       {/* POS Notification Feedback Banner */}
       {receiptPrintFeedback && (
-        <div className="bg-amber-100 border-b border-amber-300 px-4 py-2 text-xs font-bold text-amber-950 flex items-center justify-between animate-slideDown">
+        <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-xs animate-slideDown shrink-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
             <span>{receiptPrintFeedback}</span>
           </div>
-          <button onClick={() => setReceiptPrintFeedback(null)} className="text-amber-800 hover:text-amber-950">
+          <button onClick={() => setReceiptPrintFeedback(null)} className="text-white hover:text-emerald-200 p-0.5">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      <div className="p-3 sm:p-5 flex-1 flex flex-col gap-4 overflow-y-auto">
-        {/* ============================================================ */}
-        {/* 2. THE GIANT MINIMARKET CASHIER GRAND TOTAL DISPLAY SCREEN   */}
-        {/*    (Customer Display Pole / Layar Besar Kasir Minimarket)     */}
-        {/* ============================================================ */}
-        <div className={`relative rounded-3xl border-2 p-5 sm:p-6 transition-all duration-300 ${theme.container}`}>
-          {/* Background Grid Accent */}
-          <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none rounded-3xl" />
-
-          {/* Header of Customer Display */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-3 mb-4 relative z-10">
-            <div className="flex items-center gap-3">
-              <span className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold tracking-wider uppercase ${theme.badge}`}>
-                TERMINAL POS 01 • MINIMARKET DIGITAL
-              </span>
-
-              {/* Display Color Preset Switcher */}
-              <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono">
-                <span className="text-stone-500">DISPLAY:</span>
-                <button
-                  onClick={() => setDisplayTheme('vfd-green')}
-                  className={`px-1.5 py-0.5 rounded ${displayTheme === 'vfd-green' ? 'bg-emerald-600 text-white font-bold' : 'text-stone-400 hover:text-white'}`}
-                >
-                  VFD HIJAU
-                </button>
-                <button
-                  onClick={() => setDisplayTheme('amber')}
-                  className={`px-1.5 py-0.5 rounded ${displayTheme === 'amber' ? 'bg-amber-600 text-white font-bold' : 'text-stone-400 hover:text-white'}`}
-                >
-                  AMBER
-                </button>
-                <button
-                  onClick={() => setDisplayTheme('cyan')}
-                  className={`px-1.5 py-0.5 rounded ${displayTheme === 'cyan' ? 'bg-cyan-600 text-white font-bold' : 'text-stone-400 hover:text-white'}`}
-                >
-                  CYAN
-                </button>
-              </div>
-            </div>
-
-            {/* Member Card & Loyalty Info on Display */}
-            <div className="flex items-center gap-2">
-              {selectedCustomer ? (
-                <div className="flex items-center gap-2 bg-stone-900/80 border border-stone-800 px-3 py-1.5 rounded-xl">
-                  <Award className="w-4 h-4 text-amber-400 shrink-0" />
-                  <div className="text-left text-xs">
-                    <span className="font-bold text-white block">{selectedCustomer.name}</span>
-                    <span className="text-[10px] text-amber-300 font-mono">
-                      {selectedCustomer.tier} • {selectedCustomer.points.toLocaleString('id-ID')} Poin
-                    </span>
-                  </div>
+      {/* ============================================================ */}
+      {/* 2. MAIN 2-COLUMN PRACTICAL & FAST CASHIER WORKSPACE          */}
+      {/* ============================================================ */}
+      <div className="flex-1 p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-3.5 min-h-0 overflow-y-auto">
+        
+        {/* LEFT COLUMN: SCANNER & CART ITEMS TABLE (7 or 8 COLS) */}
+        <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-3 min-h-0">
+          
+          {/* SEARCH & BARCODE SCANNER BAR (AUTOFOCUS & FAST) */}
+          <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-stone-200 shadow-2xs shrink-0 relative" ref={searchDropdownRef}>
+            <form onSubmit={handleQuickBarcodeSubmit} className="relative flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  ref={quickBarcodeInputRef}
+                  type="text"
+                  value={quickBarcodeInput}
+                  onChange={(e) => {
+                    setQuickBarcodeInput(e.target.value);
+                    setIsSearchDropdownOpen(e.target.value.trim().length > 0);
+                    setSelectedSearchIndex(0);
+                  }}
+                  onFocus={() => {
+                    if (quickBarcodeInput.trim().length > 0) {
+                      setIsSearchDropdownOpen(true);
+                    }
+                  }}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Scan Barcode atau Ketik Nama Produk... [F2]"
+                  className="w-full pl-10 pr-24 py-2.5 bg-stone-50 hover:bg-stone-100/80 focus:bg-white border-2 border-emerald-400 focus:border-emerald-600 rounded-xl text-xs sm:text-sm font-semibold focus:outline-hidden focus:ring-3 focus:ring-emerald-100 transition-all"
+                  autoFocus
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {quickBarcodeInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickBarcodeInput('');
+                        setIsSearchDropdownOpen(false);
+                      }}
+                      className="p-1 hover:bg-stone-200 text-stone-400 hover:text-stone-600 rounded-md text-xs cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => setSelectedCustomer(null)}
-                    className="text-stone-500 hover:text-red-400 ml-1 p-0.5"
-                    title="Lepas Pelanggan"
+                    type="submit"
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    Enter
                   </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setIsCustomerModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-xs font-bold text-stone-200 transition-colors"
-                >
-                  <User className="w-3.5 h-3.5 text-sky-400" />
-                  <span>+ Pilih / Scan Member (F4)</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* BIG CENTER DISPLAY: GRAND TOTAL BELANJA */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 relative z-10">
-            <div>
-              <div className="text-xs sm:text-sm font-mono tracking-widest text-stone-400 uppercase font-semibold flex items-center gap-2">
-                <span>TOTAL BELANJA</span>
-                <span className="text-stone-600">|</span>
-                <span className={theme.subText}>
-                  {validRows.length} Macam Barang • {totalQtyUnits} Satuan • {totalPhysicalItems} Item Fisik
-                </span>
               </div>
-              <div className={`text-4xl sm:text-6xl lg:text-7xl font-mono font-black tracking-tight mt-1 leading-none ${theme.totalText}`}>
-                {formatRupiah(grandTotal)}
-              </div>
-            </div>
 
-            {/* Payment & Change Live Indicators */}
-            {paymentMethod === 'cash' && (
-              <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-3.5 sm:px-5 sm:py-3 min-w-[240px] text-right flex flex-col justify-center">
-                <div className="text-[11px] font-mono text-stone-400 uppercase">
-                  Uang Bayar: <span className="text-white font-bold">{formatRupiah(cashReceived)}</span>
-                </div>
-                <div className="mt-1">
-                  <div className="text-[10px] font-mono text-stone-400 uppercase">Kembalian Kasir</div>
-                  <div className={`text-2xl sm:text-3xl font-mono font-black ${changeAmount > 0 ? theme.changeText : 'text-stone-500'}`}>
-                    {formatRupiah(changeAmount)}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Sub-ticker: Last item scanned info */}
-          <div className="mt-4 pt-3 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-stone-400 relative z-10">
-            <div className="flex items-center gap-2 truncate">
-              <span className="text-stone-500">ITEM TERAKHIR:</span>
-              {lastScannedItemInfo ? (
-                <span className="text-stone-200 font-bold truncate">
-                  {lastScannedItemInfo.name} ({lastScannedItemInfo.qty} {lastScannedItemInfo.unit} × {formatRupiah(lastScannedItemInfo.price)}) = <span className={theme.subText}>{formatRupiah(lastScannedItemInfo.subtotal)}</span>
-                </span>
-              ) : (
-                <span className="text-stone-600 italic">Belum ada barang discan. Silakan scan barcode...</span>
-              )}
-            </div>
-
-            {selectedCustomer && pointsEarned > 0 && (
-              <div className="text-amber-400 font-bold flex items-center gap-1">
-                <Coins className="w-3.5 h-3.5" />
-                <span>Dapatkan +{pointsEarned} Poin Member</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ============================================================ */}
-        {/* 3. QUICK SEARCH & BARCODE SCANNER (NAMA / BARCODE)          */}
-        {/* ============================================================ */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col md:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full" ref={searchDropdownRef}>
-            <form onSubmit={handleQuickBarcodeSubmit} className="relative w-full">
-              <Search className="w-5 h-5 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                ref={quickBarcodeInputRef}
-                type="text"
-                value={quickBarcodeInput}
-                onChange={(e) => {
-                  setQuickBarcodeInput(e.target.value);
-                  setIsSearchDropdownOpen(e.target.value.trim().length > 0);
-                  setSelectedSearchIndex(0);
-                }}
-                onFocus={() => {
-                  if (quickBarcodeInput.trim().length > 0) {
-                    setIsSearchDropdownOpen(true);
-                  }
-                }}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Ketik Nama Barang atau Scan Barcode (Contoh: Indomie, Aqua, Beras, Minyak...) [F2]"
-                className="w-full pl-11 pr-28 py-3 bg-stone-50 hover:bg-stone-100/70 focus:bg-white border-2 border-emerald-300 focus:border-emerald-600 rounded-xl text-sm font-semibold focus:outline-hidden focus:ring-4 focus:ring-emerald-100 transition-all shadow-inner"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {quickBarcodeInput && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickBarcodeInput('');
-                      setIsSearchDropdownOpen(false);
-                    }}
-                    className="p-1 hover:bg-stone-200 text-stone-400 hover:text-stone-600 rounded-lg text-xs"
-                    title="Hapus pencarian"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-                >
-                  Enter
-                </button>
-              </div>
+              {/* Camera Scanner Trigger */}
+              <button
+                type="button"
+                onClick={startCameraScan}
+                className="p-2.5 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl text-stone-700 text-xs font-bold transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                title="Scan Barcode via Kamera HP"
+              >
+                <Camera className="w-4 h-4 text-emerald-600" />
+                <span className="hidden md:inline">Kamera</span>
+              </button>
             </form>
 
-            {/* Instant Autocomplete Suggestions Popover */}
+            {/* Instant Autocomplete Dropdown Popover */}
             {isSearchDropdownOpen && searchResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-stone-200 z-50 overflow-hidden divide-y divide-stone-100 max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-2 bg-stone-50 text-[11px] font-bold text-stone-500 uppercase tracking-wider flex items-center justify-between">
-                  <span>Pencarian Barang ({searchResults.length} ditemukan)</span>
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-stone-200 z-50 overflow-hidden divide-y divide-stone-100 max-h-72 overflow-y-auto">
+                <div className="px-3 py-1.5 bg-stone-50 text-[10px] font-bold text-stone-500 uppercase tracking-wider flex items-center justify-between">
+                  <span>Pencarian ({searchResults.length} barang)</span>
                   <span className="text-[10px] text-stone-400 font-normal">Gunakan ↑ ↓ lalu Enter untuk memilih</span>
                 </div>
                 {searchResults.map((prod, sIdx) => {
@@ -1624,46 +1287,29 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                       key={prod.id}
                       onClick={() => addProductToCart(prod)}
                       onMouseEnter={() => setSelectedSearchIndex(sIdx)}
-                      className={`p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
-                        isSelected ? 'bg-emerald-50/80 text-emerald-950' : 'hover:bg-stone-50 text-stone-900'
+                      className={`p-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-emerald-50 text-emerald-950 font-bold' : 'hover:bg-stone-50 text-stone-900'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         {prod.image ? (
-                          <img
-                            src={prod.image}
-                            alt={prod.name}
-                            className="w-10 h-10 rounded-xl object-cover bg-stone-100 border border-stone-200 shrink-0"
-                          />
+                          <img src={prod.image} alt={prod.name} className="w-8 h-8 rounded-lg object-cover bg-stone-100 shrink-0" />
                         ) : (
-                          <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center shrink-0 text-stone-400">
-                            <Package className="w-5 h-5" />
+                          <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center shrink-0 text-stone-400">
+                            <Package className="w-4 h-4" />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="font-bold text-xs sm:text-sm truncate text-stone-900">
-                            {prod.name}
-                          </div>
-                          <div className="text-[11px] text-stone-500 flex items-center gap-2 flex-wrap mt-0.5">
-                            <span className="font-mono bg-stone-100 px-1.5 py-0.2 rounded text-stone-600 font-medium">
-                              {prod.barcode || 'ID: ' + prod.id.slice(-6)}
-                            </span>
-                            {prod.brand && <span className="font-medium">• {prod.brand}</span>}
+                          <div className="text-xs truncate text-stone-900">{prod.name}</div>
+                          <div className="text-[10px] text-stone-500 flex items-center gap-1.5">
+                            <span className="font-mono bg-stone-100 px-1 rounded">{prod.barcode || prod.id.slice(-6)}</span>
                             <span>•</span>
-                            <span className={prod.stock && prod.stock > 10 ? 'text-emerald-700 font-semibold' : 'text-amber-700 font-bold'}>
-                              Stok: {prod.stock || 0} {prod.unit || 'Pcs'}
-                            </span>
+                            <span>Stok: {prod.stock || 0} {prod.unit || 'Pcs'}</span>
                           </div>
                         </div>
                       </div>
-
-                      <div className="text-right shrink-0">
-                        <div className="font-mono font-black text-sm text-emerald-700">
-                          {formatRupiah(prod.price)}
-                        </div>
-                        <span className="text-[10px] text-stone-400 font-medium">
-                          per {prod.unit || 'Pcs'}
-                        </span>
+                      <div className="text-right shrink-0 font-mono text-xs text-emerald-700 font-black">
+                        {formatRupiah(prod.price)}
                       </div>
                     </div>
                   );
@@ -1672,623 +1318,457 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
             )}
           </div>
 
-          {/* Live Camera Scanner Button */}
-          <button
-            type="button"
-            onClick={startCameraScan}
-            className="w-full md:w-auto px-4 py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0"
-            title="Scan Barcode menggunakan Kamera HP / Laptop"
-          >
-            <Camera className="w-4 h-4 text-emerald-400" />
-            <span>Kamera Barcode</span>
-          </button>
-
-          {/* Add Blank Row Button */}
-          <button
-            type="button"
-            onClick={handleAddBlankRow}
-            className="w-full md:w-auto px-4 py-3 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0"
-          >
-            <Plus className="w-4 h-4 text-stone-600" />
-            <span>+ Baris Kosong</span>
-          </button>
-        </div>
-
-        {/* Quick Sample Test Barcode Chips */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-stone-400 font-semibold flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Uji Coba Cepat Barcode:</span>
-          </span>
-          {sampleBarcodes.map((item) => (
-            <button
-              key={item.code}
-              type="button"
-              onClick={() => {
-                setQuickBarcodeInput(item.code);
-                setTimeout(() => {
-                  const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-                  // Look up
-                  const matched = products.find(
-                    (p) =>
-                      p.barcode === item.code ||
-                      p.id === item.code ||
-                      p.unitConversions?.some((uc) => uc.barcode === item.code)
-                  );
-                  if (matched) {
-                    playScanBeep();
-                    setRows((prev) => {
-                      const existingIdx = prev.findIndex((r) => r.productId === matched.id);
-                      if (existingIdx >= 0) {
-                        const upd = [...prev];
-                        const curr = upd[existingIdx];
-                        const newQ = curr.quantity + 1;
-                        upd[existingIdx] = {
-                          ...curr,
-                          quantity: newQ,
-                          subtotal: curr.sellingPrice * newQ - curr.discountAmount,
-                          baseQuantity: newQ * (curr.conversionMultiplier || 1),
-                        };
-                        return upd;
-                      }
-                      const emptyIdx = prev.findIndex((r) => !r.productId);
-                      const newRow: PosRowItem = {
-                        id: `row_${Date.now()}`,
-                        productId: matched.id,
-                        productName: matched.name,
-                        barcode: item.code,
-                        unit: matched.unit || 'Pcs',
-                        quantity: 1,
-                        sellingPrice: matched.price,
-                        discountAmount: 0,
-                        subtotal: matched.price,
-                        costPrice: matched.costPrice || Math.round(matched.price * 0.75),
-                        conversionMultiplier: 1,
-                        baseUnit: matched.unit || 'Pcs',
-                        baseQuantity: 1,
-                        stockAvailable: matched.stock || 0,
-                      };
-                      if (emptyIdx >= 0) {
-                        const upd = [...prev];
-                        upd[emptyIdx] = newRow;
-                        return upd;
-                      }
-                      return [...prev, newRow];
-                    });
-                    setLastScannedItemInfo({
-                      name: matched.name,
-                      qty: 1,
-                      unit: matched.unit || 'Pcs',
-                      price: matched.price,
-                      subtotal: matched.price,
-                    });
-                  }
-                }, 50);
-              }}
-              className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-stone-700 hover:text-emerald-800 border border-stone-200 hover:border-emerald-300 rounded-lg font-mono text-[11px] transition-colors"
-            >
-              {item.label} ({item.code.slice(-4)})
-            </button>
-          ))}
-        </div>
-
-        {/* ============================================================ */}
-        {/* 4. INLINE TABLE INPUT (Sama dengan modul pembelian)          */}
-        {/*    Input pembelian item barang bergeser ke baris berikutnya  */}
-        {/* ============================================================ */}
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden flex flex-col">
-          <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4 text-emerald-600" />
-              <h3 className="font-bold text-stone-900 text-xs sm:text-sm">
-                Daftar Barang Transaksi Kasir (Tabel Input Cepat)
-              </h3>
+          {/* CAMERA SCANNER POPUP IF ACTIVE */}
+          {isCameraOpen && (
+            <div className="bg-stone-900 p-3 rounded-2xl border border-stone-700 relative text-center text-white shrink-0">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold">Arahkan Barcode ke Kamera</span>
+                <button onClick={stopCameraScan} className="text-stone-400 hover:text-white p-1">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="relative w-full max-w-sm mx-auto h-40 bg-black rounded-xl overflow-hidden border border-emerald-500/50">
+                <video ref={videoRef} className="w-full h-full object-cover" />
+                <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-red-500 shadow-[0_0_8px_red] animate-pulse pointer-events-none" />
+              </div>
             </div>
-            <div className="text-[11px] text-stone-500 font-medium">
-              💡 Navigasi Keyboard: <span className="font-bold text-stone-700">Barcode</span> ➔ Enter ➔ <span className="font-bold text-stone-700">Qty</span> ➔ Enter ➔ <span className="font-bold text-stone-700">Harga</span> ➔ Enter (Otomatis geser ke baris berikutnya)
-            </div>
-          </div>
+          )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-stone-100/70 border-b border-stone-200 text-stone-700 font-bold uppercase tracking-wider">
-                <tr>
-                  <th className="px-3 py-3 w-10 text-center">No</th>
-                  <th className="px-3 py-3 w-40">Barcode Barang</th>
-                  <th className="px-3 py-3 min-w-[200px]">Pilih / Nama Produk</th>
-                  <th className="px-3 py-3 w-32">Satuan</th>
-                  <th className="px-3 py-3 w-28 text-center">Konversi Stok</th>
-                  <th className="px-3 py-3 w-24 text-center">Qty Jual</th>
-                  <th className="px-3 py-3 w-32 text-right">Harga Jual (Rp)</th>
-                  <th className="px-3 py-3 w-28 text-right">Diskon (Rp)</th>
-                  <th className="px-3 py-3 w-36 text-right">Subtotal (Rp)</th>
-                  <th className="px-3 py-3 w-24 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-200 font-medium">
-                {rows.map((row, index) => {
-                  const prod = products.find((p) => p.id === row.productId);
-                  const unitOpts = prod ? getProductUnitOptions(prod) : [];
+          {/* SHOPPING CART TABLE (FAST, CLEAN, COMPACT) */}
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs flex-1 flex flex-col min-h-[300px] overflow-hidden">
+            <div className="flex-1 overflow-x-auto overflow-y-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-bold sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-2.5 w-10 text-center">No</th>
+                    <th className="px-3 py-2.5">Barang / Barcode</th>
+                    <th className="px-2 py-2.5 w-24">Satuan</th>
+                    <th className="px-2 py-2.5 w-28 text-center">Qty</th>
+                    <th className="px-2 py-2.5 w-24 text-right">Harga (Rp)</th>
+                    <th className="px-2 py-2.5 w-20 text-right">Diskon</th>
+                    <th className="px-3 py-2.5 w-28 text-right">Subtotal</th>
+                    <th className="px-2 py-2.5 w-10 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 font-medium">
+                  {rows.map((row, index) => {
+                    const prod = products.find((p) => p.id === row.productId);
+                    const unitOpts = prod ? getProductUnitOptions(prod) : [];
 
-                  return (
-                    <tr
-                      key={row.id}
-                      className={`hover:bg-stone-50/80 transition-colors ${!row.productId ? 'bg-amber-50/20' : ''}`}
-                    >
-                      {/* 1. No */}
-                      <td className="px-3 py-2 text-center text-stone-400 font-mono font-bold">
-                        {index + 1}
-                      </td>
+                    if (!row.productId) {
+                      return (
+                        <tr key={row.id} className="hover:bg-stone-50/50">
+                          <td className="px-3 py-2 text-center text-stone-400 font-mono">{index + 1}</td>
+                          <td colSpan={7} className="px-3 py-2">
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                const p = products.find((it) => it.id === e.target.value);
+                                if (p) addProductToCart(p);
+                              }}
+                              className="w-full px-2 py-1 bg-stone-50 border border-stone-200 rounded-lg text-xs text-stone-500 focus:bg-white focus:outline-hidden"
+                            >
+                              <option value="">+ Cari atau Pilih Produk dari Katalog...</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} ({p.barcode || 'No barcode'}) - {formatRupiah(p.price)}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    }
 
-                      {/* 2. Barcode (Enter -> look up and advance to Qty) */}
-                      <td className="px-3 py-2">
-                        <div className="relative">
-                          <input
-                            ref={(el) => {
-                              barcodeInputRefs.current[index] = el;
-                            }}
-                            type="text"
-                            value={row.barcode}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setRows((prev) => {
-                                const upd = [...prev];
-                                upd[index] = { ...upd[index], barcode: val };
-                                return upd;
-                              });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleRowBarcodeLookup(index, row.barcode);
-                              }
-                            }}
-                            placeholder="Scan/ketik..."
-                            className="w-full px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-mono font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                          />
-                        </div>
-                      </td>
-
-                      {/* 3. Product Selection / Name */}
-                      <td className="px-3 py-2">
-                        <select
-                          value={row.productId}
-                          onChange={(e) => {
-                            const pId = e.target.value;
-                            const p = products.find((item) => item.id === pId);
-                            if (p) {
-                              applyProductToRow(index, p);
-                              setTimeout(() => {
-                                qtyInputRefs.current[index]?.focus();
-                                qtyInputRefs.current[index]?.select();
-                              }, 50);
-                            }
-                          }}
-                          className="w-full px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                        >
-                          <option value="">-- Cari / Pilih Produk dari Katalog --</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} (Stok: {p.stock || 0} {p.unit || 'Pcs'}) - {formatRupiah(p.price)}
-                            </option>
-                          ))}
-                        </select>
-                        {prod && (
-                          <div className="text-[10px] text-stone-500 mt-0.5 flex items-center gap-1.5">
-                            <span className="font-mono">{prod.brand}</span>
-                            <span>•</span>
-                            <span className={prod.stock && prod.stock > 10 ? 'text-emerald-600' : 'text-amber-600 font-bold'}>
-                              Stok saat ini: {prod.stock || 0} {prod.unit || 'Pcs'}
-                            </span>
+                    return (
+                      <tr key={row.id} className="hover:bg-stone-50/80 transition-colors">
+                        <td className="px-3 py-2 text-center text-stone-400 font-mono font-bold">
+                          {index + 1}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-bold text-stone-900 text-xs sm:text-sm truncate max-w-[220px]">
+                            {row.productName}
                           </div>
-                        )}
-                      </td>
-
-                      {/* 4. Satuan Barang */}
-                      <td className="px-3 py-2">
-                        <select
-                          value={row.unit}
-                          disabled={!row.productId}
-                          onChange={(e) => handleRowUnitChange(index, e.target.value)}
-                          className="w-full px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        >
-                          {unitOpts.length > 0 ? (
-                            unitOpts.map((opt) => (
-                              <option key={opt.unitName} value={opt.unitName}>
-                                {opt.unitName} (x{opt.multiplier})
-                              </option>
-                            ))
+                          <div className="text-[10px] text-stone-400 font-mono flex items-center gap-1.5">
+                            <span>{row.barcode || 'Tanpa Barcode'}</span>
+                            {prod?.stock !== undefined && (
+                              <span className={prod.stock > 5 ? 'text-stone-400' : 'text-amber-600 font-bold'}>
+                                (Sisa: {prod.stock} {prod.unit || 'Pcs'})
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          {unitOpts.length > 1 ? (
+                            <select
+                              value={row.unit}
+                              onChange={(e) => handleRowUnitChange(index, e.target.value)}
+                              className="w-full px-1.5 py-1 bg-stone-50 border border-stone-200 rounded-md text-[11px] font-bold"
+                            >
+                              {unitOpts.map((opt) => (
+                                <option key={opt.unitName} value={opt.unitName}>
+                                  {opt.unitName} (x{opt.multiplier})
+                                </option>
+                              ))}
+                            </select>
                           ) : (
-                            <option value={row.unit || 'Pcs'}>{row.unit || 'Pcs'}</option>
+                            <span className="font-mono text-[11px] text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded">
+                              {row.unit}
+                            </span>
                           )}
-                        </select>
-                      </td>
-
-                      {/* 5. Konversi Fisik */}
-                      <td className="px-3 py-2 text-center text-stone-600">
-                        <div className="font-mono text-[11px] font-bold">
-                          {row.conversionMultiplier > 1 ? `x${row.conversionMultiplier}` : '1:1'}
-                        </div>
-                        <div className="text-[10px] text-stone-400">
-                          ={row.baseQuantity || row.quantity} {row.baseUnit || 'Pcs'}
-                        </div>
-                      </td>
-
-                      {/* 6. Qty Jual (Enter -> shifts to price/discount) */}
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          ref={(el) => {
-                            qtyInputRefs.current[index] = el;
-                          }}
-                          type="number"
-                          min="1"
-                          value={row.quantity}
-                          disabled={!row.productId}
-                          onChange={(e) => handleRowQtyChange(index, parseInt(e.target.value) || 1)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              priceInputRefs.current[index]?.focus();
-                              priceInputRefs.current[index]?.select();
-                            }
-                          }}
-                          className="w-16 px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-mono font-bold text-center focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        />
-                      </td>
-
-                      {/* 7. Harga Jual Satuan (Enter -> ADVANCES TO NEXT ROW AUTOMATICALLY!) */}
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          ref={(el) => {
-                            priceInputRefs.current[index] = el;
-                          }}
-                          type="number"
-                          min="0"
-                          value={row.sellingPrice}
-                          disabled={!row.productId}
-                          onChange={(e) => handleRowPriceChange(index, parseInt(e.target.value) || 0)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              // AUTO-ADVANCE TO NEXT ROW ON ENTER!
-                              advanceToNextRow(index);
-                            }
-                          }}
-                          className="w-24 px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-mono font-bold text-right focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        />
-                      </td>
-
-                      {/* 8. Diskon per Item */}
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.discountAmount || 0}
-                          disabled={!row.productId}
-                          onChange={(e) => handleRowDiscountChange(index, parseInt(e.target.value) || 0)}
-                          placeholder="0"
-                          className="w-20 px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-mono text-right focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        />
-                      </td>
-
-                      {/* 9. Subtotal */}
-                      <td className="px-3 py-2 text-right">
-                        <div className="font-mono font-bold text-emerald-700 text-sm">
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <div className="inline-flex items-center border border-stone-300 rounded-lg overflow-hidden bg-stone-50">
+                            <button
+                              type="button"
+                              onClick={() => handleRowQtyChange(index, -1)}
+                              className="px-2 py-1 hover:bg-stone-200 text-stone-600 font-bold"
+                              title="Kurangi Qty"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={row.quantity}
+                              onChange={(e) => handleRowQtyChange(index, parseInt(e.target.value) || 1, true)}
+                              className="w-10 text-center font-mono font-black text-xs bg-white py-0.5 border-x border-stone-200 focus:outline-hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRowQtyChange(index, 1)}
+                              className="px-2 py-1 hover:bg-stone-200 text-stone-600 font-bold"
+                              title="Tambah Qty"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.sellingPrice}
+                            onChange={(e) => handleRowPriceChange(index, parseInt(e.target.value) || 0)}
+                            className="w-20 text-right font-mono text-xs px-1 py-0.5 border border-stone-200 rounded focus:bg-white focus:outline-hidden"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.discountAmount || ''}
+                            placeholder="0"
+                            onChange={(e) => handleRowDiscountChange(index, parseInt(e.target.value) || 0)}
+                            className="w-16 text-right font-mono text-xs px-1 py-0.5 border border-stone-200 rounded focus:bg-white focus:outline-hidden"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-black text-emerald-700 text-xs sm:text-sm">
                           {formatRupiah(row.subtotal)}
-                        </div>
-                      </td>
-
-                      {/* 10. Aksi: Geser Baris [ ↵ ] & Hapus [ 🗑 ] */}
-                      <td className="px-3 py-2 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => advanceToNextRow(index)}
-                            disabled={!row.productId}
-                            className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold disabled:opacity-40"
-                            title="Selesai & Geser ke baris berikutnya (Enter)"
-                          >
-                            <CornerDownRight className="w-3.5 h-3.5" />
-                          </button>
+                        </td>
+                        <td className="px-2 py-2 text-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveRow(index)}
-                            className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold"
-                            title="Hapus baris ini"
+                            className="p-1 hover:bg-red-50 text-stone-400 hover:text-red-600 rounded transition-colors"
+                            title="Hapus baris"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-              {/* Table Footer Summary */}
-              <tfoot className="bg-stone-100 border-t-2 border-stone-300 text-xs font-bold text-stone-800">
-                <tr>
-                  <td colSpan={5} className="px-4 py-3">
-                    <div className="flex items-center gap-4">
-                      <span>Total Macam Barang: <span className="font-mono text-emerald-700">{validRows.length}</span></span>
-                      <span>Total Satuan: <span className="font-mono text-emerald-700">{totalQtyUnits}</span></span>
-                      <span>Stok Fisik Keluar: <span className="font-mono text-emerald-700">-{totalPhysicalItems} unit</span></span>
-                    </div>
-                  </td>
-                  <td colSpan={3} className="px-4 py-3 text-right text-stone-500">
-                    {totalItemDiscounts > 0 && (
-                      <span className="text-red-600 mr-3">Hemat Diskon: -{formatRupiah(totalItemDiscounts)}</span>
-                    )}
-                    <span>Subtotal Kotor:</span>
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono font-black text-stone-900 text-sm">
-                    {formatRupiah(subtotalBeforeDiscount)}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-
-          {/* Add Row Bar */}
-          <div className="p-3 bg-stone-50 border-t border-stone-200 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleAddBlankRow}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 rounded-xl text-xs font-bold text-stone-700 shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-600" />
-              <span>+ Tambah Baris Berikutnya</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleHoldTransaction}
-              disabled={validRows.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl text-xs font-bold text-amber-800 disabled:opacity-50"
-            >
-              <PauseCircle className="w-3.5 h-3.5 text-amber-600" />
-              <span>Tahan Transaksi (Hold Bill)</span>
-            </button>
+            {/* Table Bottom Control Bar */}
+            <div className="bg-stone-50 border-t border-stone-200 px-3 py-2 flex items-center justify-between text-xs shrink-0">
+              <div className="flex items-center gap-3 text-stone-600 font-medium">
+                <span>Total: <strong className="text-stone-900 font-mono">{validRows.length}</strong> jenis</span>
+                <span>•</span>
+                <span>Qty: <strong className="text-stone-900 font-mono">{totalQtyUnits}</strong> item</span>
+                {totalItemDiscounts > 0 && (
+                  <>
+                    <span>•</span>
+                    <span className="text-rose-600 font-bold">Hemat: {formatRupiah(totalItemDiscounts)}</span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddBlankRow}
+                  className="px-2.5 py-1 bg-white hover:bg-stone-100 border border-stone-300 rounded-lg text-xs font-bold text-stone-700 flex items-center gap-1 shadow-2xs"
+                >
+                  <Plus className="w-3 h-3 text-emerald-600" />
+                  <span>+ Baris</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleHoldTransaction}
+                  disabled={validRows.length === 0}
+                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold text-amber-800 flex items-center gap-1 disabled:opacity-40"
+                  title="Tahan transaksi saat ini [F8]"
+                >
+                  <PauseCircle className="w-3 h-3 text-amber-600" />
+                  <span>Tahan [F8]</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ============================================================ */}
-        {/* 5. CASHIER CHECKOUT & PAYMENT SECTION                        */}
-        {/* ============================================================ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Box 1: Customer / Member & Points */}
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-sky-600" />
-                  <span>Pelanggan & Poin Loyalitas</span>
+        {/* RIGHT COLUMN: CASHIER DISPLAY & FAST PAYMENT (4 or 5 COLS) */}
+        <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-3 min-h-0">
+          
+          {/* 1. THE GIANT HIGH-CONTRAST CASHIER TOTAL SCREEN */}
+          <div className="bg-stone-950 text-emerald-400 border-2 border-stone-800 rounded-2xl p-4 shadow-xl shrink-0">
+            <div className="flex justify-between items-center text-[11px] font-mono text-stone-400 uppercase tracking-widest pb-1 border-b border-stone-800/80">
+              <span>TOTAL BELANJA</span>
+              <span>{validRows.length} BARANG • {totalQtyUnits} QTY</span>
+            </div>
+            
+            <div className="text-4xl sm:text-5xl font-mono font-black text-emerald-400 tracking-tight mt-2 leading-none drop-shadow-[0_0_18px_rgba(52,211,153,0.4)]">
+              {formatRupiah(grandTotal)}
+            </div>
+
+            {/* Live Kembalian indicator */}
+            {paymentMethod === 'cash' && (
+              <div className="mt-3 pt-2.5 border-t border-stone-800/80 flex items-center justify-between">
+                <span className="text-xs font-mono text-stone-400 uppercase">KEMBALIAN:</span>
+                <span className={`text-xl sm:text-2xl font-mono font-black ${changeAmount > 0 ? 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-stone-500'}`}>
+                  {formatRupiah(changeAmount)}
                 </span>
-                <button
-                  onClick={() => setIsNewCustomerModalOpen(true)}
-                  className="text-[11px] font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Daftar Baru</span>
-                </button>
               </div>
+            )}
+          </div>
 
-              {selectedCustomer ? (
-                <div className="bg-sky-50/60 border border-sky-200 rounded-xl p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-stone-900 text-sm">{selectedCustomer.name}</div>
-                      <div className="text-xs font-mono text-stone-500">{selectedCustomer.phone}</div>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                      Tier {selectedCustomer.tier}
+          {/* 2. CUSTOMER & LOYALTY MEMBER BAR (COMPACT) */}
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-2xs shrink-0">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                <User className="w-3.5 h-3.5 text-sky-600" />
+                <span>Pelanggan / Member</span>
+              </span>
+              <button
+                onClick={() => setIsNewCustomerModalOpen(true)}
+                className="text-[11px] font-bold text-sky-600 hover:text-sky-700 flex items-center gap-0.5 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Daftar Baru</span>
+              </button>
+            </div>
+
+            {selectedCustomer ? (
+              <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-2.5 flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="font-bold text-stone-900 text-xs truncate flex items-center gap-1.5">
+                    <span>{selectedCustomer.name}</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                      {selectedCustomer.tier}
                     </span>
                   </div>
-
-                  <div className="mt-2 pt-2 border-t border-sky-200/80 flex items-center justify-between text-xs">
-                    <span className="text-stone-600">Saldo Poin:</span>
-                    <span className="font-black text-amber-600">
-                      {selectedCustomer.points.toLocaleString('id-ID')} Poin
-                    </span>
+                  <div className="text-[10px] text-amber-700 font-bold font-mono">
+                    Saldo: {selectedCustomer.points.toLocaleString('id-ID')} Poin
                   </div>
-
-                  {/* Redeem Points Toggle */}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   {selectedCustomer.points > 0 && (
-                    <label className="mt-2.5 flex items-center gap-2 cursor-pointer pt-2 border-t border-sky-200/80">
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-stone-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={useCustomerPoints}
                         onChange={(e) => setUseCustomerPoints(e.target.checked)}
                         className="rounded text-emerald-600 focus:ring-emerald-500"
                       />
-                      <span className="text-xs font-semibold text-stone-800">
-                        Gunakan Poin Belanja (Potongan {formatRupiah(pointsDiscountAmount)})
-                      </span>
+                      <span>Pakai Poin</span>
                     </label>
                   )}
-                </div>
-              ) : (
-                <div className="bg-stone-50 border border-dashed border-stone-300 rounded-xl p-4 text-center">
-                  <p className="text-xs text-stone-500">Pelanggan Umum (Non-Member)</p>
                   <button
-                    onClick={() => setIsCustomerModalOpen(true)}
-                    className="mt-2 px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 rounded-xl text-xs font-bold text-stone-700 shadow-2xs inline-flex items-center gap-1.5"
+                    onClick={() => setSelectedCustomer(null)}
+                    className="p-1 text-stone-400 hover:text-red-500 rounded"
+                    title="Ganti ke Pelanggan Umum"
                   >
-                    <Search className="w-3.5 h-3.5 text-stone-400" />
-                    <span>Cari / Pilih Member (F4)</span>
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              )}
-            </div>
-
-            <div className="mt-3 text-[11px] text-stone-400">
-              *Member berhak mendapatkan poin belanja per Rp 1.000 transaksi untuk ditukarkan potongan belanja berikutnya.
-            </div>
-          </div>
-
-          {/* Box 2: Payment Method & Quick Cash */}
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 mb-2.5">
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                <span>Metode Pembayaran</span>
-              </span>
-
-              {/* Payment Method Tabs */}
-              <div className="grid grid-cols-4 gap-1.5 p-1 bg-stone-100 rounded-xl mb-3">
-                {[
-                  { id: 'cash' as PaymentMethod, label: 'Tunai', icon: <Banknote className="w-3.5 h-3.5" /> },
-                  { id: 'qris' as PaymentMethod, label: 'QRIS', icon: <QrCode className="w-3.5 h-3.5" /> },
-                  { id: 'transfer' as PaymentMethod, label: 'Debit/EDC', icon: <CreditCard className="w-3.5 h-3.5" /> },
-                  { id: 'cod' as PaymentMethod, label: 'Kasbon', icon: <Coins className="w-3.5 h-3.5" /> },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod(m.id);
-                      if (m.id === 'cash' && cashReceived === 0) {
-                        setCashReceived(grandTotal);
-                      }
-                    }}
-                    className={`py-2 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-                      paymentMethod === m.id
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'text-stone-600 hover:text-stone-900'
-                    }`}
-                  >
-                    {m.icon}
-                    <span>{m.label}</span>
-                  </button>
-                ))}
               </div>
-
-              {/* Cash Input & Quick Buttons */}
-              {paymentMethod === 'cash' ? (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs font-bold text-stone-700 shrink-0">Uang Diterima:</label>
-                    <div className="relative flex-1">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono font-bold text-stone-400 text-xs">
-                        Rp
-                      </span>
-                      <input
-                        ref={cashInputRef}
-                        type="number"
-                        min="0"
-                        value={cashReceived || ''}
-                        onChange={(e) => setCashReceived(parseInt(e.target.value) || 0)}
-                        placeholder="0"
-                        className="w-full pl-8 pr-2 py-1.5 bg-stone-50 border border-stone-300 rounded-xl text-sm font-mono font-bold text-stone-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Quick Cash Preset Buttons */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleSetQuickCash(grandTotal)}
-                      className="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold font-mono"
-                    >
-                      Uang Pas
-                    </button>
-                    {[10000, 20000, 50000, 100000, 200000, 500000].map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => handleSetQuickCash(amt)}
-                        className="px-1.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-mono font-semibold"
-                      >
-                        {amt >= 1000000 ? `${amt / 1000000}jt` : `${amt / 1000}k`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : paymentMethod === 'qris' ? (
-                <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl text-center">
-                  <div className="w-24 h-24 mx-auto bg-white p-2 rounded-lg border border-stone-300 shadow-2xs flex items-center justify-center">
-                    <QrCode className="w-20 h-20 text-stone-800" />
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-700 mt-2">QRIS Standar Nasional</div>
-                  <div className="text-[10px] text-stone-500">Scan via BCA, GoPay, OVO, Dana, ShopeePay</div>
-                </div>
-              ) : (
-                <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl text-center text-xs text-stone-600">
-                  <p className="font-bold">Mesin EDC / Transfer Bank</p>
-                  <p className="text-[11px] text-stone-400 mt-1">Verifikasi struk debit atau slip transfer dari pembeli</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-xl p-2">
+                <span className="text-xs text-stone-600 font-medium">Pelanggan Umum (Non-Member)</span>
+                <button
+                  onClick={() => setIsCustomerModalOpen(true)}
+                  className="px-2.5 py-1 bg-white hover:bg-stone-100 border border-stone-300 rounded-lg text-xs font-bold text-sky-700 shadow-2xs flex items-center gap-1 cursor-pointer"
+                >
+                  <Search className="w-3 h-3 text-sky-600" />
+                  <span>Pilih [F4]</span>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Box 3: Final Total & Complete Transaction Button */}
-          <div className="bg-stone-950 text-white p-5 rounded-2xl border border-stone-800 shadow-lg flex flex-col justify-between">
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-stone-400">
+          {/* 3. PAYMENT METHOD TABS (FAST TOGGLE) */}
+          <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-2xs shrink-0">
+            <div className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2 flex items-center gap-1">
+              <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Metode Pembayaran</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 rounded-xl mb-3">
+              {[
+                { id: 'cash' as PaymentMethod, label: 'Tunai', icon: <Banknote className="w-3.5 h-3.5" /> },
+                { id: 'qris' as PaymentMethod, label: 'QRIS', icon: <QrCode className="w-3.5 h-3.5" /> },
+                { id: 'transfer' as PaymentMethod, label: 'Debit/EDC', icon: <CreditCard className="w-3.5 h-3.5" /> },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod(m.id);
+                    if (m.id === 'cash' && cashReceived === 0) {
+                      setCashReceived(grandTotal);
+                    }
+                  }}
+                  className={`py-2 rounded-lg text-xs font-bold flex flex-col items-center gap-0.5 transition-all cursor-pointer ${
+                    paymentMethod === m.id
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900 hover:bg-white'
+                  }`}
+                >
+                  {m.icon}
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* CASH INPUT & QUICK CASH PRESET BUTTONS */}
+            {paymentMethod === 'cash' ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold text-stone-700 shrink-0">Uang Diterima:</label>
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono font-bold text-stone-400 text-xs">
+                      Rp
+                    </span>
+                    <input
+                      ref={cashInputRef}
+                      type="number"
+                      min="0"
+                      value={cashReceived || ''}
+                      onChange={(e) => setCashReceived(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-full pl-8 pr-2 py-1.5 bg-stone-50 border-2 border-emerald-300 rounded-xl text-base font-mono font-bold text-stone-900 focus:bg-white focus:outline-hidden focus:border-emerald-600"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Cash Presets */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickCash(grandTotal)}
+                    className="col-span-1 px-2 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 rounded-lg text-xs font-bold font-mono cursor-pointer"
+                    title="Bayar Uang Pas [F9]"
+                  >
+                    Uang Pas [F9]
+                  </button>
+                  {[10000, 20000, 50000, 100000, 200000, 500000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => handleSetQuickCash(amt)}
+                      className="px-1.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-mono font-semibold cursor-pointer"
+                    >
+                      {amt >= 1000000 ? `${amt / 1000000}jt` : `${amt / 1000}k`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : paymentMethod === 'qris' ? (
+              <div className="p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-center">
+                <div className="w-16 h-16 mx-auto bg-white p-1 rounded-lg border border-stone-300 shadow-2xs flex items-center justify-center">
+                  <QrCode className="w-14 h-14 text-stone-800" />
+                </div>
+                <div className="text-[11px] font-bold text-stone-700 mt-1">QRIS Standar Nasional</div>
+              </div>
+            ) : (
+              <div className="p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-center text-xs text-stone-600">
+                <p className="font-bold">Mesin EDC / Transfer Bank</p>
+                <p className="text-[10px] text-stone-400 mt-0.5">Lakukan swipe/tap kartu di EDC kasir</p>
+              </div>
+            )}
+          </div>
+
+          {/* 4. THE GIANT ACTION BUTTON: BAYAR & LANGSUNG PRINT KE TM-U220 */}
+          <div className="bg-stone-900 text-white p-4 rounded-2xl border border-stone-800 shadow-lg flex flex-col justify-between shrink-0">
+            <div className="space-y-1.5 text-xs">
+              <div className="flex justify-between text-stone-400">
                 <span>Subtotal ({validRows.length} item):</span>
                 <span className="font-mono">{formatRupiah(subtotalBeforeDiscount)}</span>
               </div>
               {totalItemDiscounts > 0 && (
-                <div className="flex justify-between text-xs text-rose-400">
-                  <span>Diskon Item:</span>
+                <div className="flex justify-between text-rose-400">
+                  <span>Diskon Hemat:</span>
                   <span className="font-mono">-{formatRupiah(totalItemDiscounts)}</span>
                 </div>
               )}
               {pointsDiscountAmount > 0 && (
-                <div className="flex justify-between text-xs text-amber-400">
+                <div className="flex justify-between text-amber-400">
                   <span>Potongan Poin:</span>
                   <span className="font-mono">-{formatRupiah(pointsDiscountAmount)}</span>
                 </div>
               )}
-              <div className="pt-2 border-t border-stone-800 flex justify-between items-baseline">
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-300">Total Akhir:</span>
-                <span className="text-2xl font-mono font-black text-emerald-400">
-                  {formatRupiah(grandTotal)}
-                </span>
-              </div>
-              {paymentMethod === 'cash' && (
-                <div className="pt-2 border-t border-stone-800/80 flex justify-between text-xs font-mono">
-                  <span className="text-stone-400">Kembalian:</span>
-                  <span className={`font-bold text-sm ${changeAmount > 0 ? 'text-emerald-300' : 'text-stone-500'}`}>
-                    {formatRupiah(changeAmount)}
-                  </span>
-                </div>
-              )}
             </div>
 
-            {/* BIG PRIMARY FINALIZE BUTTON */}
+            {/* BIG 1-CLICK FINALIZE & DIRECT PRINT BUTTON */}
             <button
               type="button"
               onClick={handleFinalizeSale}
               disabled={validRows.length === 0}
-              className="mt-4 w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              className="mt-3.5 w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white rounded-xl font-black text-sm tracking-wide flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-950/50 transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
             >
-              <Printer className="w-5 h-5" />
-              <span>SELESAIKAN & CETAK STRUK [F12]</span>
+              <div className="flex items-center gap-2 text-base font-extrabold">
+                <Printer className="w-5 h-5 text-emerald-200" />
+                <span>BAYAR & CETAK TM-U220 [F12]</span>
+              </div>
+              <span className="text-[10px] font-normal text-emerald-100 tracking-normal opacity-90">
+                Langsung print ke printer tanpa modul lain
+              </span>
             </button>
           </div>
+
+          {/* 5. SHORTCUT HELPER CHIP */}
+          <div className="px-3 py-2 bg-white rounded-xl border border-stone-200 text-[11px] text-stone-500 flex flex-wrap items-center justify-between gap-1 shadow-2xs shrink-0">
+            <span><strong className="text-stone-700">F2</strong> Scan</span>
+            <span><strong className="text-stone-700">F4</strong> Member</span>
+            <span><strong className="text-stone-700">F8</strong> Tahan</span>
+            <span><strong className="text-stone-700">F9</strong> Uang Pas</span>
+            <span><strong className="text-stone-700">F10</strong> Print Ulang</span>
+            <span><strong className="text-stone-700">F12</strong> Bayar</span>
+          </div>
+
         </div>
       </div>
 
       {/* ============================================================ */}
-      {/* MODAL: PILIH PELANGGAN DARI MASTER PELANGGAN (F4)            */}
+      {/* MODAL: PILIH PELANGGAN / MEMBER (F4)                         */}
       {/* ============================================================ */}
       {isCustomerModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200">
-            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200">
+            <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between bg-stone-50">
               <div className="flex items-center gap-2">
                 <User className="w-5 h-5 text-sky-600" />
-                <h3 className="font-bold text-base text-stone-900">Pilih Pelanggan / Member Toko</h3>
+                <h3 className="font-bold text-sm sm:text-base text-stone-900">Pilih Member Toko (F4)</h3>
               </div>
               <button onClick={() => setIsCustomerModalOpen(false)} className="p-1 rounded-lg text-stone-400 hover:text-stone-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 border-b border-stone-200 bg-white">
+            <div className="p-3 border-b border-stone-200 bg-white">
               <div className="relative">
                 <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -2296,13 +1776,13 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                   value={customerSearchQuery}
                   onChange={(e) => setCustomerSearchQuery(e.target.value)}
                   placeholder="Cari nama pelanggan, nomor WhatsApp, atau nomor member..."
-                  className="w-full pl-9 pr-4 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  className="w-full pl-9 pr-4 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
                   autoFocus
                 />
               </div>
             </div>
 
-            <div className="p-4 flex-1 overflow-y-auto divide-y divide-stone-100">
+            <div className="p-3 flex-1 overflow-y-auto divide-y divide-stone-100">
               {customers
                 .filter((c) => {
                   const q = customerSearchQuery.toLowerCase();
@@ -2320,16 +1800,16 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                       setIsCustomerModalOpen(false);
                       quickBarcodeInputRef.current?.focus();
                     }}
-                    className="py-3 px-3 hover:bg-sky-50/70 rounded-xl cursor-pointer flex items-center justify-between transition-colors"
+                    className="py-2.5 px-3 hover:bg-sky-50 rounded-xl cursor-pointer flex items-center justify-between transition-colors"
                   >
                     <div>
-                      <div className="font-bold text-stone-900 text-sm flex items-center gap-2">
+                      <div className="font-bold text-stone-900 text-xs flex items-center gap-2">
                         <span>{cust.name}</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
                           {cust.tier}
                         </span>
                       </div>
-                      <div className="text-xs text-stone-500 font-mono mt-0.5">
+                      <div className="text-[11px] text-stone-500 font-mono mt-0.5">
                         {cust.phone} • {cust.memberNumber}
                       </div>
                     </div>
@@ -2337,32 +1817,32 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                       <div className="text-xs font-black text-amber-600">
                         {cust.points.toLocaleString('id-ID')} Poin
                       </div>
-                      <div className="text-[10px] text-stone-400">
-                        {cust.ordersCount || 0} order
-                      </div>
                     </div>
                   </div>
                 ))}
             </div>
 
-            <div className="p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-between">
+            <div className="p-3 bg-stone-50 border-t border-stone-200 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setIsCustomerModalOpen(false);
+                  quickBarcodeInputRef.current?.focus();
+                }}
+                className="px-3 py-1.5 text-xs text-stone-600 hover:text-stone-900 font-bold"
+              >
+                Gunakan Pelanggan Umum
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setIsCustomerModalOpen(false);
                   setIsNewCustomerModalOpen(true);
                 }}
-                className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Daftarkan Pelanggan Baru</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCustomerModalOpen(false)}
-                className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl text-xs font-bold"
-              >
-                Tutup
+                + Tambah Member Baru
               </button>
             </div>
           </div>
@@ -2370,60 +1850,62 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       )}
 
       {/* ============================================================ */}
-      {/* MODAL: DAFTAR MEMBER BARU ON-THE-FLY                         */}
+      {/* MODAL: DAFTAR MEMBER BARU CEPAT                              */}
       {/* ============================================================ */}
       {isNewCustomerModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
-            <h3 className="text-lg font-bold text-stone-900 mb-4 flex items-center gap-2">
-              <User className="w-5 h-5 text-sky-600" />
-              <span>Daftar Pelanggan / Member Baru</span>
-            </h3>
-            <form onSubmit={handleQuickRegisterCustomer} className="space-y-3">
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-stone-200">
+            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
+              <h3 className="font-bold text-sm text-stone-900">Registrasi Member Baru</h3>
+              <button onClick={() => setIsNewCustomerModalOpen(false)} className="text-stone-400 hover:text-stone-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleQuickRegisterCustomer} className="p-4 space-y-3 text-xs">
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">Nama Lengkap *</label>
+                <label className="font-bold text-stone-700 block mb-1">Nama Lengkap Member:</label>
                 <input
                   type="text"
-                  required
                   value={newCustName}
                   onChange={(e) => setNewCustName(e.target.value)}
-                  placeholder="e.g. Bpk. Hendra Gunawan"
-                  className="w-full px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  placeholder="Contoh: Ibu Rina Melati"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  required
+                  autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">No. WhatsApp / HP *</label>
+                <label className="font-bold text-stone-700 block mb-1">No. WhatsApp / HP:</label>
                 <input
                   type="text"
-                  required
                   value={newCustPhone}
                   onChange={(e) => setNewCustPhone(e.target.value)}
                   placeholder="0812-xxxx-xxxx"
-                  className="w-full px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  required
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">Kota / Domisili</label>
+                <label className="font-bold text-stone-700 block mb-1">Kota / Domisili:</label>
                 <input
                   type="text"
                   value={newCustCity}
                   onChange={(e) => setNewCustCity(e.target.value)}
-                  placeholder="e.g. Jakarta Selatan"
-                  className="w-full px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  placeholder="Jakarta"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-500"
                 />
               </div>
-
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsNewCustomerModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-xs font-semibold"
+                  className="px-3 py-2 border border-stone-300 rounded-xl font-bold text-stone-600 hover:bg-stone-100"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs"
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-xs"
                 >
                   Simpan & Pilih Member
                 </button>
@@ -2434,386 +1916,62 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       )}
 
       {/* ============================================================ */}
-      {/* MODAL: PANGGIL TRANSAKSI DITAHAN (HELD BILLS)                */}
+      {/* MODAL: DAFTAR TRANSAKSI DITAHAN (HOLD / RECALL - F8)         */}
       {/* ============================================================ */}
       {isHeldModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200">
-            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[80vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200">
+            <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between bg-stone-50">
               <div className="flex items-center gap-2">
                 <PauseCircle className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-base text-stone-900">Daftar Transaksi Ditahan (Hold Bill)</h3>
+                <h3 className="font-bold text-sm sm:text-base text-stone-900">Transaksi Ditahan (Hold Bills)</h3>
               </div>
-              <button onClick={() => setIsHeldModalOpen(false)} className="p-1 text-stone-400 hover:text-stone-700">
+              <button onClick={() => setIsHeldModalOpen(false)} className="text-stone-400 hover:text-stone-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 flex-1 overflow-y-auto space-y-3">
+            <div className="p-4 flex-1 overflow-y-auto space-y-2.5">
               {heldTransactions.length === 0 ? (
-                <div className="py-12 text-center text-stone-400 text-sm">
-                  Tidak ada transaksi kasir yang sedang ditahan.
+                <div className="py-8 text-center text-stone-400 text-xs">
+                  Tidak ada transaksi yang sedang ditahan.
                 </div>
               ) : (
-                heldTransactions.map((h) => (
+                heldTransactions.map((held) => (
                   <div
-                    key={h.id}
-                    className="p-3.5 bg-stone-50 hover:bg-amber-50/50 border border-stone-200 rounded-2xl flex items-center justify-between gap-3"
+                    key={held.id}
+                    className="p-3 bg-amber-50/60 border border-amber-200 rounded-2xl flex items-center justify-between gap-3"
                   >
                     <div>
-                      <div className="font-bold text-stone-900 text-sm">
-                        {h.customer ? h.customer.name : 'Pelanggan Umum'}
+                      <div className="text-xs font-bold text-stone-900">
+                        {held.customer ? held.customer.name : 'Pelanggan Umum'} ({held.items.length} macam barang)
                       </div>
-                      <div className="text-xs text-stone-500 font-mono mt-0.5">
-                        Ditahan: {h.heldAt} • {h.items.length} macam barang
-                      </div>
-                      <div className="text-xs font-black text-emerald-700 mt-1">
-                        Total: {formatRupiah(h.totalAmount)}
+                      <div className="text-[11px] text-stone-500 font-mono mt-0.5">
+                        Ditahan jam {held.heldAt} • Total: <strong className="text-emerald-700">{formatRupiah(held.totalAmount)}</strong>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => handleRecallTransaction(h)}
-                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs"
+                        type="button"
+                        onClick={() => handleRecallTransaction(held)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-2xs"
                       >
                         <PlayCircle className="w-3.5 h-3.5" />
                         <span>Panggil</span>
                       </button>
                       <button
-                        onClick={() => setHeldTransactions((prev) => prev.filter((item) => item.id !== h.id))}
-                        className="p-1.5 text-stone-400 hover:text-red-600"
+                        type="button"
+                        onClick={() => setHeldTransactions((prev) => prev.filter((h) => h.id !== held.id))}
+                        className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg"
                         title="Hapus"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
                 ))
               )}
             </div>
-
-            <div className="p-4 bg-stone-50 border-t border-stone-200 text-right">
-              <button
-                type="button"
-                onClick={() => setIsHeldModalOpen(false)}
-                className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl text-xs font-bold"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* MODAL: LIVE CAMERA BARCODE SCANNER                           */}
-      {/* ============================================================ */}
-      {isCameraOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-4">
-          <div className="bg-stone-900 rounded-3xl overflow-hidden max-w-md w-full border border-stone-700 shadow-2xl flex flex-col">
-            <div className="p-4 border-b border-stone-800 flex items-center justify-between text-white">
-              <div className="flex items-center gap-2">
-                <Camera className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold text-sm">Arahkan Kamera ke Barcode Barang</span>
-              </div>
-              <button onClick={stopCameraScan} className="text-stone-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="relative aspect-square bg-black flex items-center justify-center overflow-hidden">
-              <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-              {/* Laser Line Animation */}
-              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-red-500 shadow-[0_0_12px_red] animate-pulse" />
-              <div className="absolute inset-12 border-2 border-dashed border-emerald-400/80 rounded-2xl pointer-events-none" />
-            </div>
-
-            <div className="p-4 text-center text-xs text-stone-400 border-t border-stone-800">
-              Posisikan barcode produk atau barcode kartu member di dalam bingkai kotak.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* MODAL: STRUK BELANJA EPSON TM-U220 70mm / POS RECEIPT PREVIEW */}
-      {/* ============================================================ */}
-      {isReceiptModalOpen && completedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[92vh]">
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-stone-900 tracking-tight">
-                    TRANSAKSI KASIR BERHASIL
-                  </h3>
-                  <p className="text-[11px] text-stone-500">Stok fisik produk otomatis terpotong</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsReceiptEditorModalOpen(true)}
-                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl border border-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
-                title="Buka Editor Struk & Pengaturan TM-U220"
-              >
-                <Sliders className="w-3.5 h-3.5 text-amber-600" />
-                <span>Desain Struk</span>
-              </button>
-            </div>
-
-            {/* Profile Info Badge */}
-            <div className="mt-3 px-3 py-1.5 bg-stone-100 rounded-xl border border-stone-200 flex items-center justify-between text-[11px] text-stone-600">
-              <span className="font-semibold truncate">
-                Format: <strong className="text-stone-900">{activeReceiptConfig.profileName}</strong>
-              </span>
-              <span className="px-2 py-0.5 bg-white text-stone-700 font-mono font-bold rounded border border-stone-200 shrink-0">
-                {activeReceiptConfig.paperWidth === '70mm_dotmatrix' ? '70mm Dot Matrix' : activeReceiptConfig.paperWidth} • {activeReceiptConfig.charactersPerLine || 40}c
-              </span>
-            </div>
-
-            {/* Epson TM-U220 70mm Dot Matrix Receipt Canvas */}
-            <div className="my-3 p-4 bg-stone-50 border border-stone-300 rounded-2xl font-mono text-xs text-stone-900 space-y-2 overflow-y-auto max-h-[50vh] shadow-inner">
-              
-              {/* Header Toko & Brand */}
-              <div className="text-center space-y-0.5 pb-1">
-                <div className="font-black text-sm tracking-wider uppercase">
-                  {cleanReceiptText(activeReceiptConfig.headerBrand || activeStore.name)}
-                </div>
-                {activeReceiptConfig.subHeader && (
-                  <div className="text-[11px] text-stone-600 font-semibold">
-                    {cleanReceiptText(activeReceiptConfig.subHeader)}
-                  </div>
-                )}
-                <div className="text-[11px] text-stone-700">
-                  {cleanReceiptText(activeReceiptConfig.storeName || activeStore.name)}
-                </div>
-                <div className="text-[10px] text-stone-500">
-                  {cleanReceiptText(activeReceiptConfig.address || activeStore.address)}
-                </div>
-                {(activeReceiptConfig.phone || activeStore.phone) && (
-                  <div className="text-[10px] text-stone-500">
-                    Telp: {cleanReceiptText(activeReceiptConfig.phone || activeStore.phone)}
-                  </div>
-                )}
-                {activeReceiptConfig.taxIdOrNpwp && (
-                  <div className="text-[10px] text-stone-500 font-semibold">
-                    {cleanReceiptText(activeReceiptConfig.taxIdOrNpwp)}
-                  </div>
-                )}
-              </div>
-
-              {/* Monospace Divider */}
-              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
-                {(activeReceiptConfig.dividerChar || '=').repeat(activeReceiptConfig.charactersPerLine || 40)}
-              </div>
-
-              {/* Order Metadata */}
-              <div className="text-[11px] text-stone-700 space-y-0.5">
-                <div className="flex justify-between">
-                  <span>No. Struk</span>
-                  <span className="font-bold text-stone-900">{completedOrder.orderNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Tanggal</span>
-                  <span>{new Date(completedOrder.createdAt).toLocaleString('id-ID')}</span>
-                </div>
-                {activeReceiptConfig.showCashierName !== false && (
-                  <div className="flex justify-between">
-                    <span>Kasir</span>
-                    <span>{cleanReceiptText(cashierName)}</span>
-                  </div>
-                )}
-                {activeReceiptConfig.showCustomerName !== false && (
-                  <div className="flex justify-between">
-                    <span>Pelanggan</span>
-                    <span className="font-bold">{cleanReceiptText(completedOrder.customerName)}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Monospace Divider */}
-              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
-                {(activeReceiptConfig.dividerChar || '-').repeat(activeReceiptConfig.charactersPerLine || 40)}
-              </div>
-
-              {/* Item List (2-row format typical for TM-U220 70mm) */}
-              <div className="space-y-1.5 text-xs">
-                {completedOrder.items.map((it, idx) => {
-                  const itemTotal = (it.unitPrice || it.product.price) * it.quantity;
-                  return (
-                    <div key={idx} className="space-y-0.5">
-                      <div className="font-bold truncate text-stone-900 uppercase">
-                        {cleanReceiptText(it.product.name)}
-                      </div>
-                      <div className="flex justify-between text-stone-600 text-[11px]">
-                        <span>
-                          {it.quantity} {it.selectedUnit || 'Pcs'} x {formatRupiah(it.unitPrice || it.product.price)}
-                        </span>
-                        <span className="font-bold text-stone-900">
-                          {formatRupiah(itemTotal)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Monospace Divider */}
-              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
-                {(activeReceiptConfig.dividerChar || '-').repeat(activeReceiptConfig.charactersPerLine || 40)}
-              </div>
-
-              {/* Calculations & Totals */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between text-stone-700">
-                  <span>Subtotal:</span>
-                  <span>{formatRupiah(completedOrder.subtotal)}</span>
-                </div>
-                {completedOrder.discountAmount > 0 && (
-                  <div className="flex justify-between text-red-600 font-bold">
-                    <span>Diskon:</span>
-                    <span>-{formatRupiah(completedOrder.discountAmount)}</span>
-                  </div>
-                )}
-                {activeReceiptConfig.taxEnabled && (
-                  <div className="flex justify-between text-stone-600 text-[11px]">
-                    <span>PPN ({activeReceiptConfig.taxPercentage || 11}%):</span>
-                    <span>{formatRupiah(Math.round((completedOrder.subtotal - (completedOrder.discountAmount || 0)) * ((activeReceiptConfig.taxPercentage || 11) / 100)))}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-black text-sm text-stone-900 pt-0.5">
-                  <span>TOTAL:</span>
-                  <span>{formatRupiah(completedOrder.total)}</span>
-                </div>
-
-                {activeReceiptConfig.showPaymentDetail !== false && (
-                  <div className="pt-1 border-t border-dashed border-stone-300 space-y-0.5 text-[11px]">
-                    <div className="flex justify-between text-stone-600">
-                      <span>Metode Pembayaran:</span>
-                      <span className="uppercase font-bold text-stone-900">{completedOrder.paymentMethod}</span>
-                    </div>
-                    {completedOrder.paymentMethod === 'cash' && (
-                      <>
-                        <div className="flex justify-between">
-                          <span>Tunai Diterima:</span>
-                          <span>{formatRupiah(cashReceived)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-emerald-700 text-xs">
-                          <span>Kembalian:</span>
-                          <span>{formatRupiah(changeAmount)}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Member Points Earned */}
-              {activeReceiptConfig.showMemberPoints !== false && completedOrder.pointsEarned > 0 && (
-                <div className="p-2 bg-amber-50 rounded-lg text-center text-amber-900 text-[11px] font-bold border border-amber-200">
-                  ⭐ +{completedOrder.pointsEarned} Poin Member NusaMart
-                </div>
-              )}
-
-              {/* Monospace Divider */}
-              <div className="text-stone-400 select-none overflow-hidden text-[10px] leading-none text-center">
-                {(activeReceiptConfig.dividerChar || '=').repeat(activeReceiptConfig.charactersPerLine || 40)}
-              </div>
-
-              {/* Footer Messages */}
-              <div className="text-center text-[10px] text-stone-600 space-y-1 pt-1">
-                {activeReceiptConfig.footerMessage1 && (
-                  <div>{cleanReceiptText(activeReceiptConfig.footerMessage1)}</div>
-                )}
-                {activeReceiptConfig.footerMessage2 && (
-                  <div className="text-stone-500">{cleanReceiptText(activeReceiptConfig.footerMessage2)}</div>
-                )}
-                {activeReceiptConfig.csHotline && (
-                  <div className="font-semibold text-stone-700">{cleanReceiptText(activeReceiptConfig.csHotline)}</div>
-                )}
-                {activeReceiptConfig.websiteOrSocial && (
-                  <div className="text-stone-500">{cleanReceiptText(activeReceiptConfig.websiteOrSocial)}</div>
-                )}
-              </div>
-
-              {/* Transaction Barcode Simulation */}
-              {activeReceiptConfig.showBarcode !== false && (
-                <div className="pt-2 text-center select-none">
-                  <div className="font-mono text-[11px] tracking-widest text-stone-900 font-bold bg-white py-1 px-3 border border-stone-300 rounded inline-block">
-                    * {completedOrder.orderNumber} *
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Actions for Cashier */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handlePrintReceipt}
-                  disabled={isPrintingReceipt}
-                  className="flex-1 py-3 bg-stone-900 hover:bg-stone-800 active:scale-[0.99] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all disabled:opacity-50"
-                  title="Kirim ke Printer Epson TM-U220 (Kertas 70mm / 76mm)"
-                >
-                  <Printer className="w-4 h-4 text-emerald-400" />
-                  <span>{isPrintingReceipt ? 'Mempersiapkan Cetak...' : 'Cetak Struk (Epson TM-U220)'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsReceiptModalOpen(false);
-                    setCompletedOrder(null);
-                    quickBarcodeInputRef.current?.focus();
-                  }}
-                  className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all shrink-0"
-                  title="Mulai Transaksi Baru (Shortcut F2)"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Transaksi Baru (F2)</span>
-                </button>
-              </div>
-
-              {/* Raw Print & Spooler Utility Tools */}
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200 text-xs">
-                <button
-                  type="button"
-                  onClick={handleCopyRawReceipt}
-                  className="px-3 py-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg flex items-center gap-1.5 transition-colors font-medium text-[11px]"
-                  title="Salin teks ASCII mentah 40 kolom untuk spooler atau serial port"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Salin RAW (ASCII)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadTxtReceipt}
-                  className="px-3 py-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg flex items-center gap-1.5 transition-colors font-medium text-[11px]"
-                  title="Unduh file .txt untuk dicetak via USB PRN / command line lpr / type file.txt > PRN"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Unduh .TXT</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsReceiptEditorModalOpen(true)}
-                  className="px-3 py-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-50 rounded-lg flex items-center gap-1.5 transition-colors font-bold text-[11px]"
-                  title="Ubah font, divider, pesan footer, dan margin Epson TM-U220"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>Edit Format</span>
-                </button>
-              </div>
-            </div>
-
           </div>
         </div>
       )}
