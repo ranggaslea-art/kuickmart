@@ -1051,6 +1051,10 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        onOpenPosCashier={() => {
+          setAdminPanelInitialTab('pos_cashier');
+          setIsAdminPanelOpen(true);
+        }}
         onOpenLiveTrafficModal={() => setIsLiveTrafficModalOpen(true)}
         isSupabaseConnected={isSupabaseConnected}
         searchQuery={searchQuery}

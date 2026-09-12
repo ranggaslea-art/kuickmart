@@ -43,7 +43,11 @@ import {
   Sliders,
   Coins,
   Copy,
-  Download
+  Download,
+  Maximize2,
+  Minimize2,
+  FileText,
+  Receipt
 } from 'lucide-react';
 
 interface PosCashierManagerProps {
@@ -316,6 +320,33 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
   // Last Completed Order (for 1-click re-print directly to TM-U220)
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+
+  // Fullscreen Mode: default to TRUE so POS kasir displays fullscreen every time it is activated
+  const [isFullScreen, setIsFullScreen] = useState(true);
+
+  // Modal Cetak Ulang Faktur Berdasarkan Nomor Faktur Tertentu
+  const [isReprintModalOpen, setIsReprintModalOpen] = useState(false);
+  const [reprintSearchQuery, setReprintSearchQuery] = useState('');
+  const [selectedReprintOrder, setSelectedReprintOrder] = useState<Order | null>(null);
+
+  // Auto request browser-level fullscreen when POS cashier is activated
+  useEffect(() => {
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {
+          // Browser may restrict programmatic fullscreen without prior user interaction
+        });
+      }
+    } catch {}
+
+    return () => {
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      } catch {}
+    };
+  }, []);
 
   // Active Store object
   const activeStore = useMemo(() => {
@@ -890,6 +921,56 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     }
   };
 
+  // List of all orders for reprinting (merging completedOrder and historical orders)
+  const allAvailableOrders = useMemo(() => {
+    const list: Order[] = [];
+    if (completedOrder) {
+      list.push(completedOrder);
+    }
+    if (orders && orders.length > 0) {
+      orders.forEach((o) => {
+        if (!list.some((existing) => existing.id === o.id || existing.orderNumber === o.orderNumber)) {
+          list.push(o);
+        }
+      });
+    }
+    return list;
+  }, [completedOrder, orders]);
+
+  // Filtered orders for reprint modal based on input
+  const filteredReprintOrders = useMemo(() => {
+    const q = reprintSearchQuery.trim().toLowerCase();
+    if (!q) return allAvailableOrders.slice(0, 50);
+    return allAvailableOrders.filter((o) => {
+      const matchNum = o.orderNumber.toLowerCase().includes(q);
+      const matchCust = o.customerName && o.customerName.toLowerCase().includes(q);
+      const matchPhone = o.customerPhone && o.customerPhone.includes(q);
+      const matchItems = o.items?.some((it) => (it.product?.name || '').toLowerCase().includes(q));
+      return matchNum || matchCust || matchPhone || matchItems;
+    }).slice(0, 50);
+  }, [allAvailableOrders, reprintSearchQuery]);
+
+  // Print any specific invoice directly to Epson TM-U220
+  const handlePrintSpecificInvoice = async (orderToPrint: Order) => {
+    try {
+      const html = generateDotMatrixReceiptHtml(
+        orderToPrint,
+        activeReceiptConfig,
+        cashierName,
+        {
+          cashReceived: orderToPrint.total,
+          changeAmount: 0,
+        }
+      );
+      await printPosReceiptViaIframe(html);
+      setReceiptPrintFeedback(`🖨️ Faktur #${orderToPrint.orderNumber} berhasil dicetak ulang ke Epson TM-U220!`);
+      setTimeout(() => setReceiptPrintFeedback(null), 5000);
+    } catch (err) {
+      console.error('Error reprinting invoice:', err);
+      alert('Gagal mengirim cetak ke printer TM-U220.');
+    }
+  };
+
   // Quick cash helper
   const handleSetQuickCash = (amount: number) => {
     setCashReceived(amount);
@@ -1010,31 +1091,42 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           setCashReceived(grandTotal);
         }
       }
-      // F10: Cetak Ulang Terakhir Langsung ke TM-U220
+      // F10: Cetak Ulang Faktur Tertentu / Terakhir
       else if (e.key === 'F10') {
         e.preventDefault();
-        handleDirectReprintLastOrder();
+        setIsReprintModalOpen(true);
+        if (completedOrder && !selectedReprintOrder) {
+          setSelectedReprintOrder(completedOrder);
+        } else if (!selectedReprintOrder && allAvailableOrders.length > 0) {
+          setSelectedReprintOrder(allAvailableOrders[0]);
+        }
       }
       // F12: Bayar & Cetak Langsung
       else if (e.key === 'F12') {
         e.preventDefault();
         handleFinalizeSale();
       }
-      // Escape: Tutup dropdown / modal
+      // Escape: Tutup modal / dropdown
       else if (e.key === 'Escape') {
-        if (isSearchDropdownOpen) {
+        if (isReprintModalOpen) {
+          setIsReprintModalOpen(false);
+        } else if (isSearchDropdownOpen) {
           setIsSearchDropdownOpen(false);
         } else if (isCustomerModalOpen) {
           setIsCustomerModalOpen(false);
         } else if (isHeldModalOpen) {
           setIsHeldModalOpen(false);
+        } else if (isReceiptEditorModalOpen) {
+          setIsReceiptEditorModalOpen(false);
+        } else if (onClose) {
+          onClose();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [grandTotal, isSearchDropdownOpen, isCustomerModalOpen, isHeldModalOpen, completedOrder, activeReceiptConfig, cashierName, cashReceived, changeAmount, validRows]);
+  }, [grandTotal, isSearchDropdownOpen, isCustomerModalOpen, isHeldModalOpen, isReprintModalOpen, isReceiptEditorModalOpen, completedOrder, selectedReprintOrder, allAvailableOrders, activeReceiptConfig, cashierName, cashReceived, changeAmount, validRows, onClose]);
 
   // Camera Barcode Scanner
   const startCameraScan = async () => {
@@ -1094,11 +1186,11 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-stone-100 text-stone-900 font-sans select-none overflow-hidden">
+    <div className={`${isFullScreen ? 'fixed inset-0 z-[100] w-screen h-screen' : 'relative w-full h-full min-h-screen'} flex flex-col bg-stone-100 text-stone-900 font-sans select-none overflow-hidden`}>
       {/* ============================================================ */}
       {/* 1. TOP BAR: KASIR & PRINTER TM-U220 STATUS (SIMPLE & CLEAN)  */}
       {/* ============================================================ */}
-      <header className="bg-white border-b border-stone-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+      <header className="bg-white border-b border-stone-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs z-40">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-xs">
             <ScanBarcode className="w-5 h-5" />
@@ -1121,7 +1213,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           </div>
         </div>
 
-        {/* PRINTER TM-U220 DIRECT STATUS CHIP */}
+        {/* PRINTER TM-U220 DIRECT STATUS CHIP & ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
             <span className="relative flex h-2 w-2">
@@ -1132,23 +1224,30 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
             <span>Epson TM-U220 (70mm Dot Matrix) • Cetak Langsung</span>
           </div>
 
-          {/* Quick 1-Click Re-print button */}
-          {completedOrder && (
-            <button
-              onClick={handleDirectReprintLastOrder}
-              className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-              title="Cetak ulang struk sebelumnya ke TM-U220 tanpa popup [F10]"
-            >
-              <Printer className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Cetak Ulang (F10)</span>
-            </button>
-          )}
+          {/* Tombol Cetak Ulang Faktur (Nomor Faktur Tertentu / Terakhir) */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsReprintModalOpen(true);
+              if (completedOrder && !selectedReprintOrder) {
+                setSelectedReprintOrder(completedOrder);
+              } else if (!selectedReprintOrder && allAvailableOrders.length > 0) {
+                setSelectedReprintOrder(allAvailableOrders[0]);
+              }
+            }}
+            className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer border border-stone-700 active:scale-95"
+            title="Cetak ulang nomor faktur tertentu ke printer TM-U220 [F10]"
+          >
+            <Printer className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Cetak Ulang Faktur (F10)</span>
+          </button>
 
           {/* Offline Sync Status */}
           <OfflineSyncBadge />
 
           {/* Held Bills Button */}
           <button
+            type="button"
             onClick={() => setIsHeldModalOpen(true)}
             className="relative px-3 py-1.5 rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Panggil Transaksi Ditahan [F8]"
@@ -1164,6 +1263,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
           {/* Reset Bill */}
           <button
+            type="button"
             onClick={handleResetTransaction}
             className="px-3 py-1.5 rounded-xl border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Kosongkan Keranjang Kasir [Esc]"
@@ -1174,21 +1274,53 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
           {/* Receipt Editor Settings Button */}
           <button
+            type="button"
             onClick={() => setIsReceiptEditorModalOpen(true)}
-            className="p-2 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 transition-colors"
+            className="p-2 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 transition-colors cursor-pointer"
             title="Pengaturan Format Struk TM-U220"
           >
             <Sliders className="w-4 h-4 text-stone-600" />
           </button>
 
+          {/* Fullscreen Toggle Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!isFullScreen) {
+                setIsFullScreen(true);
+                try {
+                  document.documentElement.requestFullscreen?.().catch(() => {});
+                } catch {}
+              } else {
+                setIsFullScreen(false);
+                try {
+                  if (document.fullscreenElement) {
+                    document.exitFullscreen?.().catch(() => {});
+                  }
+                } catch {}
+              }
+            }}
+            className="p-2 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 transition-colors cursor-pointer"
+            title={isFullScreen ? 'Keluar Mode Full Screen (Minimize)' : 'Tampilkan Full Screen Layar Penuh'}
+          >
+            {isFullScreen ? <Minimize2 className="w-4 h-4 text-stone-700" /> : <Maximize2 className="w-4 h-4 text-stone-700" />}
+          </button>
+
           {/* Close button if modal */}
           {onClose && (
             <button
-              onClick={onClose}
-              className="p-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-600 cursor-pointer"
-              title="Tutup Kasir"
+              type="button"
+              onClick={() => {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen?.().catch(() => {});
+                }
+                onClose();
+              }}
+              className="px-2.5 py-1.5 rounded-xl border border-stone-300 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-stone-600 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Tutup / Keluar dari POS Kasir [Esc]"
             >
               <X className="w-4 h-4" />
+              <span className="hidden sm:inline">Keluar</span>
             </button>
           )}
         </div>
@@ -1196,16 +1328,85 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
       {/* POS Notification Feedback Banner */}
       {receiptPrintFeedback && (
-        <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-xs animate-slideDown shrink-0">
+        <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-xs animate-slideDown shrink-0 z-35">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
             <span>{receiptPrintFeedback}</span>
           </div>
-          <button onClick={() => setReceiptPrintFeedback(null)} className="text-white hover:text-emerald-200 p-0.5">
+          <button onClick={() => setReceiptPrintFeedback(null)} className="text-white hover:text-emerald-200 p-0.5 cursor-pointer">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
+
+      {/* ============================================================ */}
+      {/* 2. FIXED TOP DISPLAY: TOTAL BELANJA (POSISI TIDAK BERUBAH)    */}
+      {/* ============================================================ */}
+      <div 
+        id="pos-top-grand-total-display"
+        className="bg-stone-950 text-emerald-400 border-b-2 border-stone-800 px-4 py-2.5 sm:px-6 sm:py-3 shadow-md shrink-0 sticky top-0 z-30 select-none"
+      >
+        <div className="w-full flex flex-wrap items-center justify-between gap-3">
+          {/* Left: Info ringkas barang & diskon */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-950/90 border border-emerald-700/60 flex items-center justify-center text-emerald-400 font-black shadow-inner shrink-0">
+              <ScanBarcode className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-[10px] sm:text-[11px] font-mono tracking-widest text-stone-400 uppercase font-bold flex items-center gap-1.5">
+                <span>DISPLAY TOTAL BELANJA</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              </div>
+              <div className="text-xs text-stone-300 font-medium flex items-center gap-2">
+                <span><strong className="text-white font-mono">{validRows.length}</strong> Jenis Barang</span>
+                <span>•</span>
+                <span><strong className="text-white font-mono">{totalQtyUnits}</strong> Total Qty</span>
+                {totalItemDiscounts > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold font-mono">
+                    Hemat -{formatRupiah(totalItemDiscounts)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Center: THE BIG UNMOVING GRAND TOTAL NUMBER */}
+          <div className="flex items-baseline gap-2 sm:gap-3">
+            <span className="text-xs sm:text-sm font-mono text-emerald-500 font-bold uppercase tracking-wider">
+              TOTAL :
+            </span>
+            <div className="text-3xl sm:text-5xl font-mono font-black text-emerald-400 tracking-tight leading-none drop-shadow-[0_0_22px_rgba(52,211,153,0.45)]">
+              {formatRupiah(grandTotal)}
+            </div>
+          </div>
+
+          {/* Right: Live Kembalian or Payment details */}
+          <div className="flex items-center gap-2.5">
+            {paymentMethod === 'cash' ? (
+              <div className="bg-stone-900 border border-stone-800 rounded-xl px-3.5 py-1.5 text-right">
+                <div className="text-[10px] font-mono text-stone-400 uppercase font-semibold">KEMBALIAN KASIR</div>
+                <div className={`text-base sm:text-2xl font-mono font-black ${changeAmount > 0 ? 'text-emerald-300 drop-shadow-[0_0_12px_rgba(52,211,153,0.45)]' : 'text-stone-500'}`}>
+                  {formatRupiah(changeAmount)}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-stone-900 border border-stone-800 rounded-xl px-3.5 py-1.5 text-right">
+                <div className="text-[10px] font-mono text-stone-400 uppercase font-semibold">METODE BAYAR</div>
+                <div className="text-sm sm:text-base font-bold text-emerald-300 uppercase font-mono">
+                  {paymentMethod.toUpperCase()}
+                </div>
+              </div>
+            )}
+
+            {selectedCustomer && (
+              <div className="hidden md:block bg-stone-900 border border-stone-800 rounded-xl px-3 py-1.5 text-right">
+                <div className="text-[10px] font-mono text-amber-400 font-bold">MEMBER: {selectedCustomer.name}</div>
+                <div className="text-xs font-mono text-stone-300">+{pointsEarned} Poin Diperoleh</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* ============================================================ */}
       {/* 2. MAIN 2-COLUMN PRACTICAL & FAST CASHIER WORKSPACE          */}
@@ -1523,24 +1724,20 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
         {/* RIGHT COLUMN: CASHIER DISPLAY & FAST PAYMENT (4 or 5 COLS) */}
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-3 min-h-0">
           
-          {/* 1. THE GIANT HIGH-CONTRAST CASHIER TOTAL SCREEN */}
-          <div className="bg-stone-950 text-emerald-400 border-2 border-stone-800 rounded-2xl p-4 shadow-xl shrink-0">
-            <div className="flex justify-between items-center text-[11px] font-mono text-stone-400 uppercase tracking-widest pb-1 border-b border-stone-800/80">
-              <span>TOTAL BELANJA</span>
-              <span>{validRows.length} BARANG • {totalQtyUnits} QTY</span>
+          {/* 1. COMPACT PAYMENT TARGET CARD */}
+          <div className="bg-stone-900 text-stone-100 rounded-2xl p-3 border border-stone-800 shadow-md shrink-0 flex items-center justify-between">
+            <div>
+              <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">TAGIHAN PEMBAYARAN</div>
+              <div className="text-2xl font-mono font-black text-emerald-400">
+                {formatRupiah(grandTotal)}
+              </div>
             </div>
-            
-            <div className="text-4xl sm:text-5xl font-mono font-black text-emerald-400 tracking-tight mt-2 leading-none drop-shadow-[0_0_18px_rgba(52,211,153,0.4)]">
-              {formatRupiah(grandTotal)}
-            </div>
-
-            {/* Live Kembalian indicator */}
             {paymentMethod === 'cash' && (
-              <div className="mt-3 pt-2.5 border-t border-stone-800/80 flex items-center justify-between">
-                <span className="text-xs font-mono text-stone-400 uppercase">KEMBALIAN:</span>
-                <span className={`text-xl sm:text-2xl font-mono font-black ${changeAmount > 0 ? 'text-emerald-300 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'text-stone-500'}`}>
+              <div className="text-right">
+                <div className="text-[10px] font-mono text-stone-400 uppercase">KEMBALIAN</div>
+                <div className={`text-base font-mono font-black ${changeAmount > 0 ? 'text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'text-stone-500'}`}>
                   {formatRupiah(changeAmount)}
-                </span>
+                </div>
               </div>
             )}
           </div>
@@ -1971,6 +2168,253 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: CETAK ULANG FAKTUR PENJUALAN (NOMOR FAKTUR TERTENTU)  */}
+      {/* ============================================================ */}
+      {isReprintModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-scaleUp">
+            {/* Header Modal */}
+            <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between bg-stone-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-stone-900 text-emerald-400 flex items-center justify-center shadow-xs">
+                  <Printer className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-stone-900">
+                    Cetak Ulang Faktur Penjualan (Epson TM-U220)
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    Cari nomor faktur atau scan barcode nota untuk cetak ulang ke printer 70mm Dot Matrix
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsReprintModalOpen(false)} 
+                className="p-1.5 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer"
+                title="Tutup Modal [Esc]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search Input Bar */}
+            <div className="p-3.5 border-b border-stone-200 bg-white">
+              <div className="relative">
+                <Search className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={reprintSearchQuery}
+                  onChange={(e) => setReprintSearchQuery(e.target.value)}
+                  placeholder="Ketik nomor faktur (contoh: POS-981240), nama member, atau scan barcode faktur..."
+                  className="w-full pl-10 pr-20 py-2.5 text-xs sm:text-sm bg-stone-50 border-2 border-emerald-400 focus:border-emerald-600 rounded-xl focus:bg-white focus:outline-hidden focus:ring-3 focus:ring-emerald-100 font-medium font-mono"
+                  autoFocus
+                />
+                {reprintSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setReprintSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs font-semibold px-1.5 py-0.5 rounded bg-stone-200 cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Body 2 Columns: List on Left, Detail & Preview on Right */}
+            <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-stone-200 min-h-[360px]">
+              {/* Left Column: List of Orders (5 cols) */}
+              <div className="md:col-span-5 p-3 overflow-y-auto space-y-2 bg-stone-50/50">
+                <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider px-1 flex items-center justify-between">
+                  <span>Daftar Faktur ({filteredReprintOrders.length})</span>
+                  <span className="text-[10px] text-stone-400 font-normal">Pilih faktur untuk cetak</span>
+                </div>
+
+                {filteredReprintOrders.length === 0 ? (
+                  <div className="py-12 text-center text-stone-400 text-xs">
+                    <Receipt className="w-8 h-8 mx-auto mb-2 opacity-40 text-stone-400" />
+                    <p className="font-semibold">Tidak ada faktur yang cocok dengan "{reprintSearchQuery}".</p>
+                    <p className="text-[10px] mt-1 text-stone-400">Silakan cek kembali nomor faktur atau nama pelanggan.</p>
+                  </div>
+                ) : (
+                  filteredReprintOrders.map((ord) => {
+                    const isSelected = selectedReprintOrder?.id === ord.id || selectedReprintOrder?.orderNumber === ord.orderNumber;
+                    return (
+                      <div
+                        key={ord.id || ord.orderNumber}
+                        onClick={() => setSelectedReprintOrder(ord)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-50/90 border-emerald-400 shadow-xs'
+                            : 'bg-white border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-mono font-black text-xs text-stone-900 bg-stone-100 px-2 py-0.5 rounded-md border border-stone-200">
+                            #{ord.orderNumber}
+                          </span>
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            {new Date(ord.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} • {new Date(ord.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+
+                        <div className="text-xs font-bold text-stone-800 truncate mb-1">
+                          {ord.customerName || 'Pelanggan Umum'}
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-100">
+                          <span className="font-mono font-black text-emerald-700">
+                            {formatRupiah(ord.total)}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] uppercase font-bold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
+                              {ord.paymentMethod}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedReprintOrder(ord);
+                                handlePrintSpecificInvoice(ord);
+                              }}
+                              className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[10px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                              title="Langsung cetak faktur ini ke TM-U220"
+                            >
+                              <Printer className="w-3 h-3" />
+                              <span>Cetak</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Right Column: Selected Invoice Detail & Print Action (7 cols) */}
+              <div className="md:col-span-7 p-4 overflow-y-auto flex flex-col justify-between bg-white">
+                {selectedReprintOrder ? (
+                  <div className="space-y-3">
+                    {/* Header Info */}
+                    <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">DETAIL FAKTUR</div>
+                        <div className="text-base font-mono font-black text-stone-900 flex items-center gap-2">
+                          <span>#{selectedReprintOrder.orderNumber}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            LUNAS
+                          </span>
+                        </div>
+                        <div className="text-xs text-stone-500 mt-0.5">
+                          {selectedReprintOrder.customerName || 'Pelanggan Umum'} • {new Date(selectedReprintOrder.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}, {new Date(selectedReprintOrder.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-stone-400 uppercase font-semibold">TOTAL BELANJA</div>
+                        <div className="text-lg font-mono font-black text-emerald-700">
+                          {formatRupiah(selectedReprintOrder.total)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Items Table */}
+                    <div className="border border-stone-200 rounded-xl overflow-hidden text-xs max-h-[160px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-stone-100 text-stone-600 font-bold border-b border-stone-200 sticky top-0">
+                          <tr>
+                            <th className="p-2">Nama Barang</th>
+                            <th className="p-2 w-14 text-center">Qty</th>
+                            <th className="p-2 w-24 text-right">Harga</th>
+                            <th className="p-2 w-24 text-right">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100">
+                          {selectedReprintOrder.items.map((it, idx) => {
+                            const itemPrice = it.unitPrice ?? it.product?.price ?? 0;
+                            const itemName = it.product?.name || 'Barang';
+                            return (
+                              <tr key={idx} className="hover:bg-stone-50/50">
+                                <td className="p-2 font-medium text-stone-900">{itemName}</td>
+                                <td className="p-2 text-center font-mono">{it.quantity} {it.selectedUnit || it.product?.unit || 'Pcs'}</td>
+                                <td className="p-2 text-right font-mono text-stone-600">{formatRupiah(itemPrice)}</td>
+                                <td className="p-2 text-right font-mono font-bold text-stone-900">{formatRupiah(itemPrice * it.quantity)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Breakdown */}
+                    <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 space-y-1 text-xs text-stone-600">
+                      <div className="flex justify-between">
+                        <span>Subtotal Barang:</span>
+                        <span className="font-mono">{formatRupiah(selectedReprintOrder.subtotal || selectedReprintOrder.total)}</span>
+                      </div>
+                      {(selectedReprintOrder.discountAmount || 0) > 0 && (
+                        <div className="flex justify-between text-rose-600 font-bold">
+                          <span>Potongan Diskon:</span>
+                          <span className="font-mono">-{formatRupiah(selectedReprintOrder.discountAmount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-stone-900 pt-1 border-t border-stone-200 text-sm">
+                        <span>Total Faktur:</span>
+                        <span className="font-mono text-emerald-700">{formatRupiah(selectedReprintOrder.total)}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="pt-2 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintSpecificInvoice(selectedReprintOrder)}
+                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
+                      >
+                        <Printer className="w-4 h-4 text-emerald-200" />
+                        <span>CETAK ULANG FAKTUR #{selectedReprintOrder.orderNumber} KE EPSON TM-U220</span>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const raw = generateRawPosReceiptText(selectedReprintOrder, activeReceiptConfig, cashierName);
+                            copyPosReceiptText(raw);
+                            alert(`Teks RAW faktur #${selectedReprintOrder.orderNumber} berhasil disalin ke clipboard.`);
+                          }}
+                          className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Salin Teks RAW 40 Kolom</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const raw = generateRawPosReceiptText(selectedReprintOrder, activeReceiptConfig, cashierName);
+                            downloadPosReceiptTxtFile(raw, `faktur_${selectedReprintOrder.orderNumber}.txt`);
+                          }}
+                          className="flex-1 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Unduh File .TXT</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-20 text-center text-stone-400">
+                    <Receipt className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                    <p className="text-xs font-semibold">Pilih faktur dari daftar di sebelah kiri atau ketik nomor faktur di kotak pencarian.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
