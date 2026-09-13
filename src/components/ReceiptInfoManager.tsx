@@ -21,12 +21,14 @@ import {
   QrCode,
   X,
   RotateCcw,
-  Sliders
+  Sliders,
+  Search
 } from 'lucide-react';
 import { ReceiptInfo, Store } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { cleanReceiptText } from '../utils/sanitizeReceipt';
 import { PosReceiptEditorModal } from './PosReceiptEditorModal';
+import { OsPrinterSearchModal } from './OsPrinterSearchModal';
 
 interface ReceiptInfoManagerProps {
   receiptConfigs: ReceiptInfo[];
@@ -44,6 +46,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDotMatrixEditorOpen, setIsDotMatrixEditorOpen] = useState(false);
+  const [isOsPrinterModalOpen, setIsOsPrinterModalOpen] = useState(false);
   const [activeConfigForEditor, setActiveConfigForEditor] = useState<ReceiptInfo | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [selectedPreviewId, setSelectedPreviewId] = useState<string>(() => {
@@ -366,12 +369,21 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         {!isEditing && (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
+              type="button"
+              onClick={() => setIsOsPrinterModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 border border-white/20 transition-all active:scale-95 shrink-0 cursor-pointer"
+              title="Pindai printer terpasang di sistem operasi media ini"
+            >
+              <Search className="w-4 h-4 text-emerald-300" />
+              <span>Pencarian Printer OS</span>
+            </button>
+            <button
               onClick={() => {
                 const tmuConfig = receiptConfigs.find(r => r.printerType === 'dot_matrix_tmu220' || r.paperWidth === '70mm_dotmatrix') || receiptConfigs[0];
                 setActiveConfigForEditor(tmuConfig);
                 setIsDotMatrixEditorOpen(true);
               }}
-              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 border border-white/20 transition-all active:scale-95 shrink-0"
+              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 border border-white/20 transition-all active:scale-95 shrink-0 cursor-pointer"
               title="Buka Editor Struk Dot Matrix Khusus Epson TM-U220 (70mm)"
             >
               <Printer className="w-4 h-4 text-amber-300" />
@@ -379,7 +391,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
             </button>
             <button
               onClick={handleOpenAdd}
-              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 shrink-0"
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4 text-stone-900" />
               <span>Tambah Info Struk Baru</span>
@@ -1004,6 +1016,15 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
           }}
         />
       )}
+
+      {/* Modal Pencarian Printer Sistem Operasi */}
+      <OsPrinterSearchModal
+        isOpen={isOsPrinterModalOpen}
+        onClose={() => setIsOsPrinterModalOpen(false)}
+        onSelectPrinter={(printer) => {
+          showNotification(`Printer aktif sistem berhasil diatur ke "${printer.name}"!`);
+        }}
+      />
     </div>
   );
 };

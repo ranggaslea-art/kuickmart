@@ -29,6 +29,9 @@ import {
   downloadPosReceiptTxtFile,
   copyPosReceiptText
 } from '../utils/posPrinterHelper';
+import { OsPrinterSearchModal } from './OsPrinterSearchModal';
+import { DiscoveredOsPrinter } from '../types/osPrinter';
+import { getSavedSelectedPrinter } from '../utils/osPrinterDiscovery';
 
 interface PosReceiptEditorModalProps {
   isOpen: boolean;
@@ -202,6 +205,8 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
   const [previewMode, setPreviewMode] = useState<'dotmatrix_visual' | 'raw_ascii'>('dotmatrix_visual');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isOsPrinterModalOpen, setIsOsPrinterModalOpen] = useState(false);
+  const [activeOsPrinter, setActiveOsPrinter] = useState<DiscoveredOsPrinter | null>(() => getSavedSelectedPrinter());
 
   // Sync state if activeConfig prop changes
   React.useEffect(() => {
@@ -339,6 +344,15 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsOsPrinterModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-500 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+              title="Pindai printer terpasang di sistem operasi media ini"
+            >
+              <Printer className="w-3.5 h-3.5 text-emerald-200" />
+              <span>Cari Printer OS</span>
+            </button>
             <button
               onClick={handleLoadTmu220Preset}
               className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-400/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
@@ -565,6 +579,29 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                       Memberi ruang kosong agar teks terbawah struk tidak terpotong oleh gerigi pisau manual / auto-cutter printer TM-U220.
                     </p>
                   </div>
+                </div>
+
+                {/* Status Printer Sistem Operasi */}
+                <div className="p-3.5 bg-stone-900 text-white rounded-2xl border border-stone-800 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="font-bold text-xs text-white">Target Hardware OS:</span>
+                      <span className="text-xs text-emerald-300 font-mono font-bold">
+                        {activeOsPrinter ? activeOsPrinter.name : 'Epson TM-U220 (Spooler OS / COM)'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      Port: {activeOsPrinter?.port || 'Sistem Spooler'} • Tipe: {activeOsPrinter?.interfaceType || 'os_spooler'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsOsPrinterModalOpen(true)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                  >
+                    Pindai / Ubah Printer OS
+                  </button>
                 </div>
               </div>
             )}
@@ -1236,6 +1273,18 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* MODAL PENCARIAN PRINTER SISTEM OPERASI */}
+      <OsPrinterSearchModal
+        isOpen={isOsPrinterModalOpen}
+        onClose={() => setIsOsPrinterModalOpen(false)}
+        onSelectPrinter={(printer) => {
+          setActiveOsPrinter(printer);
+          setFeedback(`Printer aktif berhasil diatur ke "${printer.name}" (${printer.interfaceType.toUpperCase()})`);
+          setTimeout(() => setFeedback(null), 4000);
+        }}
+        currentSelectedPrinter={activeOsPrinter}
+      />
     </div>
   );
 };

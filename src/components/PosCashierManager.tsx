@@ -19,7 +19,10 @@ import {
   generateRawPosReceiptText
 } from '../utils/posPrinterHelper';
 import { PosReceiptEditorModal } from './PosReceiptEditorModal';
+import { OsPrinterSearchModal } from './OsPrinterSearchModal';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
+import { DiscoveredOsPrinter } from '../types/osPrinter';
+import { getSavedSelectedPrinter } from '../utils/osPrinterDiscovery';
 import { 
   ScanBarcode, 
   Camera, 
@@ -328,6 +331,10 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   const [isReprintModalOpen, setIsReprintModalOpen] = useState(false);
   const [reprintSearchQuery, setReprintSearchQuery] = useState('');
   const [selectedReprintOrder, setSelectedReprintOrder] = useState<Order | null>(null);
+
+  // Modal Pencarian & Deteksi Printer Sistem Operasi (Hardware OS Discovery)
+  const [isOsPrinterModalOpen, setIsOsPrinterModalOpen] = useState(false);
+  const [activeOsPrinter, setActiveOsPrinter] = useState<DiscoveredOsPrinter | null>(() => getSavedSelectedPrinter());
 
   // Auto request browser-level fullscreen when POS cashier is activated
   useEffect(() => {
@@ -1215,14 +1222,30 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
         {/* PRINTER TM-U220 DIRECT STATUS CHIP & ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setIsOsPrinterModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/90 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs transition-all cursor-pointer group"
+            title="Klik untuk melihat dan mencari printer yang tertanam di sistem operasi"
+          >
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
             </span>
-            <Printer className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Epson TM-U220 (70mm Dot Matrix) • Cetak Langsung</span>
-          </div>
+            <Printer className="w-3.5 h-3.5 text-emerald-700 group-hover:scale-110 transition-transform" />
+            <span className="truncate max-w-[200px] sm:max-w-xs">{activeOsPrinter ? activeOsPrinter.name : 'Epson TM-U220 (70mm Dot Matrix)'} • Cetak Langsung</span>
+          </button>
+
+          {/* Tombol Pencarian Printer OS */}
+          <button
+            type="button"
+            onClick={() => setIsOsPrinterModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer border border-stone-700 active:scale-95"
+            title="Pindai printer terpasang di sistem operasi media ini (Windows / Linux / macOS / Android POS)"
+          >
+            <Search className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Cari Printer OS</span>
+          </button>
 
           {/* Tombol Cetak Ulang Faktur (Nomor Faktur Tertentu / Terakhir) */}
           <button
@@ -2431,6 +2454,20 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
         onSaveConfig={handleSaveReceiptConfig}
         sampleOrder={completedOrder || (orders && orders[0]) || undefined}
         cashierName={cashierName}
+      />
+
+      {/* ============================================================ */}
+      {/* MODAL: PENCARIAN & DETEKSI PRINTER SISTEM OPERASI            */}
+      {/* ============================================================ */}
+      <OsPrinterSearchModal
+        isOpen={isOsPrinterModalOpen}
+        onClose={() => setIsOsPrinterModalOpen(false)}
+        onSelectPrinter={(printer) => {
+          setActiveOsPrinter(printer);
+          setReceiptPrintFeedback(`Printer aktif kasir dialihkan ke "${printer.name}" (${printer.interfaceType.toUpperCase()})`);
+          setTimeout(() => setReceiptPrintFeedback(null), 4000);
+        }}
+        currentSelectedPrinter={activeOsPrinter}
       />
     </div>
   );
