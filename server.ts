@@ -164,16 +164,25 @@ async function startServer() {
     const tenant = tenantStoreMap[slug] || null;
 
     if (tenant) {
+      const isTenantActive = tenant.isActive !== false;
       // Mask secretKey for client security
       const sanitized = {
         ...tenant,
+        isActive: isTenantActive,
+        disabledReason: tenant.disabledReason || null,
+        disabledAt: tenant.disabledAt || null,
         dokuSettings: {
           ...tenant.dokuSettings,
           secretKey: tenant.dokuSettings?.secretKey ? '••••••••••••••••' : '',
           hasSecretKey: Boolean(tenant.dokuSettings?.secretKey && tenant.dokuSettings.secretKey.trim().length > 0),
         },
       };
-      return res.json({ success: true, tenant: sanitized });
+      return res.json({ 
+        success: true, 
+        tenant: sanitized,
+        isDisabled: !isTenantActive,
+        disabledReason: tenant.disabledReason || 'Subdomain ini telah dinonaktifkan oleh administrator toko-online.online.'
+      });
     }
 
     return res.json({
@@ -181,6 +190,140 @@ async function startServer() {
       tenant: null,
       message: `Tenant ${slug} belum terdaftar, silakan simpan pengaturan untuk mendaftarkan nama toko.`,
     });
+  });
+
+  // 1b-1. List All Registered Subdomains under toko-online.online
+  app.get('/api/tenants', (req, res) => {
+    try {
+      // Pastikan domain utama selalu ada dalam daftar
+      if (!tenantStoreMap['default']) {
+        tenantStoreMap['default'] = {
+          storeId: 'default',
+          storeSlug: 'default',
+          storeName: 'toko-online.online (Pusat)',
+          tagline: 'Minimarket & Toko Online Resmi',
+          ownerName: 'Administrator',
+          city: 'Jakarta',
+          isActive: true,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      const list = Object.keys(tenantStoreMap).map((slug) => {
+        const t = tenantStoreMap[slug] || {};
+        const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+        const displaySlug = isMain ? 'pusat' : slug;
+        const subdomain = isMain ? 'toko-online.online' : `${slug}.toko-online.online`;
+        const subdomainUrl = isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
+        const isActive = t.isActive !== false;
+
+        return {
+          storeId: t.storeId || slug,
+          storeSlug: slug,
+          displaySlug,
+          subdomain,
+          subdomainUrl,
+          storeName: t.storeName || (isMain ? 'toko-online.online (Pusat)' : slug),
+          tagline: t.tagline || '',
+          ownerName: t.ownerName || 'Pengelola Toko',
+          phone: t.phone || t.whatsapp || '',
+          whatsapp: t.whatsapp || t.phone || '',
+          address: t.address || '',
+          city: t.city || '',
+          logoUrl: t.logoUrl || '',
+          logoText: t.logoText || '',
+          primaryColor: t.primaryColor || '#E51A24',
+          isActive,
+          disabledReason: t.disabledReason || null,
+          disabledAt: t.disabledAt || null,
+          createdAt: t.createdAt || t.updatedAt || new Date().toISOString(),
+          updatedAt: t.updatedAt || new Date().toISOString(),
+          isRootDomain: isMain,
+          dokuEnvironment: t.dokuSettings?.environment || 'sandbox',
+          hasDoku: Boolean(t.dokuSettings?.clientId),
+          qrisEnabled: Boolean(t.dokuSettings?.enableQris),
+        };
+      });
+
+      // Urutkan: Domain utama paling atas, disusul berdasarkan update terbaru
+      list.sort((a, b) => {
+        if (a.isRootDomain) return -1;
+        if (b.isRootDomain) return 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+
+      return res.json({
+        success: true,
+        rootDomain: 'toko-online.online',
+        total: list.length,
+        activeCount: list.filter((item) => item.isActive).length,
+        disabledCount: list.filter((item) => !item.isActive).length,
+        tenants: list,
+      });
+    } catch (err: any) {
+      console.error('[Tenants Error] Failed listing tenants:', err);
+      return res.status(500).json({ error: 'Gagal mengambil daftar subdomain', details: err.message });
+    }
+  });
+
+  // 1b-2. Toggle Subdomain Status (Checklist Aktif / Nonaktif)
+  app.post('/api/tenant/toggle-status', (req, res) => {
+    try {
+      const { storeSlug, isActive, reason } = req.body || {};
+      if (!storeSlug) {
+        return res.status(400).json({ success: false, error: 'Parameter storeSlug wajib diisi.' });
+      }
+
+      const slug = storeSlug.trim().toLowerCase();
+      const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+
+      if (isMain && isActive === false) {
+        return res.status(400).json({
+          success: false,
+          error: 'Domain utama toko-online.online merupakan induk sistem dan tidak dapat dinonaktifkan.',
+        });
+      }
+
+      let existing = tenantStoreMap[slug];
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          error: `Subdomain '${slug}' tidak ditemukan dalam daftar toko terdaftar.`,
+        });
+      }
+
+      const newIsActive = Boolean(isActive);
+      existing.isActive = newIsActive;
+      existing.updatedAt = new Date().toISOString();
+
+      if (!newIsActive) {
+        existing.disabledReason = reason || 'Dinonaktifkan oleh administrator toko-online.online';
+        existing.disabledAt = new Date().toISOString();
+      } else {
+        delete existing.disabledReason;
+        delete existing.disabledAt;
+      }
+
+      tenantStoreMap[slug] = existing;
+      saveTenantsToFile();
+
+      console.log(`[Tenants] Status subdomain '${slug}' berhasil diubah: ${newIsActive ? 'AKTIF (ON)' : 'NONAKTIF (OFF)'}`);
+
+      return res.json({
+        success: true,
+        message: `Subdomain '${slug}.toko-online.online' berhasil ${newIsActive ? 'diaktifkan kembali' : 'dinonaktifkan'}.`,
+        tenant: {
+          storeSlug: slug,
+          isActive: newIsActive,
+          disabledReason: existing.disabledReason || null,
+          disabledAt: existing.disabledAt || null,
+          updatedAt: existing.updatedAt,
+        },
+      });
+    } catch (err: any) {
+      console.error('[Tenants Error] Failed toggling tenant status:', err);
+      return res.status(500).json({ success: false, error: 'Gagal mengubah status subdomain', details: err.message });
+    }
   });
 
   // 1b-2. Subdomain Authority Policy Check API
@@ -386,6 +529,16 @@ async function startServer() {
       // Resolusi tenant aktif
       const slug = (storeSlug || 'default').toLowerCase();
       const tenant = tenantStoreMap[slug] || null;
+
+      if (tenant && tenant.isActive === false) {
+        return res.status(403).json({
+          success: false,
+          error: `Subdomain '${slug}.toko-online.online' saat ini sedang dinonaktifkan oleh administrator. Transaksi Virtual Account tidak dapat diproses.`,
+          isDisabled: true,
+          disabledReason: tenant.disabledReason || 'Dinonaktifkan oleh administrator toko-online.online',
+        });
+      }
+
       const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online';
       const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
       const effectiveSecretKey = (customSecretKey && !customSecretKey.includes('•••'))
@@ -518,6 +671,16 @@ async function startServer() {
       // Resolusi tenant aktif
       const slug = (storeSlug || 'default').toLowerCase();
       const tenant = tenantStoreMap[slug] || null;
+
+      if (tenant && tenant.isActive === false) {
+        return res.status(403).json({
+          success: false,
+          error: `Subdomain '${slug}.toko-online.online' saat ini sedang dinonaktifkan oleh administrator. Pembuatan QRIS tidak dapat diproses.`,
+          isDisabled: true,
+          disabledReason: tenant.disabledReason || 'Dinonaktifkan oleh administrator toko-online.online',
+        });
+      }
+
       const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online';
       const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
       const city = (tenant?.city || 'JAKARTA').replace(/[^a-zA-Z0-9 ]/g, '').trim().toUpperCase().slice(0, 15);

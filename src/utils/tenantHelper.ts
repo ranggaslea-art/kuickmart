@@ -354,6 +354,7 @@ export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
     city: 'Jakarta',
     logoText,
     primaryColor: '#E51A24',
+    isActive: true,
     dokuSettings: {
       ...DEFAULT_DOKU_SETTINGS,
       merchantName: isDefault ? 'toko-online.online' : storeName,
@@ -544,4 +545,217 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
   // 3. Jika belum terdaftar di backend, auto-provisioning profil baru ke server
   saveStoreTenantConfig(localConfig).catch(() => {});
   return localConfig;
+}
+
+export interface RegisteredSubdomain {
+  storeId: string;
+  storeSlug: string;
+  displaySlug: string;
+  subdomain: string;
+  subdomainUrl: string;
+  storeName: string;
+  tagline: string;
+  ownerName: string;
+  phone: string;
+  whatsapp: string;
+  address: string;
+  city: string;
+  logoUrl?: string;
+  logoText?: string;
+  primaryColor?: string;
+  isActive: boolean;
+  disabledReason?: string | null;
+  disabledAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isRootDomain: boolean;
+  dokuEnvironment?: string;
+  hasDoku?: boolean;
+  qrisEnabled?: boolean;
+}
+
+/**
+ * Mengambil daftar seluruh subdomain yang terdaftar di toko-online.online
+ * Menggabungkan database server Express dan cache localStorage lokal.
+ */
+export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]> {
+  const mapBySlug: Record<string, RegisteredSubdomain> = {};
+
+  // 1. Ambil dari server Express (/api/tenants)
+  try {
+    const res = await fetch('/api/tenants');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.tenants)) {
+        data.tenants.forEach((t: RegisteredSubdomain) => {
+          mapBySlug[t.storeSlug.toLowerCase()] = t;
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[TenantHelper] Gagal mengambil daftar tenant dari server:', e);
+  }
+
+  // 2. Scan localStorage untuk tenant yang disimpan lokal
+  if (typeof window !== 'undefined') {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(STORAGE_TENANT_PREFIX)) {
+          const slug = key.replace(STORAGE_TENANT_PREFIX, '').toLowerCase();
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+            if (!mapBySlug[slug]) {
+              mapBySlug[slug] = {
+                storeId: parsed.storeId || slug,
+                storeSlug: slug,
+                displaySlug: isMain ? 'pusat' : slug,
+                subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
+                subdomainUrl: isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`,
+                storeName: parsed.storeName || (isMain ? 'toko-online.online (Pusat)' : slug),
+                tagline: parsed.tagline || '',
+                ownerName: parsed.ownerName || 'Pengelola Toko',
+                phone: parsed.phone || parsed.whatsapp || '',
+                whatsapp: parsed.whatsapp || parsed.phone || '',
+                address: parsed.address || '',
+                city: parsed.city || '',
+                logoUrl: parsed.logoUrl || '',
+                logoText: parsed.logoText || '',
+                primaryColor: parsed.primaryColor || '#E51A24',
+                isActive: parsed.isActive !== false,
+                disabledReason: parsed.disabledReason || null,
+                disabledAt: parsed.disabledAt || null,
+                createdAt: parsed.createdAt || new Date().toISOString(),
+                updatedAt: parsed.updatedAt || new Date().toISOString(),
+                isRootDomain: isMain,
+                dokuEnvironment: parsed.dokuSettings?.environment || 'sandbox',
+                hasDoku: Boolean(parsed.dokuSettings?.clientId),
+                qrisEnabled: Boolean(parsed.dokuSettings?.enableQris),
+              };
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[TenantHelper] Error scanning localStorage tenants:', err);
+    }
+  }
+
+  // 3. Pastikan Domain Utama default ada
+  if (!mapBySlug['default']) {
+    mapBySlug['default'] = {
+      storeId: 'default',
+      storeSlug: 'default',
+      displaySlug: 'pusat',
+      subdomain: 'toko-online.online',
+      subdomainUrl: 'https://toko-online.online',
+      storeName: 'toko-online.online (Pusat)',
+      tagline: 'Pusat Belanja Online Hemat, Cepat, dan Terpercaya',
+      ownerName: 'Administrator',
+      phone: '0812-3456-7890',
+      whatsapp: '6281234567890',
+      address: 'Jl. Pemuda No. 88, Pusat Niaga',
+      city: 'Jakarta',
+      logoText: 'TO',
+      primaryColor: '#E51A24',
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isRootDomain: true,
+      dokuEnvironment: 'sandbox',
+      hasDoku: true,
+      qrisEnabled: true,
+    };
+  }
+
+  const result = Object.values(mapBySlug);
+  // Sort: domain utama paling atas, lalu sisanya berdasarkan updatedAt terbaru
+  result.sort((a, b) => {
+    if (a.isRootDomain) return -1;
+    if (b.isRootDomain) return 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+
+  return result;
+}
+
+/**
+ * Mengubah status aktif / nonaktif suatu subdomain dengan tombol checklist
+ */
+export async function toggleSubdomainStatus(
+  storeSlug: string,
+  isActive: boolean,
+  reason?: string
+): Promise<{ success: boolean; message: string; tenant?: any }> {
+  const slug = (storeSlug || '').toLowerCase().trim();
+  const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+
+  if (isMain && !isActive) {
+    return {
+      success: false,
+      message: 'Domain utama toko-online.online merupakan induk sistem dan tidak dapat dinonaktifkan.',
+    };
+  }
+
+  try {
+    // 1. Kirim request ke backend Express
+    const res = await fetch('/api/tenant/toggle-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storeSlug: slug, isActive, reason }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        message: data.error || 'Gagal mengubah status subdomain di server.',
+      };
+    }
+
+    // 2. Perbarui juga di localStorage jika ada
+    if (typeof window !== 'undefined') {
+      const localKey = `${STORAGE_TENANT_PREFIX}${slug}`;
+      const existingRaw = localStorage.getItem(localKey);
+      if (existingRaw) {
+        try {
+          const parsed = JSON.parse(existingRaw);
+          parsed.isActive = isActive;
+          parsed.updatedAt = new Date().toISOString();
+          if (!isActive) {
+            parsed.disabledReason = reason || 'Dinonaktifkan oleh administrator toko-online.online';
+            parsed.disabledAt = new Date().toISOString();
+          } else {
+            delete parsed.disabledReason;
+            delete parsed.disabledAt;
+          }
+          localStorage.setItem(localKey, JSON.stringify(parsed));
+        } catch (e) {
+          console.warn('[TenantHelper] Gagal update status di localStorage:', e);
+        }
+      }
+
+      // 3. Broadcast Event agar komponen UI tahu status berubah secara instan
+      window.dispatchEvent(
+        new CustomEvent('subdomain_status_changed', {
+          detail: { storeSlug: slug, isActive, reason },
+        })
+      );
+    }
+
+    return {
+      success: true,
+      message: data.message || `Subdomain '${slug}.toko-online.online' berhasil ${isActive ? 'diaktifkan' : 'dinonaktifkan'}.`,
+      tenant: data.tenant,
+    };
+  } catch (err: any) {
+    console.error('[TenantHelper] Error toggleSubdomainStatus:', err);
+    return {
+      success: false,
+      message: err.message || 'Terjadi kesalahan jaringan saat mengubah status subdomain.',
+    };
+  }
 }

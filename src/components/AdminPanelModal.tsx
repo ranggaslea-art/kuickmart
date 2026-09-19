@@ -71,7 +71,8 @@ import {
   ChevronUp,
   ClipboardCheck,
   Undo2,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Globe
 } from 'lucide-react';
 import { 
   Product, 
@@ -139,6 +140,7 @@ import { PosCashierManager } from './PosCashierManager';
 import { StockOpnameManager } from './StockOpnameManager';
 import { ReturnsManager } from './ReturnsManager';
 import { StockMutationManager } from './StockMutationManager';
+import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN } from '../utils/tenantHelper';
 
@@ -183,7 +185,7 @@ interface AdminPanelModalProps {
   onUpdateRewardItems?: (items: RewardItem[]) => void;
   pointsLedger?: PointsLedgerEntry[];
   onUpdatePointsLedger?: (ledger: PointsLedgerEntry[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations';
 }
 
 interface AdminUser {
@@ -600,7 +602,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
@@ -2294,6 +2296,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
                 { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
                 { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
+                { id: 'subdomains', moduleKey: 'stores' as SystemModuleKey, label: 'Subdomain Terdaftar', icon: <Globe className="w-4 h-4 text-cyan-600" /> },
                 { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
                 { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
                 { id: 'push_notifications', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
@@ -3694,6 +3697,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <span>Pengaturan Struk Toko</span>
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab('subdomains'); setIsAddingStore(false); }}
+                        className="px-3.5 py-2 rounded-xl bg-white hover:bg-cyan-50 text-cyan-800 border border-cyan-300 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Globe className="w-4 h-4 text-cyan-600" />
+                        <span>Info Subdomain & Checklist</span>
+                      </button>
+
                       {currentUserPermissions.stores?.canEdit && (
                         <button
                           type="button"
@@ -4825,6 +4837,26 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <StoreDokuSettingsManager
                 brandConfig={activeBrandConfig}
                 onUpdateBrandConfig={handleUpdateBrandConfig}
+              />
+            </div>
+          ))}
+
+          {/* TAB: INFO SUBDOMAIN TERDAFTAR & CHECKLIST NONAKTIF */}
+          {activeTab === 'subdomains' && (!currentUserPermissions.stores?.canView ? (
+            renderAccessDenied('Subdomain Terdaftar')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.stores?.canEdit && renderReadOnlyBanner('Subdomain Terdaftar')}
+              <RegisteredSubdomainsManager
+                onOpenStoreSettings={() => {
+                  setActiveTab('store_doku_settings');
+                }}
+                onNavigateToStore={(targetSlug) => {
+                  const url = typeof window !== 'undefined'
+                    ? `${window.location.origin}${window.location.pathname}?store=${targetSlug}`
+                    : `https://${targetSlug}.toko-online.online`;
+                  window.location.href = url;
+                }}
               />
             </div>
           ))}

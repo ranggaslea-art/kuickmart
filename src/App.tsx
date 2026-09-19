@@ -66,7 +66,8 @@ import {
   StorePromoInfo,
   CourierInfo,
   BrandHeaderFooterConfig,
-  StaffUser
+  StaffUser,
+  StoreTenantIdentity
 } from './types';
 import { 
   PRODUCTS, 
@@ -137,7 +138,8 @@ import {
   BadgePercent,
   ChevronRight,
   Package,
-  Plus
+  Plus,
+  AlertTriangle
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -390,10 +392,19 @@ export default function App() {
   }, []);
 
   // Multi-Tenant Auto-Provisioning & Dynamic Store Branding Sync
+  const [currentTenant, setCurrentTenant] = useState<StoreTenantIdentity | null>(() => {
+    try {
+      return loadStoreTenantConfig(getStoreSlugFromUrl());
+    } catch {
+      return null;
+    }
+  });
+
   useEffect(() => {
     const slug = getStoreSlugFromUrl();
     autoProvisionStoreTenant(slug).then((tenant) => {
       if (tenant) {
+        setCurrentTenant(tenant);
         setBrandConfig((prev) => syncBrandConfigFromTenant(tenant, prev));
         if (typeof document !== 'undefined') {
           document.title = `${tenant.storeName} - Belanja & Kasir Online`;
@@ -404,6 +415,7 @@ export default function App() {
     const handleTenantUpdated = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail) {
+        setCurrentTenant(customEvent.detail);
         setBrandConfig((prev) => syncBrandConfigFromTenant(customEvent.detail, prev));
         if (typeof document !== 'undefined') {
           document.title = `${customEvent.detail.storeName} - Belanja & Kasir Online`;
@@ -411,9 +423,27 @@ export default function App() {
       }
     };
 
+    const handleSubdomainStatusChanged = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.storeSlug === getStoreSlugFromUrl()) {
+        setCurrentTenant((prev) =>
+          prev
+            ? {
+                ...prev,
+                isActive: customEvent.detail.isActive,
+                disabledReason: customEvent.detail.reason,
+                disabledAt: customEvent.detail.isActive ? undefined : new Date().toISOString(),
+              }
+            : prev
+        );
+      }
+    };
+
     window.addEventListener('store_tenant_updated', handleTenantUpdated);
+    window.addEventListener('subdomain_status_changed', handleSubdomainStatusChanged);
     return () => {
       window.removeEventListener('store_tenant_updated', handleTenantUpdated);
+      window.removeEventListener('subdomain_status_changed', handleSubdomainStatusChanged);
     };
   }, []);
 
@@ -1253,6 +1283,39 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full min-w-full flex-1 bg-[#F8F9FA] text-[#1E2022] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
+      {/* NOTIFIKASI SUBDOMAIN DINONAKTIFKAN */}
+      {currentTenant && currentTenant.isActive === false && !isDefaultStore(currentTenant.storeSlug) && (
+        <div className="bg-rose-700 text-white px-4 py-3 shadow-md sticky top-0 z-50 border-b border-rose-900">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-amber-300 mt-0.5 sm:mt-0" />
+              <div>
+                <div className="font-extrabold tracking-wide">
+                  PEMBERITAHUAN SUBDOMAIN DINONAKTIFKAN
+                </div>
+                <div className="text-rose-100 text-xs mt-0.5">
+                  Subdomain <strong className="font-mono text-white">{currentTenant.storeSlug}.toko-online.online</strong> sedang dinonaktifkan oleh administrator platform. Transaksi pembayaran dan belanja di subdomain ini dinonaktifkan sementara.
+                  {currentTenant.disabledReason && (
+                    <span className="block italic text-[11px] text-rose-200 mt-0.5">
+                      Alasan: {currentTenant.disabledReason}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = window.location.origin + window.location.pathname;
+              }}
+              className="px-4 py-2 bg-white text-rose-800 hover:bg-rose-50 font-bold rounded-xl text-xs shrink-0 shadow-xs cursor-pointer transition active:scale-95 flex items-center gap-1.5"
+            >
+              <span>Kembali ke Domain Utama</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sticky Header */}
       <Header
         currentStore={currentStore}

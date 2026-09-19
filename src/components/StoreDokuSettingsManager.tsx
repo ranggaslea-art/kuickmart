@@ -44,6 +44,7 @@ import {
   SubdomainPolicyResult,
 } from '../utils/tenantHelper';
 import { compressImageFile } from '../utils/imageHelper';
+import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 
 interface StoreDokuSettingsManagerProps {
   brandConfig: BrandHeaderFooterConfig;
@@ -87,7 +88,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
     refreshPolicy();
   };
   
-  const [activeTab, setActiveTab] = useState<'store_identity' | 'doku_gateway' | 'test_simulation' | 'guide'>('store_identity');
+  const [activeTab, setActiveTab] = useState<'store_identity' | 'doku_gateway' | 'test_simulation' | 'guide' | 'registered_subdomains'>('store_identity');
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -476,6 +477,19 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
         >
           <HelpCircle className="w-4 h-4" />
           <span>4. Panduan Cloudflare & DOKU</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('registered_subdomains')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition cursor-pointer ${
+            activeTab === 'registered_subdomains'
+              ? 'border-red-600 text-red-600 font-semibold bg-red-50/40 rounded-t-lg'
+              : 'border-transparent text-stone-600 hover:text-stone-900 hover:bg-stone-50 rounded-t-lg'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-cyan-600" />
+          <span>5. Info Subdomain & Checklist Nonaktif</span>
         </button>
       </div>
 
@@ -1307,6 +1321,22 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 5: INFO SUBDOMAIN TERDAFTAR & CHECKLIST NONAKTIF */}
+      {activeTab === 'registered_subdomains' && (
+        <RegisteredSubdomainsManager
+          onOpenStoreSettings={(slug) => {
+            setActiveSlug(slug);
+            setActiveTab('store_identity');
+          }}
+          onNavigateToStore={(slug) => {
+            const url = typeof window !== 'undefined'
+              ? `${window.location.origin}${window.location.pathname}?store=${slug}`
+              : `https://${slug}.toko-online.online`;
+            window.location.href = url;
+          }}
+        />
       )}
     </div>
   );

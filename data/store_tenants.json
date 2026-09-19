@@ -44,15 +44,17 @@
       "enableBriVa": true,
       "enableBniVa": true,
       "enablePermataVa": true,
-      "updatedAt": "2026-09-19T22:36:01.122Z"
+      "updatedAt": "2026-09-19T23:28:07.002Z"
     },
     "createdAt": "2026-09-10T20:10:36.949Z",
-    "updatedAt": "2026-09-19T22:36:01.122Z"
+    "updatedAt": "2026-09-19T23:28:07.002Z",
+    "_clientHostname": "ais-dev-c6wain7aftyvb22tgrp6mj-81222317019.asia-east1.run.app",
+    "_isNewSubdomain": false
   },
   "berkah-mart": {
     "storeSlug": "berkah-mart",
     "storeName": "Berkah Mart",
-    "updatedAt": "2026-09-19T22:39:05.090Z",
+    "updatedAt": "2026-09-19T23:34:19.687Z",
     "dokuSettings": {
       "isEnabled": true,
       "environment": "sandbox",
@@ -67,6 +69,7 @@
       "enableBniVa": true,
       "enablePermataVa": true,
       "updatedAt": "2026-09-19T22:39:05.090Z"
-    }
+    },
+    "isActive": true
   }
 }

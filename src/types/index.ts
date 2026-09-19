@@ -734,5 +734,8 @@ export interface StoreTenantIdentity {
   dokuSettings: DokuSettings;
   createdAt?: string;
   updatedAt?: string;
+  isActive?: boolean; // Status aktif / nonaktif subdomain (default true)
+  disabledReason?: string; // Alasan penonaktifan subdomain
+  disabledAt?: string; // Waktu dinonaktifkan
 }
 
