@@ -498,7 +498,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
         p.soldCount || 0,
       ];
     });
-    exportCsv(`Laporan_Info_Barang_KuickMart_${new Date().toISOString().split('T')[0]}.csv`, [headers, ...rows]);
+    exportCsv(`Laporan_Info_Barang_toko-online.online_${new Date().toISOString().split('T')[0]}.csv`, [headers, ...rows]);
   };
 
   const handleExportSalesCsv = () => {
@@ -516,12 +516,12 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
       ord.deliveryFee,
       ord.total,
     ]);
-    exportCsv(`Laporan_Penjualan_KuickMart_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, [headers, ...rows]);
+    exportCsv(`Laporan_Penjualan_toko-online.online_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, [headers, ...rows]);
   };
 
   const handleExportProfitLossCsv = () => {
     const rows: (string | number)[][] = [
-      ['LAPORAN LABA RUGI KUICK MART PANGANDARAN'],
+      ['LAPORAN LABA RUGI TOKO-ONLINE.ONLINE PANGANDARAN'],
       ['Periode:', `${activeDateRange.start.toLocaleDateString('id-ID')} s/d ${activeDateRange.end.toLocaleDateString('id-ID')}`],
       [''],
       ['KOMPONEN', 'NOMINAL (RP)'],
@@ -545,7 +545,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
       ['Net Margin (%)', `${netProfitMarginPercent.toFixed(1)}%`],
       ['Status Keuangan', netProfit >= 0 ? 'SURPLUS (LABA BERSIH)' : 'DEFISIT (RUGI)'],
     ];
-    exportCsv(`Laporan_Laba_Rugi_KuickMart_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, rows);
+    exportCsv(`Laporan_Laba_Rugi_toko-online.online_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, rows);
   };
 
   const handlePrint = () => {
@@ -1247,7 +1247,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
                                 <div className="text-2xs text-stone-400">{ord.customerPhone || '-'}</div>
                               </td>
                               <td className="py-3 px-4 text-stone-700 font-medium">
-                                {ord.store?.name || 'Kuick Mart Pangandaran'}
+                                {ord.store?.name || 'toko-online.online Pangandaran'}
                               </td>
                               <td className="py-3 px-4 text-center">
                                 <span className="inline-block px-2 py-0.5 rounded text-2xs font-bold uppercase bg-stone-100 text-stone-800 border border-stone-200">
@@ -1506,7 +1506,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
             {/* Header Document */}
             <div className="text-center border-b border-stone-200 pb-5">
               <div className="text-xs font-black tracking-widest uppercase text-stone-500">
-                KUICK MART PANGANDARAN - LAPORAN KEUANGAN
+                TOKO-ONLINE.ONLINE PANGANDARAN - LAPORAN KEUANGAN
               </div>
               <h3 className="text-2xl font-black text-stone-900 mt-1">
                 Laporan Laba Rugi Komprehensif
@@ -1651,7 +1651,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
 
             {/* FOOTER AUDIT NOTES */}
             <div className="border-t border-stone-200 pt-4 text-2xs text-stone-400 text-center">
-              Laporan Keuangan Kuick Mart Express • Digenerate otomatis berdasarkan data transaksi POS & sistem inventori cloud.
+              Laporan Keuangan toko-online.online • Digenerate otomatis berdasarkan data transaksi POS & sistem inventori cloud.
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@ const IS_PRODUCTION = process.env.DOKU_IS_PRODUCTION === 'true';
 const VAPID_FILE = path.join(process.cwd(), 'data', 'vapid-config.json');
 let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
 let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@kuickmart.id';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@toko-online.online';
 
 // Initialize or load stable VAPID keypair
 if (!vapidPublicKey || !vapidPrivateKey) {
@@ -133,7 +133,7 @@ async function startServer() {
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
-      service: 'KuickMart API Server',
+      service: 'toko-online.online API Server',
       timestamp: new Date().toISOString(),
     });
   });
@@ -153,7 +153,7 @@ async function startServer() {
       environment: isProd ? 'production' : 'sandbox',
       baseUrl: isProd ? 'https://api.doku.com' : 'https://api-sandbox.doku.com',
       hasSecretKey,
-      merchantName: dokuSettings?.merchantName || tenant?.storeName || 'KuickMart Express',
+      merchantName: dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online',
       supportedMethods: ['bca_va', 'mandiri_va', 'bri_va', 'bni_va', 'permata_va', 'qris'],
     });
   });
@@ -315,7 +315,7 @@ async function startServer() {
       // Resolusi tenant aktif
       const slug = (storeSlug || 'default').toLowerCase();
       const tenant = tenantStoreMap[slug] || null;
-      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'KuickMart Express';
+      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online';
       const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
       const effectiveSecretKey = (customSecretKey && !customSecretKey.includes('•••'))
         ? customSecretKey
@@ -447,7 +447,7 @@ async function startServer() {
       // Resolusi tenant aktif
       const slug = (storeSlug || 'default').toLowerCase();
       const tenant = tenantStoreMap[slug] || null;
-      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'KuickMart Express';
+      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online';
       const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
       const city = (tenant?.city || 'JAKARTA').replace(/[^a-zA-Z0-9 ]/g, '').trim().toUpperCase().slice(0, 15);
 
@@ -493,7 +493,7 @@ async function startServer() {
     // Acknowledge notification back to DOKU
     res.status(200).json({
       status: 'OK',
-      message: 'Notification successfully processed by KuickMart',
+      message: 'Notification successfully processed by toko-online.online',
     });
   });
 
@@ -932,7 +932,7 @@ async function startServer() {
   // POST /api/push/subscribe: Register a new subscriber from PWA client
   app.post('/api/push/subscribe', (req, res) => {
     try {
-      const { subscription, customerName = 'Pelanggan KuickMart PWA', deviceType = 'Mobile PWA' } = req.body || {};
+      const { subscription, customerName = 'Pelanggan toko-online.online PWA', deviceType = 'Mobile PWA' } = req.body || {};
 
       if (!subscription || !subscription.endpoint || !subscription.keys) {
         return res.status(400).json({ error: 'Subscription data tidak valid (membutuhkan endpoint dan keys)' });
@@ -970,7 +970,7 @@ async function startServer() {
 
       res.json({
         success: true,
-        message: 'Perangkat berhasil terdaftar untuk menerima notifikasi promosi KuickMart!',
+        message: 'Perangkat berhasil terdaftar untuk menerima notifikasi promosi toko-online.online!',
         totalSubscribers: pushSubscribers.length,
       });
     } catch (err: any) {
@@ -1006,11 +1006,11 @@ async function startServer() {
   app.post('/api/push/broadcast', async (req, res) => {
     try {
       const {
-        title = '🎉 Promo Kilat KuickMart Express!',
-        body = 'Diskon spesial dan voucher hemat menanti Anda hari ini di KuickMart!',
+        title = '🎉 Promo Kilat toko-online.online!',
+        body = 'Diskon spesial dan voucher hemat menanti Anda hari ini di toko-online.online!',
         url = '/',
         image,
-        tag = 'kuickmart-promo',
+        tag = 'toko-online-promo',
       } = req.body || {};
 
       if (!title.trim() || !body.trim()) {
@@ -1096,7 +1096,7 @@ async function startServer() {
   // POST /api/push/test: Send instant test notification to specific subscriber or local
   app.post('/api/push/test', async (req, res) => {
     try {
-      const { subscription, title = '🔔 Uji Coba Notifikasi KuickMart', body = 'Halo! Notifikasi Web Push PWA Anda bekerja dengan sempurna!' } = req.body || {};
+      const { subscription, title = '🔔 Uji Coba Notifikasi toko-online.online', body = 'Halo! Notifikasi Web Push PWA Anda bekerja dengan sempurna!' } = req.body || {};
 
       if (!subscription || !subscription.endpoint || !subscription.keys) {
         return res.status(400).json({ error: 'Subscription data tidak valid' });
@@ -1147,7 +1147,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`KuickMart Full-Stack Server running on http://0.0.0.0:${PORT}`);
+    console.log(`toko-online.online Full-Stack Server running on http://0.0.0.0:${PORT}`);
     console.log(`DOKU Client ID configured: ${DOKU_CLIENT_ID}`);
   });
 }

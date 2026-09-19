@@ -1,5 +1,5 @@
 /**
- * KuickMart Express - Web Push Notification Utility (PWA & VAPID)
+ * toko-online.online - Web Push Notification Utility (PWA & VAPID)
  * Memungkinkan pendaftaran token perangkat pelanggan dan penerimaan pesan promosi
  */
 
@@ -46,7 +46,7 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
 }
 
 /**
- * Mendaftarkan perangkat pengguna ke Push Service & Backend KuickMart
+ * Mendaftarkan perangkat pengguna ke Push Service & Backend toko-online.online
  */
 export async function subscribeUserToPush(customerName?: string): Promise<{
   success: boolean;
@@ -99,7 +99,7 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
       });
     }
 
-    // 4. Kirim data token perangkat ke backend KuickMart
+    // 4. Kirim data token perangkat ke backend toko-online.online
     const userAgent = navigator.userAgent.toLowerCase();
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -117,11 +117,12 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
     const subJson = subscription.toJSON();
     const payload = {
       subscription: subJson,
-      customerName: customerName || 'Pelanggan KuickMart',
+      customerName: customerName || 'Pelanggan toko-online.online',
       deviceType,
     };
 
     try {
+      localStorage.setItem('toko_online_push_subscription', JSON.stringify(payload));
       localStorage.setItem('kuickmart_push_subscription', JSON.stringify(payload));
     } catch (e) {}
 
@@ -168,6 +169,11 @@ export async function unsubscribeUserFromPush(): Promise<{ success: boolean; err
 
     const endpoint = subscription.endpoint;
     await subscription.unsubscribe();
+
+    try {
+      localStorage.removeItem('toko_online_push_subscription');
+      localStorage.removeItem('kuickmart_push_subscription');
+    } catch (e) {}
 
     // Hapus dari database server
     await fetch('/api/push/unsubscribe', {

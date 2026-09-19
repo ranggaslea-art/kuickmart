@@ -289,8 +289,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Staff Users State (Persistent in localStorage & Supabase sync)
   const [internalStaffUsers, setInternalStaffUsers] = useState<StaffUser[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_staff_users', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_staff_users', currentSlug));
       const parsed = saved ? JSON.parse(saved) : (isNewStore ? [] : INITIAL_STAFF_USERS);
       return ensureStaffPermissions(parsed);
     } catch {
@@ -306,7 +306,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalStaffUsers(updatedUsers);
     try {
-      const key = getTenantStorageKey('kuickmart_staff_users', currentSlug);
+      const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
       localStorage.setItem(key, JSON.stringify(updatedUsers));
     } catch (e) {
       console.error(e);
@@ -316,8 +316,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for receipt configs if not provided via props
   const [internalReceiptConfigs, setInternalReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     try {
-      const key = getTenantStorageKey('nusamart_receipt_configs', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_receipt_configs', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('nusamart_receipt_configs', currentSlug));
       return saved ? JSON.parse(saved) : INITIAL_RECEIPT_CONFIGS;
     } catch {
       return INITIAL_RECEIPT_CONFIGS;
@@ -331,7 +331,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalReceiptConfigs(newConfigs);
     try {
-      const key = getTenantStorageKey('nusamart_receipt_configs', currentSlug);
+      const key = getTenantStorageKey('toko_online_receipt_configs', currentSlug);
       localStorage.setItem(key, JSON.stringify(newConfigs));
     } catch (e) {
       console.error(e);
@@ -341,8 +341,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for store promos if not provided via props
   const [internalStorePromos, setInternalStorePromos] = useState<StorePromoInfo[]>(() => {
     try {
-      const key = getTenantStorageKey('nusamart_store_promos', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_store_promos', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('nusamart_store_promos', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_STORE_PROMOS;
     } catch {
@@ -357,7 +357,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalStorePromos(newPromos);
     try {
-      const key = getTenantStorageKey('nusamart_store_promos', currentSlug);
+      const key = getTenantStorageKey('toko_online_store_promos', currentSlug);
       localStorage.setItem(key, JSON.stringify(newPromos));
     } catch (e) {
       console.error(e);
@@ -367,8 +367,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for couriers if not provided via props
   const [internalCouriers, setInternalCouriers] = useState<CourierInfo[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_couriers', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_couriers', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_couriers', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_COURIERS;
     } catch {
@@ -383,7 +383,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalCouriers(newCouriers);
     try {
-      const key = getTenantStorageKey('kuickmart_couriers', currentSlug);
+      const key = getTenantStorageKey('toko_online_couriers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCouriers));
     } catch (e) {
       console.error(e);
@@ -393,8 +393,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for brand config if not provided via props
   const [internalBrandConfig, setInternalBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_brand_config', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_brand_config', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_brand_config', currentSlug));
       return saved ? JSON.parse(saved) : INITIAL_BRAND_CONFIG;
     } catch {
       return INITIAL_BRAND_CONFIG;
@@ -408,7 +408,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalBrandConfig(newConfig);
     try {
-      const key = getTenantStorageKey('kuickmart_brand_config', currentSlug);
+      const key = getTenantStorageKey('toko_online_brand_config', currentSlug);
       localStorage.setItem(key, JSON.stringify(newConfig));
       window.dispatchEvent(new CustomEvent('brand_config_updated', { detail: newConfig }));
     } catch (e) {
@@ -419,8 +419,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Suppliers State
   const [internalSuppliers, setInternalSuppliers] = useState<Supplier[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_suppliers', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_suppliers', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_suppliers', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_SUPPLIERS;
     } catch {
@@ -432,7 +432,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdateSuppliers) onUpdateSuppliers(newSuppliers);
     setInternalSuppliers(newSuppliers);
     try {
-      const key = getTenantStorageKey('kuickmart_suppliers', currentSlug);
+      const key = getTenantStorageKey('toko_online_suppliers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newSuppliers));
     } catch (e) {
       console.error(e);
@@ -442,8 +442,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Purchases State
   const [internalPurchases, setInternalPurchases] = useState<PurchaseOrder[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_purchases', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_purchases', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_purchases', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_PURCHASES;
     } catch {
@@ -455,7 +455,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdatePurchases) onUpdatePurchases(newPurchases);
     setInternalPurchases(newPurchases);
     try {
-      const key = getTenantStorageKey('kuickmart_purchases', currentSlug);
+      const key = getTenantStorageKey('toko_online_purchases', currentSlug);
       localStorage.setItem(key, JSON.stringify(newPurchases));
     } catch (e) {
       console.error(e);
@@ -469,8 +469,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Customers State
   const [internalCustomers, setInternalCustomers] = useState<MemberProfile[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_customers', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_customers', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_customers', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_CUSTOMERS;
     } catch {
@@ -482,7 +482,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdateCustomers) onUpdateCustomers(newCustomers);
     setInternalCustomers(newCustomers);
     try {
-      const key = getTenantStorageKey('kuickmart_customers', currentSlug);
+      const key = getTenantStorageKey('toko_online_customers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCustomers));
     } catch (e) {
       console.error(e);
@@ -496,8 +496,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Points Config State
   const [internalPointsConfig, setInternalPointsConfig] = useState<PointsConfig>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_points_config', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_points_config', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_points_config', currentSlug));
       return saved ? JSON.parse(saved) : INITIAL_POINTS_CONFIG;
     } catch {
       return INITIAL_POINTS_CONFIG;
@@ -508,7 +508,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdatePointsConfig) onUpdatePointsConfig(newConfig);
     setInternalPointsConfig(newConfig);
     try {
-      const key = getTenantStorageKey('kuickmart_points_config', currentSlug);
+      const key = getTenantStorageKey('toko_online_points_config', currentSlug);
       localStorage.setItem(key, JSON.stringify(newConfig));
     } catch (e) {
       console.error(e);
@@ -518,8 +518,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Reward Items State
   const [internalRewardItems, setInternalRewardItems] = useState<RewardItem[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_reward_items', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_reward_items', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_reward_items', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_REWARD_ITEMS;
     } catch {
@@ -531,7 +531,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdateRewardItems) onUpdateRewardItems(newItems);
     setInternalRewardItems(newItems);
     try {
-      const key = getTenantStorageKey('kuickmart_reward_items', currentSlug);
+      const key = getTenantStorageKey('toko_online_reward_items', currentSlug);
       localStorage.setItem(key, JSON.stringify(newItems));
     } catch (e) {
       console.error(e);
@@ -541,8 +541,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Points Ledger State
   const [internalPointsLedger, setInternalPointsLedger] = useState<PointsLedgerEntry[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_points_ledger', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_points_ledger', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_points_ledger', currentSlug));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_POINTS_LEDGER;
     } catch {
@@ -554,7 +554,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdatePointsLedger) onUpdatePointsLedger(newLedger);
     setInternalPointsLedger(newLedger);
     try {
-      const key = getTenantStorageKey('kuickmart_points_ledger', currentSlug);
+      const key = getTenantStorageKey('toko_online_points_ledger', currentSlug);
       localStorage.setItem(key, JSON.stringify(newLedger));
     } catch (e) {
       console.error(e);
@@ -577,6 +577,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       setInputPin('');
       setLoginError(null);
       try {
+        localStorage.removeItem('toko_online_admin_user');
         localStorage.removeItem('kuickmart_admin_user');
       } catch (e) {
         console.error(e);
@@ -590,6 +591,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setInputPin('');
     setLoginError(null);
     try {
+      localStorage.removeItem('toko_online_admin_user');
       localStorage.removeItem('kuickmart_admin_user');
     } catch (e) {
       console.error(e);
@@ -1055,6 +1057,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     if (window.confirm('Reset semua akun staff dan password ke konfigurasi bawaan (Admin: admin123, SPV: spv2026, Kasir: 1234, Gudang: gudang2026)?')) {
       setStaffUsers(INITIAL_STAFF_USERS);
       try {
+        localStorage.setItem('toko_online_staff_users', JSON.stringify(INITIAL_STAFF_USERS));
         localStorage.setItem('kuickmart_staff_users', JSON.stringify(INITIAL_STAFF_USERS));
       } catch {}
       setLoginError(null);
@@ -1066,7 +1069,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   };
 
   const handleLogout = () => {
-    if (window.confirm('Yakin ingin keluar dari sesi Admin KuickMart dan kembali ke beranda toko belanja?')) {
+    if (window.confirm('Yakin ingin keluar dari sesi Admin toko-online.online dan kembali ke beranda toko belanja?')) {
       handleClose();
     }
   };
@@ -1088,7 +1091,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setFormStock(50);
     setFormBarcode(Math.floor(1000000000000 + Math.random() * 9000000000000).toString());
     setFormImage('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400');
-    setFormDescription('Produk segar dan berkualitas KuickMart Express');
+    setFormDescription('Produk segar dan berkualitas toko-online.online');
     setFormTags('Best Seller');
     setFormConversions([]);
     setIsAddingProduct(true);
@@ -1410,7 +1413,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // STORE MANAGEMENT ACTIONS
   const handleOpenAddStore = () => {
     setEditingStore(null);
-    setStoreName('KuickMart Express - Cabang Baru');
+    setStoreName('toko-online.online - Cabang Baru');
     setStoreCode(`KM-${Math.floor(100 + Math.random() * 900)}`);
     setStoreAddress('Jl. Raya Utama No. 10');
     setStoreCity('');
@@ -1534,7 +1537,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           const price = parseInt(parts[1].replace(/[^0-9]/g, ''), 10) || 15000;
           const stock = parts[2] ? parseInt(parts[2], 10) || 30 : 30;
           const category = parts[3] || 'sembako-dapur';
-          const brand = parts[4] || 'KuickMart';
+          const brand = parts[4] || 'toko-online.online';
 
           newItems.push({
             id: `bulk_${Date.now()}_${index}`,
@@ -1549,7 +1552,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             soldCount: 0,
             barcode: Math.floor(8990000000000 + Math.random() * 999999999).toString(),
             image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400',
-            description: `Produk resmi ${name} berkualitas tinggi di minimarket KuickMart Express.`,
+            description: `Produk resmi ${name} berkualitas tinggi di minimarket toko-online.online.`,
             tags: ['Best Seller'],
           });
         }
@@ -1745,14 +1748,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // VOUCHER & DISCOUNT HANDLERS
   const handleOpenAddVoucher = () => {
     setEditingVoucher(null);
-    setVoucherCode(`KUICK${Math.floor(100 + Math.random() * 900)}`);
-    setVoucherTitle('Diskon Spesial KuickMart');
+    setVoucherCode(`TOKO${Math.floor(100 + Math.random() * 900)}`);
+    setVoucherTitle('Diskon Spesial toko-online.online');
     setVoucherType('percentage');
     setVoucherDiscountAmount(20);
     setVoucherMinSpend(50000);
     setVoucherMaxDiscount(25000);
     setVoucherValidUntil('31 Des 2026');
-    setVoucherDescription('Potongan 20% s.d. Rp 25.000 untuk belanja di KuickMart Express');
+    setVoucherDescription('Potongan 20% s.d. Rp 25.000 untuk belanja di toko-online.online');
     setIsAddingVoucher(true);
   };
 
@@ -1879,7 +1882,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-xl text-white">Login Admin & Kasir</h3>
               <span className="bg-amber-400/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-400/30">
-                KuickMart POS
+                toko-online.online POS
               </span>
             </div>
             <p className="text-xs text-stone-300 mt-1">
@@ -2174,7 +2177,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <h3 className="font-extrabold text-sm sm:text-lg text-white tracking-tight truncate">
-                  Panel Admin & Kasir KuickMart
+                  Panel Admin & Kasir toko-online.online
                 </h3>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
@@ -3447,7 +3450,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           required
                           value={storeName}
                           onChange={e => setStoreName(e.target.value)}
-                          placeholder="Contoh: KuickMart Express - Sudirman Thamrin"
+                          placeholder="Contoh: toko-online.online - Sudirman Thamrin"
                           className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl bg-white font-semibold text-stone-900 focus:ring-2 focus:ring-purple-200"
                         />
                       </div>
@@ -3647,7 +3650,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     <div>
                       <h4 className="font-extrabold text-sm text-purple-950 flex items-center gap-1.5">
                         <Building2 className="w-4 h-4 text-purple-700" />
-                        <span>Manajemen Cabang Minimarket KuickMart</span>
+                        <span>Manajemen Cabang Minimarket toko-online.online</span>
                       </h4>
                       <p className="text-xs text-purple-800 mt-0.5">
                         Kelola nama toko, alamat, kontak telepon, jam operasional, dan tarif kurir per cabang.
@@ -3944,7 +3947,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                             setVoucherDiscountAmount(20);
                             setVoucherMinSpend(50000);
                             setVoucherMaxDiscount(25000);
-                            setVoucherDescription('Diskon 20% spesial gajian hemat KuickMart');
+                            setVoucherDescription('Diskon 20% spesial gajian hemat toko-online.online');
                           }}
                           className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold"
                         >
@@ -3974,7 +3977,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                             setVoucherDiscountAmount(8000);
                             setVoucherMinSpend(30000);
                             setVoucherMaxDiscount(8000);
-                            setVoucherDescription('Gratis ongkir kilat KuickMart Express hingga Rp 8.000');
+                            setVoucherDescription('Gratis ongkir kilat toko-online.online hingga Rp 8.000');
                           }}
                           className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-lg text-xs font-semibold"
                         >
@@ -4080,7 +4083,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         rows={2}
                         value={voucherDescription}
                         onChange={e => setVoucherDescription(e.target.value)}
-                        placeholder="Contoh: Berlaku untuk semua produk di seluruh gerai KuickMart Express"
+                        placeholder="Contoh: Berlaku untuk semua produk di seluruh gerai toko-online.online"
                         className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium"
                       />
                     </div>
@@ -4283,7 +4286,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     <span>Manajemen Akun Pengguna & Hak Akses Staff</span>
                   </h4>
                   <p className="text-[11px] text-stone-500">
-                    Kelola akun login Store Manager (Admin), Supervisor, Kasir Toko, dan Staff Gudang KuickMart Express.
+                    Kelola akun login Store Manager (Admin), Supervisor, Kasir Toko, dan Staff Gudang toko-online.online.
                   </p>
                 </div>
 
@@ -4471,7 +4474,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         type="email"
                         value={userEmail}
                         onChange={e => setUserEmail(e.target.value)}
-                        placeholder="staff@kuickmart.id"
+                        placeholder="staff@toko-online.online"
                         className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium text-stone-900"
                       />
                     </div>
@@ -4978,7 +4981,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         <div className="p-4 border-t border-stone-100 bg-stone-50 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
           <div className="text-stone-500 flex items-center gap-1.5 flex-wrap">
             <Settings className="w-3.5 h-3.5 text-stone-400" />
-            <span>KuickMart POS & Inventory Management v2.5</span>
+            <span>toko-online.online POS & Inventory Management v2.5</span>
             {isAnySubFormOpen && (
               <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                 <span>⚠️</span>

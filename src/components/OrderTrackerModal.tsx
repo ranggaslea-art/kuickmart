@@ -136,7 +136,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       id: 'default_rcp',
       profileName: 'Struk Standar',
       headerBrand: 'NUSA MART EXPRESS',
-      storeName: order?.store.name || 'KuickMart Express - Sudirman Thamrin',
+      storeName: order?.store.name || 'toko-online.online - Sudirman Thamrin',
       address: order?.store.address || 'Jl. Jendral Sudirman No. 18, Menteng',
       phone: order?.store.phone || '021-5551234',
       footerMessage1: 'Struk ini adalah bukti pembayaran sah dari NusaMart Express.',

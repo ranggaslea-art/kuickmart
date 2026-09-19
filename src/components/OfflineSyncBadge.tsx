@@ -149,7 +149,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                     Status Koneksi & Sinkronisasi Cloud
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Sistem KuickMart Offline-First & Supabase Sync
+                    Sistem toko-online.online Offline-First & Supabase Sync
                   </p>
                 </div>
               </div>

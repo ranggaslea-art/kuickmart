@@ -8,7 +8,7 @@ export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
   environment: 'sandbox',
   clientId: 'BRN-0241-1788726490929',
   secretKey: '',
-  merchantName: 'KuickMart Express',
+  merchantName: 'toko-online.online',
   notificationUrl: '',
   enableQris: true,
   enableBcaVa: true,
@@ -24,8 +24,8 @@ export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
  * Contoh: "berkah-mart-jaya" -> "Berkah Mart Jaya"
  */
 export function formatSlugToStoreName(slug: string): string {
-  if (!slug || slug.trim() === '' || slug === 'default' || slug === 'kuickmart') {
-    return 'KuickMart Express';
+  if (!slug || slug.trim() === '' || slug === 'default' || slug === 'kuickmart' || slug === 'toko-online' || slug === 'toko-online.online') {
+    return 'toko-online.online';
   }
   return slug
     .replace(/[^a-zA-Z0-9\s-_]/g, '')
@@ -51,7 +51,7 @@ export function getStoreSlugFromUrl(): string {
     return paramStore.trim().toLowerCase();
   }
 
-  // 2. Cek Subdomain dari hostname (misal: tokoberkah.kuickmart.id atau berkah-mart.domainanda.com)
+  // 2. Cek Subdomain dari hostname (misal: tokoberkah.toko-online.online atau berkah-mart.domainanda.com)
   const hostname = window.location.hostname;
   const isLocalOrPreview =
     hostname.includes('localhost') ||
@@ -77,16 +77,16 @@ export function getStoreSlugFromUrl(): string {
 }
 
 /**
- * Memeriksa apakah toko saat ini adalah toko default/utama (KuickMart)
+ * Memeriksa apakah toko saat ini adalah toko default/utama (toko-online.online)
  */
 export function isDefaultStore(slug?: string): boolean {
   const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
-  return effectiveSlug === 'default' || effectiveSlug === 'kuickmart' || effectiveSlug === '';
+  return effectiveSlug === 'default' || effectiveSlug === 'kuickmart' || effectiveSlug === 'toko-online' || effectiveSlug === 'toko-online.online' || effectiveSlug === '';
 }
 
 /**
  * Menghasilkan kunci localStorage yang terisolasi per tenant/toko.
- * - Toko default tetap menggunakan kunci asli agar data lama KuickMart tidak hilang.
+ * - Toko default tetap menggunakan kunci asli agar data lama toko-online.online tidak hilang.
  * - Toko baru (seperti Toko Alda) otomatis menggunakan kunci unik `${baseKey}__tenant_${slug}`.
  */
 export function getTenantStorageKey(baseKey: string, slug?: string): string {
@@ -143,8 +143,8 @@ export function getTenantStore(slug?: string, tenantConfig?: StoreTenantIdentity
   if (isDefaultStore(effectiveSlug)) {
     return {
       id: 'store_1',
-      name: 'KuickMart Express',
-      code: 'KM-EXP-01',
+      name: 'toko-online.online',
+      code: 'TOKO-ONLINE',
       address: 'Jl. Jendral Sudirman No. 18, Menteng',
       city: 'Jakarta Pusat',
       distanceKm: 0.8,
@@ -190,14 +190,14 @@ export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
     ? (words[0][0] + words[1][0]).toUpperCase() 
     : storeName.slice(0, 2).toUpperCase();
 
-  const isDefaultKuickmart = effectiveSlug === 'default' || effectiveSlug === 'kuickmart';
+  const isDefault = isDefaultStore(effectiveSlug);
 
   return {
     storeId: effectiveSlug,
     storeSlug: effectiveSlug,
-    storeName: isDefaultKuickmart ? 'KuickMart Express' : storeName,
-    tagline: isDefaultKuickmart 
-      ? 'Minimarket Digital Super Cepat' 
+    storeName: isDefault ? 'toko-online.online' : storeName,
+    tagline: isDefault 
+      ? 'Pusat Belanja Online Hemat, Cepat, dan Terpercaya' 
       : `Pusat Belanja Hemat & Lengkap ${storeName}`,
     ownerName: 'Pengelola Toko',
     phone: '0812-3456-7890',
@@ -208,7 +208,7 @@ export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
     primaryColor: '#E51A24',
     dokuSettings: {
       ...DEFAULT_DOKU_SETTINGS,
-      merchantName: isDefaultKuickmart ? 'KuickMart Express' : storeName,
+      merchantName: isDefault ? 'toko-online.online' : storeName,
       notificationUrl: typeof window !== 'undefined' ? `${window.location.origin}/api/doku/notification` : '',
     },
     createdAt: new Date().toISOString(),

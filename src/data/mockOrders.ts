@@ -20,7 +20,7 @@ export function generateSampleOrders(): Order[] {
   const stores = INITIAL_STORES;
   const storePangandaran = stores[0] || {
     id: 'store_pangandaran',
-    name: 'Kuick Mart Pangandaran Central',
+    name: 'toko-online.online Pangandaran Central',
     address: 'Jl. Merdeka No. 45, Pangandaran',
     phone: '0812-3456-7890',
     isActive: true,

@@ -188,7 +188,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       profileName: 'Struk Dot Matrix Epson TM-U220 (70mm)',
       headerBrand: 'NUSA MART EXPRESS',
       subHeader: 'MINIMARKET & KASIR POINT OF SALE',
-      storeName: currentStore?.name || 'KuickMart Express',
+      storeName: currentStore?.name || 'toko-online.online',
       address: currentStore?.address || 'Jl. Jendral Sudirman No. 18, Menteng',
       phone: currentStore?.phone || '021-5551234',
       taxIdOrNpwp: 'NPWP: 01.345.678.9-012.000',

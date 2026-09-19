@@ -1,5 +1,5 @@
 export const SUPABASE_SQL_SCHEMA = `-- ==========================================================
--- KUICKMART / E-GROCERY SUPABASE DATABASE SCHEMA
+-- TOKO-ONLINE.ONLINE / E-GROCERY SUPABASE DATABASE SCHEMA
 -- Compatible with Klik Indomaret & Alfagift Architecture
 -- ==========================================================
 

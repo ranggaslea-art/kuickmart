@@ -93,8 +93,8 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
   // History state
   const [historyRecords, setHistoryRecords] = useState<StockOpnameRecord[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_stock_opnames', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_stock_opnames', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_stock_opnames', currentSlug));
       if (saved) return JSON.parse(saved);
     } catch {
       // fallback
@@ -113,7 +113,7 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
     setHistoryRecords(newRecords);
     if (onUpdateStockOpnames) onUpdateStockOpnames(newRecords);
     try {
-      const key = getTenantStorageKey('kuickmart_stock_opnames', currentSlug);
+      const key = getTenantStorageKey('toko_online_stock_opnames', currentSlug);
       localStorage.setItem(key, JSON.stringify(newRecords));
     } catch (e) {
       console.error(e);

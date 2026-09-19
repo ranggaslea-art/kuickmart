@@ -38,6 +38,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   private handleResetSession = () => {
     try {
+      localStorage.removeItem('toko_online_admin_user');
       localStorage.removeItem('kuickmart_admin_user');
       localStorage.removeItem('pos_current_user');
     } catch (e) {

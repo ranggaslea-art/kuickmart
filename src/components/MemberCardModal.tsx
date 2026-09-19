@@ -68,11 +68,11 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center font-black text-sm">
-                  KM
+                  TO
                 </div>
                 <div className="leading-tight">
-                  <div className="font-extrabold text-sm tracking-tight">KUICK MEMBER</div>
-                  <div className="text-[10px] text-amber-200 font-medium">Prioritas Minimarket Digital</div>
+                  <div className="font-extrabold text-sm tracking-tight">MEMBER TOKO-ONLINE</div>
+                  <div className="text-[10px] text-amber-200 font-medium">Prioritas Toko Online</div>
                 </div>
               </div>
               <span className="text-xs font-black uppercase tracking-widest bg-white/20 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/30">

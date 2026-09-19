@@ -57,8 +57,8 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
   // Persistent Mutations State
   const [mutations, setMutations] = useState<StockMutation[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_stock_mutations', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_stock_mutations', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_stock_mutations', currentSlug));
       if (saved) return JSON.parse(saved);
     } catch {}
     if (propMutations && propMutations.length > 0) return propMutations;
@@ -69,7 +69,7 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
     setMutations(newMutations);
     if (onUpdateStockMutations) onUpdateStockMutations(newMutations);
     try {
-      const key = getTenantStorageKey('kuickmart_stock_mutations', currentSlug);
+      const key = getTenantStorageKey('toko_online_stock_mutations', currentSlug);
       localStorage.setItem(key, JSON.stringify(newMutations));
     } catch (e) {
       console.error(e);

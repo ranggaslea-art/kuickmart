@@ -35,7 +35,7 @@ export const PushNotificationPrompt: React.FC = () => {
         setIsVisible(false);
       } else {
         // Cek apakah baru saja ditutup oleh pengguna
-        const dismissed = sessionStorage.getItem('kuickmart_push_prompt_dismissed');
+        const dismissed = sessionStorage.getItem('toko_online_push_prompt_dismissed') || sessionStorage.getItem('kuickmart_push_prompt_dismissed');
         if (!dismissed) {
           // Tampilkan sedikit jeda (2 detik) agar tidak mengagetkan pengunjung baru
           const timer = setTimeout(() => {
@@ -53,7 +53,7 @@ export const PushNotificationPrompt: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const result = await subscribeUserToPush('Pelanggan KuickMart Store');
+      const result = await subscribeUserToPush('Pelanggan toko-online.online Store');
       if (result.success) {
         setIsSubscribed(true);
         setIsVisible(false);
@@ -74,7 +74,7 @@ export const PushNotificationPrompt: React.FC = () => {
   const handleDismiss = () => {
     setIsVisible(false);
     try {
-      sessionStorage.setItem('kuickmart_push_prompt_dismissed', 'true');
+      sessionStorage.setItem('toko_online_push_prompt_dismissed', 'true');
     } catch (e) {}
   };
 
@@ -96,7 +96,7 @@ export const PushNotificationPrompt: React.FC = () => {
                 <span>INFO PROMO KILAT</span>
               </div>
               <h5 className="text-xs font-bold text-white mt-0.5">
-                Nyalakan Notifikasi Promo KuickMart?
+                Nyalakan Notifikasi Promo toko-online.online?
               </h5>
               <p className="text-[11px] text-stone-300 mt-1 leading-snug">
                 Dapatkan info flash sale, diskon kilat, dan voucher gratis ongkir langsung di layar HP Anda.
@@ -146,7 +146,7 @@ export const PushNotificationPrompt: React.FC = () => {
         <div className="fixed bottom-6 right-6 z-50 animate-bounce">
           <div className="bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold border border-emerald-500">
             <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-            <span>Notifikasi promo KuickMart berhasil aktif di perangkat Anda! 🎁</span>
+            <span>Notifikasi promo toko-online.online berhasil aktif di perangkat Anda! 🎁</span>
           </div>
         </div>
       )}

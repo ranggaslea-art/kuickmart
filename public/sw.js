@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kuickmart-cache-v1';
+const CACHE_NAME = 'toko-online-cache-v1';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -70,8 +70,8 @@ self.addEventListener('fetch', (event) => {
 // PWA Push Notification Event Listener
 self.addEventListener('push', (event) => {
   let notificationData = {
-    title: 'KuickMart Promo Spesial! 🎉',
-    body: 'Ada diskon dan promo menarik baru saja hadir di KuickMart!',
+    title: 'toko-online.online Promo Spesial! 🎉',
+    body: 'Ada diskon dan promo menarik baru saja hadir di toko-online.online!',
     url: '/',
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
@@ -94,7 +94,7 @@ self.addEventListener('push', (event) => {
     badge: notificationData.badge || '/pwa-192x192.png',
     image: notificationData.image,
     vibrate: [200, 100, 200, 100, 250],
-    tag: notificationData.tag || 'kuickmart-promo',
+    tag: notificationData.tag || 'toko-online-promo',
     renotify: true,
     data: {
       url: notificationData.url || '/',

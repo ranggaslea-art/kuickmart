@@ -54,7 +54,7 @@ export const SYSTEM_MODULES: SystemModuleDefinition[] = [
     key: 'brand_info',
     name: 'Info Brand & Footer',
     category: 'Pengaturan Toko',
-    description: 'Pengaturan identitas brand KuickMart Express, tagline, kontak CS, dan link footer aplikasi.',
+    description: 'Pengaturan identitas brand toko-online.online, tagline, kontak CS, dan link footer aplikasi.',
     iconName: 'Palette',
     adminNote: 'Pengaturan global toko, dikhususkan untuk Admin.',
   },

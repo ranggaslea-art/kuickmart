@@ -1,5 +1,5 @@
 /**
- * Image helper utilities for KuickMart Express:
+ * Image helper utilities for toko-online.online:
  * - Smart URL normalization (Google Drive, Dropbox, OneDrive, Postimg, etc.)
  * - Contextual fallback images based on product name/category
  * - File upload to compressed Base64 image

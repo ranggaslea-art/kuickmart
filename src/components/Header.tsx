@@ -105,15 +105,15 @@ export const Header: React.FC<HeaderProps> = ({
   const activeAnnouncement = storePromos?.find(p => p.type === 'announcement_bar' && p.isActive);
 
   // Resolved brand identity
-  const logoText = brandConfig?.brandLogoText || 'KM';
+  const logoText = brandConfig?.brandLogoText || 'TO';
   const logoImageUrl = brandConfig?.brandLogoImageUrl || '/logo.png';
   const logoGradient = brandConfig?.brandLogoBgGradient || 'from-red-600 via-red-500 to-black';
-  const namePart1 = brandConfig?.brandNamePart1 || 'KUICK';
-  const namePart2 = brandConfig?.brandNamePart2 || 'MART';
-  const badgeText = brandConfig?.brandBadgeText || 'EXPRESS';
+  const namePart1 = brandConfig?.brandNamePart1 || 'TOKO';
+  const namePart2 = brandConfig?.brandNamePart2 || 'ONLINE';
+  const badgeText = brandConfig?.brandBadgeText || '.ONLINE';
   const badgeColor = brandConfig?.brandBadgeColor || 'bg-red-600';
   const showBadge = brandConfig ? brandConfig.showBrandBadge : true;
-  const tagline = brandConfig?.tagline || 'Minimarket Digital Super Cepat';
+  const tagline = brandConfig?.tagline || 'Platform Toko Online Terpercaya & Super Cepat';
   const showTagline = brandConfig ? brandConfig.showTagline : true;
   const operatingHoursText = brandConfig?.showOperatingHoursBadge && brandConfig.operatingHoursBadgeText 
     ? brandConfig.operatingHoursBadgeText 

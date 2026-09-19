@@ -65,6 +65,7 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
         onUpdateRef.current(next);
       }
       try {
+        localStorage.setItem('toko_online_brand_config', JSON.stringify(next));
         localStorage.setItem('kuickmart_brand_config', JSON.stringify(next));
         window.dispatchEvent(new CustomEvent('brand_config_updated', { detail: next }));
       } catch (e) {
@@ -462,10 +463,10 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
                 <div>
                   <div className="flex items-center gap-1 leading-none">
                     <span className="font-extrabold text-lg text-blue-900 tracking-tight">
-                      {formData.brandNamePart1 || 'KUICK'}
+                      {formData.brandNamePart1 || 'TOKO'}
                     </span>
                     <span className="font-black text-lg text-amber-500 tracking-tight">
-                      {formData.brandNamePart2 || 'MART'}
+                      {formData.brandNamePart2 || 'ONLINE'}
                     </span>
                     {formData.showBrandBadge && formData.brandBadgeText && (
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${formData.brandBadgeColor} text-white px-1.5 py-0.5 rounded ml-1`}>
@@ -575,7 +576,7 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
                     type="text"
                     value={formData.brandNamePart1}
                     onChange={e => setFormData({ ...formData, brandNamePart1: e.target.value })}
-                    placeholder="KUICK"
+                    placeholder="TOKO"
                     className="w-full text-xs font-bold px-3 py-2 border border-stone-300 rounded-xl"
                   />
                 </div>
@@ -705,7 +706,7 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
                 type="text"
                 value={formData.footerBrandName}
                 onChange={e => setFormData({ ...formData, footerBrandName: e.target.value })}
-                placeholder="KUICK MART EXPRESS"
+                placeholder="TOKO-ONLINE.ONLINE"
                 className="w-full text-xs font-bold px-3.5 py-2.5 border border-stone-300 rounded-xl"
               />
             </div>
@@ -1168,7 +1169,7 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
               type="text"
               value={formData.copyrightText}
               onChange={e => setFormData({ ...formData, copyrightText: e.target.value })}
-              placeholder="© 2026 KuickMart Express. All rights reserved."
+              placeholder="© 2026 toko-online.online. All rights reserved."
               className="w-full text-xs font-medium px-3.5 py-2.5 border border-stone-300 rounded-xl"
             />
           </div>

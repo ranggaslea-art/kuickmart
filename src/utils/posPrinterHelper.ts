@@ -52,7 +52,7 @@ export function generateRawPosReceiptText(
     lines.push(centerText(config.subHeader.toUpperCase(), cols));
   }
 
-  const storeName = config.storeName || order.pickupStoreName || order.store?.name || 'KuickMart Express';
+  const storeName = config.storeName || order.pickupStoreName || order.store?.name || 'toko-online.online';
   lines.push(centerText(storeName, cols));
 
   const address = cleanReceiptText(config.address || '');
@@ -216,7 +216,7 @@ export function generateDotMatrixReceiptHtml(
 ): string {
   const rawText = generateRawPosReceiptText(order, config, cashierName, paymentDetails);
   const brand = config.headerBrand || 'NUSA MART EXPRESS';
-  const store = config.storeName || 'KuickMart Express';
+  const store = config.storeName || 'toko-online.online';
 
   return `<!DOCTYPE html>
 <html lang="id">

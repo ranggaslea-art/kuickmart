@@ -264,17 +264,17 @@ export const INITIAL_REWARD_ITEMS: RewardItem[] = [
   },
   {
     id: 'rew_005',
-    name: 'Tumbler Eksklusif KuickMart 500ml',
+    name: 'Tumbler Eksklusif toko-online.online 500ml',
     category: 'merchandise',
     pointsRequired: 4500,
     stock: 15,
-    description: 'Tumbler stainless steel tahan panas & dingin dengan logo elegan KuickMart.',
+    description: 'Tumbler stainless steel tahan panas & dingin dengan logo elegan toko-online.online.',
     voucherValue: 50000,
     isActive: true,
   },
   {
     id: 'rew_006',
-    name: 'Payung Lipat UV Otomatis KuickMart',
+    name: 'Payung Lipat UV Otomatis toko-online.online',
     category: 'merchandise',
     pointsRequired: 3800,
     stock: 12,
@@ -342,7 +342,7 @@ export const INITIAL_POINTS_LEDGER: PointsLedgerEntry[] = [
     type: 'bonus',
     points: 500,
     balanceAfter: 500,
-    description: 'Bonus Poin Sambutan Pendaftaran Member Baru KuickMart',
+    description: 'Bonus Poin Sambutan Pendaftaran Member Baru toko-online.online',
     referenceNo: 'WELCOME-BONUS',
   }
 ];
@@ -355,7 +355,7 @@ export const INITIAL_PURCHASES: PurchaseOrder[] = [
     supplierId: 'sup_001',
     supplierName: 'PT Indofood Sukses Makmur Tbk',
     storeId: INITIAL_STORES[0]?.id || 'store_pangandaran',
-    storeName: INITIAL_STORES[0]?.name || 'KuickMart Pusat Pangandaran',
+    storeName: INITIAL_STORES[0]?.name || 'toko-online.online Pusat Pangandaran',
     orderDate: '2026-09-04',
     receivedDate: '2026-09-05',
     items: [
@@ -403,7 +403,7 @@ export const INITIAL_PURCHASES: PurchaseOrder[] = [
     supplierId: 'sup_003',
     supplierName: 'CV Beras Nusantara Makmur',
     storeId: INITIAL_STORES[0]?.id || 'store_pangandaran',
-    storeName: INITIAL_STORES[0]?.name || 'KuickMart Pusat Pangandaran',
+    storeName: INITIAL_STORES[0]?.name || 'toko-online.online Pusat Pangandaran',
     orderDate: '2026-09-06',
     receivedDate: '2026-09-07',
     items: [

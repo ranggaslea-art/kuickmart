@@ -87,7 +87,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     setStoreId(activeStore ? activeStore.id : 'all');
     setHeaderBrand('NUSA MART EXPRESS');
     setSubHeader('Minimarket & Grosir Kebutuhan Sehari-Hari');
-    setStoreName(activeStore ? activeStore.name : 'KuickMart Express - Cabang Baru');
+    setStoreName(activeStore ? activeStore.name : 'toko-online.online - Cabang Baru');
     setAddress(activeStore ? cleanReceiptText(activeStore.address) : 'Jl. Sudirman No. 10');
     setCity(activeStore ? cleanReceiptText(activeStore.city) : '');
     setPhone(activeStore ? activeStore.phone : '021-5551234');
@@ -303,7 +303,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         storeId,
         headerBrand: headerBrand || 'NUSA MART EXPRESS',
         subHeader,
-        storeName: storeName || 'KuickMart Express - Sudirman Thamrin',
+        storeName: storeName || 'toko-online.online - Sudirman Thamrin',
         address: address || 'Jl. Jendral Sudirman No. 18, Menteng',
         city,
         phone: phone || '021-5551234',
@@ -322,7 +322,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         id: 'fallback',
         profileName: 'Struk Default',
         headerBrand: 'NUSA MART EXPRESS',
-        storeName: 'KuickMart Express',
+        storeName: 'toko-online.online',
         address: 'Jl. Jendral Sudirman No. 18',
         phone: '021-5551234',
         footerMessage1: 'Struk ini adalah bukti pembayaran sah dari NusaMart Express.',
@@ -519,7 +519,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                     required
                     value={storeName}
                     onChange={e => setStoreName(e.target.value)}
-                    placeholder="Contoh: KuickMart Express - Sudirman Thamrin"
+                    placeholder="Contoh: toko-online.online - Sudirman Thamrin"
                     className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-stone-50/50 font-semibold text-stone-900 focus:bg-white focus:ring-2 focus:ring-blue-200"
                   />
                 </div>
@@ -1058,7 +1058,7 @@ export const ReceiptVisualCard: React.FC<ReceiptVisualCardProps> = ({ receipt, i
 
         {/* Store Name */}
         <p className="text-xs text-stone-700 font-bold">
-          {receipt.storeName || 'KuickMart Express - Sudirman Thamrin'}
+          {receipt.storeName || 'toko-online.online - Sudirman Thamrin'}
         </p>
 
         {/* Address and Phone */}

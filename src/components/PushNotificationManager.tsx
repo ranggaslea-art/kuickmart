@@ -31,7 +31,7 @@ interface PushNotificationManagerProps {
 
 export const PushNotificationManager: React.FC<PushNotificationManagerProps> = ({ canEdit }) => {
   // State form broadcast
-  const [title, setTitle] = useState('🎉 Flash Sale Kilat KuickMart Express!');
+  const [title, setTitle] = useState('🎉 Flash Sale Kilat toko-online.online!');
   const [body, setBody] = useState('Dapatkan diskon hingga 50% untuk aneka snack, buah segar, dan minuman dingin sore ini!');
   const [url, setUrl] = useState('/');
   const [image, setImage] = useState('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600');
@@ -88,7 +88,7 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
 
   const handleSubscribeLocalDevice = async () => {
     try {
-      const result = await subscribeUserToPush('Admin KuickMart (Device Uji Coba)');
+      const result = await subscribeUserToPush('Admin toko-online.online (Device Uji Coba)');
       if (result.success) {
         setIsSubscribedLocally(true);
         setPermission('granted');
@@ -267,7 +267,7 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
               <span>Siaran Notifikasi Promosi Pelanggan</span>
             </h3>
             <p className="text-xs text-blue-100 leading-relaxed">
-              Kirim pengumuman diskon, flash sale, dan voucher belanja langsung ke layar HP pelanggan yang telah menginstal atau mengizinkan notifikasi PWA KuickMart.
+              Kirim pengumuman diskon, flash sale, dan voucher belanja langsung ke layar HP pelanggan yang telah menginstal atau mengizinkan notifikasi PWA toko-online.online.
             </p>
           </div>
 
@@ -576,9 +576,9 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
               <div className="flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-2 font-bold text-stone-200">
                   <div className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-[10px]">
-                    K
+                    T
                   </div>
-                  <span>KuickMart Express</span>
+                  <span>toko-online.online</span>
                   <span className="text-[9px] text-stone-400 font-normal">• Baru saja</span>
                 </div>
                 <BellRing className="w-3.5 h-3.5 text-blue-400 animate-bounce" />

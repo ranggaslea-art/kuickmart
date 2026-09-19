@@ -121,12 +121,12 @@ const DEFAULT_SAMPLE_ORDER: Order = {
   paymentStatus: 'paid',
   status: 'completed',
   createdAt: new Date().toISOString(),
-  pickupStoreName: 'KuickMart Express - Pusat',
+  pickupStoreName: 'toko-online.online - Pusat',
   pointsUsed: 0,
   pointsEarned: 1000,
   store: {
     id: 'str-01',
-    name: 'KuickMart Express - Pusat',
+    name: 'toko-online.online - Pusat',
     code: 'KM-01',
     address: 'Jl. Jendral Sudirman No. 18',
     city: 'Jakarta',
@@ -170,7 +170,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
       profileName: 'Struk Dot Matrix Epson TM-U220 (70mm)',
       headerBrand: 'NUSA MART EXPRESS',
       subHeader: 'MINIMARKET & KASIR POINT OF SALE',
-      storeName: 'KuickMart Express - Kasir Pusat',
+      storeName: 'toko-online.online - Kasir Pusat',
       address: 'Jl. Jendral Sudirman No. 18, Menteng',
       phone: '021-5551234',
       taxIdOrNpwp: 'NPWP: 01.345.678.9-012.000',
@@ -673,7 +673,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                       type="text"
                       value={config.storeName}
                       onChange={e => setConfig({ ...config, storeName: e.target.value })}
-                      placeholder="KuickMart Express - Kasir Pusat"
+                      placeholder="toko-online.online - Kasir Pusat"
                       className="w-full px-3 py-2 border border-stone-300 rounded-xl font-bold text-stone-900 bg-stone-50/50 focus:bg-white"
                     />
                   </div>
@@ -1085,7 +1085,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                       </div>
                     )}
                     <div className="text-[11px] font-bold">
-                      {config.storeName || 'KuickMart Express'}
+                      {config.storeName || 'toko-online.online'}
                     </div>
                     <div className="text-[10px] text-stone-700 leading-tight">
                       {cleanReceiptText(config.address || '')}

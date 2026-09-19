@@ -26,8 +26,8 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
 }) => {
   const [todayVisitorNumber, setTodayVisitorNumber] = useState<number>(() => {
     try {
-      const savedNum = localStorage.getItem('kuickmart_today_visitor_num');
-      const savedDate = localStorage.getItem('kuickmart_today_date');
+      const savedNum = localStorage.getItem('toko_online_today_visitor_num') || localStorage.getItem('kuickmart_today_visitor_num');
+      const savedDate = localStorage.getItem('toko_online_today_date') || localStorage.getItem('kuickmart_today_date');
       const todayStr = new Date().toISOString().split('T')[0];
       if (savedDate === todayStr && savedNum) {
         return parseInt(savedNum, 10);
@@ -38,7 +38,7 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
 
   const [todayTotalVisitors, setTodayTotalVisitors] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_today_total');
+      const saved = localStorage.getItem('toko_online_today_total') || localStorage.getItem('kuickmart_today_total');
       return saved ? parseInt(saved, 10) : 48;
     } catch {
       return 48;
@@ -47,7 +47,7 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
 
   const [totalWebVisitors, setTotalWebVisitors] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_total_visitors');
+      const saved = localStorage.getItem('toko_online_total_visitors') || localStorage.getItem('kuickmart_total_visitors');
       return saved ? parseInt(saved, 10) : 1385;
     } catch {
       return 1385;
@@ -64,7 +64,7 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
   // Authentication State for Traffic Analytics
   const [currentUser, setCurrentUser] = useState<StaffUser | { name: string; username: string; role: string } | null>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_traffic_auth');
+      const saved = localStorage.getItem('toko_online_traffic_auth') || localStorage.getItem('kuickmart_traffic_auth');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -75,7 +75,7 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
   useEffect(() => {
     const syncAuth = () => {
       try {
-        const saved = localStorage.getItem('kuickmart_traffic_auth');
+        const saved = localStorage.getItem('toko_online_traffic_auth') || localStorage.getItem('kuickmart_traffic_auth');
         setCurrentUser(saved ? JSON.parse(saved) : null);
       } catch {}
     };
@@ -90,9 +90,11 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
     };
 
     window.addEventListener('storage', syncAuth);
+    window.addEventListener('toko_online:visitor_updated', handleVisitorUpdate);
     window.addEventListener('kuickmart:visitor_updated', handleVisitorUpdate);
     return () => {
       window.removeEventListener('storage', syncAuth);
+      window.removeEventListener('toko_online:visitor_updated', handleVisitorUpdate);
       window.removeEventListener('kuickmart:visitor_updated', handleVisitorUpdate);
     };
   }, []);
@@ -105,8 +107,8 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
       let clientRegion = 'Jawa Barat';
 
       try {
-        const cachedCity = localStorage.getItem('kuickmart_user_city');
-        const cachedRegion = localStorage.getItem('kuickmart_user_region');
+        const cachedCity = localStorage.getItem('toko_online_user_city') || localStorage.getItem('kuickmart_user_city');
+        const cachedRegion = localStorage.getItem('toko_online_user_region') || localStorage.getItem('kuickmart_user_region');
         if (cachedCity && cachedRegion) {
           clientCity = cachedCity;
           clientRegion = cachedRegion;
@@ -120,8 +122,8 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
             if (data.city) {
               clientCity = data.city;
               clientRegion = data.region || 'Indonesia';
-              localStorage.setItem('kuickmart_user_city', clientCity);
-              localStorage.setItem('kuickmart_user_region', clientRegion);
+              localStorage.setItem('toko_online_user_city', clientCity);
+              localStorage.setItem('toko_online_user_region', clientRegion);
             }
           }
         }
@@ -149,10 +151,10 @@ export const VisitorCounterWidget: React.FC<VisitorCounterWidgetProps> = ({
         if (data.detectedLocation) setDetectedLocation(data.detectedLocation);
 
         const todayStr = new Date().toISOString().split('T')[0];
-        localStorage.setItem('kuickmart_today_date', todayStr);
-        localStorage.setItem('kuickmart_today_visitor_num', String(data.todayVisitorNumber));
-        localStorage.setItem('kuickmart_today_total', String(data.todayTotalVisitors));
-        localStorage.setItem('kuickmart_total_visitors', String(data.totalVisitors));
+        localStorage.setItem('toko_online_today_date', todayStr);
+        localStorage.setItem('toko_online_today_visitor_num', String(data.todayVisitorNumber));
+        localStorage.setItem('toko_online_today_total', String(data.todayTotalVisitors));
+        localStorage.setItem('toko_online_total_visitors', String(data.totalVisitors));
       }
     } catch (err) {
       console.warn('Visitor API fallback to local:', err);

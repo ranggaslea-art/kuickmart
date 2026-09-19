@@ -30,8 +30,8 @@ export interface OfflineSyncItem {
   detail?: string;
 }
 
-const STORAGE_KEY_QUEUE = 'kuickmart_offline_sync_queue';
-const STORAGE_KEY_LAST_SYNC = 'kuickmart_last_online_sync';
+const STORAGE_KEY_QUEUE = 'toko_online_offline_sync_queue';
+const STORAGE_KEY_LAST_SYNC = 'toko_online_last_online_sync';
 
 type SyncListener = () => void;
 const listeners = new Set<SyncListener>();
@@ -56,7 +56,7 @@ export function subscribeToOfflineSync(listener: SyncListener): () => void {
 export function getOfflineQueue(): OfflineSyncItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_QUEUE);
+    const raw = localStorage.getItem(STORAGE_KEY_QUEUE) || localStorage.getItem('kuickmart_offline_sync_queue');
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     console.error('Failed to parse offline sync queue:', e);
@@ -77,7 +77,7 @@ export function saveOfflineQueue(queue: OfflineSyncItem[]): void {
 export function getLastSyncTime(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return localStorage.getItem(STORAGE_KEY_LAST_SYNC);
+    return localStorage.getItem(STORAGE_KEY_LAST_SYNC) || localStorage.getItem('kuickmart_last_online_sync');
   } catch {
     return null;
   }

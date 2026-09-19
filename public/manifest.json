@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "KuickMart Express",
-  "short_name": "KuickMart",
-  "description": "Aplikasi belanja minimarket online & kasir pintar dengan pengiriman cepat dan hemat.",
+  "name": "toko-online.online",
+  "short_name": "toko-online",
+  "description": "Aplikasi belanja minimarket online & kasir pintar toko-online.online dengan pengiriman cepat dan hemat.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

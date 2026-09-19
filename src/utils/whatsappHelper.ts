@@ -32,13 +32,13 @@ export function generateOrderWhatsAppMessage(params: {
   const { driverName, orderNumber, storeName, destinationAddress, customerName, isCallRequest } = params;
 
   if (isCallRequest) {
-    return `Halo Kak ${driverName} (Kurir NusaMart),
+    return `Halo Kak ${driverName} (Kurir),
 Saya pemesan No. Pesanan *${orderNumber}*${customerName ? ` (${customerName})` : ''}.
-Saya ingin melakukan konfirmasi/panggilan telepon terkait posisi pengiriman paket belanja dari ${storeName || 'KuickMart'}.
+Saya ingin melakukan konfirmasi/panggilan telepon terkait posisi pengiriman paket belanja dari ${storeName || 'toko-online.online'}.
 Mohon respons jika sudah aman di tepi jalan. Terima kasih! 🙏`;
   }
 
-  return `Halo Kak ${driverName} (Kurir NusaMart),
+  return `Halo Kak ${driverName} (Kurir),
 Saya pemesan dengan No. Pesanan *${orderNumber}*${customerName ? ` atas nama *${customerName}*` : ''}.
 ${storeName ? `Outlet Asal: ${storeName}\n` : ''}${destinationAddress ? `Alamat Tujuan: ${destinationAddress}\n` : ''}
 Mohon info estimasi tiba dan update posisi terkini ya. Terima kasih banyak! 🛵📦`;

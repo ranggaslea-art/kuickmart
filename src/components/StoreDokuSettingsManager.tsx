@@ -384,7 +384,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
                   className="w-full text-sm font-semibold px-3.5 py-2.5 rounded-xl border border-stone-300 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition"
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
-                  Anda bisa menamainya apapun, bukan hanya KuickMart.
+                  Anda bisa menamainya apapun, bukan hanya toko-online.online.
                 </span>
               </div>
 

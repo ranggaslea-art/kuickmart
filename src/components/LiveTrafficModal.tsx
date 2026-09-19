@@ -127,8 +127,8 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
         let city = 'Pangandaran';
         let region = 'Jawa Barat';
         try {
-          const cachedCity = localStorage.getItem('kuickmart_user_city');
-          const cachedRegion = localStorage.getItem('kuickmart_user_region');
+          const cachedCity = localStorage.getItem('toko_online_user_city') || localStorage.getItem('kuickmart_user_city');
+          const cachedRegion = localStorage.getItem('toko_online_user_region') || localStorage.getItem('kuickmart_user_region');
           if (cachedCity) city = cachedCity;
           if (cachedRegion) region = cachedRegion;
         } catch {}
@@ -148,6 +148,14 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
         setLastUpdatedTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')} WIB`);
 
         // Broadcast to main widget
+        window.dispatchEvent(new CustomEvent('toko_online:visitor_updated', {
+          detail: {
+            todayVisitorNumber: data.todayVisitorNumber,
+            todayTotalVisitors: data.todayTotalVisitors,
+            totalVisitors: data.totalVisitors,
+            detectedLocation: data.detectedLocation || { city, region },
+          }
+        }));
         window.dispatchEvent(new CustomEvent('kuickmart:visitor_updated', {
           detail: {
             todayVisitorNumber: data.todayVisitorNumber,
@@ -175,6 +183,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
     setPinInput('');
     setLoginError(null);
     try {
+      localStorage.removeItem('toko_online_traffic_auth');
       localStorage.removeItem('kuickmart_traffic_auth');
     } catch {}
 
@@ -215,7 +224,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
         setSimulationToast(`🟢 Pengunjung baru dari ${data.newVisitor.city} (${data.newVisitor.region}) berhasil masuk!`);
         setTimeout(() => setSimulationToast(null), 4000);
 
-        window.dispatchEvent(new CustomEvent('kuickmart:visitor_updated', {
+        window.dispatchEvent(new CustomEvent('toko_online:visitor_updated', {
           detail: {
             todayTotalVisitors: data.todayTotalVisitors,
             totalVisitors: data.totalVisitors,
@@ -259,7 +268,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       }
       setCurrentUser(staffMatch);
       try {
-        localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(staffMatch));
+        localStorage.setItem('toko_online_traffic_auth', JSON.stringify(staffMatch));
         window.dispatchEvent(new Event('storage'));
       } catch {}
       setUsernameInput('');
@@ -286,7 +295,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       };
       setCurrentUser(userObj);
       try {
-        localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(userObj));
+        localStorage.setItem('toko_online_traffic_auth', JSON.stringify(userObj));
         window.dispatchEvent(new Event('storage'));
       } catch {}
       setUsernameInput('');
@@ -314,7 +323,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
         }
         setCurrentUser(matchedStaff);
         try {
-          localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(matchedStaff));
+          localStorage.setItem('toko_online_traffic_auth', JSON.stringify(matchedStaff));
           window.dispatchEvent(new Event('storage'));
         } catch {}
         setUsernameInput('');
@@ -339,7 +348,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
         };
         setCurrentUser(userObj);
         try {
-          localStorage.setItem('kuickmart_traffic_auth', JSON.stringify(userObj));
+          localStorage.setItem('toko_online_traffic_auth', JSON.stringify(userObj));
           window.dispatchEvent(new Event('storage'));
         } catch {}
         setUsernameInput('');
@@ -353,6 +362,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
   const handleLogout = () => {
     setCurrentUser(null);
     try {
+      localStorage.removeItem('toko_online_traffic_auth');
       localStorage.removeItem('kuickmart_traffic_auth');
       window.dispatchEvent(new Event('storage'));
     } catch {}
@@ -387,7 +397,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-blue-200/80">
-                Statistik Pengunjung & Analitik Asal Wilayah KuickMart Express
+                Statistik Pengunjung & Analitik Asal Wilayah toko-online.online
               </p>
             </div>
           </div>
@@ -663,7 +673,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
                     </h4>
                   </div>
                   <p className="text-xs text-stone-500 mt-0.5">
-                    Distribusi geografis pengunjung web KuickMart Express berdasarkan kota & provinsi di Indonesia.
+                    Distribusi geografis pengunjung web toko-online.online berdasarkan kota & provinsi di Indonesia.
                   </p>
                 </div>
 

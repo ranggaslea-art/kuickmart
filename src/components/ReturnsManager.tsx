@@ -82,8 +82,8 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
   // Persistent Sales Returns State
   const [salesReturns, setSalesReturns] = useState<SalesReturn[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_sales_returns', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_sales_returns', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_sales_returns', currentSlug));
       if (saved) return JSON.parse(saved);
     } catch {}
     if (propSalesReturns && propSalesReturns.length > 0) return propSalesReturns;
@@ -93,8 +93,8 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
   // Persistent Purchase Returns State
   const [purchaseReturns, setPurchaseReturns] = useState<PurchaseReturn[]>(() => {
     try {
-      const key = getTenantStorageKey('kuickmart_purchase_returns', currentSlug);
-      const saved = localStorage.getItem(key);
+      const key = getTenantStorageKey('toko_online_purchase_returns', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_purchase_returns', currentSlug));
       if (saved) return JSON.parse(saved);
     } catch {}
     if (propPurchaseReturns && propPurchaseReturns.length > 0) return propPurchaseReturns;
@@ -105,7 +105,7 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
     setSalesReturns(newReturns);
     if (onUpdateSalesReturns) onUpdateSalesReturns(newReturns);
     try {
-      const key = getTenantStorageKey('kuickmart_sales_returns', currentSlug);
+      const key = getTenantStorageKey('toko_online_sales_returns', currentSlug);
       localStorage.setItem(key, JSON.stringify(newReturns));
     } catch (e) {
       console.error(e);
@@ -116,7 +116,7 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
     setPurchaseReturns(newReturns);
     if (onUpdatePurchaseReturns) onUpdatePurchaseReturns(newReturns);
     try {
-      const key = getTenantStorageKey('kuickmart_purchase_returns', currentSlug);
+      const key = getTenantStorageKey('toko_online_purchase_returns', currentSlug);
       localStorage.setItem(key, JSON.stringify(newReturns));
     } catch (e) {
       console.error(e);

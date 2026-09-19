@@ -154,14 +154,14 @@ import {
 const STORAGE_CART_KEY = 'nusamart_cart';
 const STORAGE_ORDERS_KEY = 'nusamart_orders';
 const STORAGE_MEMBER_KEY = 'nusamart_member';
-const STORAGE_VOUCHERS_KEY = 'kuickmart_vouchers';
-const STORAGE_PRODUCTS_KEY = 'kuickmart_products_v2';
-const STORAGE_STORES_KEY = 'kuickmart_stores';
+const STORAGE_VOUCHERS_KEY = 'toko_online_vouchers';
+const STORAGE_PRODUCTS_KEY = 'toko_online_products_v2';
+const STORAGE_STORES_KEY = 'toko_online_stores';
 const STORAGE_RECEIPT_CONFIGS_KEY = 'nusamart_receipt_configs';
 const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
-const STORAGE_COURIERS_KEY = 'kuickmart_couriers';
-const STORAGE_BRAND_CONFIG_KEY = 'kuickmart_brand_config';
-const STORAGE_STAFF_USERS_KEY = 'kuickmart_staff_users';
+const STORAGE_COURIERS_KEY = 'toko_online_couriers';
+const STORAGE_BRAND_CONFIG_KEY = 'toko_online_brand_config';
+const STORAGE_STAFF_USERS_KEY = 'toko_online_staff_users';
 const STORAGE_MY_ORDER_IDS_KEY = 'nusamart_my_order_ids';
 const STORAGE_VISITOR_ID_KEY = 'nusamart_visitor_id';
 
@@ -224,7 +224,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
       if (saved) {
         const rawList: Product[] = JSON.parse(saved);
         return rawList.map(p => ({
@@ -245,7 +245,7 @@ export default function App() {
   const [stores, setStores] = useState<Store[]>(() => {
     try {
       const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
       if (saved) {
         const list = JSON.parse(saved);
         return sanitizeStores(list);
@@ -270,7 +270,7 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [vouchers, setVouchers] = useState<Voucher[]>(() => {
     const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
-    const saved = localStorage.getItem(key);
+    const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
     if (saved) return JSON.parse(saved);
     return isNewStore ? [] : VOUCHERS;
   });
@@ -341,7 +341,7 @@ export default function App() {
   // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_BRAND_CONFIG_KEY);
+      const saved = localStorage.getItem(STORAGE_BRAND_CONFIG_KEY) || localStorage.getItem('kuickmart_brand_config');
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
@@ -478,7 +478,7 @@ export default function App() {
   const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
     try {
       const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
       if (saved) return JSON.parse(saved);
       return isNewStore ? [] : INITIAL_COURIERS;
     } catch {
@@ -495,7 +495,7 @@ export default function App() {
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
     try {
       const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
       if (saved) return JSON.parse(saved);
       if (isNewStore) {
         const tenant = loadStoreTenantConfig(currentSlug);
@@ -1701,7 +1701,7 @@ export default function App() {
 
         {/* Footer Bottom Bar */}
         <div className="w-full mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
-          <div>{brandConfig.copyrightText || '© 2026 KuickMart Express. All rights reserved.'}</div>
+          <div>{brandConfig.copyrightText || '© 2026 toko-online.online. All rights reserved.'}</div>
           <div className="flex items-center gap-4 mt-2 sm:mt-0 flex-wrap justify-center sm:justify-end">
             <button
               onClick={() => {
