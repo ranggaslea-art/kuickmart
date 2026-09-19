@@ -183,6 +183,43 @@ async function startServer() {
     });
   });
 
+  // 1b-2. Subdomain Authority Policy Check API
+  app.get('/api/tenant/subdomain-policy', (req, res) => {
+    const rawHost = (req.headers['x-client-hostname'] || req.headers['x-forwarded-host'] || req.headers['host'] || '').toString().toLowerCase();
+    const clientHost = rawHost.split(':')[0].trim();
+    const isDevOrPreview = clientHost.includes('localhost') || clientHost.includes('127.0.0.1') || clientHost.includes('run.app') || clientHost.includes('webcontainer');
+    const isRootTokoOnline = clientHost === 'toko-online.online' || clientHost === 'www.toko-online.online';
+    const isSubdomain = clientHost.endsWith('.toko-online.online') && clientHost !== 'www.toko-online.online';
+
+    if (isSubdomain) {
+      return res.json({
+        allowed: false,
+        isRootDomain: false,
+        currentHost: clientHost,
+        rootDomain: 'toko-online.online',
+        reason: `Subdomain '${clientHost}' tidak diizinkan menambahkan subdomain baru. Hanya domain utama toko-online.online yang berwenang.`,
+      });
+    }
+
+    if (!isRootTokoOnline && !isDevOrPreview) {
+      return res.json({
+        allowed: false,
+        isRootDomain: false,
+        currentHost: clientHost,
+        rootDomain: 'toko-online.online',
+        reason: `Domain '${clientHost}' berada di luar domain resmi toko-online.online. Penambahan subdomain hanya dapat dilakukan melalui toko-online.online.`,
+      });
+    }
+
+    return res.json({
+      allowed: true,
+      isRootDomain: true,
+      currentHost: clientHost || 'toko-online.online',
+      rootDomain: 'toko-online.online',
+      message: 'Otoritas domain terverifikasi: Diizinkan menambahkan subdomain baru.',
+    });
+  });
+
   app.post('/api/tenant/config', (req, res) => {
     try {
       const incoming = req.body;
@@ -192,6 +229,40 @@ async function startServer() {
 
       const slug = incoming.storeSlug.trim().toLowerCase();
       const existing = tenantStoreMap[slug] || {};
+
+      // ATURAN OTORITAS SUBDOMAIN:
+      // Hanya domain toko-online.online yang dapat menambahkan subdomain baru.
+      // Di luar domain toko-online.online (domain eksternal atau subdomain yang sudah ada) tidak bisa menambahkan subdomain lagi.
+      const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+      const isExisting = Boolean(tenantStoreMap[slug]);
+
+      if (!isMainStore && !isExisting) {
+        const rawHost = (req.headers['x-client-hostname'] || incoming._clientHostname || req.headers['x-forwarded-host'] || req.headers['host'] || '').toString().toLowerCase();
+        const clientHost = rawHost.split(':')[0].trim();
+        const isDevOrPreview = clientHost.includes('localhost') || clientHost.includes('127.0.0.1') || clientHost.includes('run.app') || clientHost.includes('webcontainer');
+        const isRootTokoOnline = clientHost === 'toko-online.online' || clientHost === 'www.toko-online.online';
+        const isSubdomain = clientHost.endsWith('.toko-online.online') && clientHost !== 'www.toko-online.online';
+
+        if (isSubdomain) {
+          console.warn(`[Subdomain Policy] Ditolak: Subdomain '${clientHost}' mencoba menambahkan subdomain baru '${slug}'`);
+          return res.status(403).json({
+            success: false,
+            error: `Akses Ditolak: Anda saat ini berada di subdomain '${clientHost}'. Subdomain tidak dapat menambahkan subdomain baru. Hanya domain utama toko-online.online yang berwenang.`,
+            code: 'SUBDOMAIN_CREATION_FORBIDDEN_FROM_SUBDOMAIN',
+            rootDomain: 'toko-online.online',
+          });
+        }
+
+        if (!isRootTokoOnline && !isDevOrPreview) {
+          console.warn(`[Subdomain Policy] Ditolak: Domain eksternal '${clientHost}' mencoba menambahkan subdomain '${slug}'`);
+          return res.status(403).json({
+            success: false,
+            error: `Akses Ditolak: Domain '${clientHost}' berada di luar domain resmi toko-online.online. Sesuai aturan sistem, penambahan subdomain HANYA diizinkan melalui domain toko-online.online.`,
+            code: 'SUBDOMAIN_CREATION_FORBIDDEN_OUTSIDE_DOMAIN',
+            rootDomain: 'toko-online.online',
+          });
+        }
+      }
 
       // Jika secretKey dikirim sebagai masked '••••', pertahankan secretKey yang sudah ada di database
       let finalSecretKey = incoming.dokuSettings?.secretKey;

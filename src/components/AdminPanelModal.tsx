@@ -140,7 +140,7 @@ import { StockOpnameManager } from './StockOpnameManager';
 import { ReturnsManager } from './ReturnsManager';
 import { StockMutationManager } from './StockMutationManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
-import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey } from '../utils/tenantHelper';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN } from '../utils/tenantHelper';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -1412,6 +1412,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
   // STORE MANAGEMENT ACTIONS
   const handleOpenAddStore = () => {
+    const policy = canAddSubdomain();
+    if (!policy.allowed) {
+      alert(`Akses Ditolak: ${policy.reason || `Hanya domain utama ${ROOT_AUTHORITY_DOMAIN} yang berwenang menambahkan cabang atau subdomain baru.`}`);
+      return;
+    }
     setEditingStore(null);
     setStoreName('toko-online.online - Cabang Baru');
     setStoreCode(`KM-${Math.floor(100 + Math.random() * 900)}`);
@@ -1482,6 +1487,12 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
       setStoreFeedback(`Informasi cabang "${updatedStore.name}" berhasil diperbarui!`);
     } else {
+      const policy = canAddSubdomain();
+      if (!policy.allowed) {
+        alert(`Akses Ditolak: ${policy.reason || `Hanya domain utama ${ROOT_AUTHORITY_DOMAIN} yang berwenang menambahkan cabang atau subdomain baru.`}`);
+        return;
+      }
+
       const newStore: Store = {
         id: `str_${Date.now()}`,
         name: storeName.trim(),
@@ -3648,13 +3659,29 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   {/* Top Bar Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-50/70 border border-purple-200 p-4 rounded-2xl">
                     <div>
-                      <h4 className="font-extrabold text-sm text-purple-950 flex items-center gap-1.5">
-                        <Building2 className="w-4 h-4 text-purple-700" />
-                        <span>Manajemen Cabang Minimarket toko-online.online</span>
-                      </h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-extrabold text-sm text-purple-950 flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-purple-700" />
+                          <span>Manajemen Cabang Minimarket toko-online.online</span>
+                        </h4>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          canAddSubdomain().allowed
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : 'bg-rose-100 text-rose-800 border-rose-300 flex items-center gap-1'
+                        }`}>
+                          {!canAddSubdomain().allowed && <Lock className="w-2.5 h-2.5" />}
+                          {canAddSubdomain().allowed ? `Otoritas: ${ROOT_AUTHORITY_DOMAIN}` : 'Tambah Cabang Terkunci'}
+                        </span>
+                      </div>
                       <p className="text-xs text-purple-800 mt-0.5">
                         Kelola nama toko, alamat, kontak telepon, jam operasional, dan tarif kurir per cabang.
                       </p>
+                      {!canAddSubdomain().allowed && (
+                        <p className="text-[11px] text-rose-700 font-medium mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          Penambahan cabang/subdomain baru hanya diizinkan melalui domain utama {ROOT_AUTHORITY_DOMAIN}.
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -3671,9 +3698,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <button
                           type="button"
                           onClick={handleOpenAddStore}
-                          className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all ${
+                            canAddSubdomain().allowed
+                              ? 'bg-purple-700 hover:bg-purple-800 text-white cursor-pointer active:scale-95'
+                              : 'bg-stone-200 text-stone-500 cursor-not-allowed border border-stone-300'
+                          }`}
+                          title={!canAddSubdomain().allowed ? `Penambahan cabang hanya diizinkan melalui ${ROOT_AUTHORITY_DOMAIN}` : 'Tambah Cabang Baru'}
                         >
-                          <Plus className="w-4 h-4" />
+                          {!canAddSubdomain().allowed ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                           <span>Tambah Cabang Baru</span>
                         </button>
                       )}

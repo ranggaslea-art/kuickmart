@@ -23,7 +23,10 @@ import {
   Palette,
   Layers,
   ArrowRight,
-  Info
+  Info,
+  Lock,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import { StoreTenantIdentity, BrandHeaderFooterConfig } from '../types';
 import {
@@ -33,6 +36,12 @@ import {
   getStoreSlugFromUrl,
   formatSlugToStoreName,
   DEFAULT_DOKU_SETTINGS,
+  canAddSubdomain,
+  ROOT_AUTHORITY_DOMAIN,
+  SIMULATE_FOREIGN_DOMAIN_KEY,
+  SIMULATED_DOMAIN_NAME_KEY,
+  STORAGE_TENANT_PREFIX,
+  SubdomainPolicyResult,
 } from '../utils/tenantHelper';
 import { compressImageFile } from '../utils/imageHelper';
 
@@ -59,6 +68,24 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
   const currentUrlSlug = getStoreSlugFromUrl();
   const [activeSlug, setActiveSlug] = useState<string>(currentUrlSlug);
   const [tenantData, setTenantData] = useState<StoreTenantIdentity>(() => loadStoreTenantConfig(currentUrlSlug));
+  
+  // Otoritas Subdomain Policy State
+  const [policy, setPolicy] = useState<SubdomainPolicyResult>(() => canAddSubdomain());
+
+  const refreshPolicy = () => {
+    setPolicy(canAddSubdomain());
+  };
+
+  const handleToggleSimulateForeignDomain = (simulate: boolean) => {
+    if (simulate) {
+      sessionStorage.setItem(SIMULATE_FOREIGN_DOMAIN_KEY, 'true');
+      sessionStorage.setItem(SIMULATED_DOMAIN_NAME_KEY, 'toko-mitra-eksternal.com');
+    } else {
+      sessionStorage.removeItem(SIMULATE_FOREIGN_DOMAIN_KEY);
+      sessionStorage.removeItem(SIMULATED_DOMAIN_NAME_KEY);
+    }
+    refreshPolicy();
+  };
   
   const [activeTab, setActiveTab] = useState<'store_identity' | 'doku_gateway' | 'test_simulation' | 'guide'>('store_identity');
   const [showSecretKey, setShowSecretKey] = useState(false);
@@ -110,8 +137,24 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
+      const slug = (tenantData.storeSlug || '').toLowerCase().trim();
+      const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+      const isExistingTenant = Boolean(localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`));
+
+      // Validasi Aturan Subdomain:
+      // Hanya domain toko-online.online yang bisa menambahkan subdomain
+      if (!isMainStore && !isExistingTenant && !policy.allowed) {
+        alert(policy.reason || 'Hanya domain utama toko-online.online yang berwenang menambahkan subdomain baru. Di luar toko-online.online tidak dapat menambah subdomain.');
+        setIsSaving(false);
+        return;
+      }
+
       // 1. Simpan tenant config
-      await saveStoreTenantConfig(tenantData);
+      const success = await saveStoreTenantConfig(tenantData);
+      if (!success) {
+        setIsSaving(false);
+        return;
+      }
 
       // 2. Callback jika ada
       if (onUpdateTenantConfig) {
@@ -124,8 +167,9 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
 
       setSaveSuccessNotice(`Pengaturan nama toko "${tenantData.storeName}" dan DOKU berhasil disimpan!`);
       setTimeout(() => setSaveSuccessNotice(null), 4000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving settings:', err);
+      alert(err.message || 'Gagal menyimpan pengaturan.');
     } finally {
       setIsSaving(false);
     }
@@ -197,7 +241,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
 
   const notificationWebhookUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/api/doku/notification` 
-    : 'https://domainanda.com/api/doku/notification';
+    : 'https://toko-online.online/api/doku/notification';
 
   return (
     <div className="space-y-6">
@@ -264,6 +308,102 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
             <span className="text-[10px] text-stone-400">
               Contoh: <code className="text-amber-300">berkah-mart</code> atau <code className="text-amber-300">sembako-jaya</code>
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Aturan Otoritas Subdomain Banner */}
+      <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+        policy.allowed 
+          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+          : 'bg-rose-50/80 border-rose-200 text-rose-950'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+              policy.allowed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+            }`}>
+              {policy.allowed ? (
+                <ShieldCheck className="w-5 h-5" />
+              ) : (
+                <ShieldAlert className="w-5 h-5" />
+              )}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className="font-extrabold text-sm tracking-tight">
+                  Aturan Otoritas Subdomain
+                </span>
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                  policy.allowed 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    : 'bg-rose-100 text-rose-800 border-rose-300 flex items-center gap-1'
+                }`}>
+                  {!policy.allowed && <Lock className="w-3 h-3" />}
+                  {policy.allowed ? `Resmi: ${ROOT_AUTHORITY_DOMAIN}` : 'Penambahan Subdomain Terkunci'}
+                </span>
+                {policy.isSimulated && (
+                  <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    Mode Uji Simulasi
+                  </span>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed opacity-90 max-w-3xl">
+                {policy.allowed ? (
+                  <>
+                    Hanya domain utama <strong className="font-bold underline">{ROOT_AUTHORITY_DOMAIN}</strong> yang berwenang menambahkan dan mendaftarkan subdomain baru. Seluruh subdomain toko resmi otomatis beralamat di <code className="font-mono bg-emerald-100/80 px-1 py-0.5 rounded text-emerald-900 font-bold">https://[nama-toko].{ROOT_AUTHORITY_DOMAIN}</code>.
+                  </>
+                ) : (
+                  <>
+                    {policy.reason || `Domain saat ini (${policy.currentHostname}) berada di luar domain resmi ${ROOT_AUTHORITY_DOMAIN}. Penambahan subdomain hanya dapat dilakukan melalui domain resmi ${ROOT_AUTHORITY_DOMAIN}.`}
+                  </>
+                )}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[11px] text-stone-600">
+                <span className="font-medium">Akses Host Terdeteksi:</span>
+                <code className="font-mono bg-white/80 border border-stone-200 px-1.5 py-0.5 rounded text-stone-800 font-semibold">
+                  {policy.currentHostname}
+                </code>
+              </div>
+            </div>
+          </div>
+
+          {/* Action / QA Test Switcher */}
+          <div className="flex flex-col sm:items-end gap-2 shrink-0">
+            {policy.allowed ? (
+              <button
+                type="button"
+                onClick={() => handleToggleSimulateForeignDomain(true)}
+                className="text-xs bg-white hover:bg-stone-100 text-stone-700 font-semibold px-3 py-1.5 rounded-xl border border-stone-300 flex items-center gap-1.5 shadow-2xs cursor-pointer transition"
+                title="Uji coba sistem ketika diakses di luar toko-online.online"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Simulasikan Akses Luar Domain</span>
+              </button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {policy.isSimulated ? (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSimulateForeignDomain(false)}
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Kembalikan ke {ROOT_AUTHORITY_DOMAIN}</span>
+                  </button>
+                ) : (
+                  <a
+                    href={`https://${ROOT_AUTHORITY_DOMAIN}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1.5 transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Buka {ROOT_AUTHORITY_DOMAIN}</span>
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -390,9 +530,17 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
 
               {/* Subdomain / Slug Toko */}
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                  Slug Subdomain (URL) <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    Slug Subdomain (URL) <span className="text-red-500">*</span>
+                  </label>
+                  {!policy.allowed && (
+                    <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Terkunci (Hanya {ROOT_AUTHORITY_DOMAIN})
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center">
                   <span className="bg-stone-100 text-stone-500 text-xs px-3 py-2.5 rounded-l-xl border border-r-0 border-stone-300 font-mono">
                     https://
@@ -400,17 +548,28 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
                   <input
                     type="text"
                     value={tenantData.storeSlug}
+                    disabled={!policy.allowed && !localStorage.getItem(`${STORAGE_TENANT_PREFIX}${tenantData.storeSlug}`)}
                     onChange={(e) => {
                       const slug = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '');
                       setTenantData((prev) => ({ ...prev, storeSlug: slug }));
                     }}
                     placeholder="nama-toko"
-                    className="w-full text-sm font-mono px-3 py-2.5 rounded-r-xl border border-stone-300 focus:border-red-500 outline-none transition"
+                    className={`w-full text-sm font-mono px-3 py-2.5 rounded-r-xl border transition ${
+                      !policy.allowed && !localStorage.getItem(`${STORAGE_TENANT_PREFIX}${tenantData.storeSlug}`)
+                        ? 'bg-stone-100 text-stone-500 border-stone-300 cursor-not-allowed'
+                        : 'border-stone-300 focus:border-red-500 outline-none'
+                    }`}
                   />
                 </div>
                 <span className="text-[11px] text-stone-500 mt-1 block">
-                  Akan diakses via <code className="text-red-600 font-semibold">{tenantData.storeSlug || 'toko'}.domainanda.com</code>
+                  Akan diakses via <code className="text-red-600 font-semibold font-mono">https://{tenantData.storeSlug || 'toko'}.{ROOT_AUTHORITY_DOMAIN}</code>
                 </span>
+                {!policy.allowed && (
+                  <p className="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    Penambahan subdomain baru hanya dapat dilakukan dari domain resmi {ROOT_AUTHORITY_DOMAIN}.
+                  </p>
+                )}
               </div>
 
               {/* Slogan / Tagline */}

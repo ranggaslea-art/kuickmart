@@ -3,6 +3,154 @@ import { StoreTenantIdentity, DokuSettings, BrandHeaderFooterConfig, Store } fro
 export const STORAGE_ACTIVE_TENANT_KEY = 'active_store_tenant_slug';
 export const STORAGE_TENANT_PREFIX = 'store_tenant_identity_';
 
+/**
+ * Domain Resmi Berwenang:
+ * Sesuai aturan sistem, HANYA domain toko-online.online yang dapat menambahkan subdomain.
+ * Di luar domain toko-online.online (domain lain maupun subdomain toko) tidak bisa menambahkan subdomain lagi.
+ */
+export const ROOT_AUTHORITY_DOMAIN = 'toko-online.online';
+export const ALLOWED_ROOT_DOMAINS = ['toko-online.online', 'www.toko-online.online'];
+export const SIMULATE_FOREIGN_DOMAIN_KEY = 'toko_online_simulate_foreign_domain';
+export const SIMULATED_DOMAIN_NAME_KEY = 'toko_online_simulated_domain_name';
+
+export interface SubdomainPolicyResult {
+  allowed: boolean;
+  isRootDomain: boolean;
+  currentHostname: string;
+  rootDomain: string;
+  reason?: string;
+  isSimulated?: boolean;
+}
+
+/**
+ * Memeriksa apakah akses saat ini berada di domain root resmi toko-online.online
+ */
+export function isRootDomain(customHost?: string): boolean {
+  if (typeof window === 'undefined') return true;
+
+  // Cek apakah ada simulasi domain luar untuk pengujian
+  if (sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true') {
+    return false;
+  }
+
+  const hostname = (customHost || window.location.hostname || '').toLowerCase().trim();
+
+  // Root domain asli
+  if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}`) {
+    return true;
+  }
+
+  // Jika berada di environment dev/preview (localhost, 127.0.0.1, *.run.app, webcontainer)
+  const isDevOrPreview =
+    hostname.includes('localhost') ||
+    hostname.includes('127.0.0.1') ||
+    hostname.includes('run.app') ||
+    hostname.includes('webcontainer');
+
+  if (isDevOrPreview) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramStore = urlParams.get('store');
+    // Jika tidak ada ?store atau ?store mengarah ke root, anggap root di dev
+    if (!paramStore || paramStore === 'default' || paramStore === 'toko-online' || paramStore === 'toko-online.online') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Aturan Otoritas Subdomain:
+ * HANYA domain toko-online.online yang berhak dan bisa menambahkan subdomain baru.
+ * Subdomain yang sudah ada atau domain di luar toko-online.online DILARANG menambahkan subdomain.
+ */
+export function canAddSubdomain(customHost?: string): SubdomainPolicyResult {
+  if (typeof window === 'undefined') {
+    return {
+      allowed: true,
+      isRootDomain: true,
+      currentHostname: ROOT_AUTHORITY_DOMAIN,
+      rootDomain: ROOT_AUTHORITY_DOMAIN,
+    };
+  }
+
+  // Cek simulasi pengujian domain luar via sessionStorage
+  const isSimulatedForeign = sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true';
+  const simulatedDomain = sessionStorage.getItem(SIMULATED_DOMAIN_NAME_KEY) || 'toko-eksternal.com';
+
+  if (isSimulatedForeign) {
+    return {
+      allowed: false,
+      isRootDomain: false,
+      currentHostname: simulatedDomain,
+      rootDomain: ROOT_AUTHORITY_DOMAIN,
+      isSimulated: true,
+      reason: `Akses Ditolak: Domain '${simulatedDomain}' berada di luar domain resmi ${ROOT_AUTHORITY_DOMAIN}. Penambahan subdomain hanya dapat dilakukan melalui domain utama ${ROOT_AUTHORITY_DOMAIN}.`,
+    };
+  }
+
+  const hostname = (customHost || window.location.hostname || '').toLowerCase().trim();
+  const isDevOrPreview =
+    hostname.includes('localhost') ||
+    hostname.includes('127.0.0.1') ||
+    hostname.includes('run.app') ||
+    hostname.includes('webcontainer');
+
+  // 1. Domain Utama Asli (toko-online.online atau www.toko-online.online)
+  if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}`) {
+    return {
+      allowed: true,
+      isRootDomain: true,
+      currentHostname: hostname,
+      rootDomain: ROOT_AUTHORITY_DOMAIN,
+    };
+  }
+
+  // 2. Subdomain dari toko-online.online (misal: berkah.toko-online.online)
+  if (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) {
+    return {
+      allowed: false,
+      isRootDomain: false,
+      currentHostname: hostname,
+      rootDomain: ROOT_AUTHORITY_DOMAIN,
+      reason: `Akses Ditolak: Anda saat ini berada di subdomain '${hostname}'. Subdomain toko tidak diizinkan menambahkan subdomain baru. Hanya domain utama ${ROOT_AUTHORITY_DOMAIN} yang berwenang.`,
+    };
+  }
+
+  // 3. Lingkungan Dev / Cloud Run Sandbox
+  if (isDevOrPreview) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramStore = urlParams.get('store');
+
+    // Jika sedang mengakses ?store=nama-toko (bukan root), simulasikan pembatasan subdomain
+    if (paramStore && paramStore !== 'default' && paramStore !== 'toko-online' && paramStore !== 'toko-online.online') {
+      return {
+        allowed: false,
+        isRootDomain: false,
+        currentHostname: `${paramStore}.${ROOT_AUTHORITY_DOMAIN} (Subdomain Toko)`,
+        rootDomain: ROOT_AUTHORITY_DOMAIN,
+        reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${paramStore}'. Penambahan subdomain baru hanya dapat dilakukan melalui domain utama ${ROOT_AUTHORITY_DOMAIN}.`,
+      };
+    }
+
+    return {
+      allowed: true,
+      isRootDomain: true,
+      currentHostname: `${hostname} (Dev Mode toko-online.online)`,
+      rootDomain: ROOT_AUTHORITY_DOMAIN,
+    };
+  }
+
+  // 4. Domain Luar / Eksternal
+  return {
+    allowed: false,
+    isRootDomain: false,
+    currentHostname: hostname,
+    rootDomain: ROOT_AUTHORITY_DOMAIN,
+    reason: `Akses Ditolak: Domain '${hostname}' berada di luar domain resmi ${ROOT_AUTHORITY_DOMAIN}. Sesuai aturan sistem, penambahan subdomain toko HANYA diizinkan melalui domain ${ROOT_AUTHORITY_DOMAIN}.`,
+  };
+}
+
 export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
   isEnabled: true,
   environment: 'sandbox',
@@ -257,6 +405,20 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
 
   try {
     const slug = config.storeSlug.toLowerCase();
+    const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+    const isExistingTenant = Boolean(localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`));
+
+    // Validasi Aturan Subdomain:
+    // Jika mendaftarkan subdomain baru (bukan edit profil root dan bukan tenant yang sudah terdaftar)
+    if (!isMainStore && !isExistingTenant) {
+      const policy = canAddSubdomain();
+      if (!policy.allowed) {
+        console.warn('[TenantHelper] Penambahan subdomain diblokir:', policy.reason);
+        alert(policy.reason || 'Hanya domain utama toko-online.online yang dapat menambahkan subdomain.');
+        return false;
+      }
+    }
+
     const updatedConfig: StoreTenantIdentity = {
       ...config,
       storeSlug: slug,
@@ -281,11 +443,25 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
       document.title = `${updatedConfig.storeName} - Belanja & Kasir Online`;
     }
 
-    // 4. Sync ke server Express backend
+    // 4. Sync ke server Express backend dengan menyertakan origin dan hostname
     fetch('/api/tenant/config', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedConfig),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-hostname': window.location.hostname || ROOT_AUTHORITY_DOMAIN,
+      },
+      body: JSON.stringify({
+        ...updatedConfig,
+        _clientHostname: window.location.hostname,
+        _isNewSubdomain: !isMainStore && !isExistingTenant,
+      }),
+    }).then(async (res) => {
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        if (errJson.error) {
+          console.warn('[TenantHelper] Server menolak registrasi tenant:', errJson.error);
+        }
+      }
     }).catch((apiErr) => {
       console.warn('[TenantHelper] Gagal sync ke server backend:', apiErr);
     });

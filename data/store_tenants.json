@@ -18,5 +18,55 @@
       "updatedAt": "2026-09-10T20:05:11.235Z"
     },
     "updatedAt": "2026-09-10T20:05:11.235Z"
+  },
+  "default": {
+    "storeId": "default",
+    "storeSlug": "default",
+    "storeName": "KuickMart Express",
+    "tagline": "Minimarket Digital Super Cepat",
+    "ownerName": "Pengelola Toko",
+    "phone": "0812-3456-7890",
+    "whatsapp": "6281234567890",
+    "address": "Jl. Pemuda No. 88, Pusat Niaga",
+    "city": "Jakarta",
+    "logoText": "KE",
+    "primaryColor": "#E51A24",
+    "dokuSettings": {
+      "isEnabled": true,
+      "environment": "sandbox",
+      "clientId": "BRN-0241-1788726490929",
+      "secretKey": "",
+      "merchantName": "KuickMart Express",
+      "notificationUrl": "https://ais-dev-c6wain7aftyvb22tgrp6mj-81222317019.asia-east1.run.app/api/doku/notification",
+      "enableQris": true,
+      "enableBcaVa": true,
+      "enableMandiriVa": true,
+      "enableBriVa": true,
+      "enableBniVa": true,
+      "enablePermataVa": true,
+      "updatedAt": "2026-09-19T22:36:01.122Z"
+    },
+    "createdAt": "2026-09-10T20:10:36.949Z",
+    "updatedAt": "2026-09-19T22:36:01.122Z"
+  },
+  "berkah-mart": {
+    "storeSlug": "berkah-mart",
+    "storeName": "Berkah Mart",
+    "updatedAt": "2026-09-19T22:39:05.090Z",
+    "dokuSettings": {
+      "isEnabled": true,
+      "environment": "sandbox",
+      "clientId": "BRN-0241-1788726490929",
+      "secretKey": "",
+      "merchantName": "Berkah Mart",
+      "notificationUrl": "",
+      "enableQris": true,
+      "enableBcaVa": true,
+      "enableMandiriVa": true,
+      "enableBriVa": true,
+      "enableBniVa": true,
+      "enablePermataVa": true,
+      "updatedAt": "2026-09-19T22:39:05.090Z"
+    }
   }
 }
