@@ -1,4 +1,4 @@
-import { StoreTenantIdentity, DokuSettings, BrandHeaderFooterConfig } from '../types';
+import { StoreTenantIdentity, DokuSettings, BrandHeaderFooterConfig, Store } from '../types';
 
 export const STORAGE_ACTIVE_TENANT_KEY = 'active_store_tenant_slug';
 export const STORAGE_TENANT_PREFIX = 'store_tenant_identity_';
@@ -24,7 +24,7 @@ export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
  * Contoh: "berkah-mart-jaya" -> "Berkah Mart Jaya"
  */
 export function formatSlugToStoreName(slug: string): string {
-  if (!slug || slug.trim() === '' || slug === 'default') {
+  if (!slug || slug.trim() === '' || slug === 'default' || slug === 'kuickmart') {
     return 'KuickMart Express';
   }
   return slug
@@ -74,6 +74,107 @@ export function getStoreSlugFromUrl(): string {
   }
 
   return 'default';
+}
+
+/**
+ * Memeriksa apakah toko saat ini adalah toko default/utama (KuickMart)
+ */
+export function isDefaultStore(slug?: string): boolean {
+  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
+  return effectiveSlug === 'default' || effectiveSlug === 'kuickmart' || effectiveSlug === '';
+}
+
+/**
+ * Menghasilkan kunci localStorage yang terisolasi per tenant/toko.
+ * - Toko default tetap menggunakan kunci asli agar data lama KuickMart tidak hilang.
+ * - Toko baru (seperti Toko Alda) otomatis menggunakan kunci unik `${baseKey}__tenant_${slug}`.
+ */
+export function getTenantStorageKey(baseKey: string, slug?: string): string {
+  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
+  if (isDefaultStore(effectiveSlug)) {
+    return baseKey;
+  }
+  return `${baseKey}__tenant_${effectiveSlug}`;
+}
+
+/**
+ * Muat data dari localStorage dengan isolasi multi-tenant:
+ * Jika toko baru dan belum ada data tersimpan, otomatis mengembalikan defaultIfNewStore (misalnya array kosong []).
+ */
+export function getTenantInitialData<T>(
+  baseKey: string,
+  defaultIfMainStore: T,
+  defaultIfNewStore: T,
+  slug?: string
+): T {
+  if (typeof window === 'undefined') return isDefaultStore(slug) ? defaultIfMainStore : defaultIfNewStore;
+  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
+  const storageKey = getTenantStorageKey(baseKey, effectiveSlug);
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved !== null) {
+      return JSON.parse(saved);
+    }
+  } catch (err) {
+    console.warn(`[TenantStorage] Gagal baca ${storageKey}:`, err);
+  }
+  return isDefaultStore(effectiveSlug) ? defaultIfMainStore : defaultIfNewStore;
+}
+
+/**
+ * Simpan data ke localStorage dengan isolasi multi-tenant.
+ */
+export function setTenantData<T>(baseKey: string, value: T, slug?: string): void {
+  if (typeof window === 'undefined') return;
+  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
+  const storageKey = getTenantStorageKey(baseKey, effectiveSlug);
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(value));
+  } catch (err) {
+    console.warn(`[TenantStorage] Gagal simpan ${storageKey}:`, err);
+  }
+}
+
+/**
+ * Menghasilkan object Store untuk tenant aktif
+ */
+export function getTenantStore(slug?: string, tenantConfig?: StoreTenantIdentity): Store {
+  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
+  if (isDefaultStore(effectiveSlug)) {
+    return {
+      id: 'store_1',
+      name: 'KuickMart Express',
+      code: 'KM-EXP-01',
+      address: 'Jl. Jendral Sudirman No. 18, Menteng',
+      city: 'Jakarta Pusat',
+      distanceKm: 0.8,
+      is24Hours: true,
+      isOpen: true,
+      openHours: '24 Jam Nonstop',
+      phone: '021-5551234',
+      readyForPickup: true,
+      readyForDelivery: true,
+      deliveryFee: 6000,
+      minOrder: 15000,
+    };
+  }
+  const tenant = tenantConfig || loadStoreTenantConfig(effectiveSlug);
+  return {
+    id: effectiveSlug,
+    name: tenant.storeName,
+    code: effectiveSlug.toUpperCase(),
+    address: tenant.address || 'Alamat Toko',
+    city: tenant.city || 'Kota',
+    distanceKm: 0.5,
+    is24Hours: true,
+    isOpen: true,
+    openHours: '07:00 - 22:00',
+    phone: tenant.phone || tenant.whatsapp || '08123456789',
+    readyForPickup: true,
+    readyForDelivery: true,
+    deliveryFee: 6000,
+    minOrder: 10000,
+  };
 }
 
 /**

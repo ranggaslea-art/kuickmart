@@ -140,6 +140,7 @@ import { StockOpnameManager } from './StockOpnameManager';
 import { ReturnsManager } from './ReturnsManager';
 import { StockMutationManager } from './StockMutationManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey } from '../utils/tenantHelper';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -242,6 +243,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdatePointsLedger,
   initialTab,
 }) => {
+  const currentSlug = getStoreSlugFromUrl();
+  const isNewStore = !isDefaultStore(currentSlug);
+
   // Helper to ensure all staff users have permissions and default accounts exist
   const ensureStaffPermissions = (users: StaffUser[]): StaffUser[] => {
     const defaultMap = new Map<string, StaffUser>();
@@ -254,11 +258,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     const safeUsers = Array.isArray(users) ? users.filter(Boolean) : [];
     const existingUsernames = new Set(safeUsers.map(u => (u?.username || '').toLowerCase()).filter(Boolean));
     const missingDefaults: StaffUser[] = [];
-    INITIAL_STAFF_USERS.forEach(def => {
-      if (def?.username && !existingUsernames.has(def.username.toLowerCase())) {
-        missingDefaults.push({ ...def });
-      }
-    });
+    if (!isNewStore) {
+      INITIAL_STAFF_USERS.forEach(def => {
+        if (def?.username && !existingUsernames.has(def.username.toLowerCase())) {
+          missingDefaults.push({ ...def });
+        }
+      });
+    }
 
     const fullList = [...safeUsers, ...missingDefaults];
     return fullList.map(u => {
@@ -283,11 +289,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Staff Users State (Persistent in localStorage & Supabase sync)
   const [internalStaffUsers, setInternalStaffUsers] = useState<StaffUser[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_staff_users');
-      const parsed = saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
+      const key = getTenantStorageKey('kuickmart_staff_users', currentSlug);
+      const saved = localStorage.getItem(key);
+      const parsed = saved ? JSON.parse(saved) : (isNewStore ? [] : INITIAL_STAFF_USERS);
       return ensureStaffPermissions(parsed);
     } catch {
-      return ensureStaffPermissions(INITIAL_STAFF_USERS);
+      return ensureStaffPermissions(isNewStore ? [] : INITIAL_STAFF_USERS);
     }
   });
 
@@ -299,7 +306,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalStaffUsers(updatedUsers);
     try {
-      localStorage.setItem('kuickmart_staff_users', JSON.stringify(updatedUsers));
+      const key = getTenantStorageKey('kuickmart_staff_users', currentSlug);
+      localStorage.setItem(key, JSON.stringify(updatedUsers));
     } catch (e) {
       console.error(e);
     }
@@ -308,7 +316,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for receipt configs if not provided via props
   const [internalReceiptConfigs, setInternalReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     try {
-      const saved = localStorage.getItem('nusamart_receipt_configs');
+      const key = getTenantStorageKey('nusamart_receipt_configs', currentSlug);
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : INITIAL_RECEIPT_CONFIGS;
     } catch {
       return INITIAL_RECEIPT_CONFIGS;
@@ -322,7 +331,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalReceiptConfigs(newConfigs);
     try {
-      localStorage.setItem('nusamart_receipt_configs', JSON.stringify(newConfigs));
+      const key = getTenantStorageKey('nusamart_receipt_configs', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newConfigs));
     } catch (e) {
       console.error(e);
     }
@@ -331,10 +341,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for store promos if not provided via props
   const [internalStorePromos, setInternalStorePromos] = useState<StorePromoInfo[]>(() => {
     try {
-      const saved = localStorage.getItem('nusamart_store_promos');
-      return saved ? JSON.parse(saved) : INITIAL_STORE_PROMOS;
+      const key = getTenantStorageKey('nusamart_store_promos', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_STORE_PROMOS;
     } catch {
-      return INITIAL_STORE_PROMOS;
+      return isNewStore ? [] : INITIAL_STORE_PROMOS;
     }
   });
 
@@ -345,7 +357,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalStorePromos(newPromos);
     try {
-      localStorage.setItem('nusamart_store_promos', JSON.stringify(newPromos));
+      const key = getTenantStorageKey('nusamart_store_promos', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newPromos));
     } catch (e) {
       console.error(e);
     }
@@ -354,10 +367,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for couriers if not provided via props
   const [internalCouriers, setInternalCouriers] = useState<CourierInfo[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_couriers');
-      return saved ? JSON.parse(saved) : INITIAL_COURIERS;
+      const key = getTenantStorageKey('kuickmart_couriers', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_COURIERS;
     } catch {
-      return INITIAL_COURIERS;
+      return isNewStore ? [] : INITIAL_COURIERS;
     }
   });
 
@@ -368,7 +383,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalCouriers(newCouriers);
     try {
-      localStorage.setItem('kuickmart_couriers', JSON.stringify(newCouriers));
+      const key = getTenantStorageKey('kuickmart_couriers', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newCouriers));
     } catch (e) {
       console.error(e);
     }
@@ -377,7 +393,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Internal fallback for brand config if not provided via props
   const [internalBrandConfig, setInternalBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_brand_config');
+      const key = getTenantStorageKey('kuickmart_brand_config', currentSlug);
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : INITIAL_BRAND_CONFIG;
     } catch {
       return INITIAL_BRAND_CONFIG;
@@ -391,20 +408,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
     setInternalBrandConfig(newConfig);
     try {
-      localStorage.setItem('kuickmart_brand_config', JSON.stringify(newConfig));
+      const key = getTenantStorageKey('kuickmart_brand_config', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newConfig));
       window.dispatchEvent(new CustomEvent('brand_config_updated', { detail: newConfig }));
     } catch (e) {
       console.error(e);
     }
-  }, [onUpdateBrandConfig]);
+  }, [onUpdateBrandConfig, currentSlug]);
 
   // Suppliers State
   const [internalSuppliers, setInternalSuppliers] = useState<Supplier[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_suppliers');
-      return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
+      const key = getTenantStorageKey('kuickmart_suppliers', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_SUPPLIERS;
     } catch {
-      return INITIAL_SUPPLIERS;
+      return isNewStore ? [] : INITIAL_SUPPLIERS;
     }
   });
   const activeSuppliers = propSuppliers || internalSuppliers;
@@ -412,7 +432,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdateSuppliers) onUpdateSuppliers(newSuppliers);
     setInternalSuppliers(newSuppliers);
     try {
-      localStorage.setItem('kuickmart_suppliers', JSON.stringify(newSuppliers));
+      const key = getTenantStorageKey('kuickmart_suppliers', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newSuppliers));
     } catch (e) {
       console.error(e);
     }
@@ -421,10 +442,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Purchases State
   const [internalPurchases, setInternalPurchases] = useState<PurchaseOrder[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_purchases');
-      return saved ? JSON.parse(saved) : INITIAL_PURCHASES;
+      const key = getTenantStorageKey('kuickmart_purchases', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_PURCHASES;
     } catch {
-      return INITIAL_PURCHASES;
+      return isNewStore ? [] : INITIAL_PURCHASES;
     }
   });
   const activePurchases = propPurchases || internalPurchases;
@@ -432,7 +455,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdatePurchases) onUpdatePurchases(newPurchases);
     setInternalPurchases(newPurchases);
     try {
-      localStorage.setItem('kuickmart_purchases', JSON.stringify(newPurchases));
+      const key = getTenantStorageKey('kuickmart_purchases', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newPurchases));
     } catch (e) {
       console.error(e);
     }
@@ -445,10 +469,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Customers State
   const [internalCustomers, setInternalCustomers] = useState<MemberProfile[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_customers');
-      return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
+      const key = getTenantStorageKey('kuickmart_customers', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_CUSTOMERS;
     } catch {
-      return INITIAL_CUSTOMERS;
+      return isNewStore ? [] : INITIAL_CUSTOMERS;
     }
   });
   const activeCustomers = propCustomers || internalCustomers;
@@ -456,7 +482,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdateCustomers) onUpdateCustomers(newCustomers);
     setInternalCustomers(newCustomers);
     try {
-      localStorage.setItem('kuickmart_customers', JSON.stringify(newCustomers));
+      const key = getTenantStorageKey('kuickmart_customers', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newCustomers));
     } catch (e) {
       console.error(e);
     }
@@ -469,7 +496,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Points Config State
   const [internalPointsConfig, setInternalPointsConfig] = useState<PointsConfig>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_points_config');
+      const key = getTenantStorageKey('kuickmart_points_config', currentSlug);
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : INITIAL_POINTS_CONFIG;
     } catch {
       return INITIAL_POINTS_CONFIG;
@@ -480,7 +508,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdatePointsConfig) onUpdatePointsConfig(newConfig);
     setInternalPointsConfig(newConfig);
     try {
-      localStorage.setItem('kuickmart_points_config', JSON.stringify(newConfig));
+      const key = getTenantStorageKey('kuickmart_points_config', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newConfig));
     } catch (e) {
       console.error(e);
     }
@@ -489,10 +518,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Reward Items State
   const [internalRewardItems, setInternalRewardItems] = useState<RewardItem[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_reward_items');
-      return saved ? JSON.parse(saved) : INITIAL_REWARD_ITEMS;
+      const key = getTenantStorageKey('kuickmart_reward_items', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_REWARD_ITEMS;
     } catch {
-      return INITIAL_REWARD_ITEMS;
+      return isNewStore ? [] : INITIAL_REWARD_ITEMS;
     }
   });
   const activeRewardItems = propRewardItems || internalRewardItems;
@@ -500,7 +531,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdateRewardItems) onUpdateRewardItems(newItems);
     setInternalRewardItems(newItems);
     try {
-      localStorage.setItem('kuickmart_reward_items', JSON.stringify(newItems));
+      const key = getTenantStorageKey('kuickmart_reward_items', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newItems));
     } catch (e) {
       console.error(e);
     }
@@ -509,10 +541,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Points Ledger State
   const [internalPointsLedger, setInternalPointsLedger] = useState<PointsLedgerEntry[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_points_ledger');
-      return saved ? JSON.parse(saved) : INITIAL_POINTS_LEDGER;
+      const key = getTenantStorageKey('kuickmart_points_ledger', currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_POINTS_LEDGER;
     } catch {
-      return INITIAL_POINTS_LEDGER;
+      return isNewStore ? [] : INITIAL_POINTS_LEDGER;
     }
   });
   const activePointsLedger = propPointsLedger || internalPointsLedger;
@@ -520,7 +554,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     if (onUpdatePointsLedger) onUpdatePointsLedger(newLedger);
     setInternalPointsLedger(newLedger);
     try {
-      localStorage.setItem('kuickmart_points_ledger', JSON.stringify(newLedger));
+      const key = getTenantStorageKey('kuickmart_points_ledger', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newLedger));
     } catch (e) {
       console.error(e);
     }

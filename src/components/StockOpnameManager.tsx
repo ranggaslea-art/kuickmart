@@ -6,6 +6,7 @@ import {
   StockOpnameRecord 
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
+import { getStoreSlugFromUrl, getTenantStorageKey } from '../utils/tenantHelper';
 import { 
   ClipboardCheck, 
   Search, 
@@ -87,10 +88,13 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
   });
   const [opnameNotes, setOpnameNotes] = useState('');
 
+  const currentSlug = getStoreSlugFromUrl();
+
   // History state
   const [historyRecords, setHistoryRecords] = useState<StockOpnameRecord[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_stock_opnames');
+      const key = getTenantStorageKey('kuickmart_stock_opnames', currentSlug);
+      const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch {
       // fallback
@@ -109,7 +113,8 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
     setHistoryRecords(newRecords);
     if (onUpdateStockOpnames) onUpdateStockOpnames(newRecords);
     try {
-      localStorage.setItem('kuickmart_stock_opnames', JSON.stringify(newRecords));
+      const key = getTenantStorageKey('kuickmart_stock_opnames', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newRecords));
     } catch (e) {
       console.error(e);
     }

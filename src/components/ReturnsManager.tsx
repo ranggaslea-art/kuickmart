@@ -11,6 +11,7 @@ import {
   PurchaseReturnItem 
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey } from '../utils/tenantHelper';
 import { 
   Undo2, 
   ArrowDownLeft, 
@@ -75,33 +76,37 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
     return stores.find((s) => s.id === selectedStoreId) || currentStore || stores[0];
   }, [stores, selectedStoreId, currentStore]);
 
+  const currentSlug = getStoreSlugFromUrl();
+  const isNewStore = !isDefaultStore(currentSlug);
+
   // Persistent Sales Returns State
   const [salesReturns, setSalesReturns] = useState<SalesReturn[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_sales_returns');
+      const key = getTenantStorageKey('kuickmart_sales_returns', currentSlug);
+      const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return propSalesReturns && propSalesReturns.length > 0
-      ? propSalesReturns
-      : INITIAL_SALES_RETURNS;
+    if (propSalesReturns && propSalesReturns.length > 0) return propSalesReturns;
+    return isNewStore ? [] : INITIAL_SALES_RETURNS;
   });
 
   // Persistent Purchase Returns State
   const [purchaseReturns, setPurchaseReturns] = useState<PurchaseReturn[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_purchase_returns');
+      const key = getTenantStorageKey('kuickmart_purchase_returns', currentSlug);
+      const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return propPurchaseReturns && propPurchaseReturns.length > 0
-      ? propPurchaseReturns
-      : INITIAL_PURCHASE_RETURNS;
+    if (propPurchaseReturns && propPurchaseReturns.length > 0) return propPurchaseReturns;
+    return isNewStore ? [] : INITIAL_PURCHASE_RETURNS;
   });
 
   const saveSalesReturns = (newReturns: SalesReturn[]) => {
     setSalesReturns(newReturns);
     if (onUpdateSalesReturns) onUpdateSalesReturns(newReturns);
     try {
-      localStorage.setItem('kuickmart_sales_returns', JSON.stringify(newReturns));
+      const key = getTenantStorageKey('kuickmart_sales_returns', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newReturns));
     } catch (e) {
       console.error(e);
     }
@@ -111,7 +116,8 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
     setPurchaseReturns(newReturns);
     if (onUpdatePurchaseReturns) onUpdatePurchaseReturns(newReturns);
     try {
-      localStorage.setItem('kuickmart_purchase_returns', JSON.stringify(newReturns));
+      const key = getTenantStorageKey('kuickmart_purchase_returns', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newReturns));
     } catch (e) {
       console.error(e);
     }

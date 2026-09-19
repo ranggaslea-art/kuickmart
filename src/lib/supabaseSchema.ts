@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.products (
     description TEXT,
     barcode TEXT,
     is_popular BOOLEAN DEFAULT FALSE,
+    store_id TEXT, -- Multi-tenant identifier (slug/subdomain)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS public.members (
     points INT DEFAULT 0,
     stamps INT DEFAULT 0,
     tier TEXT DEFAULT 'Bronze',
+    store_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -84,6 +86,7 @@ CREATE TABLE IF NOT EXISTS public.vouchers (
     max_discount NUMERIC(12, 2),
     valid_until TEXT NOT NULL,
     description TEXT,
+    store_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -402,9 +405,13 @@ CREATE POLICY "Allow public read/write on couriers" ON public.couriers FOR ALL U
 DROP POLICY IF EXISTS "Allow public read/write on staff_users" ON public.staff_users;
 CREATE POLICY "Allow public read/write on staff_users" ON public.staff_users FOR ALL USING (true) WITH CHECK (true);
 
--- 3. Pastikan kolom orders lengkap
+-- 3. Pastikan kolom orders lengkap & dukungan multi-tenant isolasi per toko
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_location JSONB;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items_json JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS driver_json JSONB;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tracking_steps JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS store_id TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS store_id TEXT;
+ALTER TABLE public.vouchers ADD COLUMN IF NOT EXISTS store_id TEXT;
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS store_id TEXT;
 `;

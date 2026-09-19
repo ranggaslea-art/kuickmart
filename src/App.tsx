@@ -51,6 +51,7 @@ import {
   PushNotificationPrompt 
 } from './components/PushNotificationPrompt';
 import { cleanReceiptText } from './utils/sanitizeReceipt';
+import { DEFAULT_ROLE_PERMISSIONS } from './utils/permissions';
 import { 
   Product, 
   Store, 
@@ -134,7 +135,9 @@ import {
   Store as StoreIcon,
   Headphones,
   BadgePercent,
-  ChevronRight
+  ChevronRight,
+  Package,
+  Plus
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -142,7 +145,10 @@ import {
   autoProvisionStoreTenant, 
   getStoreSlugFromUrl, 
   syncBrandConfigFromTenant,
-  loadStoreTenantConfig
+  loadStoreTenantConfig,
+  isDefaultStore,
+  getTenantStorageKey,
+  getTenantStore
 } from './utils/tenantHelper';
 
 const STORAGE_CART_KEY = 'nusamart_cart';
@@ -178,6 +184,9 @@ const sanitizeStores = (list: Store[]): Store[] => {
 };
 
 export default function App() {
+  const currentSlug = getStoreSlugFromUrl();
+  const isNewStore = !isDefaultStore(currentSlug);
+
   // Visitor ID & Visitor-specific Orders
   const [visitorId] = useState<string>(() => {
     try {
@@ -194,7 +203,8 @@ export default function App() {
 
   const [myOrderIds, setMyOrderIds] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_MY_ORDER_IDS_KEY);
+      const key = getTenantStorageKey(STORAGE_MY_ORDER_IDS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -203,41 +213,66 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_MY_ORDER_IDS_KEY, JSON.stringify(myOrderIds));
+      const key = getTenantStorageKey(STORAGE_MY_ORDER_IDS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(myOrderIds));
     } catch (e) {
       console.warn('Gagal menyimpan myOrderIds:', e);
     }
-  }, [myOrderIds]);
-  // Products & Catalogs
+  }, [myOrderIds, currentSlug]);
+
+  // Products & Catalogs - Toko baru mulai dengan DATABASE BERSIH (0 produk)
   const [products, setProducts] = useState<Product[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
-      const rawList: Product[] = saved ? JSON.parse(saved) : PRODUCTS;
-      return rawList.map(p => ({
-        ...p,
-        image: formatImageUrl(p.image),
-      }));
-    } catch {
+      const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const rawList: Product[] = JSON.parse(saved);
+        return rawList.map(p => ({
+          ...p,
+          image: formatImageUrl(p.image),
+        }));
+      }
+      // Jika toko baru, isolasi data: Toko baru mulai dengan kosong (0 produk)
+      if (isNewStore) {
+        return [];
+      }
       return PRODUCTS;
+    } catch {
+      return isNewStore ? [] : PRODUCTS;
     }
   });
+
   const [stores, setStores] = useState<Store[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_STORES_KEY);
-      const list = saved ? JSON.parse(saved) : INITIAL_STORES;
-      return sanitizeStores(list);
-    } catch {
+      const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const list = JSON.parse(saved);
+        return sanitizeStores(list);
+      }
+      if (isNewStore) {
+        return [getTenantStore(currentSlug)];
+      }
       return sanitizeStores(INITIAL_STORES);
+    } catch {
+      return isNewStore ? [getTenantStore(currentSlug)] : sanitizeStores(INITIAL_STORES);
     }
   });
+
   const [currentStore, setCurrentStore] = useState<Store>(() => {
+    if (isNewStore) {
+      return getTenantStore(currentSlug);
+    }
     const list = sanitizeStores(INITIAL_STORES);
     return list[0];
   });
+
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [vouchers, setVouchers] = useState<Voucher[]>(() => {
-    const saved = localStorage.getItem(STORAGE_VOUCHERS_KEY);
-    return saved ? JSON.parse(saved) : VOUCHERS;
+    const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved);
+    return isNewStore ? [] : VOUCHERS;
   });
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [currentAddress, setCurrentAddress] = useState<Address>(INITIAL_ADDRESSES[0]);
@@ -245,26 +280,33 @@ export default function App() {
 
   // Member & Loyalty
   const [member, setMember] = useState<MemberProfile>(() => {
-    const saved = localStorage.getItem(STORAGE_MEMBER_KEY);
+    const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
+    const saved = localStorage.getItem(key);
     return saved ? JSON.parse(saved) : INITIAL_MEMBER;
   });
 
   // Cart State
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem(STORAGE_CART_KEY);
+    const key = getTenantStorageKey(STORAGE_CART_KEY, currentSlug);
+    const saved = localStorage.getItem(key);
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Orders State
+  // Orders State - Toko baru TERISOLASI dari riwayat order toko lain (0 order awal)
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem(STORAGE_ORDERS_KEY);
+    const key = getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug);
+    const saved = localStorage.getItem(key);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         console.error('Failed to parse saved orders:', e);
       }
+    }
+    // Jika toko baru, isolasi data: Toko baru mulai dengan kosong (0 pesanan)
+    if (isNewStore) {
+      return [];
     }
     return INITIAL_SAMPLE_ORDERS;
   });
@@ -378,59 +420,124 @@ export default function App() {
   // Store Receipt Configurations State (Add, Edit, Delete Struk Info Toko)
   const [receiptConfigs, setReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_RECEIPT_CONFIGS_KEY);
-      const list = saved ? JSON.parse(saved) : INITIAL_RECEIPT_CONFIGS;
-      return sanitizeReceiptConfigs(list);
+      const key = getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return sanitizeReceiptConfigs(JSON.parse(saved));
+      if (isNewStore) {
+        const tenant = loadStoreTenantConfig(currentSlug);
+        const newStoreReceipt: ReceiptInfo = {
+          id: `rcpt_${currentSlug}`,
+          storeId: currentSlug,
+          profileName: `Struk Utama ${tenant.storeName}`,
+          headerBrand: tenant.storeName.toUpperCase(),
+          subHeader: tenant.tagline || 'Pusat Belanja & Kasir',
+          storeName: tenant.storeName,
+          address: tenant.address || 'Alamat Toko',
+          city: tenant.city || 'Kota',
+          phone: tenant.phone || tenant.whatsapp || '08123456789',
+          cashierName: 'Kasir',
+          footerMessage1: 'Terima kasih atas kunjungan Anda!',
+          footerMessage2: 'Barang yang sudah dibeli tidak dapat ditukar',
+          csHotline: tenant.whatsapp || tenant.phone,
+          showBarcode: true,
+          showStoreLogo: false,
+          paperWidth: '58mm',
+          isDefault: true,
+        };
+        return [newStoreReceipt];
+      }
+      return sanitizeReceiptConfigs(INITIAL_RECEIPT_CONFIGS);
     } catch {
       return sanitizeReceiptConfigs(INITIAL_RECEIPT_CONFIGS);
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_RECEIPT_CONFIGS_KEY, JSON.stringify(receiptConfigs));
-  }, [receiptConfigs]);
+    const key = getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(receiptConfigs));
+  }, [receiptConfigs, currentSlug]);
 
   // Store Promo & Discount Configurations State (Add, Edit, Delete Info Diskon / Promo Apapun)
   const [storePromos, setStorePromos] = useState<StorePromoInfo[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_STORE_PROMOS_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_STORE_PROMOS;
+      const key = getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_STORE_PROMOS;
     } catch {
-      return INITIAL_STORE_PROMOS;
+      return isNewStore ? [] : INITIAL_STORE_PROMOS;
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_STORE_PROMOS_KEY, JSON.stringify(storePromos));
-  }, [storePromos]);
+    const key = getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(storePromos));
+  }, [storePromos, currentSlug]);
 
   // Couriers Management State (Add, Edit, Delete Info Kurir Pengiriman)
   const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_COURIERS_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_COURIERS;
+      const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      return isNewStore ? [] : INITIAL_COURIERS;
     } catch {
-      return INITIAL_COURIERS;
+      return isNewStore ? [] : INITIAL_COURIERS;
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_COURIERS_KEY, JSON.stringify(couriers));
-  }, [couriers]);
+    const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(couriers));
+  }, [couriers, currentSlug]);
 
   // Staff Users Management State (Admin, Supervisor, Kasir, Gudang)
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_STAFF_USERS_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
+      const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved);
+      if (isNewStore) {
+        const tenant = loadStoreTenantConfig(currentSlug);
+        const newStoreStaff: StaffUser[] = [
+          {
+            id: `usr_${currentSlug}_admin`,
+            username: `admin_${currentSlug}`,
+            name: `Pemilik ${tenant.storeName}`,
+            role: 'admin',
+            pin: '1234',
+            phone: tenant.phone || tenant.whatsapp,
+            storeId: currentSlug,
+            storeName: tenant.storeName,
+            isActive: true,
+            createdAt: '01 Jan 2026',
+            permissions: DEFAULT_ROLE_PERMISSIONS.admin,
+          },
+          {
+            id: `usr_${currentSlug}_kasir`,
+            username: `kasir_${currentSlug}`,
+            name: `Kasir ${tenant.storeName}`,
+            role: 'kasir',
+            pin: '1234',
+            storeId: currentSlug,
+            storeName: tenant.storeName,
+            isActive: true,
+            createdAt: '01 Jan 2026',
+            permissions: DEFAULT_ROLE_PERMISSIONS.kasir,
+          }
+        ];
+        return newStoreStaff;
+      }
+      return INITIAL_STAFF_USERS;
     } catch {
       return INITIAL_STAFF_USERS;
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_STAFF_USERS_KEY, JSON.stringify(staffUsers));
-  }, [staffUsers]);
+    const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(staffUsers));
+  }, [staffUsers, currentSlug]);
 
   // Supabase State
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
@@ -452,89 +559,133 @@ export default function App() {
         dbCouriers,
         dbStaffUsers
       ] = await Promise.all([
-        fetchProductsFromSupabase(),
+        fetchProductsFromSupabase(currentSlug),
         fetchStoresFromSupabase(),
         fetchCategoriesFromSupabase(),
-        fetchVouchersFromSupabase(),
-        fetchOrdersFromSupabase(),
+        fetchVouchersFromSupabase(currentSlug),
+        fetchOrdersFromSupabase(currentSlug),
         fetchBrandConfigFromSupabase(),
         fetchReceiptConfigsFromSupabase(),
         fetchStorePromosFromSupabase(),
-        fetchCouriersFromSupabase(),
-        fetchStaffUsersFromSupabase()
+        fetchCouriersFromSupabase(currentSlug),
+        fetchStaffUsersFromSupabase(currentSlug)
       ]);
 
       if (dbProducts !== null) {
         setIsSupabaseConnected(true);
       }
 
-      if (dbProducts && dbProducts.length > 0) {
-        const formattedDb = dbProducts.map((p) => ({
-          ...p,
-          image: formatImageUrl(p.image),
-        }));
-        setProducts(formattedDb);
-        try {
-          localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(formattedDb));
-        } catch (e) {
-          console.warn('Gagal cache produk Supabase ke localStorage:', e);
+      if (dbProducts !== null) {
+        // Multi-tenant: Toko baru hanya memuat produk miliknya sendiri dari Supabase
+        const relevantProducts = isNewStore 
+          ? dbProducts.filter((p: any) => p.storeId === currentSlug)
+          : dbProducts;
+
+        if (relevantProducts.length > 0) {
+          const formattedDb = relevantProducts.map((p) => ({
+            ...p,
+            image: formatImageUrl(p.image),
+          }));
+          setProducts(formattedDb);
+          try {
+            const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+            localStorage.setItem(key, JSON.stringify(formattedDb));
+          } catch (e) {
+            console.warn('Gagal cache produk Supabase ke localStorage:', e);
+          }
+        } else if (isNewStore) {
+          // Jika toko baru belum memiliki produk di database, baca dari local cache tenant atau set kosong
+          const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            try {
+              setProducts(JSON.parse(cached));
+            } catch {}
+          } else {
+            setProducts([]);
+          }
         }
       }
       if (dbStores && dbStores.length > 0) {
-        setStores(dbStores);
-        try {
-          localStorage.setItem(STORAGE_STORES_KEY, JSON.stringify(dbStores));
-        } catch {}
-        setCurrentStore((prev) => dbStores.find((s) => s.id === prev.id) || dbStores[0]);
+        if (!isNewStore) {
+          setStores(dbStores);
+          try {
+            localStorage.setItem(getTenantStorageKey(STORAGE_STORES_KEY, currentSlug), JSON.stringify(dbStores));
+          } catch {}
+          setCurrentStore((prev) => dbStores.find((s) => s.id === prev.id) || dbStores[0]);
+        }
       }
       if (dbCategories && dbCategories.length > 0) {
         setCategories(dbCategories);
       }
       if (dbVouchers && dbVouchers.length > 0) {
-        setVouchers(dbVouchers);
+        const relevantVouchers = isNewStore
+          ? dbVouchers.filter((v: any) => v.storeId === currentSlug)
+          : dbVouchers;
+        setVouchers(relevantVouchers);
         try {
-          localStorage.setItem(STORAGE_VOUCHERS_KEY, JSON.stringify(dbVouchers));
+          localStorage.setItem(getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug), JSON.stringify(relevantVouchers));
         } catch {}
       }
       if (dbOrders && dbOrders.length > 0) {
-        setOrders(dbOrders);
+        // Multi-tenant: Toko baru HANYA melihat pesanan toko miliknya sendiri
+        const relevantOrders = isNewStore
+          ? dbOrders.filter((o) => o.store?.id === currentSlug || (o as any).storeId === currentSlug)
+          : dbOrders;
+        setOrders(relevantOrders);
         try {
-          localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify(dbOrders));
+          localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(relevantOrders));
         } catch {}
       }
       // 1. Pengaturan Brand & Struk
-      if (dbBrandConfig) {
+      if (dbBrandConfig && !isNewStore) {
         setBrandConfig(dbBrandConfig);
         try {
-          localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(dbBrandConfig));
+          localStorage.setItem(getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug), JSON.stringify(dbBrandConfig));
         } catch {}
       }
       if (dbReceiptConfigs && dbReceiptConfigs.length > 0) {
-        setReceiptConfigs(dbReceiptConfigs);
-        try {
-          localStorage.setItem(STORAGE_RECEIPT_CONFIGS_KEY, JSON.stringify(dbReceiptConfigs));
-        } catch {}
+        const relevantReceipts = isNewStore
+          ? dbReceiptConfigs.filter((r) => r.storeId === currentSlug)
+          : dbReceiptConfigs;
+        if (relevantReceipts.length > 0) {
+          setReceiptConfigs(relevantReceipts);
+          try {
+            localStorage.setItem(getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug), JSON.stringify(relevantReceipts));
+          } catch {}
+        }
       }
       // 2. Info Promo & Flash Sale
       if (dbStorePromos && dbStorePromos.length > 0) {
-        setStorePromos(dbStorePromos);
+        const relevantPromos = isNewStore
+          ? dbStorePromos.filter((p: any) => p.storeId === currentSlug)
+          : dbStorePromos;
+        setStorePromos(relevantPromos);
         try {
-          localStorage.setItem(STORAGE_STORE_PROMOS_KEY, JSON.stringify(dbStorePromos));
+          localStorage.setItem(getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug), JSON.stringify(relevantPromos));
         } catch {}
       }
       // 3. Kurir & Armada
       if (dbCouriers && dbCouriers.length > 0) {
-        setCouriers(dbCouriers);
+        const relevantCouriers = isNewStore
+          ? dbCouriers.filter((c: any) => c.storeId === currentSlug)
+          : dbCouriers;
+        setCouriers(relevantCouriers);
         try {
-          localStorage.setItem(STORAGE_COURIERS_KEY, JSON.stringify(dbCouriers));
+          localStorage.setItem(getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug), JSON.stringify(relevantCouriers));
         } catch {}
       }
       // 4. Manajemen User / Staff
       if (dbStaffUsers && dbStaffUsers.length > 0) {
-        setStaffUsers(dbStaffUsers);
-        try {
-          localStorage.setItem(STORAGE_STAFF_USERS_KEY, JSON.stringify(dbStaffUsers));
-        } catch {}
+        const relevantUsers = isNewStore
+          ? dbStaffUsers.filter((u) => u.storeId === currentSlug)
+          : dbStaffUsers;
+        if (relevantUsers.length > 0) {
+          setStaffUsers(relevantUsers);
+          try {
+            localStorage.setItem(getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug), JSON.stringify(relevantUsers));
+          } catch {}
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat data dari Supabase:', e);
@@ -581,39 +732,71 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [currentSlug, isNewStore]);
+
+  // Salin 30 Katalog Contoh Minimarket (Opsional jika toko baru ingin mengisi etalase cepat)
+  const handleCopySampleCatalog = () => {
+    const sample = PRODUCTS.map((p, idx) => ({
+      ...p,
+      id: `prod_${currentSlug}_${idx + 1}`,
+      storeId: currentSlug,
+      image: formatImageUrl(p.image),
+    }));
+    setProducts(sample);
+    try {
+      const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(sample));
+    } catch (e) {
+      console.warn('Gagal simpan salinan sample produk:', e);
+    }
+    sample.forEach((p) => {
+      saveProductToSupabase(p).catch(() => {});
+    });
+  };
 
   // CRUD Produk Terjamin Persistensinya
   const handleAddProduct = async (newProd: Product): Promise<{ success: boolean; error?: string }> => {
-    // 1. Simpan langsung ke state produk lokal
-    setProducts((prev) => [newProd, ...prev]);
+    const prodWithStore: Product = {
+      ...newProd,
+      storeId: (newProd as any).storeId || currentSlug,
+    };
 
-    // 2. Langsung simpan ke localStorage secara sinkron
+    // 1. Simpan langsung ke state produk lokal
+    setProducts((prev) => [prodWithStore, ...prev]);
+
+    // 2. Langsung simpan ke localStorage secara sinkron dengan kunci tenant
     try {
-      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+      const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
       const list: Product[] = saved ? JSON.parse(saved) : products;
-      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify([newProd, ...list.filter(p => p.id !== newProd.id)]));
+      localStorage.setItem(key, JSON.stringify([prodWithStore, ...list.filter(p => p.id !== prodWithStore.id)]));
     } catch (err) {
       console.warn('Gagal simpan produk baru ke localStorage:', err);
     }
 
     // 3. Simpan ke Supabase
-    const res = await saveProductToSupabase(newProd);
+    const res = await saveProductToSupabase(prodWithStore);
     return res;
   };
 
   const handleEditProduct = async (updatedProd: Product): Promise<{ success: boolean; error?: string }> => {
-    setProducts((prev) => prev.map((p) => (p.id === updatedProd.id ? updatedProd : p)));
+    const prodWithStore: Product = {
+      ...updatedProd,
+      storeId: (updatedProd as any).storeId || currentSlug,
+    };
+
+    setProducts((prev) => prev.map((p) => (p.id === prodWithStore.id ? prodWithStore : p)));
 
     try {
-      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+      const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
       const list: Product[] = saved ? JSON.parse(saved) : products;
-      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(list.map(p => p.id === updatedProd.id ? updatedProd : p)));
+      localStorage.setItem(key, JSON.stringify(list.map(p => p.id === prodWithStore.id ? prodWithStore : p)));
     } catch (err) {
       console.warn('Gagal update produk di localStorage:', err);
     }
 
-    const res = await saveProductToSupabase(updatedProd);
+    const res = await saveProductToSupabase(prodWithStore);
     return res;
   };
 
@@ -621,9 +804,10 @@ export default function App() {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
 
     try {
-      const saved = localStorage.getItem(STORAGE_PRODUCTS_KEY);
+      const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
       const list: Product[] = saved ? JSON.parse(saved) : products;
-      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(list.filter(p => p.id !== productId)));
+      localStorage.setItem(key, JSON.stringify(list.filter(p => p.id !== productId)));
     } catch (err) {
       console.warn('Gagal hapus produk di localStorage:', err);
     }
@@ -634,6 +818,10 @@ export default function App() {
 
   const handleUpdateProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
+    try {
+      const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newProducts));
+    } catch {}
     newProducts.forEach((p) => {
       saveProductToSupabase(p).catch(() => {});
     });
@@ -641,6 +829,10 @@ export default function App() {
 
   const handleUpdateStores = (newStores: Store[]) => {
     setStores(newStores);
+    try {
+      const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newStores));
+    } catch {}
     newStores.forEach((s) => {
       saveStoreToSupabase(s).catch(() => {});
     });
@@ -657,6 +849,10 @@ export default function App() {
       saveVoucherToSupabase(v).catch(() => {});
     });
     setVouchers(newVouchers);
+    try {
+      const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newVouchers));
+    } catch {}
   };
 
   const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
@@ -678,6 +874,10 @@ export default function App() {
       saveReceiptConfigToSupabase(r).catch(() => {});
     });
     setReceiptConfigs(newConfigs);
+    try {
+      const key = getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newConfigs));
+    } catch {}
   };
 
   const handleUpdateStorePromos = (newPromos: StorePromoInfo[]) => {
@@ -691,6 +891,10 @@ export default function App() {
       saveStorePromoToSupabase(p).catch(() => {});
     });
     setStorePromos(newPromos);
+    try {
+      const key = getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newPromos));
+    } catch {}
   };
 
   const handleUpdateCouriers = (newCouriers: CourierInfo[]) => {
@@ -704,12 +908,17 @@ export default function App() {
       saveCourierToSupabase(c).catch(() => {});
     });
     setCouriers(newCouriers);
+    try {
+      const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newCouriers));
+    } catch {}
   };
 
   const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
-    // 1. Immediately persist synchronously to localStorage
+    // 1. Immediately persist synchronously to localStorage with tenant key
     try {
-      localStorage.setItem(STORAGE_STAFF_USERS_KEY, JSON.stringify(newUsers));
+      const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newUsers));
     } catch {}
 
     // 2. Sync to Supabase in background
@@ -729,22 +938,26 @@ export default function App() {
 
   // Save Cart to LocalStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_CART_KEY, JSON.stringify(cartItems));
-  }, [cartItems]);
+    const key = getTenantStorageKey(STORAGE_CART_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(cartItems));
+  }, [cartItems, currentSlug]);
 
   // Save Orders to LocalStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify(orders));
-  }, [orders]);
+    const key = getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(orders));
+  }, [orders, currentSlug]);
 
   // Save Member to LocalStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_MEMBER_KEY, JSON.stringify(member));
-  }, [member]);
+    const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(member));
+  }, [member, currentSlug]);
 
   // Save Vouchers to LocalStorage & Keep appliedVoucher in sync
   useEffect(() => {
-    localStorage.setItem(STORAGE_VOUCHERS_KEY, JSON.stringify(vouchers));
+    const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(vouchers));
     if (appliedVoucher) {
       const existing = vouchers.find(v => v.id === appliedVoucher.id);
       if (!existing) {
@@ -753,12 +966,13 @@ export default function App() {
         setAppliedVoucher(existing);
       }
     }
-  }, [vouchers]);
+  }, [vouchers, currentSlug]);
 
   // Save Products to LocalStorage with Quota Safe Guard
   useEffect(() => {
+    const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
     try {
-      localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(products));
+      localStorage.setItem(key, JSON.stringify(products));
     } catch (e) {
       console.warn('Storage quota warning on saving products:', e);
       try {
@@ -767,12 +981,12 @@ export default function App() {
           ...p,
           image: p.image && p.image.length > 3000 ? getProductFallbackImage(p.category) : p.image
         }));
-        localStorage.setItem(STORAGE_PRODUCTS_KEY, JSON.stringify(lean));
+        localStorage.setItem(key, JSON.stringify(lean));
       } catch (err) {
         console.error('Failed to save products to localStorage:', err);
       }
     }
-  }, [products]);
+  }, [products, currentSlug]);
 
   // Count products by category
   const productCountByCategory = categories.reduce((acc, cat) => {
@@ -1257,7 +1471,34 @@ export default function App() {
               )}
             </div>
 
-            {filteredProducts.length === 0 ? (
+            {products.length === 0 ? (
+              <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-12 text-center my-6 max-w-xl mx-auto shadow-sm">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto mb-3.5 shadow-xs">
+                  <Package className="w-8 h-8" />
+                </div>
+                <h4 className="font-bold text-stone-900 text-lg mb-1.5">Katalog Toko Masih Kosong (0 Produk)</h4>
+                <p className="text-xs text-stone-500 max-w-md mx-auto mb-6 leading-relaxed">
+                  Toko <strong>{brandConfig.brandNamePart1} {brandConfig.brandNamePart2}</strong> terisolasi secara mandiri dengan database bersih. Anda dapat menginput produk baru di Panel Admin, atau menyalin 30 template produk minimarket untuk pengujian cepat.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => {
+                      setAdminPanelInitialTab('products');
+                      setIsAdminPanelOpen(true);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" /> Buka Panel Admin (Tambah Produk)
+                  </button>
+                  <button
+                    onClick={handleCopySampleCatalog}
+                    className="bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold px-4 py-2.5 rounded-xl border border-stone-300 transition-all inline-flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-600" /> Salin 30 Katalog Contoh
+                  </button>
+                </div>
+              </div>
+            ) : filteredProducts.length === 0 ? (
               <div className="bg-white border border-stone-200 rounded-3xl p-12 text-center my-6">
                 <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mx-auto mb-3">
                   <Search className="w-8 h-8" />

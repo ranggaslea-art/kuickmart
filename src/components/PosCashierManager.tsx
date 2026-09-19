@@ -11,6 +11,7 @@ import {
 import { formatRupiah } from '../utils/formatters';
 import { getProductUnitOptions } from '../utils/unitConversion';
 import { cleanReceiptText } from '../utils/sanitizeReceipt';
+import { getStoreSlugFromUrl, getTenantStorageKey } from '../utils/tenantHelper';
 import { 
   generateDotMatrixReceiptHtml, 
   printPosReceiptViaIframe,
@@ -152,13 +153,16 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   const [selectedStoreId] = useState(currentStore?.id || stores[0]?.id || 'store_1');
   const [cashierName] = useState('Kasir 01 (Budi Santoso)');
 
+  const currentSlug = getStoreSlugFromUrl();
+
   // Receipt Configuration (Default: Epson TM-U220 Dot Matrix 70mm)
   const [isReceiptEditorModalOpen, setIsReceiptEditorModalOpen] = useState(false);
   const [receiptPrintFeedback, setReceiptPrintFeedback] = useState<string | null>(null);
   const [localReceiptConfigs, setLocalReceiptConfigs] = useState<ReceiptInfo[]>(() => {
     if (receiptConfigs && receiptConfigs.length > 0) return receiptConfigs;
     try {
-      const saved = localStorage.getItem('nusamart_receipt_configs');
+      const key = getTenantStorageKey('nusamart_receipt_configs', currentSlug);
+      const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch {}
     return [];
@@ -217,7 +221,8 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     }
     setLocalReceiptConfigs(newList);
     try {
-      localStorage.setItem('nusamart_receipt_configs', JSON.stringify(newList));
+      const key = getTenantStorageKey('nusamart_receipt_configs', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newList));
     } catch {}
     if (onUpdateReceiptConfigs) {
       onUpdateReceiptConfigs(newList);
@@ -312,7 +317,8 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   // Held Transactions (Tahan / Panggil Struk)
   const [heldTransactions, setHeldTransactions] = useState<HeldTransaction[]>(() => {
     try {
-      const saved = localStorage.getItem('nusamart_pos_held_bills');
+      const key = getTenantStorageKey('nusamart_pos_held_bills', currentSlug);
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -416,11 +422,12 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   // Sync held bills to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('nusamart_pos_held_bills', JSON.stringify(heldTransactions));
+      const key = getTenantStorageKey('nusamart_pos_held_bills', currentSlug);
+      localStorage.setItem(key, JSON.stringify(heldTransactions));
     } catch {
       // ignore
     }
-  }, [heldTransactions]);
+  }, [heldTransactions, currentSlug]);
 
   // ==========================================
   // ADD PRODUCT TO TRANSACTION CART

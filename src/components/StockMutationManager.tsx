@@ -6,6 +6,7 @@ import {
   StockMutationItem 
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey } from '../utils/tenantHelper';
 import { 
   ArrowLeftRight, 
   Plus, 
@@ -50,22 +51,26 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
     currentStore?.id || stores[0]?.id || 'store_1'
   );
 
+  const currentSlug = getStoreSlugFromUrl();
+  const isNewStore = !isDefaultStore(currentSlug);
+
   // Persistent Mutations State
   const [mutations, setMutations] = useState<StockMutation[]>(() => {
     try {
-      const saved = localStorage.getItem('kuickmart_stock_mutations');
+      const key = getTenantStorageKey('kuickmart_stock_mutations', currentSlug);
+      const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return propMutations && propMutations.length > 0
-      ? propMutations
-      : INITIAL_STOCK_MUTATIONS;
+    if (propMutations && propMutations.length > 0) return propMutations;
+    return isNewStore ? [] : INITIAL_STOCK_MUTATIONS;
   });
 
   const saveMutations = (newMutations: StockMutation[]) => {
     setMutations(newMutations);
     if (onUpdateStockMutations) onUpdateStockMutations(newMutations);
     try {
-      localStorage.setItem('kuickmart_stock_mutations', JSON.stringify(newMutations));
+      const key = getTenantStorageKey('kuickmart_stock_mutations', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newMutations));
     } catch (e) {
       console.error(e);
     }

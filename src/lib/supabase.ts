@@ -27,6 +27,7 @@ import {
   INITIAL_STAFF_USERS
 } from '../data/mockData';
 import { DEFAULT_SUPABASE_CONFIG } from './supabaseConfig';
+import { getStoreSlugFromUrl, isDefaultStore } from '../utils/tenantHelper';
 
 const STORAGE_KEY_URL = 'nusamart_supabase_url';
 const STORAGE_KEY_KEY = 'nusamart_supabase_anon_key';
@@ -569,27 +570,33 @@ export async function updateProductSalesAndStockInSupabase(
 }
 
 // Fetch orders & barang terjual dari Supabase
-export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
+export async function fetchOrdersFromSupabase(storeId?: string): Promise<Order[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+  const isNew = !isDefaultStore(targetSlug);
+
   try {
     let ordersData: any[] | null = null;
-    const { data: withItems, error: relError } = await supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .order('created_at', { ascending: false });
+    let query = supabase.from('orders').select('*, order_items(*)');
+    if (isNew) {
+      query = query.eq('store_id', targetSlug);
+    }
+    const { data: withItems, error: relError } = await query.order('created_at', { ascending: false });
 
     if (!relError && withItems) {
       ordersData = withItems;
     } else {
       // Fallback jika relasi order_items belum terbaca di PostgREST schema cache
-      const { data: fallbackOrders, error: fallbackError } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let fallbackQuery = supabase.from('orders').select('*');
+      if (isNew) {
+        fallbackQuery = fallbackQuery.eq('store_id', targetSlug);
+      }
+      const { data: fallbackOrders, error: fallbackError } = await fallbackQuery.order('created_at', { ascending: false });
 
       if (fallbackError) {
+        if (isNew) return [];
         console.warn('Gagal memuat pesanan dari Supabase:', fallbackError.message);
         return null;
       }
@@ -597,6 +604,10 @@ export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
     }
 
     if (!ordersData || ordersData.length === 0) return [];
+
+    if (isNew) {
+      ordersData = ordersData.filter((r: any) => r.store_id === targetSlug || r.store?.id === targetSlug);
+    }
 
     const stores = await fetchStoresFromSupabase();
     const defaultStore = stores && stores.length > 0 ? stores[0] : null;
@@ -707,15 +718,32 @@ export async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
 }
 
 // Fetch products from Supabase
-export async function fetchProductsFromSupabase(): Promise<Product[] | null> {
+export async function fetchProductsFromSupabase(storeId?: string): Promise<Product[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  try {
-    const { data, error } = await supabase.from('products').select('*').order('sold_count', { ascending: false });
-    if (error || !data || data.length === 0) return null;
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+  const isNew = !isDefaultStore(targetSlug);
 
-    return data.map((row: any) => ({
+  try {
+    let query = supabase.from('products').select('*');
+    if (isNew) {
+      query = query.eq('store_id', targetSlug);
+    }
+    const { data, error } = await query.order('sold_count', { ascending: false });
+    
+    // If error because column 'store_id' does not exist yet
+    if (error) {
+      if (isNew) {
+        // Toko baru tidak boleh melihat produk toko utama jika kolom store_id belum ada
+        return [];
+      }
+      return null;
+    }
+    
+    if (!data || data.length === 0) return [];
+
+    const mapped = data.map((row: any) => ({
       id: row.id,
       name: row.name,
       brand: row.brand,
@@ -733,7 +761,13 @@ export async function fetchProductsFromSupabase(): Promise<Product[] | null> {
       description: row.description,
       barcode: row.barcode,
       isPopular: row.is_popular,
+      storeId: row.store_id || undefined,
     }));
+
+    if (isNew) {
+      return mapped.filter((p: any) => p.storeId === targetSlug);
+    }
+    return mapped;
   } catch (e) {
     return null;
   }
@@ -792,15 +826,26 @@ export async function fetchCategoriesFromSupabase(): Promise<Category[] | null> 
 }
 
 // Fetch vouchers from Supabase
-export async function fetchVouchersFromSupabase(): Promise<Voucher[] | null> {
+export async function fetchVouchersFromSupabase(storeId?: string): Promise<Voucher[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  try {
-    const { data, error } = await supabase.from('vouchers').select('*').order('created_at', { ascending: false });
-    if (error || !data || data.length === 0) return null;
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+  const isNew = !isDefaultStore(targetSlug);
 
-    return data.map((row: any) => ({
+  try {
+    let query = supabase.from('vouchers').select('*');
+    if (isNew) {
+      query = query.eq('store_id', targetSlug);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      if (isNew) return [];
+      return null;
+    }
+    if (!data || data.length === 0) return [];
+
+    const mapped = data.map((row: any) => ({
       id: row.id,
       code: row.code,
       title: row.title,
@@ -810,7 +855,13 @@ export async function fetchVouchersFromSupabase(): Promise<Voucher[] | null> {
       maxDiscount: row.max_discount ? Number(row.max_discount) : undefined,
       validUntil: row.valid_until,
       description: row.description,
+      storeId: row.store_id || undefined,
     }));
+
+    if (isNew) {
+      return mapped.filter((v: any) => v.storeId === targetSlug);
+    }
+    return mapped;
   } catch (e) {
     return null;
   }
@@ -836,7 +887,8 @@ export async function saveProductToSupabase(
 
   if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
   try {
-    const payload = {
+    const targetSlug = product.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+    const payload: Record<string, any> = {
       id: product.id,
       name: product.name || 'Produk Baru',
       brand: product.brand || 'Umum',
@@ -854,8 +906,17 @@ export async function saveProductToSupabase(
       description: product.description || '',
       barcode: product.barcode || '',
       is_popular: Boolean(product.isPopular),
+      store_id: targetSlug || null,
     };
-    const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
+
+    const currentPayload = { ...payload };
+    let upsertRes = await supabase.from('products').upsert(currentPayload, { onConflict: 'id' });
+    if (upsertRes.error && (upsertRes.error.message?.includes('store_id') || upsertRes.error.code === '42703')) {
+      delete currentPayload.store_id;
+      upsertRes = await supabase.from('products').upsert(currentPayload, { onConflict: 'id' });
+    }
+    const { error } = upsertRes;
+
     if (error) {
       if (!options?.skipQueue && isNetworkError(error)) {
         addToOfflineQueue(
@@ -1090,7 +1151,8 @@ export async function saveVoucherToSupabase(voucher: Voucher): Promise<boolean> 
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
-    const payload = {
+    const targetSlug = (voucher as any).storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+    const payload: Record<string, any> = {
       id: voucher.id,
       code: voucher.code,
       title: voucher.title,
@@ -1100,9 +1162,15 @@ export async function saveVoucherToSupabase(voucher: Voucher): Promise<boolean> 
       max_discount: voucher.maxDiscount || null,
       valid_until: voucher.validUntil,
       description: voucher.description,
+      store_id: targetSlug || null,
     };
-    const { error } = await supabase.from('vouchers').upsert(payload, { onConflict: 'id' });
-    return !error;
+    const currentPayload = { ...payload };
+    let upsertRes = await supabase.from('vouchers').upsert(currentPayload, { onConflict: 'id' });
+    if (upsertRes.error && (upsertRes.error.message?.includes('store_id') || upsertRes.error.code === '42703')) {
+      delete currentPayload.store_id;
+      upsertRes = await supabase.from('vouchers').upsert(currentPayload, { onConflict: 'id' });
+    }
+    return !upsertRes.error;
   } catch {
     return false;
   }
@@ -1310,13 +1378,24 @@ export async function deleteStorePromoFromSupabase(promoId: string): Promise<boo
 // -------------------------------------------------------------
 // 4. COURIERS & FLEET MANAGEMENT (Kurir & Armada Pengantaran)
 // -------------------------------------------------------------
-export async function fetchCouriersFromSupabase(): Promise<CourierInfo[] | null> {
+export async function fetchCouriersFromSupabase(storeId?: string): Promise<CourierInfo[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+  const isNew = !isDefaultStore(targetSlug);
+
   try {
-    const { data, error } = await supabase.from('couriers').select('*').order('name', { ascending: true });
-    if (error || !data || data.length === 0) return null;
-    return data.map((row: any) => ({
+    let query = supabase.from('couriers').select('*');
+    if (isNew) {
+      query = query.eq('store_id', targetSlug);
+    }
+    const { data, error } = await query.order('name', { ascending: true });
+    if (error) {
+      if (isNew) return [];
+      return null;
+    }
+    if (!data || data.length === 0) return [];
+    const mapped = data.map((row: any) => ({
       id: row.id,
       name: row.name,
       phone: row.phone,
@@ -1332,6 +1411,11 @@ export async function fetchCouriersFromSupabase(): Promise<CourierInfo[] | null>
       notes: row.notes || undefined,
       updatedAt: row.updated_at,
     }));
+
+    if (isNew) {
+      return mapped.filter((c: any) => c.storeId === targetSlug);
+    }
+    return mapped;
   } catch (e) {
     return null;
   }
@@ -1341,6 +1425,7 @@ export async function saveCourierToSupabase(courier: CourierInfo): Promise<boole
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
+    const targetSlug = courier.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
     const payload = {
       id: courier.id,
       name: courier.name,
@@ -1353,7 +1438,7 @@ export async function saveCourierToSupabase(courier: CourierInfo): Promise<boole
       status: courier.status || 'available',
       rating: courier.rating ?? 4.9,
       total_deliveries: courier.totalDeliveries ?? 0,
-      store_id: courier.storeId || null,
+      store_id: targetSlug || null,
       notes: courier.notes || null,
       updated_at: new Date().toISOString()
     };
@@ -1378,13 +1463,24 @@ export async function deleteCourierFromSupabase(courierId: string): Promise<bool
 // -------------------------------------------------------------
 // 5. STAFF USERS (Manajemen User Staff/Kasir/Admin/Supervisor)
 // -------------------------------------------------------------
-export async function fetchStaffUsersFromSupabase(): Promise<StaffUser[] | null> {
+export async function fetchStaffUsersFromSupabase(storeId?: string): Promise<StaffUser[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart');
+  const isNew = !isDefaultStore(targetSlug);
+
   try {
-    const { data, error } = await supabase.from('staff_users').select('*').order('created_at', { ascending: false });
-    if (error || !data || data.length === 0) return null;
-    return data.map((row: any) => {
+    let query = supabase.from('staff_users').select('*');
+    if (isNew) {
+      query = query.eq('store_id', targetSlug);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      if (isNew) return [];
+      return null;
+    }
+    if (!data || data.length === 0) return [];
+    const mapped = data.map((row: any) => {
       let parsedPermissions = undefined;
       if (row.permissions) {
         try {
@@ -1407,6 +1503,11 @@ export async function fetchStaffUsersFromSupabase(): Promise<StaffUser[] | null>
         permissions: parsedPermissions,
       };
     });
+
+    if (isNew) {
+      return mapped.filter((u: any) => u.storeId === targetSlug);
+    }
+    return mapped;
   } catch (e) {
     return null;
   }
@@ -1424,7 +1525,7 @@ export async function saveStaffUserToSupabase(user: StaffUser): Promise<boolean>
       pin: user.pin,
       phone: user.phone || null,
       email: user.email || null,
-      store_id: user.storeId || null,
+      store_id: user.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'kuickmart'),
       store_name: user.storeName || null,
       is_active: user.isActive ?? true,
       created_at: formatSupabaseTimestamp(user.createdAt) || new Date().toISOString(),

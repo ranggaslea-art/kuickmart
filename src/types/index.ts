@@ -29,6 +29,7 @@ export interface Product {
   description: string;
   barcode: string;
   isPopular?: boolean;
+  storeId?: string; // Multi-tenant store slug / ID
 }
 
 export interface Category {
