@@ -107,6 +107,9 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_sales_returns', currentSlug);
       localStorage.setItem(key, JSON.stringify(newReturns));
+      import('../utils/tenantCloudSync').then(({ saveTenantDataToCloud }) => {
+        saveTenantDataToCloud('sales_returns', newReturns, currentSlug);
+      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -118,6 +121,9 @@ export const ReturnsManager: React.FC<ReturnsManagerProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_purchase_returns', currentSlug);
       localStorage.setItem(key, JSON.stringify(newReturns));
+      import('../utils/tenantCloudSync').then(({ saveTenantDataToCloud }) => {
+        saveTenantDataToCloud('purchase_returns', newReturns, currentSlug);
+      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }

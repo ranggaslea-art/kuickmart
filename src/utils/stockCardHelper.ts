@@ -94,6 +94,9 @@ export function saveStoredStockAdjustments(records: StockAdjustmentRecord[], slu
   try {
     const key = getTenantStorageKey('toko_online_stock_adjustments', slug);
     localStorage.setItem(key, JSON.stringify(records));
+    import('./tenantCloudSync').then(({ saveTenantDataToCloud }) => {
+      saveTenantDataToCloud('stock_cards', records, slug);
+    }).catch(() => {});
   } catch (e) {
     console.error('Failed to save stock adjustments:', e);
   }

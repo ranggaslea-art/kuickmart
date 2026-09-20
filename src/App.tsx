@@ -152,6 +152,11 @@ import {
   getTenantStorageKey,
   getTenantStore
 } from './utils/tenantHelper';
+import { 
+  saveTenantDataToCloud, 
+  fetchTenantDataFromCloud, 
+  subscribeToTenantCloudChanges 
+} from './utils/tenantCloudSync';
 
 const STORAGE_CART_KEY = 'nusamart_cart';
 const STORAGE_ORDERS_KEY = 'nusamart_orders';
@@ -594,9 +599,9 @@ export default function App() {
         fetchCategoriesFromSupabase(),
         fetchVouchersFromSupabase(currentSlug),
         fetchOrdersFromSupabase(currentSlug),
-        fetchBrandConfigFromSupabase(),
-        fetchReceiptConfigsFromSupabase(),
-        fetchStorePromosFromSupabase(),
+        fetchBrandConfigFromSupabase(currentSlug),
+        fetchReceiptConfigsFromSupabase(currentSlug),
+        fetchStorePromosFromSupabase(currentSlug),
         fetchCouriersFromSupabase(currentSlug),
         fetchStaffUsersFromSupabase(currentSlug)
       ]);
@@ -608,7 +613,7 @@ export default function App() {
       if (dbProducts !== null) {
         // Multi-tenant: Toko baru hanya memuat produk miliknya sendiri dari Supabase
         const relevantProducts = isNewStore 
-          ? dbProducts.filter((p: any) => p.storeId === currentSlug)
+          ? dbProducts.filter((p: any) => !p.storeId || p.storeId === currentSlug || (Array.isArray(p.tags) && p.tags.includes(`store:${currentSlug}`)))
           : dbProducts;
 
         if (relevantProducts.length > 0) {
@@ -624,15 +629,24 @@ export default function App() {
             console.warn('Gagal cache produk Supabase ke localStorage:', e);
           }
         } else if (isNewStore) {
-          // Jika toko baru belum memiliki produk di database, baca dari local cache tenant atau set kosong
-          const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
-          const cached = localStorage.getItem(key);
-          if (cached) {
+          // Periksa juga cadangan dari Cloud Tenant Sync
+          const cloudProds = await fetchTenantDataFromCloud<Product[]>('products', currentSlug);
+          if (cloudProds && cloudProds.length > 0) {
+            const formatted = cloudProds.map(p => ({ ...p, image: formatImageUrl(p.image) }));
+            setProducts(formatted);
             try {
-              setProducts(JSON.parse(cached));
+              localStorage.setItem(getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug), JSON.stringify(formatted));
             } catch {}
           } else {
-            setProducts([]);
+            const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+            const cached = localStorage.getItem(key);
+            if (cached) {
+              try {
+                setProducts(JSON.parse(cached));
+              } catch {}
+            } else {
+              setProducts([]);
+            }
           }
         }
       }
@@ -650,7 +664,7 @@ export default function App() {
       }
       if (dbVouchers && dbVouchers.length > 0) {
         const relevantVouchers = isNewStore
-          ? dbVouchers.filter((v: any) => v.storeId === currentSlug)
+          ? dbVouchers.filter((v: any) => !v.storeId || v.storeId === currentSlug)
           : dbVouchers;
         setVouchers(relevantVouchers);
         try {
@@ -668,7 +682,7 @@ export default function App() {
         } catch {}
       }
       // 1. Pengaturan Brand & Struk
-      if (dbBrandConfig && !isNewStore) {
+      if (dbBrandConfig) {
         setBrandConfig(dbBrandConfig);
         try {
           localStorage.setItem(getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug), JSON.stringify(dbBrandConfig));
@@ -676,7 +690,7 @@ export default function App() {
       }
       if (dbReceiptConfigs && dbReceiptConfigs.length > 0) {
         const relevantReceipts = isNewStore
-          ? dbReceiptConfigs.filter((r) => r.storeId === currentSlug)
+          ? dbReceiptConfigs.filter((r) => !r.storeId || r.storeId === currentSlug)
           : dbReceiptConfigs;
         if (relevantReceipts.length > 0) {
           setReceiptConfigs(relevantReceipts);
@@ -688,7 +702,7 @@ export default function App() {
       // 2. Info Promo & Flash Sale
       if (dbStorePromos && dbStorePromos.length > 0) {
         const relevantPromos = isNewStore
-          ? dbStorePromos.filter((p: any) => p.storeId === currentSlug)
+          ? dbStorePromos.filter((p: any) => !p.storeId || p.storeId === currentSlug)
           : dbStorePromos;
         setStorePromos(relevantPromos);
         try {
@@ -698,7 +712,7 @@ export default function App() {
       // 3. Kurir & Armada
       if (dbCouriers && dbCouriers.length > 0) {
         const relevantCouriers = isNewStore
-          ? dbCouriers.filter((c: any) => c.storeId === currentSlug)
+          ? dbCouriers.filter((c: any) => !c.storeId || c.storeId === currentSlug)
           : dbCouriers;
         setCouriers(relevantCouriers);
         try {
@@ -708,7 +722,7 @@ export default function App() {
       // 4. Manajemen User / Staff
       if (dbStaffUsers && dbStaffUsers.length > 0) {
         const relevantUsers = isNewStore
-          ? dbStaffUsers.filter((u) => u.storeId === currentSlug)
+          ? dbStaffUsers.filter((u) => !u.storeId || u.storeId === currentSlug)
           : dbStaffUsers;
         if (relevantUsers.length > 0) {
           setStaffUsers(relevantUsers);
@@ -739,6 +753,30 @@ export default function App() {
       loadAllFromSupabase();
     });
 
+    // 3b. Subscribe to Real-time Tenant Cloud changes (brand_configs) across devices
+    const unsubscribeTenant = subscribeToTenantCloudChanges(currentSlug, (moduleKey, data) => {
+      if (moduleKey === 'products' && Array.isArray(data)) {
+        const formatted = data.map(p => ({ ...p, image: formatImageUrl(p.image) }));
+        setProducts(formatted);
+      } else if (moduleKey === 'brand' && data) {
+        setBrandConfig(data);
+      } else if (moduleKey === 'identity' && data) {
+        setCurrentTenant(data);
+        setBrandConfig((prev) => syncBrandConfigFromTenant(data, prev));
+      } else if (moduleKey === 'vouchers' && Array.isArray(data)) {
+        setVouchers(data);
+      } else if (moduleKey === 'receipts' && Array.isArray(data)) {
+        setReceiptConfigs(data);
+      } else if (moduleKey === 'promos' && Array.isArray(data)) {
+        setStorePromos(data);
+      } else if (moduleKey === 'couriers' && Array.isArray(data)) {
+        setCouriers(data);
+      } else if (moduleKey === 'staff' && Array.isArray(data)) {
+        setStaffUsers(data);
+      }
+      loadAllFromSupabase();
+    });
+
     // 4. Auto sync when tab is focused / phone screen unlocked
     const handleFocus = () => {
       loadAllFromSupabase();
@@ -751,13 +789,14 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 5. Background polling every 10 seconds to keep all phones completely in sync
+    // 5. Background polling every 5 seconds to keep all devices completely in sync
     const interval = setInterval(() => {
       loadAllFromSupabase();
-    }, 10000);
+    }, 5000);
 
     return () => {
       unsubscribe();
+      unsubscribeTenant();
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
@@ -799,7 +838,9 @@ export default function App() {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       const saved = localStorage.getItem(key);
       const list: Product[] = saved ? JSON.parse(saved) : products;
-      localStorage.setItem(key, JSON.stringify([prodWithStore, ...list.filter(p => p.id !== prodWithStore.id)]));
+      const updatedList = [prodWithStore, ...list.filter(p => p.id !== prodWithStore.id)];
+      localStorage.setItem(key, JSON.stringify(updatedList));
+      saveTenantDataToCloud('products', updatedList, currentSlug);
     } catch (err) {
       console.warn('Gagal simpan produk baru ke localStorage:', err);
     }
@@ -821,7 +862,9 @@ export default function App() {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       const saved = localStorage.getItem(key);
       const list: Product[] = saved ? JSON.parse(saved) : products;
-      localStorage.setItem(key, JSON.stringify(list.map(p => p.id === prodWithStore.id ? prodWithStore : p)));
+      const updatedList = list.map(p => p.id === prodWithStore.id ? prodWithStore : p);
+      localStorage.setItem(key, JSON.stringify(updatedList));
+      saveTenantDataToCloud('products', updatedList, currentSlug);
     } catch (err) {
       console.warn('Gagal update produk di localStorage:', err);
     }
@@ -837,7 +880,9 @@ export default function App() {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       const saved = localStorage.getItem(key);
       const list: Product[] = saved ? JSON.parse(saved) : products;
-      localStorage.setItem(key, JSON.stringify(list.filter(p => p.id !== productId)));
+      const updatedList = list.filter(p => p.id !== productId);
+      localStorage.setItem(key, JSON.stringify(updatedList));
+      saveTenantDataToCloud('products', updatedList, currentSlug);
     } catch (err) {
       console.warn('Gagal hapus produk di localStorage:', err);
     }
@@ -851,6 +896,7 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newProducts));
+      saveTenantDataToCloud('products', newProducts, currentSlug);
     } catch {}
     newProducts.forEach((p) => {
       saveProductToSupabase(p).catch(() => {});
@@ -882,13 +928,15 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newVouchers));
+      saveTenantDataToCloud('vouchers', newVouchers, currentSlug);
     } catch {}
   };
 
   const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
     setBrandConfig((prev) => {
       const next = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
-      saveBrandConfigToSupabase(next).catch(() => {});
+      saveBrandConfigToSupabase(next, currentSlug).catch(() => {});
+      saveTenantDataToCloud('brand', next, currentSlug);
       return next;
     });
   };
@@ -907,6 +955,7 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newConfigs));
+      saveTenantDataToCloud('receipts', newConfigs, currentSlug);
     } catch {}
   };
 
@@ -924,6 +973,7 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newPromos));
+      saveTenantDataToCloud('promos', newPromos, currentSlug);
     } catch {}
   };
 
@@ -941,6 +991,7 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newCouriers));
+      saveTenantDataToCloud('couriers', newCouriers, currentSlug);
     } catch {}
   };
 
@@ -949,6 +1000,7 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newUsers));
+      saveTenantDataToCloud('staff', newUsers, currentSlug);
     } catch {}
 
     // 2. Sync to Supabase in background

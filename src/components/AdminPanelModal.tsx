@@ -144,6 +144,7 @@ import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN } from '../utils/tenantHelper';
+import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -437,6 +438,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_suppliers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newSuppliers));
+      saveTenantDataToCloud('suppliers', newSuppliers, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -460,6 +462,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_purchases', currentSlug);
       localStorage.setItem(key, JSON.stringify(newPurchases));
+      saveTenantDataToCloud('purchases', newPurchases, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -487,6 +490,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_customers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCustomers));
+      saveTenantDataToCloud('customers', newCustomers, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -513,6 +517,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_points_config', currentSlug);
       localStorage.setItem(key, JSON.stringify(newConfig));
+      saveTenantDataToCloud('points_config', newConfig, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -536,6 +541,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_reward_items', currentSlug);
       localStorage.setItem(key, JSON.stringify(newItems));
+      saveTenantDataToCloud('reward_items', newItems, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -559,6 +565,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_points_ledger', currentSlug);
       localStorage.setItem(key, JSON.stringify(newLedger));
+      saveTenantDataToCloud('points_ledger', newLedger, currentSlug);
     } catch (e) {
       console.error(e);
     }

@@ -71,6 +71,9 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_stock_mutations', currentSlug);
       localStorage.setItem(key, JSON.stringify(newMutations));
+      import('../utils/tenantCloudSync').then(({ saveTenantDataToCloud }) => {
+        saveTenantDataToCloud('stock_mutations', newMutations, currentSlug);
+      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }

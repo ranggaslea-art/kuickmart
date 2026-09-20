@@ -589,6 +589,11 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
       console.warn('[TenantHelper] Gagal sync ke server backend:', apiErr);
     });
 
+    // 5. Sync ke Supabase Cloud tabel brand_configs agar langsung terbaca di hardware online lain
+    import('./tenantCloudSync').then(({ saveTenantDataToCloud }) => {
+      saveTenantDataToCloud('identity', updatedConfig, slug);
+    }).catch(() => {});
+
     return true;
   } catch (err) {
     console.error('[TenantHelper] Error saving store tenant config:', err);
@@ -665,6 +670,29 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
     }
   } catch (err) {
     console.warn('[TenantHelper] Auto-provision backend check fallback to local:', err);
+  }
+
+  // 3. Hubungi Supabase Cloud (tabel brand_configs) untuk sync antar-hardware
+  try {
+    const { fetchTenantDataFromCloud } = await import('./tenantCloudSync');
+    const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', effectiveSlug);
+    if (cloudTenant && cloudTenant.storeSlug) {
+      const merged: StoreTenantIdentity = {
+        ...localConfig,
+        ...cloudTenant,
+        dokuSettings: {
+          ...localConfig.dokuSettings,
+          ...cloudTenant.dokuSettings,
+          secretKey: localConfig.dokuSettings?.secretKey || cloudTenant.dokuSettings?.secretKey || '',
+        },
+      };
+      try {
+        localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(merged));
+      } catch {}
+      return merged;
+    }
+  } catch (err) {
+    console.warn('[TenantHelper] Auto-provision cloud sync check:', err);
   }
 
   // 3. Simpan konfigurasi lokal secara hening ke localStorage tanpa memicu alert atau error

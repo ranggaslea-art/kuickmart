@@ -50,27 +50,30 @@ export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
     }
   }
 
-  const metaEnv = (import.meta as any).env || {};
+  const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env) ? (import.meta as any).env : {};
   const envUrl = (metaEnv.VITE_SUPABASE_URL || DEFAULT_SUPABASE_CONFIG.url || '').trim();
   const envKey = (metaEnv.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_CONFIG.anonKey || '').trim();
 
-  let savedUrl = (localStorage.getItem(STORAGE_KEY_URL) || '').trim();
-  let savedKey = (localStorage.getItem(STORAGE_KEY_KEY) || '').trim();
+  const hasLocalStorage = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  let savedUrl = hasLocalStorage ? (localStorage.getItem(STORAGE_KEY_URL) || '').trim() : '';
+  let savedKey = hasLocalStorage ? (localStorage.getItem(STORAGE_KEY_KEY) || '').trim() : '';
 
   // If default config is provided in code, ALWAYS enforce it across all devices
   if (DEFAULT_SUPABASE_CONFIG.url && DEFAULT_SUPABASE_CONFIG.anonKey) {
     if (!savedUrl || !savedKey || savedUrl !== DEFAULT_SUPABASE_CONFIG.url || savedKey !== DEFAULT_SUPABASE_CONFIG.anonKey) {
       savedUrl = DEFAULT_SUPABASE_CONFIG.url;
       savedKey = DEFAULT_SUPABASE_CONFIG.anonKey;
-      try {
-        localStorage.setItem(STORAGE_KEY_URL, DEFAULT_SUPABASE_CONFIG.url);
-        localStorage.setItem(STORAGE_KEY_KEY, DEFAULT_SUPABASE_CONFIG.anonKey);
-      } catch {}
+      if (hasLocalStorage) {
+        try {
+          localStorage.setItem(STORAGE_KEY_URL, DEFAULT_SUPABASE_CONFIG.url);
+          localStorage.setItem(STORAGE_KEY_KEY, DEFAULT_SUPABASE_CONFIG.anonKey);
+        } catch {}
+      }
     }
   } else if (!savedUrl || savedUrl.includes('xyzcompany') || !savedUrl.startsWith('https://')) {
     savedUrl = envUrl;
     savedKey = envKey;
-    if (envUrl) {
+    if (envUrl && hasLocalStorage) {
       try {
         localStorage.setItem(STORAGE_KEY_URL, envUrl);
         localStorage.setItem(STORAGE_KEY_KEY, envKey);
@@ -717,31 +720,83 @@ export async function fetchOrdersFromSupabase(storeId?: string): Promise<Order[]
   }
 }
 
+// Internal Cloud Tenant helpers to sync across multiple online devices/hardware
+export async function getTenantCloudRecord<T>(key: string, slug: string): Promise<T | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('brand_configs')
+      .select('*')
+      .eq('id', `tenant_${key}_${slug}`)
+      .maybeSingle();
+    if (!error && data && data.config_json) {
+      if (data.config_json.data !== undefined) {
+        return data.config_json.data as T;
+      }
+      return data.config_json as T;
+    }
+  } catch {}
+  return null;
+}
+
+export async function setTenantCloudRecord<T>(key: string, slug: string, value: T): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('brand_configs').upsert({
+      id: `tenant_${key}_${slug}`,
+      config_json: {
+        moduleKey: key,
+        slug,
+        data: value,
+        updatedAt: now,
+      },
+      updated_at: now,
+    }, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // Fetch products from Supabase
 export async function fetchProductsFromSupabase(storeId?: string): Promise<Product[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+  const targetSlug = (storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
   const isNew = !isDefaultStore(targetSlug);
 
   try {
-    let query = supabase.from('products').select('*');
+    // 1. Jika toko subdomain, periksa dulu Cloud Tenant Storage (tabel brand_configs)
     if (isNew) {
-      query = query.eq('store_id', targetSlug);
+      const cloudTenantProducts = await getTenantCloudRecord<Product[]>('products', targetSlug);
+      if (cloudTenantProducts && Array.isArray(cloudTenantProducts) && cloudTenantProducts.length > 0) {
+        return cloudTenantProducts;
+      }
     }
+
+    // 2. Query tabel products Supabase (tanpa .eq('store_id') agar tidak memicu error Postgres 42703)
+    let query = supabase.from('products').select('*');
     const { data, error } = await query.order('sold_count', { ascending: false });
     
-    // If error because column 'store_id' does not exist yet
     if (error) {
       if (isNew) {
-        // Toko baru tidak boleh melihat produk toko utama jika kolom store_id belum ada
-        return [];
+        const cloudTenantProducts = await getTenantCloudRecord<Product[]>('products', targetSlug);
+        return cloudTenantProducts || [];
       }
       return null;
     }
     
-    if (!data || data.length === 0) return [];
+    if (!data || data.length === 0) {
+      if (isNew) {
+        const cloudTenantProducts = await getTenantCloudRecord<Product[]>('products', targetSlug);
+        return cloudTenantProducts || [];
+      }
+      return [];
+    }
 
     const mapped = data.map((row: any) => ({
       id: row.id,
@@ -765,10 +820,23 @@ export async function fetchProductsFromSupabase(storeId?: string): Promise<Produ
     }));
 
     if (isNew) {
-      return mapped.filter((p: any) => p.storeId === targetSlug);
+      const filtered = mapped.filter((p: any) => 
+        p.storeId === targetSlug || 
+        (typeof p.id === 'string' && p.id.includes(targetSlug)) ||
+        (Array.isArray(p.tags) && p.tags.includes(`store:${targetSlug}`))
+      );
+      const cloudTenantProducts = await getTenantCloudRecord<Product[]>('products', targetSlug);
+      if (cloudTenantProducts && Array.isArray(cloudTenantProducts) && cloudTenantProducts.length > 0) {
+        return cloudTenantProducts;
+      }
+      return filtered;
     }
     return mapped;
   } catch (e) {
+    if (isNew) {
+      const cloudTenantProducts = await getTenantCloudRecord<Product[]>('products', targetSlug);
+      return cloudTenantProducts || [];
+    }
     return null;
   }
 }
@@ -830,20 +898,33 @@ export async function fetchVouchersFromSupabase(storeId?: string): Promise<Vouch
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+  const targetSlug = (storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
   const isNew = !isDefaultStore(targetSlug);
 
   try {
-    let query = supabase.from('vouchers').select('*');
     if (isNew) {
-      query = query.eq('store_id', targetSlug);
+      const cloudVouchers = await getTenantCloudRecord<Voucher[]>('vouchers', targetSlug);
+      if (cloudVouchers && Array.isArray(cloudVouchers)) {
+        return cloudVouchers;
+      }
     }
+
+    let query = supabase.from('vouchers').select('*');
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) {
-      if (isNew) return [];
+      if (isNew) {
+        const cloudVouchers = await getTenantCloudRecord<Voucher[]>('vouchers', targetSlug);
+        return cloudVouchers || [];
+      }
       return null;
     }
-    if (!data || data.length === 0) return [];
+    if (!data || data.length === 0) {
+      if (isNew) {
+        const cloudVouchers = await getTenantCloudRecord<Voucher[]>('vouchers', targetSlug);
+        return cloudVouchers || [];
+      }
+      return [];
+    }
 
     const mapped = data.map((row: any) => ({
       id: row.id,
@@ -863,6 +944,10 @@ export async function fetchVouchersFromSupabase(storeId?: string): Promise<Vouch
     }
     return mapped;
   } catch (e) {
+    if (isNew) {
+      const cloudVouchers = await getTenantCloudRecord<Voucher[]>('vouchers', targetSlug);
+      return cloudVouchers || [];
+    }
     return null;
   }
 }
@@ -887,7 +972,9 @@ export async function saveProductToSupabase(
 
   if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
   try {
-    const targetSlug = product.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+    const targetSlug = (product.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
+    const isNew = !isDefaultStore(targetSlug);
+
     const payload: Record<string, any> = {
       id: product.id,
       name: product.name || 'Produk Baru',
@@ -902,7 +989,7 @@ export async function saveProductToSupabase(
       stock: Number(product.stock) || 0,
       rating: Number(product.rating) || 4.8,
       sold_count: Number(product.soldCount) || 0,
-      tags: Array.isArray(product.tags) ? product.tags : [],
+      tags: Array.isArray(product.tags) ? (isNew && !(product.tags as string[]).includes(`store:${targetSlug}`) ? [...product.tags, `store:${targetSlug}` as any] : product.tags) : (isNew ? [`store:${targetSlug}` as any] : []),
       description: product.description || '',
       barcode: product.barcode || '',
       is_popular: Boolean(product.isPopular),
@@ -916,6 +1003,25 @@ export async function saveProductToSupabase(
       upsertRes = await supabase.from('products').upsert(currentPayload, { onConflict: 'id' });
     }
     const { error } = upsertRes;
+
+    // Sinkronisasi juga ke cloud tenant record agar hardware online lain langsung melihat update
+    if (isNew) {
+      try {
+        const existingList = (await getTenantCloudRecord<Product[]>('products', targetSlug)) || [];
+        const idx = existingList.findIndex(p => p.id === product.id);
+        const prodToSave = { ...product, storeId: targetSlug };
+        let nextList: Product[];
+        if (idx > -1) {
+          nextList = [...existingList];
+          nextList[idx] = prodToSave;
+        } else {
+          nextList = [prodToSave, ...existingList];
+        }
+        await setTenantCloudRecord('products', targetSlug, nextList);
+      } catch (syncErr) {
+        console.warn('Gagal sync produk ke tenant cloud record:', syncErr);
+      }
+    }
 
     if (error) {
       if (!options?.skipQueue && isNetworkError(error)) {
@@ -961,6 +1067,15 @@ export async function deleteProductFromSupabase(
 
   if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
   try {
+    const targetSlug = typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default';
+    if (!isDefaultStore(targetSlug)) {
+      try {
+        const existingList = (await getTenantCloudRecord<Product[]>('products', targetSlug)) || [];
+        const nextList = existingList.filter(p => p.id !== productId);
+        await setTenantCloudRecord('products', targetSlug, nextList);
+      } catch {}
+    }
+
     const { error } = await supabase.from('products').delete().eq('id', productId);
     if (error) {
       if (!options?.skipQueue && isNetworkError(error)) {
@@ -1151,7 +1266,8 @@ export async function saveVoucherToSupabase(voucher: Voucher): Promise<boolean> 
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
-    const targetSlug = (voucher as any).storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+    const targetSlug = ((voucher as any).storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
+    const isNew = !isDefaultStore(targetSlug);
     const payload: Record<string, any> = {
       id: voucher.id,
       code: voucher.code,
@@ -1170,6 +1286,23 @@ export async function saveVoucherToSupabase(voucher: Voucher): Promise<boolean> 
       delete currentPayload.store_id;
       upsertRes = await supabase.from('vouchers').upsert(currentPayload, { onConflict: 'id' });
     }
+
+    if (isNew) {
+      try {
+        const existingList = (await getTenantCloudRecord<Voucher[]>('vouchers', targetSlug)) || [];
+        const idx = existingList.findIndex(v => v.id === voucher.id);
+        const vToSave = { ...voucher, storeId: targetSlug };
+        let nextList: Voucher[];
+        if (idx > -1) {
+          nextList = [...existingList];
+          nextList[idx] = vToSave;
+        } else {
+          nextList = [vToSave, ...existingList];
+        }
+        await setTenantCloudRecord('vouchers', targetSlug, nextList);
+      } catch {}
+    }
+
     return !upsertRes.error;
   } catch {
     return false;
@@ -1181,6 +1314,15 @@ export async function deleteVoucherFromSupabase(voucherId: string): Promise<bool
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
+    const targetSlug = typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default';
+    if (!isDefaultStore(targetSlug)) {
+      try {
+        const existingList = (await getTenantCloudRecord<Voucher[]>('vouchers', targetSlug)) || [];
+        const nextList = existingList.filter(v => v.id !== voucherId);
+        await setTenantCloudRecord('vouchers', targetSlug, nextList);
+      } catch {}
+    }
+
     const { error } = await supabase.from('vouchers').delete().eq('id', voucherId);
     return !error;
   } catch {
@@ -1191,25 +1333,35 @@ export async function deleteVoucherFromSupabase(voucherId: string): Promise<bool
 // -------------------------------------------------------------
 // 1. BRAND CONFIGURATION (Header & Footer Brand, Logo, Slogan)
 // -------------------------------------------------------------
-export async function fetchBrandConfigFromSupabase(): Promise<BrandHeaderFooterConfig | null> {
+export async function fetchBrandConfigFromSupabase(storeSlug?: string): Promise<BrandHeaderFooterConfig | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from('brand_configs').select('*').eq('id', 'default').maybeSingle();
+    const slug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
+    const isDefault = isDefaultStore(slug);
+    const configId = isDefault ? 'default' : `tenant_brand_${slug}`;
+    const { data, error } = await supabase.from('brand_configs').select('*').eq('id', configId).maybeSingle();
     if (error || !data || !data.config_json) return null;
-    return data.config_json as BrandHeaderFooterConfig;
+    const json = data.config_json;
+    if (json.data && typeof json.data === 'object') {
+      return json.data as BrandHeaderFooterConfig;
+    }
+    return json as BrandHeaderFooterConfig;
   } catch (e) {
     console.warn('Gagal memuat brand config dari Supabase:', e);
     return null;
   }
 }
 
-export async function saveBrandConfigToSupabase(config: BrandHeaderFooterConfig): Promise<boolean> {
+export async function saveBrandConfigToSupabase(config: BrandHeaderFooterConfig, storeSlug?: string): Promise<boolean> {
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
+    const slug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
+    const isDefault = isDefaultStore(slug);
+    const configId = isDefault ? 'default' : `tenant_brand_${slug}`;
     const { error } = await supabase.from('brand_configs').upsert({
-      id: 'default',
+      id: configId,
       config_json: config,
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
@@ -1222,10 +1374,16 @@ export async function saveBrandConfigToSupabase(config: BrandHeaderFooterConfig)
 // -------------------------------------------------------------
 // 2. RECEIPT CONFIGURATIONS (Struk Toko & Kasir)
 // -------------------------------------------------------------
-export async function fetchReceiptConfigsFromSupabase(): Promise<ReceiptInfo[] | null> {
+export async function fetchReceiptConfigsFromSupabase(storeSlug?: string): Promise<ReceiptInfo[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
   try {
+    const cleanSlug = storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'main');
+    const cloudRecord = await getTenantCloudRecord<ReceiptInfo[]>('receipts', cleanSlug);
+    if (cloudRecord && Array.isArray(cloudRecord) && cloudRecord.length > 0) {
+      return cloudRecord;
+    }
+
     const { data, error } = await supabase.from('receipt_configs').select('*').order('updated_at', { ascending: false });
     if (error || !data || data.length === 0) return null;
     return data.map((row: any) => ({
@@ -1302,10 +1460,16 @@ export async function deleteReceiptConfigFromSupabase(receiptId: string): Promis
 // -------------------------------------------------------------
 // 3. STORE PROMOS & DISCOUNT BANNERS
 // -------------------------------------------------------------
-export async function fetchStorePromosFromSupabase(): Promise<StorePromoInfo[] | null> {
+export async function fetchStorePromosFromSupabase(storeSlug?: string): Promise<StorePromoInfo[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
   try {
+    const cleanSlug = storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'main');
+    const cloudRecord = await getTenantCloudRecord<StorePromoInfo[]>('promos', cleanSlug);
+    if (cloudRecord && Array.isArray(cloudRecord) && cloudRecord.length > 0) {
+      return cloudRecord;
+    }
+
     const { data, error } = await supabase.from('store_promos').select('*').order('order_seq', { ascending: true });
     if (error || !data || data.length === 0) return null;
     return data.map((row: any) => ({

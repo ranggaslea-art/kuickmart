@@ -115,6 +115,9 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_stock_opnames', currentSlug);
       localStorage.setItem(key, JSON.stringify(newRecords));
+      import('../utils/tenantCloudSync').then(({ saveTenantDataToCloud }) => {
+        saveTenantDataToCloud('stock_opnames', newRecords, currentSlug);
+      }).catch(() => {});
     } catch (e) {
       console.error(e);
     }
