@@ -87,6 +87,154 @@ const broadcastHistory: BroadcastItem[] = [
   },
 ];
 
+const workerTenantMap: Record<string, any> = {
+  default: {
+    storeId: 'default',
+    storeSlug: 'default',
+    storeName: 'KuickMart Express',
+    tagline: 'Minimarket Digital Super Cepat',
+    ownerName: 'Administrator',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Jl. Pemuda No. 88, Pusat Niaga',
+    city: 'Jakarta',
+    logoUrl: '',
+    logoText: 'KE',
+    primaryColor: '#E51A24',
+    isActive: true,
+    dokuSettings: {
+      isEnabled: true,
+      environment: 'sandbox',
+      clientId: 'BRN-0241-1788726490929',
+      merchantName: 'KuickMart Express',
+      enableQris: true,
+      enableBcaVa: true,
+      enableMandiriVa: true,
+      enableBriVa: true,
+      enableBniVa: true,
+      enablePermataVa: true,
+    },
+    createdAt: '2026-09-10T20:10:36.949Z',
+    updatedAt: '2026-09-20T08:45:41.552Z',
+  },
+  mrberkah: {
+    storeId: 'mrberkah',
+    storeSlug: 'mrberkah',
+    storeName: 'Mr Berkah Mart',
+    tagline: 'Pilihan Belanja Berkah dan Hemat',
+    ownerName: 'Pengelola Mr Berkah',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Pusat Niaga Mr Berkah',
+    city: 'Pangandaran',
+    logoUrl: '',
+    logoText: 'MB',
+    primaryColor: '#059669',
+    isActive: true,
+    dokuSettings: {
+      isEnabled: true,
+      environment: 'sandbox',
+      clientId: 'BRN-0241-1788726490929',
+      merchantName: 'Mr Berkah Mart',
+      enableQris: true,
+      enableBcaVa: true,
+      enableMandiriVa: true,
+      enableBriVa: true,
+      enableBniVa: true,
+      enablePermataVa: true,
+    },
+    createdAt: '2026-09-20T09:00:00.000Z',
+    updatedAt: '2026-09-20T09:00:00.000Z',
+  },
+  'berkah-mart': {
+    storeId: 'berkah-mart',
+    storeSlug: 'berkah-mart',
+    storeName: 'Berkah Mart',
+    tagline: 'Kebutuhan Harian Lengkap & Terjangkau',
+    ownerName: 'Pengelola Toko',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Berkah Mart',
+    city: 'Pangandaran',
+    logoUrl: '',
+    logoText: 'BM',
+    primaryColor: '#E51A24',
+    isActive: true,
+    dokuSettings: {
+      isEnabled: true,
+      environment: 'sandbox',
+      clientId: 'BRN-0241-1788726490929',
+      merchantName: 'Berkah Mart',
+      enableQris: true,
+      enableBcaVa: true,
+      enableMandiriVa: true,
+      enableBriVa: true,
+      enableBniVa: true,
+      enablePermataVa: true,
+    },
+    createdAt: '2026-09-19T23:34:19.687Z',
+    updatedAt: '2026-09-19T23:34:19.687Z',
+  },
+  'berkah-jaya': {
+    storeId: 'berkah-jaya',
+    storeSlug: 'berkah-jaya',
+    storeName: 'Berkah Jaya Mart',
+    tagline: 'Melayani Kebutuhan Anda Sepenuh Hati',
+    ownerName: 'Pengelola Toko',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Berkah Jaya',
+    city: 'Surabaya',
+    logoUrl: '',
+    logoText: 'BJ',
+    primaryColor: '#E51A24',
+    isActive: true,
+    dokuSettings: {
+      isEnabled: true,
+      environment: 'sandbox',
+      clientId: 'BRN-0241-1788726490929',
+      merchantName: 'Berkah Jaya Mart',
+      enableQris: true,
+      enableBcaVa: true,
+      enableMandiriVa: true,
+      enableBriVa: true,
+      enableBniVa: true,
+      enablePermataVa: true,
+    },
+    createdAt: '2026-09-10T20:05:11.235Z',
+    updatedAt: '2026-09-10T20:05:11.235Z',
+  },
+  tokoalda: {
+    storeId: 'tokoalda',
+    storeSlug: 'tokoalda',
+    storeName: 'Toko Alda',
+    tagline: 'Belanja Mudah, Hemat, dan Lengkap',
+    ownerName: 'Pengelola Toko Alda',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Toko Alda',
+    city: 'Pangandaran',
+    logoUrl: '',
+    logoText: 'TA',
+    primaryColor: '#E51A24',
+    isActive: true,
+    dokuSettings: {
+      isEnabled: true,
+      environment: 'sandbox',
+      clientId: 'BRN-0241-1788726490929',
+      merchantName: 'Toko Alda',
+      enableQris: true,
+      enableBcaVa: true,
+      enableMandiriVa: true,
+      enableBriVa: true,
+      enableBniVa: true,
+      enablePermataVa: true,
+    },
+    createdAt: '2026-09-21T01:00:00.000Z',
+    updatedAt: '2026-09-21T01:00:00.000Z',
+  },
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -269,6 +417,175 @@ export default {
           baseUrl: 'https://api-sandbox.doku.com',
           hasSecretKey: false,
           supportedMethods: ['bca_va', 'mandiri_va', 'bri_va', 'bni_va', 'permata_va', 'qris'],
+        });
+      }
+
+      // 10. List All Registered Subdomains under toko-online.online
+      if (url.pathname === '/api/tenants') {
+        const list = Object.keys(workerTenantMap).map((slug) => {
+          const t = workerTenantMap[slug] || {};
+          const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+          const displaySlug = isMain ? 'pusat' : slug;
+          const subdomain = isMain ? 'toko-online.online' : `${slug}.toko-online.online`;
+          const subdomainUrl = isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
+          const isActive = t.isActive !== false;
+
+          return {
+            storeId: t.storeId || slug,
+            storeSlug: slug,
+            displaySlug,
+            subdomain,
+            subdomainUrl,
+            storeName: t.storeName || (isMain ? 'toko-online.online (Pusat)' : slug),
+            tagline: t.tagline || '',
+            ownerName: t.ownerName || 'Pengelola Toko',
+            phone: t.phone || t.whatsapp || '',
+            whatsapp: t.whatsapp || t.phone || '',
+            address: t.address || '',
+            city: t.city || '',
+            logoUrl: t.logoUrl || '',
+            logoText: t.logoText || '',
+            primaryColor: t.primaryColor || '#E51A24',
+            isActive,
+            disabledReason: t.disabledReason || null,
+            disabledAt: t.disabledAt || null,
+            createdAt: t.createdAt || new Date().toISOString(),
+            updatedAt: t.updatedAt || new Date().toISOString(),
+            isRootDomain: isMain,
+            dokuEnvironment: t.dokuSettings?.environment || 'sandbox',
+            hasDoku: Boolean(t.dokuSettings?.clientId),
+            qrisEnabled: Boolean(t.dokuSettings?.enableQris ?? true),
+          };
+        });
+
+        list.sort((a, b) => {
+          if (a.isRootDomain) return -1;
+          if (b.isRootDomain) return 1;
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
+
+        return jsonResponse({
+          success: true,
+          rootDomain: 'toko-online.online',
+          total: list.length,
+          activeCount: list.filter((i) => i.isActive).length,
+          disabledCount: list.filter((i) => !i.isActive).length,
+          tenants: list,
+        });
+      }
+
+      // 11. Tenant config GET
+      if (url.pathname === '/api/tenant/config' && request.method === 'GET') {
+        const slug = (url.searchParams.get('slug') || request.headers.get('x-tenant-slug') || 'default').toLowerCase();
+        const tenant = workerTenantMap[slug] || null;
+        if (tenant) {
+          const isTenantActive = tenant.isActive !== false;
+          return jsonResponse({
+            success: true,
+            tenant: {
+              ...tenant,
+              isActive: isTenantActive,
+              dokuSettings: {
+                ...tenant.dokuSettings,
+                secretKey: tenant.dokuSettings?.secretKey ? '••••••••••••••••' : '',
+                hasSecretKey: Boolean(tenant.dokuSettings?.secretKey),
+              },
+            },
+            isDisabled: !isTenantActive,
+            disabledReason: tenant.disabledReason || null,
+          });
+        }
+        return jsonResponse({
+          success: true,
+          tenant: null,
+          message: `Tenant ${slug} belum terdaftar.`,
+        });
+      }
+
+      // 12. Tenant config POST (save/register)
+      if (url.pathname === '/api/tenant/config' && request.method === 'POST') {
+        try {
+          const incoming: any = await request.json();
+          const slug = (incoming?.storeSlug || '').trim().toLowerCase();
+          if (!slug) return jsonResponse({ error: 'storeSlug wajib diisi' }, 400);
+
+          const existing = workerTenantMap[slug] || {};
+          const updated = {
+            ...existing,
+            ...incoming,
+            storeSlug: slug,
+            updatedAt: new Date().toISOString(),
+          };
+          workerTenantMap[slug] = updated;
+
+          return jsonResponse({
+            success: true,
+            message: `Pengaturan toko '${slug}' berhasil disimpan.`,
+            tenant: updated,
+          });
+        } catch (e: any) {
+          return jsonResponse({ error: e.message }, 500);
+        }
+      }
+
+      // 13. Subdomain toggle-status
+      if (url.pathname === '/api/tenant/toggle-status' && request.method === 'POST') {
+        try {
+          const body: any = await request.json();
+          const { storeSlug, isActive, reason } = body || {};
+          const slug = (storeSlug || '').trim().toLowerCase();
+
+          if ((slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online') && !isActive) {
+            return jsonResponse({
+              success: false,
+              error: 'Domain utama toko-online.online tidak dapat dinonaktifkan.',
+            }, 400);
+          }
+
+          let existing = workerTenantMap[slug];
+          if (!existing) {
+            existing = {
+              storeId: slug,
+              storeSlug: slug,
+              storeName: slug,
+              isActive: Boolean(isActive),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+          }
+
+          existing.isActive = Boolean(isActive);
+          existing.updatedAt = new Date().toISOString();
+          if (!isActive) {
+            existing.disabledReason = reason || 'Dinonaktifkan oleh administrator';
+            existing.disabledAt = new Date().toISOString();
+          } else {
+            delete existing.disabledReason;
+            delete existing.disabledAt;
+          }
+
+          workerTenantMap[slug] = existing;
+
+          return jsonResponse({
+            success: true,
+            message: `Subdomain '${slug}' berhasil ${isActive ? 'diaktifkan kembali' : 'dinonaktifkan'}.`,
+            tenant: {
+              storeSlug: slug,
+              isActive: Boolean(isActive),
+            },
+          });
+        } catch (e: any) {
+          return jsonResponse({ error: e.message }, 500);
+        }
+      }
+
+      // 14. Check authority
+      if (url.pathname === '/api/subdomain/check-authority') {
+        return jsonResponse({
+          success: true,
+          canAdd: true,
+          allowed: true,
+          rootDomain: 'toko-online.online',
         });
       }
 

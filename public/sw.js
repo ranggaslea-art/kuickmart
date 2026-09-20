@@ -1,7 +1,6 @@
-const CACHE_NAME = 'toko-online-cache-v1';
+const CACHE_NAME = 'toko-online-cache-v2';
 const PRECACHE_ASSETS = [
   '/',
-  '/index.html',
   '/manifest.json',
   '/icon.svg',
   '/pwa-192x192.png',
@@ -41,6 +40,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const isHtml = event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html');
+
+  if (isHtml) {
+    // Network-first for HTML pages so latest code is always served
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse) => {
+            return cachedResponse || caches.match('/index.html');
+          });
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
@@ -58,9 +81,6 @@ self.addEventListener('fetch', (event) => {
         return caches.match(event.request).then((cachedResponse) => {
           if (cachedResponse) {
             return cachedResponse;
-          }
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('/index.html');
           }
         });
       })

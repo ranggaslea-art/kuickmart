@@ -42,6 +42,7 @@ import {
   SIMULATED_DOMAIN_NAME_KEY,
   STORAGE_TENANT_PREFIX,
   SubdomainPolicyResult,
+  BUILTIN_REGISTERED_SUBDOMAINS,
 } from '../utils/tenantHelper';
 import { compressImageFile } from '../utils/imageHelper';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
@@ -141,10 +142,14 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
       const slug = (tenantData.storeSlug || '').toLowerCase().trim();
       const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
       const isExistingTenant = Boolean(localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`));
+      const isBuiltinTenant = BUILTIN_REGISTERED_SUBDOMAINS.some(
+        (b) => b.storeSlug.toLowerCase() === slug || b.storeId.toLowerCase() === slug
+      );
+      const isEditingCurrentStore = slug === getStoreSlugFromUrl().toLowerCase();
 
       // Validasi Aturan Subdomain:
-      // Hanya domain toko-online.online yang bisa menambahkan subdomain
-      if (!isMainStore && !isExistingTenant && !policy.allowed) {
+      // Hanya domain toko-online.online yang bisa mendaftarkan subdomain baru
+      if (!isMainStore && !isExistingTenant && !isBuiltinTenant && !isEditingCurrentStore && !policy.allowed) {
         alert(policy.reason || 'Hanya domain utama toko-online.online yang berwenang menambahkan subdomain baru. Di luar toko-online.online tidak dapat menambah subdomain.');
         setIsSaving(false);
         return;

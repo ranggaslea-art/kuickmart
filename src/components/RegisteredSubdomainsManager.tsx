@@ -25,12 +25,17 @@ import {
   SlidersHorizontal,
   X,
   Clock,
-  Info
+  Info,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
 } from 'lucide-react';
 import {
   RegisteredSubdomain,
   fetchRegisteredSubdomains,
   toggleSubdomainStatus,
+  saveStoreTenantConfig,
   ROOT_AUTHORITY_DOMAIN,
   canAccessSubdomainModule,
   ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
@@ -59,6 +64,23 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
   const [pendingDisableSubdomain, setPendingDisableSubdomain] = useState<RegisteredSubdomain | null>(null);
   const [disableReasonInput, setDisableReasonInput] = useState<string>('');
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Modal Daftarkan Subdomain Baru
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [newSlug, setNewSlug] = useState<string>('');
+  const [newStoreName, setNewStoreName] = useState<string>('');
+  const [newCity, setNewCity] = useState<string>('Pangandaran');
+  const [newOwnerName, setNewOwnerName] = useState<string>('Pengelola Toko');
+  const [newPhone, setNewPhone] = useState<string>('');
+  const [isSubmittingNew, setIsSubmittingNew] = useState<boolean>(false);
+  const [showDnsGuide, setShowDnsGuide] = useState<boolean>(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopyField = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    setTimeout(() => setCopiedField(null), 2500);
+  };
 
   // Domain simulation state for testing/demo in preview environment
   const [simulationState, setSimulationState] = useState<{
@@ -211,6 +233,76 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
       setTogglingSlug(null);
       setPendingDisableSubdomain(null);
       setTimeout(() => setActionNotice(null), 4500);
+    }
+  };
+
+  // Daftarkan Subdomain Baru
+  const handleRegisterSubdomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanSlug = newSlug.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+    if (!cleanSlug) {
+      alert('Mohon masukkan slug subdomain yang valid (hanya huruf, angka, tanda hubung).');
+      return;
+    }
+
+    if (cleanSlug === 'default' || cleanSlug === 'toko-online' || cleanSlug === 'www') {
+      alert('Nama subdomain tersebut merupakan nama sistem dan tidak dapat digunakan.');
+      return;
+    }
+
+    const storeNameFinal = newStoreName.trim() || cleanSlug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    setIsSubmittingNew(true);
+
+    try {
+      const tenantPayload = {
+        storeId: cleanSlug,
+        storeSlug: cleanSlug,
+        storeName: storeNameFinal,
+        tagline: `Toko Resmi ${storeNameFinal}`,
+        ownerName: newOwnerName.trim() || 'Pengelola Toko',
+        phone: newPhone.trim() || '0812-3456-7890',
+        whatsapp: newPhone.trim() || '6281234567890',
+        address: `Cabang ${storeNameFinal}`,
+        city: newCity.trim() || 'Pangandaran',
+        logoText: cleanSlug.slice(0, 2).toUpperCase(),
+        primaryColor: '#E51A24',
+        isActive: true,
+        dokuSettings: {
+          isEnabled: true,
+          environment: 'sandbox',
+          clientId: 'BRN-0241-1788726490929',
+          secretKey: '',
+          merchantName: storeNameFinal,
+          notificationUrl: '',
+          enableQris: true,
+          enableBcaVa: true,
+          enableMandiriVa: true,
+          enableBriVa: true,
+          enableBniVa: true,
+          enablePermataVa: true,
+        },
+      };
+
+      const ok = await saveStoreTenantConfig(tenantPayload as any);
+      if (ok) {
+        setActionNotice({
+          type: 'success',
+          message: `Subdomain '${cleanSlug}.${ROOT_AUTHORITY_DOMAIN}' berhasil didaftarkan dan aktif!`,
+        });
+        setIsAddModalOpen(false);
+        setNewSlug('');
+        setNewStoreName('');
+        setNewPhone('');
+        await loadData();
+      } else {
+        alert('Gagal mendaftarkan subdomain ke server.');
+      }
+    } catch (err: any) {
+      console.error('Error registering subdomain:', err);
+      alert(err.message || 'Terjadi kesalahan saat mendaftarkan subdomain.');
+    } finally {
+      setIsSubmittingNew(false);
+      setTimeout(() => setActionNotice(null), 5000);
     }
   };
 
@@ -424,6 +516,16 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
 
             <button
               type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-xs"
+              title="Daftarkan subdomain cabang baru"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Daftarkan Subdomain</span>
+            </button>
+
+            <button
+              type="button"
               onClick={loadData}
               disabled={isLoading}
               className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-bold flex items-center gap-2 cursor-pointer transition active:scale-95 disabled:opacity-50"
@@ -503,6 +605,130 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
           </button>
         </div>
       )}
+
+      {/* CLOUDFLARE DNS & ROUTE TROUBLESHOOTING CARD */}
+      <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 sm:p-5 text-stone-800 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <HelpCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-black text-amber-950">
+                Mengapa Subdomain Baru (seperti tokoalda.toko-online.online) Muncul &quot;DNS_PROBE_FINISHED_NXDOMAIN&quot;?
+              </h4>
+              <p className="text-[11px] sm:text-xs text-amber-800/90 mt-0.5">
+                Penyebabnya adalah DNS Cloudflare belum memiliki record <span className="font-bold">Wildcard CNAME (*)</span> atau <span className="font-bold">Worker Route</span> untuk domain <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950">toko-online.online</code>.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDnsGuide(!showDnsGuide)}
+            className="px-3 py-1.5 bg-amber-200/80 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-auto"
+          >
+            <span>{showDnsGuide ? 'Sembunyikan Solusi' : 'Lihat Solusi 2 Langkah'}</span>
+            {showDnsGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {showDnsGuide && (
+          <div className="pt-3 border-t border-amber-200/80 space-y-4 animate-fade-in text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* Langkah 1: DNS Record */}
+              <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[11px] font-black flex items-center justify-center">
+                    1
+                  </span>
+                  <span className="font-extrabold text-stone-900 text-xs">
+                    Tambah CNAME Wildcard di DNS Cloudflare
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-600 leading-relaxed">
+                  Buka <strong>Cloudflare Dashboard ➔ toko-online.online ➔ DNS ➔ Records ➔ Add record</strong>:
+                </p>
+                <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200 font-mono text-[11px] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500">Type:</span>
+                    <span className="font-bold text-stone-800">CNAME</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500">Name:</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">*</code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyField('*', 'dns_name')}
+                        className="text-[10px] px-1.5 py-0.5 bg-stone-200 hover:bg-stone-300 rounded font-sans cursor-pointer text-stone-700"
+                      >
+                        {copiedField === 'dns_name' ? '✓ Disalin' : 'Salin'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500">Target:</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-bold text-stone-800">toko-online.online</code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyField('toko-online.online', 'dns_target')}
+                        className="text-[10px] px-1.5 py-0.5 bg-stone-200 hover:bg-stone-300 rounded font-sans cursor-pointer text-stone-700"
+                      >
+                        {copiedField === 'dns_target' ? '✓ Disalin' : 'Salin'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500">Proxy status:</span>
+                    <span className="font-bold text-amber-600">Proxied (Awan Oranye ☁️ ON)</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-stone-500 italic">
+                  *Dengan tanda bintang (*), semua subdomain cabang baru akan otomatis terhubung selamanya.
+                </p>
+              </div>
+
+              {/* Langkah 2: Worker Route */}
+              <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[11px] font-black flex items-center justify-center">
+                    2
+                  </span>
+                  <span className="font-extrabold text-stone-900 text-xs">
+                    Pasang Route di Cloudflare Workers
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-600 leading-relaxed">
+                  Buka tab <strong>Workers &amp; Pages ➔ Worker Anda ➔ Settings ➔ Domains &amp; Routes</strong> (atau <strong>Triggers</strong>):
+                </p>
+                <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200 font-mono text-[11px] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500">Route:</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">*.toko-online.online/*</code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyField('*.toko-online.online/*', 'worker_route')}
+                        className="text-[10px] px-1.5 py-0.5 bg-stone-200 hover:bg-stone-300 rounded font-sans cursor-pointer text-stone-700"
+                      >
+                        {copiedField === 'worker_route' ? '✓ Disalin' : 'Salin'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500">Zone:</span>
+                    <span className="font-bold text-stone-800">toko-online.online</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-stone-500 italic">
+                  *Route ini mengarahkan seluruh subdomain cabang langsung dieksekusi oleh kode Worker Anda.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* SEARCH & FILTER CONTROLS */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-2xs">
@@ -875,6 +1101,136 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 <span>Ya, Nonaktifkan Subdomain</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* DIALOG: DAFTARKAN SUBDOMAIN BARU */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-red-50 text-red-600 rounded-xl">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm sm:text-base text-stone-900">
+                    Daftarkan Subdomain Toko Baru
+                  </h4>
+                  <p className="text-xs text-stone-500">
+                    Tambahkan cabang toko resmi di bawah {ROOT_AUTHORITY_DOMAIN}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRegisterSubdomain} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Slug Subdomain <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center">
+                  <span className="bg-stone-100 text-stone-500 text-xs px-3 py-2 rounded-l-xl border border-r-0 border-stone-300 font-mono">
+                    https://
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={newSlug}
+                    onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
+                    placeholder="mrberkah"
+                    className="w-full text-xs font-mono font-bold px-3 py-2 border border-stone-300 rounded-none focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                  />
+                  <span className="bg-stone-100 text-stone-600 text-xs px-3 py-2 rounded-r-xl border border-l-0 border-stone-300 font-mono font-semibold">
+                    .{ROOT_AUTHORITY_DOMAIN}
+                  </span>
+                </div>
+                <span className="text-[10px] text-stone-500 mt-1 block">
+                  Contoh: <code>mrberkah</code> akan menjadi <code>https://mrberkah.{ROOT_AUTHORITY_DOMAIN}</code>
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Nama Toko / Cabang <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  placeholder="Mr Berkah Mart"
+                  className="w-full text-xs font-medium px-3.5 py-2 border border-stone-300 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Kota Lokasi Toko
+                  </label>
+                  <input
+                    type="text"
+                    value={newCity}
+                    onChange={(e) => setNewCity(e.target.value)}
+                    placeholder="Pangandaran"
+                    className="w-full text-xs font-medium px-3.5 py-2 border border-stone-300 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Penanggung Jawab
+                  </label>
+                  <input
+                    type="text"
+                    value={newOwnerName}
+                    onChange={(e) => setNewOwnerName(e.target.value)}
+                    placeholder="Pengelola Toko"
+                    className="w-full text-xs font-medium px-3.5 py-2 border border-stone-300 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Nomor WhatsApp Toko
+                </label>
+                <input
+                  type="text"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="081234567890"
+                  className="w-full text-xs font-medium px-3.5 py-2 border border-stone-300 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingNew}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{isSubmittingNew ? 'Mendaftarkan...' : 'Daftarkan & Aktifkan'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

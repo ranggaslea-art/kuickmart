@@ -440,38 +440,45 @@ export function getTenantStore(slug?: string, tenantConfig?: StoreTenantIdentity
  */
 export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
   const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase();
-  const storeName = formatSlugToStoreName(effectiveSlug);
-
-  // Buat 2 huruf inisial untuk logo teks (misal: "Berkah Mart" -> "BM")
-  const words = storeName.split(' ').filter(Boolean);
-  const logoText = words.length >= 2 
-    ? (words[0][0] + words[1][0]).toUpperCase() 
-    : storeName.slice(0, 2).toUpperCase();
+  
+  // Periksa apakah ada profil bawaan di daftar subdomain resmi
+  const builtin = BUILTIN_REGISTERED_SUBDOMAINS.find(
+    (b) => b.storeSlug.toLowerCase() === effectiveSlug || b.storeId.toLowerCase() === effectiveSlug
+  );
 
   const isDefault = isDefaultStore(effectiveSlug);
+  const storeName = builtin?.storeName || (isDefault ? 'toko-online.online' : formatSlugToStoreName(effectiveSlug));
+
+  // Buat 2 huruf inisial untuk logo teks (misal: "Berkah Mart" -> "BM")
+  const logoText = builtin?.logoText || (() => {
+    const words = storeName.split(' ').filter(Boolean);
+    return words.length >= 2 
+      ? (words[0][0] + words[1][0]).toUpperCase() 
+      : storeName.slice(0, 2).toUpperCase();
+  })();
 
   return {
     storeId: effectiveSlug,
     storeSlug: effectiveSlug,
-    storeName: isDefault ? 'toko-online.online' : storeName,
-    tagline: isDefault 
+    storeName: storeName,
+    tagline: builtin?.tagline || (isDefault 
       ? 'Pusat Belanja Online Hemat, Cepat, dan Terpercaya' 
-      : `Pusat Belanja Hemat & Lengkap ${storeName}`,
-    ownerName: 'Pengelola Toko',
-    phone: '0812-3456-7890',
-    whatsapp: '6281234567890',
-    address: 'Jl. Pemuda No. 88, Pusat Niaga',
-    city: 'Jakarta',
+      : `Pusat Belanja Hemat & Lengkap ${storeName}`),
+    ownerName: builtin?.ownerName || 'Pengelola Toko',
+    phone: builtin?.phone || '0812-3456-7890',
+    whatsapp: builtin?.whatsapp || '6281234567890',
+    address: builtin?.address || 'Jl. Pemuda No. 88, Pusat Niaga',
+    city: builtin?.city || 'Jakarta',
     logoText,
-    primaryColor: '#E51A24',
-    isActive: true,
+    primaryColor: builtin?.primaryColor || '#E51A24',
+    isActive: builtin ? builtin.isActive : true,
     dokuSettings: {
       ...DEFAULT_DOKU_SETTINGS,
-      merchantName: isDefault ? 'toko-online.online' : storeName,
+      merchantName: storeName,
       notificationUrl: typeof window !== 'undefined' ? `${window.location.origin}/api/doku/notification` : '',
     },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: builtin?.createdAt || new Date().toISOString(),
+    updatedAt: builtin?.updatedAt || new Date().toISOString(),
   };
 }
 
@@ -518,14 +525,17 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
     const slug = config.storeSlug.toLowerCase();
     const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
     const isExistingTenant = Boolean(localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`));
+    const isBuiltinTenant = BUILTIN_REGISTERED_SUBDOMAINS.some(
+      (b) => b.storeSlug.toLowerCase() === slug || b.storeId.toLowerCase() === slug
+    );
 
     // Validasi Aturan Subdomain:
-    // Jika mendaftarkan subdomain baru (bukan edit profil root dan bukan tenant yang sudah terdaftar)
-    if (!isMainStore && !isExistingTenant) {
+    // Jika mendaftarkan subdomain baru yang belum pernah terdaftar sama sekali
+    if (!isMainStore && !isExistingTenant && !isBuiltinTenant) {
       const policy = canAddSubdomain();
       if (!policy.allowed) {
-        console.warn('[TenantHelper] Penambahan subdomain diblokir:', policy.reason);
-        alert(policy.reason || 'Hanya domain utama toko-online.online yang dapat menambahkan subdomain.');
+        console.warn('[TenantHelper] Penambahan subdomain baru diblokir oleh kebijakan otoritas:', policy.reason);
+        // Catatan: Jangan panggil window.alert di sini karena fungsi ini dipanggil di level background / sync data
         return false;
       }
     }
@@ -543,8 +553,10 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
     };
 
     // 1. LocalStorage
-    localStorage.setItem(`${STORAGE_TENANT_PREFIX}${slug}`, JSON.stringify(updatedConfig));
-    localStorage.setItem(STORAGE_ACTIVE_TENANT_KEY, slug);
+    try {
+      localStorage.setItem(`${STORAGE_TENANT_PREFIX}${slug}`, JSON.stringify(updatedConfig));
+      localStorage.setItem(STORAGE_ACTIVE_TENANT_KEY, slug);
+    } catch {}
 
     // 2. Broadcast event
     window.dispatchEvent(new CustomEvent('store_tenant_updated', { detail: updatedConfig }));
@@ -564,7 +576,7 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
       body: JSON.stringify({
         ...updatedConfig,
         _clientHostname: window.location.hostname,
-        _isNewSubdomain: !isMainStore && !isExistingTenant,
+        _isNewSubdomain: !isMainStore && !isExistingTenant && !isBuiltinTenant,
       }),
     }).then(async (res) => {
       if (!res.ok) {
@@ -633,18 +645,21 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
     const res = await fetch(`/api/tenant/config?slug=${encodeURIComponent(effectiveSlug)}`);
     if (res.ok) {
       const data = await res.json();
-      if (data && data.storeSlug) {
+      const serverTenant = data?.tenant || (data?.storeSlug ? data : null);
+      if (serverTenant && serverTenant.storeSlug) {
         // Jika server punya data, gabungkan tanpa menghilangkan secretKey lokal jika di server disamarkan
         const merged: StoreTenantIdentity = {
           ...localConfig,
-          ...data,
+          ...serverTenant,
           dokuSettings: {
             ...localConfig.dokuSettings,
-            ...data.dokuSettings,
-            secretKey: localConfig.dokuSettings?.secretKey || data.dokuSettings?.secretKey || '',
+            ...serverTenant.dokuSettings,
+            secretKey: localConfig.dokuSettings?.secretKey || serverTenant.dokuSettings?.secretKey || '',
           },
         };
-        localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(merged));
+        try {
+          localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(merged));
+        } catch {}
         return merged;
       }
     }
@@ -652,8 +667,10 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
     console.warn('[TenantHelper] Auto-provision backend check fallback to local:', err);
   }
 
-  // 3. Jika belum terdaftar di backend, auto-provisioning profil baru ke server
-  saveStoreTenantConfig(localConfig).catch(() => {});
+  // 3. Simpan konfigurasi lokal secara hening ke localStorage tanpa memicu alert atau error
+  try {
+    localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(localConfig));
+  } catch {}
   return localConfig;
 }
 
@@ -684,14 +701,152 @@ export interface RegisteredSubdomain {
   qrisEnabled?: boolean;
 }
 
+export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
+  {
+    storeId: 'default',
+    storeSlug: 'default',
+    displaySlug: 'pusat',
+    subdomain: 'toko-online.online',
+    subdomainUrl: 'https://toko-online.online',
+    storeName: 'KuickMart Express',
+    tagline: 'Minimarket Digital Super Cepat',
+    ownerName: 'Administrator',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Jl. Pemuda No. 88, Pusat Niaga',
+    city: 'Jakarta',
+    logoUrl: '',
+    logoText: 'KE',
+    primaryColor: '#E51A24',
+    isActive: true,
+    disabledReason: null,
+    disabledAt: null,
+    createdAt: '2026-09-10T20:10:36.949Z',
+    updatedAt: '2026-09-20T08:45:41.552Z',
+    isRootDomain: true,
+    dokuEnvironment: 'sandbox',
+    hasDoku: true,
+    qrisEnabled: true,
+  },
+  {
+    storeId: 'mrberkah',
+    storeSlug: 'mrberkah',
+    displaySlug: 'mrberkah',
+    subdomain: 'mrberkah.toko-online.online',
+    subdomainUrl: 'https://mrberkah.toko-online.online',
+    storeName: 'Mr Berkah Mart',
+    tagline: 'Pilihan Belanja Berkah dan Hemat',
+    ownerName: 'Pengelola Mr Berkah',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Pusat Niaga Mr Berkah',
+    city: 'Pangandaran',
+    logoUrl: '',
+    logoText: 'MB',
+    primaryColor: '#059669',
+    isActive: true,
+    disabledReason: null,
+    disabledAt: null,
+    createdAt: '2026-09-20T09:00:00.000Z',
+    updatedAt: '2026-09-20T09:00:00.000Z',
+    isRootDomain: false,
+    dokuEnvironment: 'sandbox',
+    hasDoku: true,
+    qrisEnabled: true,
+  },
+  {
+    storeId: 'berkah-mart',
+    storeSlug: 'berkah-mart',
+    displaySlug: 'berkah-mart',
+    subdomain: 'berkah-mart.toko-online.online',
+    subdomainUrl: 'https://berkah-mart.toko-online.online',
+    storeName: 'Berkah Mart',
+    tagline: 'Kebutuhan Harian Lengkap & Terjangkau',
+    ownerName: 'Pengelola Toko',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Berkah Mart',
+    city: 'Pangandaran',
+    logoUrl: '',
+    logoText: 'BM',
+    primaryColor: '#E51A24',
+    isActive: true,
+    disabledReason: null,
+    disabledAt: null,
+    createdAt: '2026-09-19T23:34:19.687Z',
+    updatedAt: '2026-09-19T23:34:19.687Z',
+    isRootDomain: false,
+    dokuEnvironment: 'sandbox',
+    hasDoku: true,
+    qrisEnabled: true,
+  },
+  {
+    storeId: 'berkah-jaya',
+    storeSlug: 'berkah-jaya',
+    displaySlug: 'berkah-jaya',
+    subdomain: 'berkah-jaya.toko-online.online',
+    subdomainUrl: 'https://berkah-jaya.toko-online.online',
+    storeName: 'Berkah Jaya Mart',
+    tagline: 'Melayani Kebutuhan Anda Sepenuh Hati',
+    ownerName: 'Pengelola Toko',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Berkah Jaya',
+    city: 'Surabaya',
+    logoUrl: '',
+    logoText: 'BJ',
+    primaryColor: '#E51A24',
+    isActive: true,
+    disabledReason: null,
+    disabledAt: null,
+    createdAt: '2026-09-10T20:05:11.235Z',
+    updatedAt: '2026-09-10T20:05:11.235Z',
+    isRootDomain: false,
+    dokuEnvironment: 'sandbox',
+    hasDoku: true,
+    qrisEnabled: true,
+  },
+  {
+    storeId: 'tokoalda',
+    storeSlug: 'tokoalda',
+    displaySlug: 'tokoalda',
+    subdomain: 'tokoalda.toko-online.online',
+    subdomainUrl: 'https://tokoalda.toko-online.online',
+    storeName: 'Toko Alda',
+    tagline: 'Belanja Mudah, Hemat, dan Lengkap',
+    ownerName: 'Pengelola Toko Alda',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Toko Alda',
+    city: 'Pangandaran',
+    logoUrl: '',
+    logoText: 'TA',
+    primaryColor: '#E51A24',
+    isActive: true,
+    disabledReason: null,
+    disabledAt: null,
+    createdAt: '2026-09-21T01:00:00.000Z',
+    updatedAt: '2026-09-21T01:00:00.000Z',
+    isRootDomain: false,
+    dokuEnvironment: 'sandbox',
+    hasDoku: true,
+    qrisEnabled: true,
+  },
+];
+
 /**
  * Mengambil daftar seluruh subdomain yang terdaftar di toko-online.online
- * Menggabungkan database server Express dan cache localStorage lokal.
+ * Menggabungkan database server Express, built-in fallback data, dan cache localStorage lokal.
  */
 export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]> {
   const mapBySlug: Record<string, RegisteredSubdomain> = {};
 
-  // 1. Ambil dari server Express (/api/tenants)
+  // 1. Inisialisasi awal dengan data subdomain bawaan sistem
+  BUILTIN_REGISTERED_SUBDOMAINS.forEach((item) => {
+    mapBySlug[item.storeSlug.toLowerCase()] = { ...item };
+  });
+
+  // 2. Ambil dari server Express atau Cloudflare Worker (/api/tenants)
   try {
     const reqHeaders: Record<string, string> = {};
     if (typeof window !== 'undefined') {
@@ -704,7 +859,7 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
     const res = await fetch('/api/tenants', { headers: reqHeaders });
     if (res.ok) {
       const data = await res.json();
-      if (data && Array.isArray(data.tenants)) {
+      if (data && Array.isArray(data.tenants) && data.tenants.length > 0) {
         data.tenants.forEach((t: RegisteredSubdomain) => {
           mapBySlug[t.storeSlug.toLowerCase()] = t;
         });
@@ -714,7 +869,7 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
     console.warn('[TenantHelper] Gagal mengambil daftar tenant dari server:', e);
   }
 
-  // 2. Scan localStorage untuk tenant yang disimpan lokal
+  // 3. Scan localStorage untuk tenant yang disimpan / dimodifikasi lokal
   if (typeof window !== 'undefined') {
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -725,34 +880,33 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
           if (raw) {
             const parsed = JSON.parse(raw);
             const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
-            if (!mapBySlug[slug]) {
-              mapBySlug[slug] = {
-                storeId: parsed.storeId || slug,
-                storeSlug: slug,
-                displaySlug: isMain ? 'pusat' : slug,
-                subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
-                subdomainUrl: isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`,
-                storeName: parsed.storeName || (isMain ? 'toko-online.online (Pusat)' : slug),
-                tagline: parsed.tagline || '',
-                ownerName: parsed.ownerName || 'Pengelola Toko',
-                phone: parsed.phone || parsed.whatsapp || '',
-                whatsapp: parsed.whatsapp || parsed.phone || '',
-                address: parsed.address || '',
-                city: parsed.city || '',
-                logoUrl: parsed.logoUrl || '',
-                logoText: parsed.logoText || '',
-                primaryColor: parsed.primaryColor || '#E51A24',
-                isActive: parsed.isActive !== false,
-                disabledReason: parsed.disabledReason || null,
-                disabledAt: parsed.disabledAt || null,
-                createdAt: parsed.createdAt || new Date().toISOString(),
-                updatedAt: parsed.updatedAt || new Date().toISOString(),
-                isRootDomain: isMain,
-                dokuEnvironment: parsed.dokuSettings?.environment || 'sandbox',
-                hasDoku: Boolean(parsed.dokuSettings?.clientId),
-                qrisEnabled: Boolean(parsed.dokuSettings?.enableQris),
-              };
-            }
+            const existing = mapBySlug[slug];
+            mapBySlug[slug] = {
+              storeId: parsed.storeId || slug,
+              storeSlug: slug,
+              displaySlug: isMain ? 'pusat' : slug,
+              subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
+              subdomainUrl: isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`,
+              storeName: parsed.storeName || (existing?.storeName) || (isMain ? 'toko-online.online (Pusat)' : slug),
+              tagline: parsed.tagline || (existing?.tagline) || '',
+              ownerName: parsed.ownerName || (existing?.ownerName) || 'Pengelola Toko',
+              phone: parsed.phone || parsed.whatsapp || (existing?.phone) || '',
+              whatsapp: parsed.whatsapp || parsed.phone || (existing?.whatsapp) || '',
+              address: parsed.address || (existing?.address) || '',
+              city: parsed.city || (existing?.city) || '',
+              logoUrl: parsed.logoUrl || (existing?.logoUrl) || '',
+              logoText: parsed.logoText || (existing?.logoText) || '',
+              primaryColor: parsed.primaryColor || (existing?.primaryColor) || '#E51A24',
+              isActive: parsed.isActive !== undefined ? parsed.isActive : (existing?.isActive ?? true),
+              disabledReason: parsed.disabledReason || null,
+              disabledAt: parsed.disabledAt || null,
+              createdAt: parsed.createdAt || existing?.createdAt || new Date().toISOString(),
+              updatedAt: parsed.updatedAt || existing?.updatedAt || new Date().toISOString(),
+              isRootDomain: isMain,
+              dokuEnvironment: parsed.dokuSettings?.environment || existing?.dokuEnvironment || 'sandbox',
+              hasDoku: Boolean(parsed.dokuSettings?.clientId || existing?.hasDoku),
+              qrisEnabled: Boolean(parsed.dokuSettings?.enableQris ?? existing?.qrisEnabled ?? true),
+            };
           }
         }
       }

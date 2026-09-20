@@ -22,21 +22,21 @@
   "default": {
     "storeId": "default",
     "storeSlug": "default",
-    "storeName": "KuickMart Express",
-    "tagline": "Minimarket Digital Super Cepat",
+    "storeName": "toko-online.online",
+    "tagline": "Pusat Belanja Online Hemat, Cepat, dan Terpercaya",
     "ownerName": "Pengelola Toko",
     "phone": "0812-3456-7890",
     "whatsapp": "6281234567890",
     "address": "Jl. Pemuda No. 88, Pusat Niaga",
     "city": "Jakarta",
-    "logoText": "KE",
+    "logoText": "TO",
     "primaryColor": "#E51A24",
     "dokuSettings": {
       "isEnabled": true,
       "environment": "sandbox",
       "clientId": "BRN-0241-1788726490929",
       "secretKey": "",
-      "merchantName": "KuickMart Express",
+      "merchantName": "toko-online.online",
       "notificationUrl": "https://ais-dev-c6wain7aftyvb22tgrp6mj-81222317019.asia-east1.run.app/api/doku/notification",
       "enableQris": true,
       "enableBcaVa": true,
@@ -44,12 +44,13 @@
       "enableBriVa": true,
       "enableBniVa": true,
       "enablePermataVa": true,
-      "updatedAt": "2026-09-19T23:28:07.002Z"
+      "updatedAt": "2026-09-20T17:57:57.718Z"
     },
-    "createdAt": "2026-09-10T20:10:36.949Z",
-    "updatedAt": "2026-09-19T23:28:07.002Z",
+    "createdAt": "2026-09-20T10:02:43.751Z",
+    "updatedAt": "2026-09-20T17:57:57.718Z",
     "_clientHostname": "ais-dev-c6wain7aftyvb22tgrp6mj-81222317019.asia-east1.run.app",
-    "_isNewSubdomain": false
+    "_isNewSubdomain": false,
+    "isActive": true
   },
   "berkah-mart": {
     "storeSlug": "berkah-mart",
@@ -70,6 +71,68 @@
       "enablePermataVa": true,
       "updatedAt": "2026-09-19T22:39:05.090Z"
     },
+    "isActive": true
+  },
+  "mrberkah": {
+    "storeId": "mrberkah",
+    "storeSlug": "mrberkah",
+    "storeName": "Mr Berkah Mart",
+    "tagline": "Pilihan Belanja Berkah dan Hemat",
+    "ownerName": "Pengelola Mr Berkah",
+    "phone": "0812-3456-7890",
+    "whatsapp": "6281234567890",
+    "address": "Pusat Niaga Mr Berkah",
+    "city": "Pangandaran",
+    "logoText": "MB",
+    "primaryColor": "#059669",
+    "dokuSettings": {
+      "isEnabled": true,
+      "environment": "sandbox",
+      "clientId": "BRN-0241-1788726490929",
+      "secretKey": "",
+      "merchantName": "Mr Berkah Mart",
+      "notificationUrl": "",
+      "enableQris": true,
+      "enableBcaVa": true,
+      "enableMandiriVa": true,
+      "enableBriVa": true,
+      "enableBniVa": true,
+      "enablePermataVa": true,
+      "updatedAt": "2026-09-20T09:00:00.000Z"
+    },
+    "createdAt": "2026-09-20T09:00:00.000Z",
+    "updatedAt": "2026-09-20T09:00:00.000Z",
+    "isActive": true
+  },
+  "tokoalda": {
+    "storeId": "tokoalda",
+    "storeSlug": "tokoalda",
+    "storeName": "Toko Alda",
+    "tagline": "Belanja Mudah, Hemat, dan Lengkap",
+    "ownerName": "Pengelola Toko Alda",
+    "phone": "0812-3456-7890",
+    "whatsapp": "6281234567890",
+    "address": "Cabang Toko Alda",
+    "city": "Pangandaran",
+    "logoText": "TA",
+    "primaryColor": "#E51A24",
+    "dokuSettings": {
+      "isEnabled": true,
+      "environment": "sandbox",
+      "clientId": "BRN-0241-1788726490929",
+      "secretKey": "",
+      "merchantName": "Toko Alda",
+      "notificationUrl": "",
+      "enableQris": true,
+      "enableBcaVa": true,
+      "enableMandiriVa": true,
+      "enableBriVa": true,
+      "enableBniVa": true,
+      "enablePermataVa": true,
+      "updatedAt": "2026-09-21T01:00:00.000Z"
+    },
+    "createdAt": "2026-09-21T01:00:00.000Z",
+    "updatedAt": "2026-09-21T01:00:00.000Z",
     "isActive": true
   }
 }
