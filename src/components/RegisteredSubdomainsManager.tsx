@@ -483,21 +483,21 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
   return (
     <div className="space-y-6" id="registered-subdomains-module">
       {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 text-white rounded-2xl p-6 sm:p-7 shadow-md border border-stone-800">
+      <div className="bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 text-white rounded-2xl p-5 sm:p-6 md:p-7 shadow-md border border-stone-800">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-red-600/20 border border-red-500/40 rounded-2xl text-red-400 shrink-0">
-              <Globe className="w-8 h-8" />
+          <div className="flex items-start gap-3.5 sm:gap-4">
+            <div className="p-2.5 sm:p-3 bg-red-600/20 border border-red-500/40 rounded-2xl text-red-400 shrink-0">
+              <Globe className="w-7 h-7 sm:w-8 sm:h-8" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <h3 className="text-xl font-black tracking-tight text-white">
+                <h3 className="text-lg sm:text-xl font-black tracking-tight text-white">
                   Info Subdomain Terdaftar
                 </h3>
                 <span className="bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold px-2.5 py-0.5 rounded-full">
                   {ROOT_AUTHORITY_DOMAIN}
                 </span>
-                <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full">
                   <ShieldCheck className="w-3 h-3 text-emerald-400" />
                   Akses Terverifikasi: {accessPolicy.currentDomain}
                 </span>
@@ -506,18 +506,18 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 Pantau seluruh subdomain toko yang terdaftar di ekosistem resmi <strong>{ROOT_AUTHORITY_DOMAIN}</strong>. 
                 Anda dapat mengaktifkan atau menonaktifkan akses subdomain sewaktu-waktu menggunakan tombol checklist status.
                 <span className="block text-emerald-300/90 text-xs mt-1 font-medium">
-                  ✓ Diotorisasi khusus untuk: <strong>kuickmart.ranggaslea.workers.dev</strong> & <strong>toko-online.online</strong>
+                  ✓ Diotorisasi khusus untuk: <strong>kuickmart.ranggaslea.workers.dev</strong> &amp; <strong>toko-online.online</strong>
                 </span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-stone-800">
             {/* Simulation switcher for admin test */}
             <button
               type="button"
               onClick={() => handleToggleSimulation(simulationState.isSimulating ? undefined : 'toko-luar.com')}
-              className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition ${
+              className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition flex-1 sm:flex-initial ${
                 simulationState.isSimulating
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
                   : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
@@ -525,13 +525,13 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
               title="Uji simulasi akses dari domain luar"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>{simulationState.isSimulating ? 'Reset Simulasi' : 'Uji Blokir Domain'}</span>
+              <span>{simulationState.isSimulating ? 'Reset Simulasi' : 'Uji Blokir'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-xs"
+              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 shadow-xs flex-1 sm:flex-initial"
               title="Daftarkan subdomain cabang baru"
             >
               <Plus className="w-4 h-4" />
@@ -542,7 +542,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
               type="button"
               onClick={loadData}
               disabled={isLoading}
-              className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-bold flex items-center gap-2 cursor-pointer transition active:scale-95 disabled:opacity-50"
+              className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 disabled:opacity-50 flex-1 sm:flex-initial"
               title="Perbarui data subdomain"
             >
               <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-red-400' : ''}`} />
@@ -552,14 +552,14 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
         </div>
 
         {/* METRICS ROW */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-stone-800">
-          <div className="bg-stone-800/80 border border-stone-700/80 rounded-xl p-3.5 sm:p-4">
-            <div className="text-[11px] font-semibold text-stone-400 mb-1 flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-stone-400" />
-              <span>Total Subdomain</span>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-stone-800">
+          <div className="bg-stone-800/80 border border-stone-700/80 rounded-xl p-3 sm:p-4 min-w-0">
+            <div className="text-[11px] font-semibold text-stone-400 mb-1 flex items-center gap-1.5 truncate">
+              <Globe className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+              <span className="truncate">Total Subdomain</span>
             </div>
             <div className="text-2xl sm:text-3xl font-black text-white">{totalCount}</div>
-            <div className="text-[10px] text-stone-400 mt-1">Terdaftar resmi</div>
+            <div className="text-[10px] text-stone-400 mt-1 truncate">Terdaftar resmi</div>
           </div>
 
           <div className="bg-emerald-950/30 border border-emerald-800/50 rounded-xl p-3.5 sm:p-4">
@@ -745,22 +745,22 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
       </div>
 
       {/* SEARCH & FILTER CONTROLS */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-2xs">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-2xs">
         {/* Search Input */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Cari berdasarkan nama toko, slug, kota, atau nomor telepon..."
-            className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-stone-200 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition"
+            className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm rounded-xl border border-stone-200 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-0.5"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-0.5 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -768,11 +768,11 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
         </div>
 
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl shrink-0">
+        <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl shrink-0 overflow-x-auto no-scrollbar max-w-full">
           <button
             type="button"
             onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               statusFilter === 'all'
                 ? 'bg-white text-stone-900 shadow-2xs'
                 : 'text-stone-600 hover:text-stone-900'
@@ -783,7 +783,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
           <button
             type="button"
             onClick={() => setStatusFilter('active')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               statusFilter === 'active'
                 ? 'bg-emerald-600 text-white shadow-2xs'
                 : 'text-emerald-700 hover:text-emerald-900'
@@ -795,7 +795,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
           <button
             type="button"
             onClick={() => setStatusFilter('disabled')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               statusFilter === 'disabled'
                 ? 'bg-rose-600 text-white shadow-2xs'
                 : 'text-rose-700 hover:text-rose-900'
@@ -851,7 +851,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 }`}
               >
                 <div className="p-4 sm:p-5">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     {/* LEFT: STORE IDENTITY & SUBDOMAIN */}
                     <div className="flex items-start gap-3.5 flex-1 min-w-0">
                       {/* Logo / Initial */}
@@ -962,31 +962,31 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                       </div>
                     </div>
 
-                    {/* RIGHT: TOMBOL CHECKLIST STATUS & AKSI */}
-                    <div className="flex flex-row sm:flex-col lg:flex-row items-center justify-between sm:justify-end gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-stone-100 shrink-0">
+                    {/* RIGHT: TOMBOL CHECKLIST STATUS & AKSI (RESPONSIF KONSISTEN UNTUK HP, TABLET, DESKTOP) */}
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between md:justify-end gap-2.5 sm:gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-stone-100 shrink-0 w-full md:w-auto">
                       {/* TOMBOL CHECKLIST STATUS */}
-                      <div className="flex flex-col items-start sm:items-end">
+                      <div className="flex flex-col items-start md:items-end shrink-0">
                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-1">
                           Akses Subdomain
                         </span>
 
                         {isRoot ? (
                           <div
-                            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-100 border border-stone-200 text-stone-500 text-xs font-bold cursor-not-allowed select-none"
+                            className="flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl bg-stone-100 border border-stone-200 text-stone-500 text-xs font-bold cursor-not-allowed select-none"
                             title="Domain utama tidak dapat dinonaktifkan"
                           >
-                            <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
+                            <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-2xs shrink-0">
                               <Check className="w-3.5 h-3.5 stroke-[3]" />
                             </div>
-                            <span className="text-stone-700">Domain Utama</span>
-                            <Lock className="w-3.5 h-3.5 text-stone-400 ml-0.5" />
+                            <span className="text-stone-700 whitespace-nowrap">Domain Utama</span>
+                            <Lock className="w-3.5 h-3.5 text-stone-400 ml-0.5 shrink-0" />
                           </div>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleChecklistToggle(item)}
                             disabled={isTogglingThis}
-                            className={`group flex items-center gap-2.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50 ${
+                            className={`group flex items-center gap-2.5 px-3 sm:px-3.5 py-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50 ${
                               item.isActive
                                 ? 'bg-emerald-50 hover:bg-emerald-100/90 text-emerald-900 border-emerald-300'
                                 : 'bg-stone-100 hover:bg-stone-200/90 text-stone-700 border-stone-300'
@@ -999,7 +999,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                           >
                             {/* Checklist Icon Box */}
                             <div
-                              className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                              className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 ${
                                 item.isActive
                                   ? 'bg-emerald-600 text-white shadow-xs'
                                   : 'bg-white border-2 border-stone-400 text-stone-400 group-hover:border-stone-600'
@@ -1013,10 +1013,10 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                             </div>
 
                             <div className="flex flex-col text-left">
-                              <span className="leading-tight">
+                              <span className="leading-tight whitespace-nowrap">
                                 {item.isActive ? 'Subdomain Aktif' : 'Dinonaktifkan'}
                               </span>
-                              <span className="text-[9px] font-medium opacity-70">
+                              <span className="text-[9px] font-medium opacity-70 whitespace-nowrap">
                                 {item.isActive ? 'Klik nonaktifkan' : 'Klik aktifkan'}
                               </span>
                             </div>
@@ -1025,26 +1025,26 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                       </div>
 
                       {/* ACTIONS BUTTONS */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {onOpenStoreSettings && (
                           <button
                             type="button"
                             onClick={() => onOpenStoreSettings(item.storeSlug)}
-                            className="px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                            className="px-2.5 sm:px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                             title="Buka Pengaturan Toko & DOKU"
                           >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Kelola Toko</span>
+                            <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                            <span className="inline">Kelola Toko</span>
                           </button>
                         )}
 
                         <button
                           type="button"
                           onClick={() => handleOpenStore(item)}
-                          className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                          className="px-3 sm:px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
                           title="Buka Halaman Subdomain"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                           <span>Kunjungi</span>
                         </button>
                       </div>

@@ -303,7 +303,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
             >
               <span className="text-sm">👑</span>
-              <span className="hidden lg:inline">Admin Toko</span>
+              <span className="hidden md:inline">Admin Toko</span>
             </button>
 
             {/* Member Card Button */}

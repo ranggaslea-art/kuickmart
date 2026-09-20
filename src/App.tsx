@@ -1415,7 +1415,7 @@ export default function App() {
       {/* NOTIFIKASI SUBDOMAIN DINONAKTIFKAN */}
       {currentTenant && currentTenant.isActive === false && !isDefaultStore(currentTenant.storeSlug) && (
         <div className="bg-rose-700 text-white px-4 py-3 shadow-md sticky top-0 z-50 border-b border-rose-900">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm">
             <div className="flex items-start sm:items-center gap-2.5">
               <AlertTriangle className="w-5 h-5 shrink-0 text-amber-300 mt-0.5 sm:mt-0" />
               <div>
@@ -1437,7 +1437,7 @@ export default function App() {
               onClick={() => {
                 window.location.href = window.location.origin + window.location.pathname;
               }}
-              className="px-4 py-2 bg-white text-rose-800 hover:bg-rose-50 font-bold rounded-xl text-xs shrink-0 shadow-xs cursor-pointer transition active:scale-95 flex items-center gap-1.5"
+              className="w-full sm:w-auto px-4 py-2 bg-white text-rose-800 hover:bg-rose-50 font-bold rounded-xl text-xs shrink-0 shadow-xs cursor-pointer transition active:scale-95 flex items-center justify-center gap-1.5"
             >
               <span>Kembali ke Domain Utama</span>
             </button>
