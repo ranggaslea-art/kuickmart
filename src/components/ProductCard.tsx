@@ -53,7 +53,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Product Image & Badges */}
       <div 
         onClick={() => onOpenDetail(product)} 
-        className="relative bg-stone-50 cursor-pointer aspect-square overflow-hidden flex items-center justify-center p-3"
+        className="relative bg-stone-50 cursor-pointer aspect-square overflow-hidden flex items-center justify-center p-2.5 sm:p-3"
       >
         <img
           src={imgSrc}
@@ -113,7 +113,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
 
       {/* Product Content */}
-      <div className="p-3.5 flex flex-col justify-between flex-1">
+      <div className="p-3 sm:p-3.5 flex flex-col justify-between flex-1">
         <div>
           <div onClick={() => onOpenDetail(product)} className="cursor-pointer">
             <div className="flex items-center justify-between gap-1 mb-1">
@@ -176,17 +176,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <div className="h-[14px]" />
           )}
 
-          <div className="flex items-end justify-between gap-1 mb-2.5">
-            <div>
-              <span className="font-extrabold text-sm sm:text-base text-blue-900">
+          <div className="flex flex-wrap sm:flex-nowrap items-baseline justify-between gap-1 mb-2.5">
+            <div className="flex items-baseline flex-wrap">
+              <span className="font-extrabold text-sm sm:text-base text-blue-900 leading-tight">
                 {formatRupiah(currentPrice)}
               </span>
-              <span className="text-[10px] text-stone-400 ml-1">
+              <span className="text-[10px] text-stone-400 ml-1 whitespace-nowrap">
                 /{selectedOption.unitName}
               </span>
             </div>
-            <div className="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0">
-              <Award className="w-2.5 h-2.5" /> +{pointsEarned} Poin
+            <div className="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0 whitespace-nowrap">
+              <Award className="w-2.5 h-2.5 shrink-0" /> +{pointsEarned} Poin
             </div>
           </div>
 
@@ -194,10 +194,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {quantityInCart === 0 ? (
             <button
               onClick={() => onAddToCart(product, 1, undefined, selectedOption)}
-              className="w-full bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 hover:border-blue-600 font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95"
+              className="w-full bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 hover:border-blue-600 font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 truncate"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Beli ({selectedOption.unitName})</span>
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Beli ({selectedOption.unitName})</span>
             </button>
           ) : (
             <div className="flex items-center justify-between bg-blue-600 text-white rounded-xl p-1 shadow-xs">

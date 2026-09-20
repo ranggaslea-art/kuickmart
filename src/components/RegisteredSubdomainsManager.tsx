@@ -851,7 +851,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 }`}
               >
                 <div className="p-4 sm:p-5">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* LEFT: STORE IDENTITY & SUBDOMAIN */}
                     <div className="flex items-start gap-3.5 flex-1 min-w-0">
                       {/* Logo / Initial */}
@@ -963,9 +963,9 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                     </div>
 
                     {/* RIGHT: TOMBOL CHECKLIST STATUS & AKSI (RESPONSIF KONSISTEN UNTUK HP, TABLET, DESKTOP) */}
-                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between md:justify-end gap-2.5 sm:gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-stone-100 shrink-0 w-full md:w-auto">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between lg:justify-end gap-2.5 sm:gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-stone-100 shrink-0 w-full lg:w-auto">
                       {/* TOMBOL CHECKLIST STATUS */}
-                      <div className="flex flex-col items-start md:items-end shrink-0">
+                      <div className="flex flex-col items-start lg:items-end shrink-0">
                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-1">
                           Akses Subdomain
                         </span>

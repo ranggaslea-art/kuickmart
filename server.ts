@@ -85,6 +85,36 @@ function saveTenantsToFile() {
 // Muat data tenant saat server start
 loadTenantsFromFile();
 
+// File penyimpanan data produk per tenant / subdomain
+const TENANT_PRODUCTS_FILE = path.join(process.cwd(), 'data', 'tenant_products.json');
+let tenantProductsMap: Record<string, any[]> = {};
+
+function loadTenantProductsFromFile() {
+  try {
+    if (fs.existsSync(TENANT_PRODUCTS_FILE)) {
+      const raw = fs.readFileSync(TENANT_PRODUCTS_FILE, 'utf-8');
+      tenantProductsMap = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('[TenantProducts] Could not load tenant_products.json:', e);
+  }
+}
+
+function saveTenantProductsToFile() {
+  try {
+    const dir = path.dirname(TENANT_PRODUCTS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(TENANT_PRODUCTS_FILE, JSON.stringify(tenantProductsMap, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[TenantProducts] Could not write tenant_products.json:', e);
+  }
+}
+
+// Muat data produk tenant saat server start
+loadTenantProductsFromFile();
+
 // Bank endpoint mapping in Jokul DOKU
 const DOKU_BANK_PATHS: Record<string, { path: string; prefix: string; name: string }> = {
   bca: { path: '/bca-virtual-account/v2/payment-code', prefix: '80777', name: 'BCA Virtual Account' },
@@ -560,6 +590,72 @@ async function startServer() {
     } catch (err: any) {
       console.error('[Tenants Error] Failed saving tenant config:', err);
       return res.status(500).json({ error: 'Gagal menyimpan pengaturan toko', details: err.message });
+    }
+  });
+
+  // 1b-4. Ambil Daftar Produk Spesifik Subdomain / Tenant (Sinkronisasi HP & Tablet)
+  app.get('/api/tenant/products', (req, res) => {
+    try {
+      const rawSlug = (req.query.slug as string) || 'default';
+      const slug = rawSlug.trim().toLowerCase();
+      
+      // Ambil produk khusus slug jika sudah ada di server
+      if (tenantProductsMap[slug] && Array.isArray(tenantProductsMap[slug]) && tenantProductsMap[slug].length > 0) {
+        return res.json({
+          success: true,
+          slug,
+          isCustomized: true,
+          count: tenantProductsMap[slug].length,
+          products: tenantProductsMap[slug],
+        });
+      }
+
+      // Jika belum ada, gunakan katalog default dari tenant 'default' agar konsisten antar semua perangkat
+      const fallbackProducts = tenantProductsMap['default'] || [];
+      if (fallbackProducts.length > 0 && slug !== 'default') {
+        // Otomatis seed untuk tenant ini agar kedua perangkat (HP dan tablet) langsung sinkron
+        tenantProductsMap[slug] = fallbackProducts;
+        saveTenantProductsToFile();
+      }
+
+      return res.json({
+        success: true,
+        slug,
+        isCustomized: false,
+        count: fallbackProducts.length,
+        products: fallbackProducts,
+      });
+    } catch (err: any) {
+      console.error('[TenantProducts Error] Failed fetching tenant products:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 1b-5. Simpan / Perbarui Produk Spesifik Subdomain / Tenant (Real-time Sync)
+  app.post('/api/tenant/products', (req, res) => {
+    try {
+      const { slug, products } = req.body || {};
+      if (!slug) {
+        return res.status(400).json({ success: false, error: 'Parameter slug wajib diisi' });
+      }
+      if (!Array.isArray(products)) {
+        return res.status(400).json({ success: false, error: 'Format data products harus berupa array' });
+      }
+
+      const cleanSlug = slug.trim().toLowerCase();
+      tenantProductsMap[cleanSlug] = products;
+      saveTenantProductsToFile();
+
+      console.log(`[TenantProducts] Berhasil menyimpan ${products.length} produk untuk subdomain '${cleanSlug}'`);
+      return res.json({
+        success: true,
+        slug: cleanSlug,
+        count: products.length,
+        message: `Katalog produk untuk '${cleanSlug}' berhasil disimpan ke database server (${products.length} produk).`,
+      });
+    } catch (err: any) {
+      console.error('[TenantProducts Error] Failed saving tenant products:', err);
+      return res.status(500).json({ success: false, error: err.message });
     }
   });
 

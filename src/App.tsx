@@ -50,6 +50,9 @@ import {
 import { 
   PushNotificationPrompt 
 } from './components/PushNotificationPrompt';
+import { 
+  SubdomainBanner 
+} from './components/SubdomainBanner';
 import { cleanReceiptText } from './utils/sanitizeReceipt';
 import { DEFAULT_ROLE_PERMISSIONS } from './utils/permissions';
 import { 
@@ -228,7 +231,7 @@ export default function App() {
     }
   }, [myOrderIds, currentSlug]);
 
-  // Products & Catalogs - Toko baru mulai dengan DATABASE BERSIH (0 produk)
+  // Products & Catalogs - Konsisten antara HP dan Tablet via Server Persistence
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
@@ -240,13 +243,9 @@ export default function App() {
           image: formatImageUrl(p.image),
         }));
       }
-      // Jika toko baru, isolasi data: Toko baru mulai dengan kosong (0 produk)
-      if (isNewStore) {
-        return [];
-      }
       return PRODUCTS;
     } catch {
-      return isNewStore ? [] : PRODUCTS;
+      return PRODUCTS;
     }
   });
 
@@ -880,6 +879,34 @@ export default function App() {
     };
   }, [currentSlug, isNewStore]);
 
+  // Sinkronisasi Katalog Produk Subdomain antara HP dan Tablet via Server Persistence
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchTenantProductsFromServer = async () => {
+      try {
+        const resp = await fetch(`/api/tenant/products?slug=${encodeURIComponent(currentSlug)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!isCancelled && data.success && Array.isArray(data.products) && data.products.length > 0) {
+          const formatted = data.products.map((p: Product) => ({
+            ...p,
+            image: formatImageUrl(p.image),
+          }));
+          setProducts(formatted);
+          const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+          localStorage.setItem(key, JSON.stringify(formatted));
+        }
+      } catch (err) {
+        console.warn('[TenantProducts] Sinkronisasi katalog server gagal:', err);
+      }
+    };
+
+    fetchTenantProductsFromServer();
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentSlug]);
+
   // Salin 30 Katalog Contoh Minimarket (Opsional jika toko baru ingin mengisi etalase cepat)
   const handleCopySampleCatalog = () => {
     const sample = PRODUCTS.map((p, idx) => ({
@@ -892,6 +919,12 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(sample));
+      saveTenantDataToCloud('products', sample, currentSlug);
+      fetch('/api/tenant/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: currentSlug, products: sample }),
+      }).catch(() => {});
     } catch (e) {
       console.warn('Gagal simpan salinan sample produk:', e);
     }
@@ -918,6 +951,11 @@ export default function App() {
       const updatedList = [prodWithStore, ...list.filter(p => p.id !== prodWithStore.id)];
       localStorage.setItem(key, JSON.stringify(updatedList));
       saveTenantDataToCloud('products', updatedList, currentSlug);
+      fetch('/api/tenant/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: currentSlug, products: updatedList }),
+      }).catch(() => {});
     } catch (err) {
       console.warn('Gagal simpan produk baru ke localStorage:', err);
     }
@@ -942,6 +980,11 @@ export default function App() {
       const updatedList = list.map(p => p.id === prodWithStore.id ? prodWithStore : p);
       localStorage.setItem(key, JSON.stringify(updatedList));
       saveTenantDataToCloud('products', updatedList, currentSlug);
+      fetch('/api/tenant/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: currentSlug, products: updatedList }),
+      }).catch(() => {});
     } catch (err) {
       console.warn('Gagal update produk di localStorage:', err);
     }
@@ -960,6 +1003,11 @@ export default function App() {
       const updatedList = list.filter(p => p.id !== productId);
       localStorage.setItem(key, JSON.stringify(updatedList));
       saveTenantDataToCloud('products', updatedList, currentSlug);
+      fetch('/api/tenant/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: currentSlug, products: updatedList }),
+      }).catch(() => {});
     } catch (err) {
       console.warn('Gagal hapus produk di localStorage:', err);
     }
@@ -974,6 +1022,11 @@ export default function App() {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newProducts));
       saveTenantDataToCloud('products', newProducts, currentSlug);
+      fetch('/api/tenant/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: currentSlug, products: newProducts }),
+      }).catch(() => {});
     } catch {}
     newProducts.forEach((p) => {
       saveProductToSupabase(p).catch(() => {});
@@ -1510,6 +1563,24 @@ export default function App() {
         </main>
       ) : (
         <main className="flex-1 w-full min-w-full">
+          {/* Subdomain Storefront Banner (Hadir saat mengunjungi Subdomain Toko) */}
+          <SubdomainBanner
+            currentSlug={currentSlug}
+            tenantConfig={currentTenant}
+            onOpenSubdomainsModal={() => {
+              setAdminPanelInitialTab('subdomains');
+              setIsAdminPanelOpen(true);
+            }}
+            onOpenAdminPanel={() => {
+              setAdminPanelInitialTab('store_doku_settings');
+              setIsAdminPanelOpen(true);
+            }}
+            onBackToMainStore={() => {
+              handleGoHome();
+              window.location.href = window.location.origin + window.location.pathname;
+            }}
+          />
+
           {/* Hero Promotional Banner & Flash Deals */}
           <HeroBanner
             onSelectCategory={(slug) => {
@@ -1715,7 +1786,7 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                 {filteredProducts.map((product) => {
                   const inCart = cartItems.find((item) => item.product.id === product.id);
                   const qty = inCart ? inCart.quantity : 0;
