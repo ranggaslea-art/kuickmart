@@ -183,12 +183,12 @@ export const Header: React.FC<HeaderProps> = ({
                   {logoText}
                 </div>
               )}
-              <div className="leading-tight hidden sm:block">
+              <div className="leading-tight min-w-0">
                 <div className="flex items-center gap-1">
-                  <span className="font-extrabold text-lg text-blue-900 tracking-tight">{namePart1}</span>
-                  <span className="font-black text-lg text-amber-500 tracking-tight">{namePart2}</span>
+                  <span className="font-extrabold text-sm sm:text-lg text-blue-900 tracking-tight truncate max-w-[85px] xs:max-w-[120px] sm:max-w-none">{namePart1}</span>
+                  <span className="font-black text-sm sm:text-lg text-amber-500 tracking-tight truncate max-w-[80px] xs:max-w-[110px] sm:max-w-none">{namePart2}</span>
                   {showBadge && badgeText && (
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${badgeColor} text-white px-1.5 py-0.5 rounded ml-1`}>
+                    <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider ${badgeColor} text-white px-1 sm:px-1.5 py-0.5 rounded ml-0.5 sm:ml-1 shrink-0`}>
                       {badgeText}
                     </span>
                   )}
@@ -356,20 +356,20 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Sub-bar: Baris Kedua (Outlet Selector, Antar/Ambil, Cloud Online, Traffic, Info Subdomain & Jam Operasional) */}
-        <div className="w-full flex items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs overflow-x-auto">
-          <div className="flex items-center gap-1.5 shrink-0">
+        <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2 mt-2 pt-2 border-t border-stone-100 text-xs overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
               id="btn-delivery-toggle"
               onClick={() => onToggleDeliveryType(deliveryType === 'delivery' ? 'pickup' : 'delivery')}
-              className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 font-semibold text-stone-700 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+              className="px-2 py-1 sm:px-2.5 rounded-lg bg-stone-100 hover:bg-stone-200 font-semibold text-stone-700 flex items-center gap-1 shrink-0 transition-colors cursor-pointer text-[11px] sm:text-xs"
             >
               {deliveryType === 'delivery' ? <Bike className="w-3.5 h-3.5 text-blue-600" /> : <StoreIcon className="w-3.5 h-3.5 text-red-600" />}
-              <span>{deliveryType === 'delivery' ? 'Antar' : 'Ambil Toko'}</span>
+              <span>{deliveryType === 'delivery' ? 'Antar' : 'Ambil'}</span>
             </button>
             <button
               id="btn-outlet-selector"
               onClick={onOpenStoreSelector}
-              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[130px] sm:max-w-[220px] md:max-w-[280px] font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[105px] xs:max-w-[150px] sm:max-w-[220px] md:max-w-[280px] font-medium transition-colors cursor-pointer text-[11px] sm:text-xs"
               title={currentStore.name}
             >
               <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
@@ -380,9 +380,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Baris Kedua: Tombol Cloud Online, Traffic, & Info Subdomain Berdampingan */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Tombol Cloud Online */}
-            <OfflineSyncBadge className="py-1 px-2.5 text-xs shrink-0" />
+            <OfflineSyncBadge className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" />
 
             {/* Tombol Traffic (Live Traffic Analytics) */}
             {onOpenLiveTrafficModal && (
@@ -390,7 +390,7 @@ export const Header: React.FC<HeaderProps> = ({
                 id="btn-header-traffic"
                 onClick={onOpenLiveTrafficModal}
                 title="Halaman Live Traffic Analytics (Wajib Login)"
-                className="px-2 sm:px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50 whitespace-nowrap"
+                className="px-1.5 sm:px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50 whitespace-nowrap"
               >
                 <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
                 <span>Traffic</span>
@@ -403,10 +403,11 @@ export const Header: React.FC<HeaderProps> = ({
                 id="btn-header-subdomain"
                 onClick={onOpenSubdomains}
                 title="Buka Modul Info Subdomain & Checklist Nonaktif"
-                className="px-2 sm:px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-cyan-500/50 whitespace-nowrap"
+                className="px-1.5 sm:px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-cyan-500/50 whitespace-nowrap"
               >
                 <Globe className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
-                <span>Info Subdomain</span>
+                <span className="hidden sm:inline">Info Subdomain</span>
+                <span className="sm:hidden">Subdomain</span>
               </button>
             )}
 

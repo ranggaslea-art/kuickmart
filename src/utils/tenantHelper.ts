@@ -283,7 +283,7 @@ export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
  * Contoh: "berkah-mart-jaya" -> "Berkah Mart Jaya"
  */
 export function formatSlugToStoreName(slug: string): string {
-  if (!slug || slug.trim() === '' || slug === 'default' || slug === 'kuickmart' || slug === 'toko-online' || slug === 'toko-online.online') {
+  if (!slug || slug.trim() === '' || slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online') {
     return 'toko-online.online';
   }
   return slug
@@ -319,6 +319,10 @@ export function getStoreSlugFromUrl(): string {
     hostname.includes('webcontainer');
 
   if (!isLocalOrPreview) {
+    // Root domain resmi toko-online.online atau worker dev root
+    if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}` || hostname === 'kuickmart.ranggaslea.workers.dev') {
+      return 'default';
+    }
     const parts = hostname.split('.');
     // Jika formatnya subdomain.domain.tld (minimal 3 bagian) dan bukan 'www'
     if (parts.length >= 3 && parts[0] !== 'www') {
@@ -340,7 +344,7 @@ export function getStoreSlugFromUrl(): string {
  */
 export function isDefaultStore(slug?: string): boolean {
   const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
-  return effectiveSlug === 'default' || effectiveSlug === 'kuickmart' || effectiveSlug === 'toko-online' || effectiveSlug === 'toko-online.online' || effectiveSlug === '';
+  return effectiveSlug === 'default' || effectiveSlug === 'toko-online' || effectiveSlug === 'toko-online.online' || effectiveSlug === '';
 }
 
 /**
@@ -867,6 +871,32 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     disabledAt: null,
     createdAt: '2026-09-21T01:00:00.000Z',
     updatedAt: '2026-09-21T01:00:00.000Z',
+    isRootDomain: false,
+    dokuEnvironment: 'sandbox',
+    hasDoku: true,
+    qrisEnabled: true,
+  },
+  {
+    storeId: 'kuickmart',
+    storeSlug: 'kuickmart',
+    displaySlug: 'kuickmart',
+    subdomain: 'kuickmart.toko-online.online',
+    subdomainUrl: 'https://kuickmart.toko-online.online',
+    storeName: 'Kuickmart',
+    tagline: 'Pusat Belanja Minimarket Cepat & Lengkap',
+    ownerName: 'Pengelola Kuickmart',
+    phone: '0812-3456-7890',
+    whatsapp: '6281234567890',
+    address: 'Cabang Kuickmart - Bandung',
+    city: 'Bandung',
+    logoUrl: '',
+    logoText: 'KM',
+    primaryColor: '#2563EB',
+    isActive: true,
+    disabledReason: null,
+    disabledAt: null,
+    createdAt: '2026-09-20T00:00:00.000Z',
+    updatedAt: '2026-09-20T00:00:00.000Z',
     isRootDomain: false,
     dokuEnvironment: 'sandbox',
     hasDoku: true,

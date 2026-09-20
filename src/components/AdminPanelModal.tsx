@@ -143,7 +143,7 @@ import { StockMutationManager } from './StockMutationManager';
 import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
-import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN } from '../utils/tenantHelper';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
 interface AdminPanelModalProps {
@@ -250,6 +250,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const currentSlug = getStoreSlugFromUrl();
   const isNewStore = !isDefaultStore(currentSlug);
 
+  const activeTenantIdentity = useMemo(() => {
+    return loadStoreTenantConfig(currentSlug);
+  }, [currentSlug]);
+
   // Helper to ensure all staff users have permissions and default accounts exist
   const ensureStaffPermissions = (users: StaffUser[]): StaffUser[] => {
     const defaultMap = new Map<string, StaffUser>();
@@ -262,13 +266,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     const safeUsers = Array.isArray(users) ? users.filter(Boolean) : [];
     const existingUsernames = new Set(safeUsers.map(u => (u?.username || '').toLowerCase()).filter(Boolean));
     const missingDefaults: StaffUser[] = [];
-    if (!isNewStore) {
-      INITIAL_STAFF_USERS.forEach(def => {
-        if (def?.username && !existingUsernames.has(def.username.toLowerCase())) {
-          missingDefaults.push({ ...def });
-        }
-      });
-    }
+    
+    // Pastikan akun dasar (admin, spv, kasir, gudang) selalu tersedia sebagai baseline
+    INITIAL_STAFF_USERS.forEach(def => {
+      if (def?.username && !existingUsernames.has(def.username.toLowerCase())) {
+        missingDefaults.push({ ...def });
+      }
+    });
 
     const fullList = [...safeUsers, ...missingDefaults];
     return fullList.map(u => {
@@ -295,10 +299,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_staff_users', currentSlug));
-      const parsed = saved ? JSON.parse(saved) : (isNewStore ? [] : INITIAL_STAFF_USERS);
+      const parsed = saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
       return ensureStaffPermissions(parsed);
     } catch {
-      return ensureStaffPermissions(isNewStore ? [] : INITIAL_STAFF_USERS);
+      return ensureStaffPermissions(INITIAL_STAFF_USERS);
     }
   });
 
@@ -1898,17 +1902,17 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             </button>
 
             <div className="w-12 h-12 rounded-2xl bg-amber-400 text-stone-950 flex items-center justify-center font-black text-2xl shadow-lg mb-3">
-              KM
+              {activeTenantIdentity.logoText || (isDefaultStore(currentSlug) ? 'TO' : currentSlug.slice(0, 2).toUpperCase())}
             </div>
 
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-xl text-white">Login Admin & Kasir</h3>
               <span className="bg-amber-400/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-400/30">
-                toko-online.online POS
+                {activeTenantIdentity.storeName} POS
               </span>
             </div>
             <p className="text-xs text-stone-300 mt-1">
-              Masukkan ID Pengguna & Password/PIN untuk mengakses manajemen katalog, pesanan, dan cabang toko.
+              Masukkan ID Pengguna & Password/PIN untuk mengakses manajemen katalog, pesanan, dan operasional {activeTenantIdentity.storeName}.
             </p>
           </div>
 
