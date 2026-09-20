@@ -1,5 +1,5 @@
 import { getSupabase } from '../lib/supabase';
-import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey } from './tenantHelper';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, STORAGE_TENANT_PREFIX } from './tenantHelper';
 import { Product, StoreTenantIdentity, BrandHeaderFooterConfig, Voucher, ReceiptInfo, StorePromoInfo, CourierInfo, StaffUser } from '../types';
 
 /**
@@ -7,7 +7,7 @@ import { Product, StoreTenantIdentity, BrandHeaderFooterConfig, Voucher, Receipt
  */
 const STORAGE_KEY_MAPPING: Record<string, string> = {
   products: 'toko_online_products',
-  identity: 'store_tenant_',
+  identity: STORAGE_TENANT_PREFIX,
   brand: 'toko_online_brand_config',
   vouchers: 'toko_online_vouchers',
   receipts: 'toko_online_receipt_configs',
@@ -45,7 +45,7 @@ export async function saveTenantDataToCloud<T = any>(
     try {
       const baseKey = STORAGE_KEY_MAPPING[moduleKey] || `toko_online_${moduleKey}`;
       const localKey = moduleKey === 'identity' 
-        ? `${baseKey}${effectiveSlug}` 
+        ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
         : getTenantStorageKey(baseKey, effectiveSlug);
       localStorage.setItem(localKey, JSON.stringify(data));
     } catch (e) {
@@ -121,7 +121,7 @@ export async function fetchTenantDataFromCloud<T = any>(
           try {
             const baseKey = STORAGE_KEY_MAPPING[moduleKey] || `toko_online_${moduleKey}`;
             const localKey = moduleKey === 'identity' 
-              ? `${baseKey}${effectiveSlug}` 
+              ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
               : getTenantStorageKey(baseKey, effectiveSlug);
             localStorage.setItem(localKey, JSON.stringify(cloudData));
           } catch {}
@@ -139,7 +139,7 @@ export async function fetchTenantDataFromCloud<T = any>(
     try {
       const baseKey = STORAGE_KEY_MAPPING[moduleKey] || `toko_online_${moduleKey}`;
       const localKey = moduleKey === 'identity' 
-        ? `${baseKey}${effectiveSlug}` 
+        ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
         : getTenantStorageKey(baseKey, effectiveSlug);
       const cached = localStorage.getItem(localKey);
       if (cached) {
@@ -217,7 +217,7 @@ export function subscribeToTenantCloudChanges(
                     try {
                       const baseKey = STORAGE_KEY_MAPPING[modKey] || `toko_online_${modKey}`;
                       const localKey = modKey === 'identity' 
-                        ? `${baseKey}${effectiveSlug}` 
+                        ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
                         : getTenantStorageKey(baseKey, effectiveSlug);
                       localStorage.setItem(localKey, JSON.stringify(updatedData));
                     } catch {}
@@ -228,9 +228,12 @@ export function subscribeToTenantCloudChanges(
                   // simpan juga ke cache lokal agar list subdomain selalu up-to-date
                   if (typeof window !== 'undefined') {
                     try {
-                      localStorage.setItem(`toko_online_tenant_${rowSlug.toLowerCase()}`, JSON.stringify(updatedData));
+                      localStorage.setItem(`${STORAGE_TENANT_PREFIX}${rowSlug.toLowerCase()}`, JSON.stringify(updatedData));
                       window.dispatchEvent(new CustomEvent('subdomain_status_changed', {
                         detail: { storeSlug: rowSlug.toLowerCase(), isActive: updatedData.isActive }
+                      }));
+                      window.dispatchEvent(new CustomEvent('store_tenant_updated', {
+                        detail: updatedData
                       }));
                     } catch {}
                   }

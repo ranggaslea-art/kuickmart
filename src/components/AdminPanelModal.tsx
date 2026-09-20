@@ -1084,7 +1084,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   };
 
   const handleLogout = () => {
-    if (window.confirm('Yakin ingin keluar dari sesi Admin toko-online.online dan kembali ke beranda toko belanja?')) {
+    if (window.confirm(`Yakin ingin keluar dari sesi Admin ${activeTenantIdentity.storeName} dan kembali ke beranda toko belanja?`)) {
       handleClose();
     }
   };
@@ -2197,13 +2197,24 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         {/* Top Header - Selalu Menempel di Atas (Shrink-0) */}
         <div className="shrink-0 p-3 sm:p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between gap-3 z-30">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-amber-400 text-stone-950 flex items-center justify-center font-black shadow-md shrink-0 text-sm sm:text-base">
-              KM
+            <div 
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-black shadow-md shrink-0 text-sm sm:text-base text-white overflow-hidden"
+              style={{ backgroundColor: activeTenantIdentity.primaryColor || '#2563eb' }}
+            >
+              {activeTenantIdentity.logoUrl ? (
+                <img 
+                  src={activeTenantIdentity.logoUrl} 
+                  alt={activeTenantIdentity.storeName} 
+                  className="w-full h-full object-cover" 
+                />
+              ) : (
+                <span>{activeTenantIdentity.logoText || (isDefaultStore(currentSlug) ? 'TO' : currentSlug.slice(0, 2).toUpperCase())}</span>
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <h3 className="font-extrabold text-sm sm:text-lg text-white tracking-tight truncate">
-                  Panel Admin & Kasir toko-online.online
+                  Panel Admin & Kasir {activeTenantIdentity.storeName}
                 </h3>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
@@ -5091,7 +5102,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         <div className="p-4 border-t border-stone-100 bg-stone-50 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
           <div className="text-stone-500 flex items-center gap-1.5 flex-wrap">
             <Settings className="w-3.5 h-3.5 text-stone-400" />
-            <span>toko-online.online POS & Inventory Management v2.5</span>
+            <span>{activeTenantIdentity.storeName} POS & Inventory Management v2.5</span>
             {isAnySubFormOpen && (
               <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                 <span>⚠️</span>

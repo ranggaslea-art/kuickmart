@@ -1,4 +1,4 @@
-const CACHE_NAME = 'toko-online-cache-v2';
+const CACHE_NAME = 'toko-online-cache-v4';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
@@ -11,12 +11,13 @@ const PRECACHE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
         console.warn('Pre-cache warning:', err);
       });
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -26,6 +27,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((name) => {
           if (name !== CACHE_NAME) {
+            console.log('[SW] Clearing old cache:', name);
             return caches.delete(name);
           }
         })
@@ -40,10 +42,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Never cache API calls, Supabase endpoints, or socket connections
+  if (event.request.url.includes('/api/') || event.request.url.includes('/rest/v1/') || event.request.url.includes('/socket.io/')) {
+    return;
+  }
+
   const isHtml = event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html');
 
   if (isHtml) {
-    // Network-first for HTML pages so latest code is always served
+    // Network-first for HTML pages so latest code and branding are always served
     event.respondWith(
       fetch(event.request, { cache: 'no-cache' })
         .then((networkResponse) => {

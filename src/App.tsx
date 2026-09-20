@@ -452,11 +452,38 @@ export default function App() {
       }
     };
 
+    const handleTenantCloudSynced = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        const { moduleKey, slug, data } = customEvent.detail;
+        if (slug === currentSlug) {
+          if (moduleKey === 'identity' && data) {
+            setCurrentTenant(data);
+            setBrandConfig((prev) => syncBrandConfigFromTenant(data, prev));
+            setCurrentStore((prev) => ({
+              ...prev,
+              name: data.storeName,
+              address: data.address || prev.address,
+              city: data.city || prev.city,
+              phone: data.phone || data.whatsapp || prev.phone,
+            }));
+            if (typeof document !== 'undefined') {
+              document.title = `${data.storeName} - Belanja & Kasir Online`;
+            }
+          } else if (moduleKey === 'brand' && data) {
+            setBrandConfig(data);
+          }
+        }
+      }
+    };
+
     window.addEventListener('store_tenant_updated', handleTenantUpdated);
     window.addEventListener('subdomain_status_changed', handleSubdomainStatusChanged);
+    window.addEventListener('tenant_cloud_synced', handleTenantCloudSynced);
     return () => {
       window.removeEventListener('store_tenant_updated', handleTenantUpdated);
       window.removeEventListener('subdomain_status_changed', handleSubdomainStatusChanged);
+      window.removeEventListener('tenant_cloud_synced', handleTenantCloudSynced);
     };
   }, []);
 

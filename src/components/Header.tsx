@@ -18,7 +18,8 @@ import {
   Minimize,
   Activity,
   ScanBarcode,
-  Globe
+  Globe,
+  RotateCcw
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
@@ -379,10 +380,25 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Baris Kedua: Tombol Cloud Online, Traffic, & Info Subdomain Berdampingan */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Baris Kedua: Tombol Cloud Online, Segarkan, Traffic, & Info Subdomain Berdampingan */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Tombol Cloud Online */}
             <OfflineSyncBadge className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" />
+
+            {/* Tombol Segarkan Data Real-time (Sangat berguna di HP untuk update instan) */}
+            {onRefreshData && (
+              <button
+                id="btn-header-refresh"
+                type="button"
+                onClick={onRefreshData}
+                disabled={isSyncing}
+                title="Segarkan data produk, banner & identitas subdomain dari Cloud"
+                className="px-1.5 sm:px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-700 font-bold text-[11px] sm:text-xs flex items-center gap-1 shrink-0 transition-all cursor-pointer border border-stone-200 disabled:opacity-50"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 text-stone-600 ${isSyncing ? 'animate-spin text-blue-600' : ''}`} />
+                <span className="hidden sm:inline">Segarkan</span>
+              </button>
+            )}
 
             {/* Tombol Traffic (Live Traffic Analytics) */}
             {onOpenLiveTrafficModal && (
