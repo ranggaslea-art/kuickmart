@@ -283,18 +283,6 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Live Traffic Analytics Button (Wajib Login) */}
-            {onOpenLiveTrafficModal && (
-              <button
-                onClick={onOpenLiveTrafficModal}
-                title="Halaman Live Traffic Analytics (Wajib Login)"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-blue-900/90 hover:bg-blue-800 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50"
-              >
-                <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span className="hidden xl:inline">Live Traffic</span>
-              </button>
-            )}
-
             {/* Kasir POS Minimarket Button */}
             {onOpenPosCashier && (
               <button
@@ -304,18 +292,6 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <ScanBarcode className="w-3.5 h-3.5 text-emerald-200" />
                 <span className="hidden md:inline">Kasir POS</span>
-              </button>
-            )}
-
-            {/* Subdomain Info & Checklist Button */}
-            {onOpenSubdomains && (
-              <button
-                onClick={onOpenSubdomains}
-                title="Buka Modul Info Subdomain & Checklist Nonaktif"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-cyan-500/50"
-              >
-                <Globe className="w-3.5 h-3.5 text-cyan-200" />
-                <span className="hidden lg:inline">Subdomain</span>
               </button>
             )}
 
@@ -401,13 +377,37 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Samping 24 Jam Nonstop: Tombol Cloud Online */}
+          {/* Baris Kedua: Tombol Traffic, Info Subdomain, & Cloud Online */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Tombol Cloud Online diletakkan di samping 24 Jam Nonstop */}
+            {/* Live Traffic Analytics Button */}
+            {onOpenLiveTrafficModal && (
+              <button
+                onClick={onOpenLiveTrafficModal}
+                title="Halaman Live Traffic Analytics (Wajib Login)"
+                className="px-2 sm:px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50 whitespace-nowrap"
+              >
+                <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span className="hidden sm:inline">Traffic</span>
+              </button>
+            )}
+
+            {/* Subdomain Info & Checklist Button */}
+            {onOpenSubdomains && (
+              <button
+                onClick={onOpenSubdomains}
+                title="Buka Modul Info Subdomain & Checklist Nonaktif"
+                className="px-2 sm:px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-cyan-500/50 whitespace-nowrap"
+              >
+                <Globe className="w-3.5 h-3.5 text-cyan-200" />
+                <span className="hidden sm:inline">Info Subdomain</span>
+              </button>
+            )}
+
+            {/* Tombol Cloud Online diletakkan di samping Traffic & Subdomain */}
             <OfflineSyncBadge className="py-1 px-2.5 text-xs" />
 
             {(!brandConfig || brandConfig.showOperatingHoursBadge) && (
-              <span className="text-[11px] sm:text-xs text-emerald-600 font-semibold flex items-center gap-1 shrink-0 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">
+              <span className="text-[11px] sm:text-xs text-emerald-600 font-semibold flex items-center gap-1 shrink-0 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60 hidden md:flex">
                 <Clock className="w-3.5 h-3.5 text-emerald-500" />
                 {operatingHoursText}
               </span>
