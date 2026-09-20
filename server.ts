@@ -193,8 +193,102 @@ async function startServer() {
   });
 
   // 1b-1. List All Registered Subdomains under toko-online.online
+  const ALLOWED_SUBDOMAIN_MODULE_DOMAINS = [
+    'kuickmart.ranggaslea.workers.dev',
+    'toko-online.online',
+    'www.toko-online.online',
+  ];
+
+  function verifySubdomainModuleAccess(req: express.Request): { allowed: boolean; reason?: string } {
+    // Cek jika ada simulasi domain pengujian via header
+    const simulateHeader = (req.headers['x-simulate-domain'] as string | undefined)?.trim().toLowerCase();
+    if (simulateHeader) {
+      if (
+        simulateHeader === 'kuickmart.ranggaslea.workers.dev' ||
+        simulateHeader === 'toko-online.online' ||
+        simulateHeader === 'www.toko-online.online'
+      ) {
+        return { allowed: true };
+      }
+      return {
+        allowed: false,
+        reason: `Akses Ditolak: Domain '${simulateHeader}' tidak memiliki izin. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+      };
+    }
+
+    const clientHostname = (req.headers['x-client-hostname'] as string | undefined)?.trim().toLowerCase();
+    const forwardedHost = (req.headers['x-forwarded-host'] as string | undefined)?.split(',')[0].trim().toLowerCase();
+    const hostHeader = (req.headers['host'] as string | undefined)?.split(':')[0].trim().toLowerCase();
+    const origin = req.headers['origin'] as string | undefined;
+    const referer = req.headers['referer'] as string | undefined;
+
+    const extractHost = (val?: string) => {
+      if (!val) return '';
+      try {
+        if (val.startsWith('http://') || val.startsWith('https://')) {
+          return new URL(val).hostname.toLowerCase();
+        }
+        return val.split(':')[0].trim().toLowerCase();
+      } catch {
+        return val.split(':')[0].trim().toLowerCase();
+      }
+    };
+
+    const hostList = [
+      clientHostname,
+      forwardedHost,
+      hostHeader,
+      extractHost(origin),
+      extractHost(referer),
+    ].filter(Boolean) as string[];
+
+    // Diizinkan secara eksplisit jika berasal dari kuickmart.ranggaslea.workers.dev atau toko-online.online
+    const isExplicitlyAllowed = hostList.some((h) => {
+      const clean = extractHost(h);
+      return (
+        clean === 'kuickmart.ranggaslea.workers.dev' ||
+        clean === 'toko-online.online' ||
+        clean === 'www.toko-online.online'
+      );
+    });
+
+    if (isExplicitlyAllowed) {
+      return { allowed: true };
+    }
+
+    // Diizinkan untuk environment internal dev/preview sandbox Cloud Run / Localhost
+    const isDevPreview = hostList.some((h) => {
+      const clean = extractHost(h);
+      return (
+        clean === 'localhost' ||
+        clean === '127.0.0.1' ||
+        clean.includes('run.app') ||
+        clean.includes('webcontainer') ||
+        clean.includes('aistudio')
+      );
+    });
+
+    if (isDevPreview) {
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      reason: 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.',
+    };
+  }
+
   app.get('/api/tenants', (req, res) => {
     try {
+      const access = verifySubdomainModuleAccess(req);
+      if (!access.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.',
+          allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+        });
+      }
+
       // Pastikan domain utama selalu ada dalam daftar
       if (!tenantStoreMap['default']) {
         tenantStoreMap['default'] = {
@@ -269,6 +363,15 @@ async function startServer() {
   // 1b-2. Toggle Subdomain Status (Checklist Aktif / Nonaktif)
   app.post('/api/tenant/toggle-status', (req, res) => {
     try {
+      const access = verifySubdomainModuleAccess(req);
+      if (!access.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.',
+          allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+        });
+      }
+
       const { storeSlug, isActive, reason } = req.body || {};
       if (!storeSlug) {
         return res.status(400).json({ success: false, error: 'Parameter storeSlug wajib diisi.' });

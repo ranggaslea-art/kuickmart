@@ -10,8 +10,118 @@ export const STORAGE_TENANT_PREFIX = 'store_tenant_identity_';
  */
 export const ROOT_AUTHORITY_DOMAIN = 'toko-online.online';
 export const ALLOWED_ROOT_DOMAINS = ['toko-online.online', 'www.toko-online.online'];
+export const ALLOWED_SUBDOMAIN_MODULE_DOMAINS = [
+  'kuickmart.ranggaslea.workers.dev',
+  'toko-online.online',
+  'www.toko-online.online',
+];
 export const SIMULATE_FOREIGN_DOMAIN_KEY = 'toko_online_simulate_foreign_domain';
 export const SIMULATED_DOMAIN_NAME_KEY = 'toko_online_simulated_domain_name';
+
+export interface SubdomainModuleAccessResult {
+  allowed: boolean;
+  currentDomain: string;
+  allowedDomains: string[];
+  reason?: string;
+  isSimulated?: boolean;
+}
+
+/**
+ * Aturan Akses Modul Info Subdomain:
+ * HANYA bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.
+ * Domain lain maupun subdomain cabang toko DILARANG mengakses modul info subdomain ini.
+ */
+export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAccessResult {
+  if (typeof window === 'undefined') {
+    return {
+      allowed: true,
+      currentDomain: ROOT_AUTHORITY_DOMAIN,
+      allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+    };
+  }
+
+  // Cek simulasi pengujian domain via sessionStorage
+  const isSimulatedForeign = sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true';
+  const simulatedDomain = (sessionStorage.getItem(SIMULATED_DOMAIN_NAME_KEY) || 'toko-eksternal.com').toLowerCase().trim();
+
+  if (isSimulatedForeign) {
+    const isSimAllowed =
+      simulatedDomain === 'kuickmart.ranggaslea.workers.dev' ||
+      simulatedDomain === 'toko-online.online' ||
+      simulatedDomain === 'www.toko-online.online';
+
+    if (!isSimAllowed) {
+      return {
+        allowed: false,
+        currentDomain: simulatedDomain,
+        allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+        isSimulated: true,
+        reason: `Akses Ditolak: Domain '${simulatedDomain}' tidak diizinkan. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+      };
+    }
+  }
+
+  const hostname = (customHost || window.location.hostname || '').toLowerCase().trim();
+
+  // 1. Cek kecocokan langsung dengan domain yang berhak
+  if (
+    hostname === 'kuickmart.ranggaslea.workers.dev' ||
+    hostname === 'toko-online.online' ||
+    hostname === 'www.toko-online.online'
+  ) {
+    return {
+      allowed: true,
+      currentDomain: hostname,
+      allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+    };
+  }
+
+  // 2. Subdomain dari toko-online.online (misal: berkah-mart.toko-online.online)
+  if (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) {
+    return {
+      allowed: false,
+      currentDomain: hostname,
+      allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+      reason: `Akses Ditolak: Anda saat ini berada di subdomain toko '${hostname}'. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+    };
+  }
+
+  // 3. Lingkungan Dev / Cloud Run Sandbox
+  const isDevOrPreview =
+    hostname.includes('localhost') ||
+    hostname.includes('127.0.0.1') ||
+    hostname.includes('run.app') ||
+    hostname.includes('webcontainer');
+
+  if (isDevOrPreview) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramStore = urlParams.get('store');
+
+    // Jika sedang mengakses ?store=nama-toko (bukan root), simulasikan pembatasan subdomain
+    if (paramStore && paramStore !== 'default' && paramStore !== 'toko-online' && paramStore !== 'toko-online.online') {
+      return {
+        allowed: false,
+        currentDomain: `${paramStore}.${ROOT_AUTHORITY_DOMAIN}`,
+        allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+        reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${paramStore}'. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+      };
+    }
+
+    return {
+      allowed: true,
+      currentDomain: `${hostname} (Dev Mode Otoritas)`,
+      allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+    };
+  }
+
+  // 4. Domain Luar Lainnya
+  return {
+    allowed: false,
+    currentDomain: hostname,
+    allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+    reason: `Akses Ditolak: Domain '${hostname}' tidak memiliki izin. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+  };
+}
 
 export interface SubdomainPolicyResult {
   allowed: boolean;
@@ -583,7 +693,15 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
 
   // 1. Ambil dari server Express (/api/tenants)
   try {
-    const res = await fetch('/api/tenants');
+    const reqHeaders: Record<string, string> = {};
+    if (typeof window !== 'undefined') {
+      reqHeaders['x-client-hostname'] = window.location.hostname || '';
+      if (sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true') {
+        reqHeaders['x-simulate-domain'] = sessionStorage.getItem(SIMULATED_DOMAIN_NAME_KEY) || 'toko-eksternal.com';
+      }
+    }
+
+    const res = await fetch('/api/tenants', { headers: reqHeaders });
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.tenants)) {
@@ -701,9 +819,19 @@ export async function toggleSubdomainStatus(
 
   try {
     // 1. Kirim request ke backend Express
+    const postHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (typeof window !== 'undefined') {
+      postHeaders['x-client-hostname'] = window.location.hostname || '';
+      if (sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true') {
+        postHeaders['x-simulate-domain'] = sessionStorage.getItem(SIMULATED_DOMAIN_NAME_KEY) || 'toko-eksternal.com';
+      }
+    }
+
     const res = await fetch('/api/tenant/toggle-status', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: postHeaders,
       body: JSON.stringify({ storeSlug: slug, isActive, reason }),
     });
 

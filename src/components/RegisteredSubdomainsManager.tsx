@@ -10,6 +10,8 @@ import {
   Check,
   Lock,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
   Store,
   Phone,
   MapPin,
@@ -30,6 +32,10 @@ import {
   fetchRegisteredSubdomains,
   toggleSubdomainStatus,
   ROOT_AUTHORITY_DOMAIN,
+  canAccessSubdomainModule,
+  ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+  SIMULATE_FOREIGN_DOMAIN_KEY,
+  SIMULATED_DOMAIN_NAME_KEY,
 } from '../utils/tenantHelper';
 
 interface RegisteredSubdomainsManagerProps {
@@ -41,6 +47,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
   onOpenStoreSettings,
   onNavigateToStore,
 }) => {
+  const [accessPolicy, setAccessPolicy] = useState(() => canAccessSubdomainModule());
   const [subdomains, setSubdomains] = useState<RegisteredSubdomain[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -53,7 +60,43 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
   const [disableReasonInput, setDisableReasonInput] = useState<string>('');
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Domain simulation state for testing/demo in preview environment
+  const [simulationState, setSimulationState] = useState<{
+    isSimulating: boolean;
+    domain: string;
+  }>(() => {
+    if (typeof window === 'undefined') return { isSimulating: false, domain: '' };
+    return {
+      isSimulating: sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true',
+      domain: sessionStorage.getItem(SIMULATED_DOMAIN_NAME_KEY) || 'toko-eksternal.com',
+    };
+  });
+
+  const handleToggleSimulation = (domainToSimulate?: string) => {
+    if (simulationState.isSimulating && !domainToSimulate) {
+      sessionStorage.removeItem(SIMULATE_FOREIGN_DOMAIN_KEY);
+      sessionStorage.removeItem(SIMULATED_DOMAIN_NAME_KEY);
+      setSimulationState({ isSimulating: false, domain: '' });
+      setAccessPolicy(canAccessSubdomainModule());
+      loadData();
+    } else {
+      const target = domainToSimulate || 'toko-eksternal.com';
+      sessionStorage.setItem(SIMULATE_FOREIGN_DOMAIN_KEY, 'true');
+      sessionStorage.setItem(SIMULATED_DOMAIN_NAME_KEY, target);
+      setSimulationState({ isSimulating: true, domain: target });
+      setAccessPolicy(canAccessSubdomainModule(target));
+      loadData();
+    }
+  };
+
   const loadData = async () => {
+    const currentPol = canAccessSubdomainModule();
+    setAccessPolicy(currentPol);
+    if (!currentPol.allowed) {
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const list = await fetchRegisteredSubdomains();
@@ -191,6 +234,146 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
     window.location.href = url;
   };
 
+  if (!accessPolicy.allowed) {
+    return (
+      <div className="space-y-6" id="registered-subdomains-locked">
+        {/* ACCESS DENIED CARD */}
+        <div className="bg-gradient-to-br from-stone-900 via-rose-950 to-stone-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-rose-800/60 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="relative z-10 space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-400/40 text-rose-300 flex items-center justify-center shrink-0 shadow-inner">
+                  <ShieldAlert className="w-7 h-7 text-rose-400" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg sm:text-xl font-black tracking-tight text-white">
+                      Akses Terbatas: Modul Info Subdomain
+                    </h3>
+                    <span className="bg-rose-500/30 text-rose-200 border border-rose-400/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Ditolak
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-rose-200/90 mt-1">
+                    Modul info subdomain hanya bisa diakses oleh domain <strong>kuickmart.ranggaslea.workers.dev</strong> dan domain <strong>toko-online.online</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Current Domain Box vs Allowed Domains */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Box 1: Status Domain Saat Ini */}
+              <div className="bg-stone-900/80 border border-stone-700/80 rounded-2xl p-4 space-y-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Domain Akses Anda Saat Ini</span>
+                </div>
+                <div className="bg-stone-950/90 border border-rose-900/50 rounded-xl p-3 flex items-center justify-between gap-2">
+                  <div className="font-mono text-xs sm:text-sm font-bold text-rose-300 truncate">
+                    {accessPolicy.currentDomain || 'unknown'}
+                  </div>
+                  <span className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded shrink-0">
+                    Tidak Berwenang
+                  </span>
+                </div>
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  {accessPolicy.reason || 'Domain ini tidak memiliki wewenang untuk membuka direktori subdomain maupun mengubah checklist aktivasi.'}
+                </p>
+              </div>
+
+              {/* Box 2: Domain yang Diizinkan */}
+              <div className="bg-stone-900/80 border border-emerald-800/40 rounded-2xl p-4 space-y-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Dua Domain Resmi yang Berwenang</span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <a
+                    href="https://kuickmart.ranggaslea.workers.dev"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-950/70 hover:border-emerald-400/60 transition group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 font-mono font-bold text-emerald-200 truncate">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <span className="truncate">kuickmart.ranggaslea.workers.dev</span>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
+                  </a>
+
+                  <a
+                    href="https://toko-online.online"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-950/70 hover:border-emerald-400/60 transition group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 font-mono font-bold text-emerald-200 truncate">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <span className="truncate">toko-online.online (Domain Utama)</span>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Test Simulation Controls (for Developers/Admins testing in preview) */}
+            <div className="bg-black/40 border border-white/10 rounded-2xl p-4 text-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-stone-300 flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Pengujian Simulasi Domain (Otoritas & Hak Akses)</span>
+                </span>
+                {simulationState.isSimulating && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSimulation()}
+                    className="text-[11px] text-amber-300 hover:text-white underline font-bold cursor-pointer"
+                  >
+                    Reset ke Default
+                  </button>
+                )}
+              </div>
+              <p className="text-stone-400 text-[11px]">
+                Gunakan tombol di bawah untuk menguji respon sistem saat diakses melalui domain berwenang vs domain luar:
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSimulation('kuickmart.ranggaslea.workers.dev')}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Uji: kuickmart.ranggaslea.workers.dev (Diizinkan)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleSimulation('toko-online.online')}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Uji: toko-online.online (Diizinkan)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleSimulation('berkah-mart.toko-online.online')}
+                  className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Uji: Subdomain Cabang (Ditolak)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6" id="registered-subdomains-module">
       {/* HEADER SECTION */}
@@ -208,15 +391,37 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 <span className="bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold px-2.5 py-0.5 rounded-full">
                   {ROOT_AUTHORITY_DOMAIN}
                 </span>
+                <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  Akses Terverifikasi: {accessPolicy.currentDomain}
+                </span>
               </div>
               <p className="text-xs sm:text-sm text-stone-300 leading-relaxed max-w-2xl">
                 Pantau seluruh subdomain toko yang terdaftar di ekosistem resmi <strong>{ROOT_AUTHORITY_DOMAIN}</strong>. 
                 Anda dapat mengaktifkan atau menonaktifkan akses subdomain sewaktu-waktu menggunakan tombol checklist status.
+                <span className="block text-emerald-300/90 text-xs mt-1 font-medium">
+                  ✓ Diotorisasi khusus untuk: <strong>kuickmart.ranggaslea.workers.dev</strong> & <strong>toko-online.online</strong>
+                </span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Simulation switcher for admin test */}
+            <button
+              type="button"
+              onClick={() => handleToggleSimulation(simulationState.isSimulating ? undefined : 'toko-luar.com')}
+              className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition ${
+                simulationState.isSimulating
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+                  : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
+              }`}
+              title="Uji simulasi akses dari domain luar"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>{simulationState.isSimulating ? 'Reset Simulasi' : 'Uji Blokir Domain'}</span>
+            </button>
+
             <button
               type="button"
               onClick={loadData}
