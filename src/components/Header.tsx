@@ -17,7 +17,8 @@ import {
   Maximize,
   Minimize,
   Activity,
-  ScanBarcode
+  ScanBarcode,
+  Globe
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
@@ -34,6 +35,7 @@ interface HeaderProps {
   cartItems: CartItem[];
   onOpenCart: () => void;
   onOpenAdminPanel: () => void;
+  onOpenSubdomains?: () => void;
   onOpenPosCashier?: () => void;
   onOpenLiveTrafficModal?: () => void;
   onOpenSupabaseModal?: () => void;
