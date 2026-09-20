@@ -162,6 +162,14 @@ export const SYSTEM_MODULES: SystemModuleDefinition[] = [
     iconName: 'ArrowLeftRight',
     adminNote: 'Dikelola oleh Admin, Supervisor, dan Gudang untuk mengontrol distribusi stok antar outlet.',
   },
+  {
+    key: 'stock_card',
+    name: 'Kartu Stok & Mutasi Barang',
+    category: 'Operasional',
+    description: 'Lacak riwayat keluar-masuk barang, alur mutasi saldo berjalan (pembelian, kasir POS, opname, retur, transfer cabang), dan laporan rekap pergerakan persediaan.',
+    iconName: 'Layers',
+    adminNote: 'Admin, Supervisor, dan Staff Gudang berhak melihat & mencetak kartu stok serta mengaudit mutasi persediaan.',
+  },
 ];
 
 // Hak akses standar bawaan per peran (Default Role Permissions)
@@ -186,6 +194,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     stock_opname: { canView: true, canEdit: true },
     returns: { canView: true, canEdit: true },
     stock_mutations: { canView: true, canEdit: true },
+    stock_card: { canView: true, canEdit: true },
   },
   supervisor: {
     products: { canView: true, canEdit: true },
@@ -207,6 +216,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     stock_opname: { canView: true, canEdit: true }, // Supervisor bisa audit opname
     returns: { canView: true, canEdit: true }, // Supervisor bisa kelola retur
     stock_mutations: { canView: true, canEdit: true }, // Supervisor bisa mutasi barang
+    stock_card: { canView: true, canEdit: true }, // Supervisor bisa akses kartu stok & laporan
   },
   kasir: {
     // Kasir dapat melihat katalog, promo, pelanggan, dan poin belanja, serta retur penjualan
@@ -229,6 +239,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     suppliers: { canView: false, canEdit: false }, // Terkunci
     stock_opname: { canView: false, canEdit: false }, // Terkunci
     stock_mutations: { canView: false, canEdit: false }, // Terkunci
+    stock_card: { canView: true, canEdit: false }, // Kasir dapat memeriksa alur kartu stok (hanya lihat)
   },
   gudang: {
     products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
@@ -238,6 +249,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     stock_opname: { canView: true, canEdit: true }, // Gudang berhak penuh opname stok
     returns: { canView: true, canEdit: true }, // Gudang memproses retur barang
     stock_mutations: { canView: true, canEdit: true }, // Gudang memproses mutasi antar cabang
+    stock_card: { canView: true, canEdit: true }, // Gudang dapat mengaudit & cetak kartu stok
     stores: { canView: true, canEdit: false }, // Gudang melihat cabang untuk mutasi
     receipts: { canView: false, canEdit: false },
     promos: { canView: false, canEdit: false },
@@ -306,6 +318,7 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       stock_opname: { canView: false, canEdit: false },
       returns: { canView: false, canEdit: false },
       stock_mutations: { canView: false, canEdit: false },
+      stock_card: { canView: false, canEdit: false },
     }),
   },
   {
@@ -335,6 +348,7 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
       stock_opname: { canView: false, canEdit: false },
       returns: { canView: false, canEdit: false },
       stock_mutations: { canView: false, canEdit: false },
+      stock_card: { canView: true, canEdit: false },
     }),
   },
   {

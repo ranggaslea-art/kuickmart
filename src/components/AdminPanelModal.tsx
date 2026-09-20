@@ -140,6 +140,7 @@ import { PosCashierManager } from './PosCashierManager';
 import { StockOpnameManager } from './StockOpnameManager';
 import { ReturnsManager } from './ReturnsManager';
 import { StockMutationManager } from './StockMutationManager';
+import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN } from '../utils/tenantHelper';
@@ -185,7 +186,7 @@ interface AdminPanelModalProps {
   onUpdateRewardItems?: (items: RewardItem[]) => void;
   pointsLedger?: PointsLedgerEntry[];
   onUpdatePointsLedger?: (ledger: PointsLedgerEntry[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card';
 }
 
 interface AdminUser {
@@ -602,7 +603,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
@@ -635,6 +636,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   }, [activeTab]);
 
   const [productSearch, setProductSearch] = useState('');
+  const [selectedStockCardProductId, setSelectedStockCardProductId] = useState<string | undefined>(undefined);
   
   // Product Edit/Add State
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -2286,6 +2288,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               {[
                 { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
                 { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: products.length },
+                { id: 'stock_card', moduleKey: 'stock_card' as SystemModuleKey, label: 'Kartu Stok & Mutasi', icon: <Layers className="w-4 h-4 text-blue-600" /> },
                 { id: 'stock_opname', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
                 { id: 'returns', moduleKey: 'returns' as SystemModuleKey, label: 'Retur Jual & Beli', icon: <Undo2 className="w-4 h-4 text-rose-600" /> },
                 { id: 'stock_mutations', moduleKey: 'stock_mutations' as SystemModuleKey, label: 'Mutasi Antar Cabang', icon: <ArrowLeftRight className="w-4 h-4 text-purple-600" /> },
@@ -3179,6 +3182,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                 {p.barcode}
                               </td>
                               <td className="p-3 text-right space-x-1">
+                                {currentUserPermissions.stock_card?.canView && (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStockCardProductId(p.id);
+                                      setActiveTab('stock_card');
+                                    }}
+                                    className="p-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-700 transition-colors"
+                                    title="Buka Kartu Stok & Histori Mutasi Barang"
+                                  >
+                                    <Layers className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 {currentUserPermissions.products?.canEdit ? (
                                   <>
                                     <button
@@ -5035,6 +5050,26 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 stores={stores}
                 currentStore={currentStore}
                 onUpdateProducts={onUpdateProducts}
+              />
+            </div>
+          ))}
+
+          {/* TAB: KARTU STOK & HISTORI KELUAR MASUK BARANG */}
+          {activeTab === 'stock_card' && (!currentUserPermissions.stock_card?.canView ? (
+            renderAccessDenied('Kartu Stok & Mutasi Barang')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.stock_card?.canEdit && renderReadOnlyBanner('Kartu Stok & Mutasi Barang')}
+              <StockCardManager
+                products={products}
+                orders={orders}
+                purchases={activePurchases}
+                stores={stores}
+                currentStore={currentStore}
+                onUpdateProducts={onUpdateProducts}
+                canEdit={currentUserPermissions.stock_card?.canEdit}
+                preSelectedProductId={selectedStockCardProductId}
+                storeSlug={currentSlug}
               />
             </div>
           ))}

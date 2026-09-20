@@ -367,7 +367,8 @@ export type SystemModuleKey =
   | 'points_rewards'
   | 'stock_opname'
   | 'returns'
-  | 'stock_mutations';
+  | 'stock_mutations'
+  | 'stock_card';
 
 // ==========================================
 // 1. MODUL OPNAME STOK BARANG (STOCK OPNAME)
@@ -737,5 +738,87 @@ export interface StoreTenantIdentity {
   isActive?: boolean; // Status aktif / nonaktif subdomain (default true)
   disabledReason?: string; // Alasan penonaktifan subdomain
   disabledAt?: string; // Waktu dinonaktifkan
+}
+
+// ==========================================
+// 4. MODUL KARTU STOK & HISTORI KELUAR MASUK BARANG
+// ==========================================
+export type StockMovementType =
+  | 'purchase_in'         // Pembelian Masuk (PO / Faktur Beli dari Supplier)
+  | 'sale_out'            // Penjualan Keluar (Kasir POS / Transaksi Penjualan)
+  | 'opname_in'           // Opname Fisik Lebih (Koreksi Surplus)
+  | 'opname_out'          // Opname Fisik Kurang (Koreksi Defisit/Hilang)
+  | 'sales_return_in'     // Retur Penjualan Masuk (Barang kembali dari konsumen)
+  | 'purchase_return_out' // Retur Pembelian Keluar (Dikembalikan ke supplier)
+  | 'mutation_in'         // Mutasi Masuk (Terima dari cabang lain)
+  | 'mutation_out'        // Mutasi Keluar (Kirim ke cabang lain)
+  | 'adjustment_in'       // Penyesuaian Manual Masuk (Bonus supplier, temuan, koreksi)
+  | 'adjustment_out'      // Penyesuaian Manual Keluar (Barang rusak, kadaluarsa, sampel promosi, susut)
+  | 'initial_balance';    // Saldo Awal Periode
+
+export interface StockMovementEntry {
+  id: string;
+  timestamp: string; // ISO 8601 string
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm:ss
+  productId: string;
+  productName: string;
+  barcode: string;
+  category: string;
+  unit: string;
+  storeId?: string;
+  storeName?: string;
+  type: StockMovementType;
+  typeLabel: string;
+  direction: 'in' | 'out' | 'initial'; // 'in' = (+), 'out' = (-), 'initial' = saldo awal
+  referenceNumber: string; // No Dokumen (cth: FB-202609-001, TRX-0921-001, OPN-001, etc)
+  referenceId?: string;
+  qtyIn: number;
+  qtyOut: number;
+  costPrice: number; // HPP / Harga beli
+  sellingPrice?: number; // Harga jual
+  totalAmount: number; // Nilai mutasi (qty * costPrice)
+  previousBalance: number; // Saldo sebelum transaksi
+  runningBalance: number; // Saldo sesudah transaksi
+  partnerName?: string; // Nama Suplier, Nama Pelanggan, atau Nama Cabang
+  notes?: string;
+  operatorName?: string; // Kasir / PIC / Staff Gudang
+}
+
+export interface StockAdjustmentRecord {
+  id: string;
+  adjustmentNumber: string; // cth: 'ADJ-202609-001'
+  date: string;
+  productId: string;
+  productName: string;
+  barcode: string;
+  unit: string;
+  storeId: string;
+  storeName: string;
+  type: 'in' | 'out';
+  quantity: number;
+  costPrice: number;
+  reason: 'expired' | 'damaged' | 'sample' | 'bonus' | 'lost' | 'correction' | 'other';
+  reasonLabel: string;
+  notes: string;
+  handledBy: string;
+  createdAt: string;
+}
+
+export interface StockSummaryReportItem {
+  productId: string;
+  productName: string;
+  barcode: string;
+  category: string;
+  brand: string;
+  unit: string;
+  costPrice: number;
+  sellingPrice: number;
+  initialStock: number;
+  totalIn: number;
+  totalOut: number;
+  finalStock: number;
+  finalValuation: number; // finalStock * costPrice
+  status: 'safe' | 'low' | 'out_of_stock' | 'negative';
 }
 

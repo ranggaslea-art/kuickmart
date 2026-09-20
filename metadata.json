@@ -1,6 +1,6 @@
 {
   "name": "toko-online.online",
-  "description": "Aplikasi pemesanan belanja online minimarket cerdas multi-tenant toko-online.online dengan kustomisasi nama toko bebas, DOKU payment gateway per-tenant, integrasi Supabase, sistem login admin kasir, dan tracking pesanan real-time.",
+  "description": "Aplikasi pemesanan belanja online minimarket cerdas multi-tenant toko-online.online dengan kustomisasi nama toko bebas, DOKU payment gateway per-tenant, integrasi Supabase, modul kartu stok barang & mutasi keluar-masuk, sistem login admin kasir, dan tracking pesanan real-time.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
