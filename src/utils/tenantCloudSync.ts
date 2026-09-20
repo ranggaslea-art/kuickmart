@@ -152,6 +152,34 @@ export async function fetchTenantDataFromCloud<T = any>(
 }
 
 /**
+ * Ambil seluruh data identitas tenant (semua subdomain terdaftar) dari Supabase Cloud.
+ * Membantu hardware lain yang baru online langsung mendapatkan list subdomain termutakhir.
+ */
+export async function fetchAllTenantIdentitiesFromCloud(): Promise<any[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('brand_configs')
+      .select('id, config_json, updated_at')
+      .like('id', 'tenant_identity_%');
+
+    if (error || !data) return [];
+
+    const list: any[] = [];
+    for (const row of data) {
+      if (row.config_json && row.config_json.data && row.config_json.data.storeSlug) {
+        list.push(row.config_json.data);
+      }
+    }
+    return list;
+  } catch (err) {
+    console.warn('[CloudSync] Exception saat fetchAllTenantIdentitiesFromCloud:', err);
+    return [];
+  }
+}
+
+/**
  * Listener Real-time Supabase untuk perubahan data tenant di semua hardware/perangkat.
  */
 export function subscribeToTenantCloudChanges(
@@ -180,19 +208,33 @@ export function subscribeToTenantCloudChanges(
             const match = row.id.match(/^tenant_([a-zA-Z0-9_-]+)_(.+)$/);
             if (match) {
               const [, modKey, rowSlug] = match;
-              if (rowSlug.toLowerCase() === effectiveSlug && payload.new?.config_json) {
+              if (payload.new?.config_json) {
                 const updatedData = payload.new.config_json.data;
-                // Update local storage
-                if (typeof window !== 'undefined') {
-                  try {
-                    const baseKey = STORAGE_KEY_MAPPING[modKey] || `toko_online_${modKey}`;
-                    const localKey = modKey === 'identity' 
-                      ? `${baseKey}${effectiveSlug}` 
-                      : getTenantStorageKey(baseKey, effectiveSlug);
-                    localStorage.setItem(localKey, JSON.stringify(updatedData));
-                  } catch {}
+                // Jika perubahan terjadi pada tenant yang sedang aktif di layar ini
+                if (rowSlug.toLowerCase() === effectiveSlug) {
+                  // Update local storage
+                  if (typeof window !== 'undefined') {
+                    try {
+                      const baseKey = STORAGE_KEY_MAPPING[modKey] || `toko_online_${modKey}`;
+                      const localKey = modKey === 'identity' 
+                        ? `${baseKey}${effectiveSlug}` 
+                        : getTenantStorageKey(baseKey, effectiveSlug);
+                      localStorage.setItem(localKey, JSON.stringify(updatedData));
+                    } catch {}
+                  }
+                  onTenantUpdate(modKey, updatedData);
+                } else if (modKey === 'identity') {
+                  // Jika perubahan identitas / status aktif terjadi pada subdomain lain,
+                  // simpan juga ke cache lokal agar list subdomain selalu up-to-date
+                  if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem(`toko_online_tenant_${rowSlug.toLowerCase()}`, JSON.stringify(updatedData));
+                      window.dispatchEvent(new CustomEvent('subdomain_status_changed', {
+                        detail: { storeSlug: rowSlug.toLowerCase(), isActive: updatedData.isActive }
+                      }));
+                    } catch {}
+                  }
                 }
-                onTenantUpdate(modKey, updatedData);
               }
             }
           }

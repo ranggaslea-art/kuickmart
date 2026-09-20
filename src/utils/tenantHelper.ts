@@ -1,4 +1,5 @@
 import { StoreTenantIdentity, DokuSettings, BrandHeaderFooterConfig, Store } from '../types';
+import { INITIAL_BRAND_CONFIG } from '../data/mockData';
 
 export const STORAGE_ACTIVE_TENANT_KEY = 'active_store_tenant_slug';
 export const STORAGE_TENANT_PREFIX = 'store_tenant_identity_';
@@ -592,6 +593,8 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
     // 5. Sync ke Supabase Cloud tabel brand_configs agar langsung terbaca di hardware online lain
     import('./tenantCloudSync').then(({ saveTenantDataToCloud }) => {
       saveTenantDataToCloud('identity', updatedConfig, slug);
+      const brand = syncBrandConfigFromTenant(updatedConfig, INITIAL_BRAND_CONFIG);
+      saveTenantDataToCloud('brand', brand, slug);
     }).catch(() => {});
 
     return true;
@@ -645,7 +648,39 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
     return localConfig;
   }
 
-  // 2. Hubungi server backend (/api/tenant/config)
+  // 2. Hubungi Supabase Cloud (tabel brand_configs) DAHULU karena Cloud adalah sumber kebenaran lintas-perangkat online!
+  try {
+    const { fetchTenantDataFromCloud } = await import('./tenantCloudSync');
+    const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', effectiveSlug);
+    if (cloudTenant && cloudTenant.storeSlug) {
+      const merged: StoreTenantIdentity = {
+        ...localConfig,
+        ...cloudTenant,
+        dokuSettings: {
+          ...localConfig.dokuSettings,
+          ...cloudTenant.dokuSettings,
+          secretKey: localConfig.dokuSettings?.secretKey || cloudTenant.dokuSettings?.secretKey || '',
+        },
+      };
+      try {
+        localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(merged));
+      } catch {}
+      // Sync ke backend express agar server cache selalu sinkron
+      fetch('/api/tenant/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-hostname': window.location.hostname || ROOT_AUTHORITY_DOMAIN,
+        },
+        body: JSON.stringify(merged),
+      }).catch(() => {});
+      return merged;
+    }
+  } catch (err) {
+    console.warn('[TenantHelper] Auto-provision cloud sync check:', err);
+  }
+
+  // 3. Fallback: Hubungi server backend (/api/tenant/config) jika Cloud belum punya record khusus
   try {
     const res = await fetch(`/api/tenant/config?slug=${encodeURIComponent(effectiveSlug)}`);
     if (res.ok) {
@@ -672,30 +707,7 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
     console.warn('[TenantHelper] Auto-provision backend check fallback to local:', err);
   }
 
-  // 3. Hubungi Supabase Cloud (tabel brand_configs) untuk sync antar-hardware
-  try {
-    const { fetchTenantDataFromCloud } = await import('./tenantCloudSync');
-    const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', effectiveSlug);
-    if (cloudTenant && cloudTenant.storeSlug) {
-      const merged: StoreTenantIdentity = {
-        ...localConfig,
-        ...cloudTenant,
-        dokuSettings: {
-          ...localConfig.dokuSettings,
-          ...cloudTenant.dokuSettings,
-          secretKey: localConfig.dokuSettings?.secretKey || cloudTenant.dokuSettings?.secretKey || '',
-        },
-      };
-      try {
-        localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(merged));
-      } catch {}
-      return merged;
-    }
-  } catch (err) {
-    console.warn('[TenantHelper] Auto-provision cloud sync check:', err);
-  }
-
-  // 3. Simpan konfigurasi lokal secara hening ke localStorage tanpa memicu alert atau error
+  // 4. Simpan konfigurasi lokal ke localStorage
   try {
     localStorage.setItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`, JSON.stringify(localConfig));
   } catch {}
@@ -943,7 +955,58 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
     }
   }
 
-  // 3. Pastikan Domain Utama default ada
+  // 4. Ambil seluruh data tenant identity dari Supabase Cloud (tabel brand_configs)
+  // Ini memastikan hardware online lain langsung melihat subdomain dan status aktif/nonaktif terbaru!
+  try {
+    const { fetchAllTenantIdentitiesFromCloud } = await import('./tenantCloudSync');
+    const cloudTenants = await fetchAllTenantIdentitiesFromCloud();
+    if (cloudTenants && cloudTenants.length > 0) {
+      cloudTenants.forEach((ct: any) => {
+        if (!ct || !ct.storeSlug) return;
+        const slug = ct.storeSlug.toLowerCase();
+        const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+        const existing = mapBySlug[slug];
+
+        mapBySlug[slug] = {
+          storeId: ct.storeId || slug,
+          storeSlug: slug,
+          displaySlug: isMain ? 'pusat' : slug,
+          subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
+          subdomainUrl: isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`,
+          storeName: ct.storeName || (existing?.storeName) || (isMain ? 'toko-online.online (Pusat)' : slug),
+          tagline: ct.tagline || (existing?.tagline) || '',
+          ownerName: ct.ownerName || (existing?.ownerName) || 'Pengelola Toko',
+          phone: ct.phone || ct.whatsapp || (existing?.phone) || '',
+          whatsapp: ct.whatsapp || ct.phone || (existing?.whatsapp) || '',
+          address: ct.address || (existing?.address) || '',
+          city: ct.city || (existing?.city) || '',
+          logoUrl: ct.logoUrl || (existing?.logoUrl) || '',
+          logoText: ct.logoText || (existing?.logoText) || '',
+          primaryColor: ct.primaryColor || (existing?.primaryColor) || '#E51A24',
+          isActive: ct.isActive !== undefined ? ct.isActive : (existing?.isActive ?? true),
+          disabledReason: ct.disabledReason || null,
+          disabledAt: ct.disabledAt || null,
+          createdAt: ct.createdAt || existing?.createdAt || new Date().toISOString(),
+          updatedAt: ct.updatedAt || existing?.updatedAt || new Date().toISOString(),
+          isRootDomain: isMain,
+          dokuEnvironment: ct.dokuSettings?.environment || existing?.dokuEnvironment || 'sandbox',
+          hasDoku: Boolean(ct.dokuSettings?.clientId || existing?.hasDoku),
+          qrisEnabled: Boolean(ct.dokuSettings?.enableQris ?? existing?.qrisEnabled ?? true),
+        };
+
+        // Simpan juga ke cache localStorage lokal
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(`${STORAGE_TENANT_PREFIX}${slug}`, JSON.stringify(ct));
+          } catch {}
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('[TenantHelper] Gagal sync cloud tenants ke list subdomain:', err);
+  }
+
+  // 5. Pastikan Domain Utama default ada
   if (!mapBySlug['default']) {
     mapBySlug['default'] = {
       storeId: 'default',
@@ -1054,6 +1117,21 @@ export async function toggleSubdomainStatus(
           detail: { storeSlug: slug, isActive, reason },
         })
       );
+    }
+
+    // 4. Sync ke Supabase Cloud agar semua hardware online langsung terupdate secara real-time
+    try {
+      const { saveTenantDataToCloud } = await import('./tenantCloudSync');
+      let tenantToSync = data.tenant;
+      if (!tenantToSync && typeof window !== 'undefined') {
+        const raw = localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`);
+        if (raw) tenantToSync = JSON.parse(raw);
+      }
+      if (tenantToSync && tenantToSync.storeSlug) {
+        saveTenantDataToCloud('identity', tenantToSync, slug);
+      }
+    } catch (e) {
+      console.warn('[TenantHelper] Gagal sync status subdomain ke cloud:', e);
     }
 
     return {

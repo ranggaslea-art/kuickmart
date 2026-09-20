@@ -355,10 +355,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Sub-bar: Outlet Selector, Delivery, Cloud Online & Jam Operasional */}
-        <div className="w-full flex items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs">
-          <div className="flex items-center gap-1.5 min-w-0">
+        {/* Sub-bar: Baris Kedua (Outlet Selector, Antar/Ambil, Cloud Online, Traffic, Info Subdomain & Jam Operasional) */}
+        <div className="w-full flex items-center justify-between gap-2 mt-2 pt-2 border-t border-stone-100 text-xs overflow-x-auto">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
+              id="btn-delivery-toggle"
               onClick={() => onToggleDeliveryType(deliveryType === 'delivery' ? 'pickup' : 'delivery')}
               className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 font-semibold text-stone-700 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
             >
@@ -366,8 +367,9 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{deliveryType === 'delivery' ? 'Antar' : 'Ambil Toko'}</span>
             </button>
             <button
+              id="btn-outlet-selector"
               onClick={onOpenStoreSelector}
-              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[150px] sm:max-w-[250px] md:max-w-[320px] font-medium transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[130px] sm:max-w-[220px] md:max-w-[280px] font-medium transition-colors cursor-pointer"
               title={currentStore.name}
             >
               <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
@@ -377,34 +379,36 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Baris Kedua: Tombol Traffic, Info Subdomain, & Cloud Online */}
+          {/* Baris Kedua: Tombol Cloud Online, Traffic, & Info Subdomain Berdampingan */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Live Traffic Analytics Button */}
+            {/* Tombol Cloud Online */}
+            <OfflineSyncBadge className="py-1 px-2.5 text-xs shrink-0" />
+
+            {/* Tombol Traffic (Live Traffic Analytics) */}
             {onOpenLiveTrafficModal && (
               <button
+                id="btn-header-traffic"
                 onClick={onOpenLiveTrafficModal}
                 title="Halaman Live Traffic Analytics (Wajib Login)"
                 className="px-2 sm:px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50 whitespace-nowrap"
               >
-                <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span className="hidden sm:inline">Traffic</span>
+                <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                <span>Traffic</span>
               </button>
             )}
 
-            {/* Subdomain Info & Checklist Button */}
+            {/* Tombol Info Subdomain */}
             {onOpenSubdomains && (
               <button
+                id="btn-header-subdomain"
                 onClick={onOpenSubdomains}
                 title="Buka Modul Info Subdomain & Checklist Nonaktif"
                 className="px-2 sm:px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-cyan-500/50 whitespace-nowrap"
               >
-                <Globe className="w-3.5 h-3.5 text-cyan-200" />
-                <span className="hidden sm:inline">Info Subdomain</span>
+                <Globe className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
+                <span>Info Subdomain</span>
               </button>
             )}
-
-            {/* Tombol Cloud Online diletakkan di samping Traffic & Subdomain */}
-            <OfflineSyncBadge className="py-1 px-2.5 text-xs" />
 
             {(!brandConfig || brandConfig.showOperatingHoursBadge) && (
               <span className="text-[11px] sm:text-xs text-emerald-600 font-semibold flex items-center gap-1 shrink-0 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60 hidden md:flex">

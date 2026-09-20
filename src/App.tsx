@@ -150,7 +150,8 @@ import {
   loadStoreTenantConfig,
   isDefaultStore,
   getTenantStorageKey,
-  getTenantStore
+  getTenantStore,
+  STORAGE_TENANT_PREFIX
 } from './utils/tenantHelper';
 import { 
   saveTenantDataToCloud, 
@@ -348,7 +349,8 @@ export default function App() {
   // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_BRAND_CONFIG_KEY) || localStorage.getItem('kuickmart_brand_config');
+      const tenantKey = getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug);
+      const saved = localStorage.getItem(tenantKey) || (currentSlug === 'default' ? localStorage.getItem(STORAGE_BRAND_CONFIG_KEY) || localStorage.getItem('kuickmart_brand_config') : null);
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
@@ -362,19 +364,25 @@ export default function App() {
             : INITIAL_BRAND_CONFIG.bottomLinks,
         };
       }
-      return INITIAL_BRAND_CONFIG;
+      const tenant = loadStoreTenantConfig(currentSlug);
+      return syncBrandConfigFromTenant(tenant, INITIAL_BRAND_CONFIG);
     } catch {
       return INITIAL_BRAND_CONFIG;
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(brandConfig));
-  }, [brandConfig]);
+    const tenantKey = getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug);
+    localStorage.setItem(tenantKey, JSON.stringify(brandConfig));
+    if (currentSlug === 'default') {
+      localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(brandConfig));
+    }
+  }, [brandConfig, currentSlug]);
 
   useEffect(() => {
+    const tenantKey = getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug);
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_BRAND_CONFIG_KEY && e.newValue) {
+      if ((e.key === tenantKey || (currentSlug === 'default' && e.key === STORAGE_BRAND_CONFIG_KEY)) && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
           setBrandConfig((prev) => ({ ...prev, ...parsed }));
@@ -394,7 +402,7 @@ export default function App() {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('brand_config_updated', handleCustom as EventListener);
     };
-  }, []);
+  }, [currentSlug]);
 
   // Multi-Tenant Auto-Provisioning & Dynamic Store Branding Sync
   const [currentTenant, setCurrentTenant] = useState<StoreTenantIdentity | null>(() => {
@@ -681,12 +689,41 @@ export default function App() {
           localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(relevantOrders));
         } catch {}
       }
+      // 0. Sinkronisasi Identitas Tenant & Subdomain dari Supabase Cloud
+      const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', currentSlug);
+      if (cloudTenant && cloudTenant.storeSlug) {
+        setCurrentTenant(cloudTenant);
+        setCurrentStore((prev) => ({
+          ...prev,
+          name: cloudTenant.storeName,
+          address: cloudTenant.address || prev.address,
+          city: cloudTenant.city || prev.city,
+          phone: cloudTenant.phone || cloudTenant.whatsapp || prev.phone,
+        }));
+        if (typeof document !== 'undefined') {
+          document.title = `${cloudTenant.storeName} - Belanja & Kasir Online`;
+        }
+        try {
+          localStorage.setItem(`${STORAGE_TENANT_PREFIX}${currentSlug}`, JSON.stringify(cloudTenant));
+        } catch {}
+      }
+
       // 1. Pengaturan Brand & Struk
       if (dbBrandConfig) {
         setBrandConfig(dbBrandConfig);
         try {
           localStorage.setItem(getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug), JSON.stringify(dbBrandConfig));
         } catch {}
+      } else {
+        const cloudBrand = await fetchTenantDataFromCloud<BrandHeaderFooterConfig>('brand', currentSlug);
+        if (cloudBrand) {
+          setBrandConfig(cloudBrand);
+          try {
+            localStorage.setItem(getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug), JSON.stringify(cloudBrand));
+          } catch {}
+        } else if (cloudTenant) {
+          setBrandConfig((prev) => syncBrandConfigFromTenant(cloudTenant, prev));
+        }
       }
       if (dbReceiptConfigs && dbReceiptConfigs.length > 0) {
         const relevantReceipts = isNewStore
@@ -763,6 +800,19 @@ export default function App() {
       } else if (moduleKey === 'identity' && data) {
         setCurrentTenant(data);
         setBrandConfig((prev) => syncBrandConfigFromTenant(data, prev));
+        setCurrentStore((prev) => ({
+          ...prev,
+          name: data.storeName,
+          address: data.address || prev.address,
+          city: data.city || prev.city,
+          phone: data.phone || data.whatsapp || prev.phone,
+        }));
+        if (typeof document !== 'undefined') {
+          document.title = `${data.storeName} - Belanja & Kasir Online`;
+        }
+        try {
+          localStorage.setItem(`${STORAGE_TENANT_PREFIX}${currentSlug}`, JSON.stringify(data));
+        } catch {}
       } else if (moduleKey === 'vouchers' && Array.isArray(data)) {
         setVouchers(data);
       } else if (moduleKey === 'receipts' && Array.isArray(data)) {

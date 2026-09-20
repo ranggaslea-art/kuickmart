@@ -139,9 +139,23 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
 
     window.addEventListener('subdomain_status_changed', handleStatusChanged);
     window.addEventListener('store_tenant_updated', handleStatusChanged);
+
+    // Auto-refresh when tab is focused / screen unlocked
+    const handleFocus = () => {
+      loadData();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Polling every 5 detik agar selalu sinkron real-time antar perangkat
+    const interval = setInterval(() => {
+      loadData();
+    }, 5000);
+
     return () => {
       window.removeEventListener('subdomain_status_changed', handleStatusChanged);
       window.removeEventListener('store_tenant_updated', handleStatusChanged);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
     };
   }, []);
 
