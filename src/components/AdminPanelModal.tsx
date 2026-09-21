@@ -94,9 +94,19 @@ import {
   MemberProfile,
   PointsConfig,
   RewardItem,
-  PointsLedgerEntry
+  PointsLedgerEntry,
+  BrandItem,
+  Category
 } from '../types';
-import { INITIAL_STAFF_USERS, INITIAL_RECEIPT_CONFIGS, INITIAL_STORE_PROMOS, INITIAL_COURIERS, INITIAL_BRAND_CONFIG } from '../data/mockData';
+import { 
+  INITIAL_STAFF_USERS, 
+  INITIAL_RECEIPT_CONFIGS, 
+  INITIAL_STORE_PROMOS, 
+  INITIAL_COURIERS, 
+  INITIAL_BRAND_CONFIG,
+  CATEGORIES,
+  INITIAL_BRANDS 
+} from '../data/mockData';
 import { 
   INITIAL_SUPPLIERS, 
   INITIAL_CUSTOMERS, 
@@ -142,6 +152,7 @@ import { ReturnsManager } from './ReturnsManager';
 import { StockMutationManager } from './StockMutationManager';
 import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
+import { CategoryBrandManager } from './CategoryBrandManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
@@ -187,7 +198,11 @@ interface AdminPanelModalProps {
   onUpdateRewardItems?: (items: RewardItem[]) => void;
   pointsLedger?: PointsLedgerEntry[];
   onUpdatePointsLedger?: (ledger: PointsLedgerEntry[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card';
+  categories?: Category[];
+  onUpdateCategories?: (categories: Category[]) => void;
+  brands?: BrandItem[];
+  onUpdateBrands?: (brands: BrandItem[]) => void;
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands';
 }
 
 interface AdminUser {
@@ -245,6 +260,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateRewardItems,
   pointsLedger: propPointsLedger,
   onUpdatePointsLedger,
+  categories: propCategories,
+  onUpdateCategories,
+  brands: propBrands,
+  onUpdateBrands,
   initialTab,
 }) => {
   const currentSlug = getStoreSlugFromUrl();
@@ -575,6 +594,52 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
+  // Categories State
+  const [internalCategories, setInternalCategories] = useState<Category[]>(() => {
+    try {
+      const key = getTenantStorageKey('toko_online_categories', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_categories', currentSlug));
+      return saved ? JSON.parse(saved) : CATEGORIES;
+    } catch {
+      return CATEGORIES;
+    }
+  });
+  const activeCategories = propCategories || internalCategories;
+  const handleUpdateCategories = (newCategories: Category[]) => {
+    if (onUpdateCategories) onUpdateCategories(newCategories);
+    setInternalCategories(newCategories);
+    try {
+      const key = getTenantStorageKey('toko_online_categories', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newCategories));
+      saveTenantDataToCloud('categories', newCategories, currentSlug);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Brands State
+  const [internalBrands, setInternalBrands] = useState<BrandItem[]>(() => {
+    try {
+      const key = getTenantStorageKey('toko_online_brands', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_brands', currentSlug));
+      return saved ? JSON.parse(saved) : INITIAL_BRANDS;
+    } catch {
+      return INITIAL_BRANDS;
+    }
+  });
+  const activeBrands = propBrands || internalBrands;
+  const handleUpdateBrands = (newBrands: BrandItem[]) => {
+    if (onUpdateBrands) onUpdateBrands(newBrands);
+    setInternalBrands(newBrands);
+    try {
+      const key = getTenantStorageKey('toko_online_brands', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newBrands));
+      saveTenantDataToCloud('brands', newBrands, currentSlug);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Login Authentication State - Selalu wajib login setiap kali masuk modul admin
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
@@ -614,7 +679,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
@@ -658,6 +723,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [formCategory, setFormCategory] = useState('snack-biscuit');
   const [formPrice, setFormPrice] = useState(15000);
   const [formOriginalPrice, setFormOriginalPrice] = useState(15000);
+  const [formCostPrice, setFormCostPrice] = useState<number>(12000);
   const [formUnit, setFormUnit] = useState('Pcs');
   const [formStock, setFormStock] = useState(50);
   const [formBarcode, setFormBarcode] = useState('');
@@ -1102,6 +1168,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setFormCategory('snack-biscuit');
     setFormPrice(15000);
     setFormOriginalPrice(15000);
+    setFormCostPrice(12000);
     setFormUnit('Pcs');
     setFormStock(50);
     setFormBarcode(Math.floor(1000000000000 + Math.random() * 9000000000000).toString());
@@ -1119,6 +1186,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setFormCategory(p.category);
     setFormPrice(p.price);
     setFormOriginalPrice(p.originalPrice || p.price);
+    setFormCostPrice(p.costPrice !== undefined ? p.costPrice : (p.price ? Math.round(p.price * 0.8) : 10000));
     setFormUnit(p.unit);
     setFormStock(p.stock);
     setFormBarcode(p.barcode);
@@ -1319,6 +1387,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           category: formCategory,
           price: Number(formPrice),
           originalPrice: Number(formOriginalPrice),
+          costPrice: Number(formCostPrice) >= 0 ? Number(formCostPrice) : undefined,
           discountPercent: discount,
           unit: formUnit,
           stock: Number(formStock),
@@ -1361,6 +1430,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           category: formCategory,
           price: Number(formPrice),
           originalPrice: Number(formOriginalPrice),
+          costPrice: Number(formCostPrice) >= 0 ? Number(formCostPrice) : undefined,
           discountPercent: discount,
           unit: formUnit,
           stock: Number(formStock),
@@ -2310,6 +2380,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               {[
                 { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
                 { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: products.length },
+                { id: 'categories_brands', moduleKey: 'products' as SystemModuleKey, label: 'Kategori & Merk', icon: <Tag className="w-4 h-4 text-pink-600" />, count: (activeCategories.length + activeBrands.length) },
                 { id: 'stock_card', moduleKey: 'stock_card' as SystemModuleKey, label: 'Kartu Stok & Mutasi', icon: <Layers className="w-4 h-4 text-blue-600" /> },
                 { id: 'stock_opname', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
                 { id: 'returns', moduleKey: 'returns' as SystemModuleKey, label: 'Retur Jual & Beli', icon: <Undo2 className="w-4 h-4 text-rose-600" /> },
@@ -2606,33 +2677,89 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     </div>
 
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Brand / Merek:</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-stone-700">Brand / Merek:</label>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('categories_brands')}
+                          className="text-[10px] text-pink-700 hover:text-pink-900 font-bold hover:underline flex items-center gap-0.5"
+                          title="Buka modul manajemen kategori dan merk"
+                        >
+                          <Tag className="w-2.5 h-2.5" />
+                          <span>Kelola Merk</span>
+                        </button>
+                      </div>
                       <input
                         type="text"
                         required
+                        list="available-brands-list"
                         value={formBrand}
                         onChange={e => setFormBrand(e.target.value)}
                         placeholder="Contoh: Djarum, Indofood, Unilever"
                         className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-blue-100"
                       />
+                      <datalist id="available-brands-list">
+                        {activeBrands.map(b => (
+                          <option key={b.id} value={b.name} />
+                        ))}
+                      </datalist>
                     </div>
 
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Kategori:</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-stone-700">Kategori Produk:</label>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('categories_brands')}
+                          className="text-[10px] text-pink-700 hover:text-pink-900 font-bold hover:underline flex items-center gap-0.5"
+                          title="Buka modul manajemen kategori dan merk"
+                        >
+                          <Tag className="w-2.5 h-2.5" />
+                          <span>Kelola Kategori</span>
+                        </button>
+                      </div>
                       <select
                         value={formCategory}
                         onChange={e => setFormCategory(e.target.value)}
-                        className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium"
+                        className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-blue-100"
                       >
-                        <option value="sembako-dapur">Sembako & Kebutuhan Dapur</option>
-                        <option value="minuman-segar">Minuman Segar & Kopi</option>
-                        <option value="snack-biscuit">Snack, Biskuit & Cokelat</option>
-                        <option value="perawatan-diri">Perawatan Diri & Sabun</option>
-                        <option value="kebutuhan-rumah">Kebutuhan Rumah Tangga</option>
-                        <option value="ibu-bayi">Kebutuhan Ibu & Bayi</option>
-                        <option value="rokok-tembakau">Rokok & Tembakau</option>
-                        <option value="obat-p3k">Obat & Kesehatan P3K</option>
+                        {activeCategories.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
                       </select>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-amber-900 flex items-center gap-1">
+                          <Coins className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Harga Modal / Beli (HPP):</span>
+                        </label>
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          Hitung Laba
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-stone-400 font-semibold text-xs">Rp</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formCostPrice}
+                          onChange={e => setFormCostPrice(Number(e.target.value))}
+                          placeholder="0"
+                          className="w-full pl-9 pr-3 py-2 border border-amber-300 rounded-xl bg-amber-50/40 font-bold text-amber-950 focus:ring-2 focus:ring-amber-200"
+                        />
+                      </div>
+                      {formPrice > 0 && formCostPrice > 0 && (
+                        <div className="mt-1 flex items-center justify-between text-[11px] px-2 py-1 bg-stone-100 rounded-lg">
+                          <span className="text-stone-600">Estimasi Margin:</span>
+                          <span className={`font-bold ${formPrice >= formCostPrice ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {formatRupiah(formPrice - formCostPrice)} ({Math.round(((formPrice - formCostPrice) / formPrice) * 100)}%)
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -3134,14 +3261,22 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           <tr className="bg-stone-100 text-stone-600 font-bold border-b border-stone-200 sticky top-0 z-10">
                             <th className="p-3">Produk & Satuan</th>
                             <th className="p-3">Kategori</th>
-                            <th className="p-3">Harga</th>
+                            <th className="p-3">Harga Modal (HPP)</th>
+                            <th className="p-3">Harga Jual & Margin</th>
                             <th className="p-3">Stok Gudang & Kemasan</th>
                             <th className="p-3">Barcode</th>
                             <th className="p-3 text-right">Aksi</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
-                          {filteredCatalog.map(p => (
+                          {filteredCatalog.map(p => {
+                            const catObj = activeCategories.find(c => c.id === p.category);
+                            const catLabel = catObj?.name || p.category;
+                            const hpp = p.costPrice !== undefined ? p.costPrice : null;
+                            const marginRp = hpp !== null && p.price ? p.price - hpp : null;
+                            const marginPct = marginRp !== null && p.price > 0 ? Math.round((marginRp / p.price) * 100) : null;
+
+                            return (
                             <tr key={p.id} className="hover:bg-blue-50/40 transition-colors">
                               <td className="p-3">
                                 <div className="flex items-start gap-2.5">
@@ -3169,17 +3304,40 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                 </div>
                               </td>
                               <td className="p-3">
-                                <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded text-[10px] font-medium">
-                                  {p.category}
+                                <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded text-[10px] font-medium inline-block max-w-[130px] truncate" title={catLabel}>
+                                  {catLabel}
                                 </span>
                               </td>
-                              <td className="p-3 font-bold text-blue-900">
-                                {formatRupiah(p.price)}
-                                {p.discountPercent ? (
-                                  <span className="ml-1 text-[10px] bg-red-100 text-red-600 px-1 rounded font-extrabold">
-                                    -{p.discountPercent}%
-                                  </span>
-                                ) : null}
+                              <td className="p-3">
+                                {hpp !== null ? (
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-amber-900 text-xs">
+                                      {formatRupiah(hpp)}
+                                    </span>
+                                    <span className="text-[9px] text-amber-700">Modal / HPP</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-stone-400 italic">Belum diset</span>
+                                )}
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-blue-900 text-xs">{formatRupiah(p.price)}</span>
+                                    {p.discountPercent ? (
+                                      <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded font-extrabold">
+                                        -{p.discountPercent}%
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {marginRp !== null && marginPct !== null && (
+                                    <div className="text-[10px] font-semibold flex items-center gap-1 mt-0.5">
+                                      <span className={marginRp >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                                        +{formatRupiah(marginRp)} ({marginPct}%)
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="p-3">
                                 <div className="flex flex-col gap-1">
@@ -3240,7 +3398,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                 )}
                               </td>
                             </tr>
-                          ))}
+                          );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -5072,6 +5231,24 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 stores={stores}
                 currentStore={currentStore}
                 onUpdateProducts={onUpdateProducts}
+              />
+            </div>
+          ))}
+
+          {/* TAB: MANAJEMEN KATEGORI & MERK BARANG */}
+          {activeTab === 'categories_brands' && (!currentUserPermissions.products?.canView ? (
+            renderAccessDenied('Kategori & Merk Barang')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.products?.canEdit && renderReadOnlyBanner('Kategori & Merk Barang')}
+              <CategoryBrandManager
+                categories={activeCategories}
+                onUpdateCategories={handleUpdateCategories}
+                brands={activeBrands}
+                onUpdateBrands={handleUpdateBrands}
+                products={products}
+                onUpdateProducts={onUpdateProducts}
+                canEdit={currentUserPermissions.products?.canEdit}
               />
             </div>
           ))}

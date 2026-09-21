@@ -41,6 +41,17 @@ export interface Category {
   color?: string;
 }
 
+export interface BrandItem {
+  id: string;
+  name: string;
+  code?: string;
+  categorySlug?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Store {
   id: string;
   name: string;

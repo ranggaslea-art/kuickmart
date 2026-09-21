@@ -1,4 +1,4 @@
-import { Product, Category, Store, Voucher, Address, MemberProfile, StaffUser, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig } from '../types';
+import { Product, Category, BrandItem, Store, Voucher, Address, MemberProfile, StaffUser, ReceiptInfo, StorePromoInfo, CourierInfo, BrandHeaderFooterConfig } from '../types';
 import { DEFAULT_ROLE_PERMISSIONS } from '../utils/permissions';
 
 export const INITIAL_BRAND_CONFIG: BrandHeaderFooterConfig = {
@@ -509,6 +509,40 @@ export const CATEGORIES: Category[] = [
   { id: 'cat_perawatan', name: 'Perawatan Diri', slug: 'perawatan', icon: 'Sparkles', color: 'pink' },
   { id: 'cat_kebersihan', name: 'Kebutuhan Rumah', slug: 'rumah-tangga', icon: 'Home', color: 'indigo' },
   { id: 'cat_bayi', name: 'Ibu & Bayi', slug: 'ibu-bayi', icon: 'Baby', color: 'purple' },
+  { id: 'cat_rokok', name: 'Rokok & Tembakau', slug: 'rokok-tembakau', icon: 'Cigarette', color: 'stone' },
+  { id: 'cat_obat', name: 'Obat & P3K', slug: 'obat-p3k', icon: 'Pill', color: 'teal' },
+];
+
+export const INITIAL_BRANDS: BrandItem[] = [
+  { id: 'brd_01', name: 'Bimoli', code: 'BML', categorySlug: 'sembako', description: 'Minyak goreng kelapa sawit terkemuka', isActive: true },
+  { id: 'brd_02', name: 'Indofood', code: 'IDF', categorySlug: 'sembako', description: 'Produsen bumbu, mie, dan kebutuhan pangan', isActive: true },
+  { id: 'brd_03', name: 'Indomie', code: 'IDM', categorySlug: 'sembako', description: 'Brand mie instan legendaris Indonesia', isActive: true },
+  { id: 'brd_04', name: 'Gulaku', code: 'GLK', categorySlug: 'sembako', description: 'Gula pasir kristal tebu premium', isActive: true },
+  { id: 'brd_05', name: 'Nusa Ramos', code: 'NRM', categorySlug: 'sembako', description: 'Beras putih pulen dan pandan wangi', isActive: true },
+  { id: 'brd_06', name: 'Segitiga Biru', code: 'SGB', categorySlug: 'sembako', description: 'Tepung terigu serbaguna Bogasari', isActive: true },
+  { id: 'brd_07', name: 'Filma', code: 'FLM', categorySlug: 'sembako', description: 'Minyak goreng non-kolesterol & margarin', isActive: true },
+  { id: 'brd_08', name: 'Le Minerale', code: 'LMN', categorySlug: 'minuman', description: 'Air mineral pegunungan dengan mineral alami', isActive: true },
+  { id: 'brd_09', name: 'Ultra Milk', code: 'ULM', categorySlug: 'minuman', description: 'Susu cair UHT berkualitas tinggi', isActive: true },
+  { id: 'brd_10', name: 'Teh Botol Sosro', code: 'TBS', categorySlug: 'minuman', description: 'Teh melati asli dalam kemasan', isActive: true },
+  { id: 'brd_11', name: 'Pocari Sweat', code: 'PCS', categorySlug: 'minuman', description: 'Minuman isotonik pengganti ion tubuh', isActive: true },
+  { id: 'brd_12', name: 'Good Day', code: 'GDD', categorySlug: 'minuman', description: 'Kopi instan berbagai varian rasa nikmat', isActive: true },
+  { id: 'brd_13', name: 'Oreo', code: 'ORO', categorySlug: 'snack', description: 'Biskuit sandwich krim cokelat lezat', isActive: true },
+  { id: 'brd_14', name: 'Roma', code: 'RMA', categorySlug: 'snack', description: 'Biskuit kelapa dan biskuit gandum Mayora', isActive: true },
+  { id: 'brd_15', name: 'Chitato', code: 'CTT', categorySlug: 'snack', description: 'Keripik kentang bergelombang aneka rasa', isActive: true },
+  { id: 'brd_16', name: 'Beng-Beng', code: 'BNG', categorySlug: 'snack', description: 'Wafer karamel cokelat renyah 4 lapis', isActive: true },
+  { id: 'brd_17', name: 'SilverQueen', code: 'SVQ', categorySlug: 'snack', description: 'Cokelat batang isi kacang mede premium', isActive: true },
+  { id: 'brd_18', name: 'Sunpride', code: 'SNP', categorySlug: 'fresh', description: 'Buah-buahan segar lokal dan impor terpilih', isActive: true },
+  { id: 'brd_19', name: 'Djarum', code: 'DJR', categorySlug: 'rokok-tembakau', description: 'Brand tembakau dan rokok kretek filter', isActive: true },
+  { id: 'brd_20', name: 'Sampoerna', code: 'SMP', categorySlug: 'rokok-tembakau', description: 'Brand tembakau dan kretek legendaris', isActive: true },
+  { id: 'brd_21', name: 'Gudang Garam', code: 'GGR', categorySlug: 'rokok-tembakau', description: 'Rokok kretek nusantara bermutu tinggi', isActive: true },
+  { id: 'brd_22', name: 'Lifebuoy', code: 'LFB', categorySlug: 'perawatan', description: 'Sabun kesehatan kulit antibakteri terpercaya', isActive: true },
+  { id: 'brd_23', name: 'Pepsodent', code: 'PPD', categorySlug: 'perawatan', description: 'Pasta gigi perlindungan gigi berlubang', isActive: true },
+  { id: 'brd_24', name: 'Pantene', code: 'PNT', categorySlug: 'perawatan', description: 'Sampo dan kondisioner perawatan rambut', isActive: true },
+  { id: 'brd_25', name: 'Rinso', code: 'RNS', categorySlug: 'rumah-tangga', description: 'Deterjen cair dan bubuk anti-noda konsentrat', isActive: true },
+  { id: 'brd_26', name: 'Sunlight', code: 'SNL', categorySlug: 'rumah-tangga', description: 'Sabun pencuci piring ekstrak jeruk nipis', isActive: true },
+  { id: 'brd_27', name: 'MamyPoko', code: 'MPK', categorySlug: 'ibu-bayi', description: 'Popok bayi lembut ekstra kering', isActive: true },
+  { id: 'brd_28', name: 'Tolak Angin', code: 'TLA', categorySlug: 'obat-p3k', description: 'Herbal masuk angin alami Sido Muncul', isActive: true },
+  { id: 'brd_29', name: 'Betadine', code: 'BTD', categorySlug: 'obat-p3k', description: 'Antiseptik luka dan pembersih higienis', isActive: true },
 ];
 
 export const VOUCHERS: Voucher[] = [

@@ -9,7 +9,17 @@ import {
   Sparkles, 
   Home, 
   Baby, 
-  Tag 
+  Tag,
+  Cigarette,
+  Pill,
+  Utensils,
+  ShoppingBag,
+  Truck,
+  Gift,
+  ShieldCheck,
+  Flame,
+  Heart,
+  Star
 } from 'lucide-react';
 import { Category } from '../types';
 
@@ -44,6 +54,28 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
         return <Home className="w-4 h-4 text-indigo-500" />;
       case 'Baby':
         return <Baby className="w-4 h-4 text-purple-500" />;
+      case 'Cigarette':
+        return <Cigarette className="w-4 h-4 text-stone-500" />;
+      case 'Pill':
+        return <Pill className="w-4 h-4 text-teal-500" />;
+      case 'Utensils':
+        return <Utensils className="w-4 h-4 text-amber-500" />;
+      case 'ShoppingBag':
+        return <ShoppingBag className="w-4 h-4 text-emerald-600" />;
+      case 'Truck':
+        return <Truck className="w-4 h-4 text-blue-600" />;
+      case 'Gift':
+        return <Gift className="w-4 h-4 text-pink-600" />;
+      case 'ShieldCheck':
+        return <ShieldCheck className="w-4 h-4 text-teal-600" />;
+      case 'Flame':
+        return <Flame className="w-4 h-4 text-rose-500" />;
+      case 'Heart':
+        return <Heart className="w-4 h-4 text-rose-500" />;
+      case 'Star':
+        return <Star className="w-4 h-4 text-amber-500" />;
+      case 'Tag':
+        return <Tag className="w-4 h-4 text-blue-500" />;
       default:
         return <Store className="w-4 h-4 text-stone-600" />;
     }

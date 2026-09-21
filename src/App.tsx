@@ -70,7 +70,8 @@ import {
   CourierInfo,
   BrandHeaderFooterConfig,
   StaffUser,
-  StoreTenantIdentity
+  StoreTenantIdentity,
+  BrandItem
 } from './types';
 import { 
   PRODUCTS, 
@@ -83,7 +84,8 @@ import {
   INITIAL_STORE_PROMOS,
   INITIAL_COURIERS,
   INITIAL_BRAND_CONFIG,
-  INITIAL_STAFF_USERS
+  INITIAL_STAFF_USERS,
+  INITIAL_BRANDS
 } from './data/mockData';
 import { INITIAL_SAMPLE_ORDERS } from './data/mockOrders';
 import { 
@@ -274,7 +276,25 @@ export default function App() {
     return list[0];
   });
 
-  const [categories, setCategories] = useState<Category[]>(CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>(() => {
+    try {
+      const key = getTenantStorageKey('toko_online_categories', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
+      return saved ? JSON.parse(saved) : CATEGORIES;
+    } catch {
+      return CATEGORIES;
+    }
+  });
+
+  const [brands, setBrands] = useState<BrandItem[]>(() => {
+    try {
+      const key = getTenantStorageKey('toko_online_brands', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
+      return saved ? JSON.parse(saved) : INITIAL_BRANDS;
+    } catch {
+      return INITIAL_BRANDS;
+    }
+  });
   const [vouchers, setVouchers] = useState<Voucher[]>(() => {
     const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
     const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
@@ -1031,6 +1051,24 @@ export default function App() {
     newProducts.forEach((p) => {
       saveProductToSupabase(p).catch(() => {});
     });
+  };
+
+  const handleUpdateCategories = (newCategories: Category[]) => {
+    setCategories(newCategories);
+    try {
+      const key = getTenantStorageKey('toko_online_categories', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newCategories));
+      saveTenantDataToCloud('categories', newCategories, currentSlug);
+    } catch {}
+  };
+
+  const handleUpdateBrands = (newBrands: BrandItem[]) => {
+    setBrands(newBrands);
+    try {
+      const key = getTenantStorageKey('toko_online_brands', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newBrands));
+      saveTenantDataToCloud('brands', newBrands, currentSlug);
+    } catch {}
   };
 
   const handleUpdateStores = (newStores: Store[]) => {
@@ -2150,6 +2188,10 @@ export default function App() {
           onUpdateBrandConfig={handleUpdateBrandConfig}
           staffUsers={staffUsers}
           onUpdateStaffUsers={handleUpdateStaffUsers}
+          categories={categories}
+          onUpdateCategories={handleUpdateCategories}
+          brands={brands}
+          onUpdateBrands={handleUpdateBrands}
           initialTab={adminPanelInitialTab}
           onOpenSupabaseModal={() => {
             setIsAdminPanelOpen(false);
