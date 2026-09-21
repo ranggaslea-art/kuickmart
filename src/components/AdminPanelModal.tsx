@@ -2591,6 +2591,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 }}
                 receiptConfigs={activeReceiptConfigs}
                 onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
+                isSupabaseConnected={isSupabaseConnected}
+                onOpenSupabaseModal={onOpenSupabaseModal}
                 onClose={() => setActiveTab('products')}
               />
             </div>

@@ -159,33 +159,44 @@ export function subscribeToSupabaseChanges(onChange: () => void): () => void {
 }
 
 // Test connection to Supabase
-export async function testSupabaseConnection(url?: string, anonKey?: string): Promise<{ success: boolean; message: string }> {
+export async function testSupabaseConnection(
+  url?: string, 
+  anonKey?: string
+): Promise<{ success: boolean; message: string; latencyMs?: number }> {
+  const startTime = Date.now();
   try {
     const targetUrl = url || getStoredSupabaseConfig().url;
     const targetKey = anonKey || getStoredSupabaseConfig().anonKey;
 
     if (!targetUrl || !targetKey) {
-      return { success: false, message: 'URL dan Anon Key Supabase belum diisi.' };
+      return { success: false, message: 'URL dan Anon Key Supabase belum diisi.', latencyMs: 0 };
     }
 
     const testClient = createClient(targetUrl, targetKey);
     // Use GET .select('id').limit(1) for guaranteed compatibility with mobile carriers and proxies
     const { error } = await testClient.from('products').select('id').limit(1);
+    const latencyMs = Date.now() - startTime;
     
     if (error) {
       // If table doesn't exist yet, it's still a reachable database!
       if (error.code === '42P01') {
         return { 
           success: true, 
+          latencyMs,
           message: 'Terhubung ke Supabase! (Tabel belum dibuat, Anda dapat mengeksekusi SQL schema).' 
         };
       }
-      return { success: false, message: `Gagal query: ${error.message}` };
+      return { success: false, latencyMs, message: `Gagal query: ${error.message}` };
     }
 
-    return { success: true, message: 'Koneksi ke database Supabase berhasil & tabel terverifikasi!' };
+    return { 
+      success: true, 
+      latencyMs,
+      message: `Koneksi ke database Supabase berhasil & tabel terverifikasi (${latencyMs} ms)!` 
+    };
   } catch (err: any) {
-    return { success: false, message: err.message || 'Koneksi gagal diperiksa.' };
+    const latencyMs = Date.now() - startTime;
+    return { success: false, latencyMs, message: err.message || 'Koneksi gagal diperiksa.' };
   }
 }
 

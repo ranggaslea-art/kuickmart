@@ -383,7 +383,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Baris Kedua: Tombol Cloud Online, Segarkan, Traffic, & Info Subdomain Berdampingan */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Tombol Cloud Online */}
-            <OfflineSyncBadge className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" />
+            <OfflineSyncBadge 
+              className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" 
+              isSupabaseConnected={isSupabaseConnected}
+              onOpenSupabaseModal={onOpenSupabaseModal}
+            />
 
             {/* Tombol Segarkan Data Real-time (Sangat berguna di HP untuk update instan) */}
             {onRefreshData && (

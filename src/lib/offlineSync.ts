@@ -32,6 +32,7 @@ export interface OfflineSyncItem {
 
 const STORAGE_KEY_QUEUE = 'toko_online_offline_sync_queue';
 const STORAGE_KEY_LAST_SYNC = 'toko_online_last_online_sync';
+const STORAGE_KEY_MANUAL_OFFLINE = 'toko_online_manual_offline_mode';
 
 type SyncListener = () => void;
 const listeners = new Set<SyncListener>();
@@ -44,6 +45,27 @@ function notifyListeners() {
       console.error('Error in offline sync listener:', e);
     }
   });
+}
+
+export function isManualOfflineMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(STORAGE_KEY_MANUAL_OFFLINE) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setManualOfflineMode(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (enabled) {
+      localStorage.setItem(STORAGE_KEY_MANUAL_OFFLINE, 'true');
+    } else {
+      localStorage.removeItem(STORAGE_KEY_MANUAL_OFFLINE);
+    }
+    notifyListeners();
+  } catch {}
 }
 
 export function subscribeToOfflineSync(listener: SyncListener): () => void {
@@ -136,9 +158,10 @@ export function clearOfflineQueue(): void {
   saveOfflineQueue([]);
 }
 
-// Check network status safely
+// Check network status safely (respects physical connection and manual offline mode)
 export function isBrowserOnline(): boolean {
   if (typeof navigator === 'undefined') return true;
+  if (isManualOfflineMode()) return false;
   return navigator.onLine;
 }
 

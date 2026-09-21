@@ -10,11 +10,15 @@ import {
   removeFromOfflineQueue,
   initOfflineSyncListeners,
   OfflineSyncItem,
+  isManualOfflineMode,
+  setManualOfflineMode,
 } from '../lib/offlineSync';
 
 export interface OfflineSyncStatus {
   isOnline: boolean;
   isSyncing: boolean;
+  isManualOffline: boolean;
+  setManualOffline: (enabled: boolean) => void;
   pendingCount: number;
   queue: OfflineSyncItem[];
   lastSyncTime: string | null;
@@ -26,6 +30,7 @@ export interface OfflineSyncStatus {
 export function useOfflineSync(): OfflineSyncStatus {
   const [isOnline, setIsOnline] = useState<boolean>(() => isBrowserOnline());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => isCurrentlySyncing());
+  const [isManualOffline, setIsManualOffline] = useState<boolean>(() => isManualOfflineMode());
   const [queue, setQueue] = useState<OfflineSyncItem[]>(() => getOfflineQueue());
   const [lastSyncTime, setLastSync] = useState<string | null>(() => getLastSyncTime());
 
@@ -35,6 +40,7 @@ export function useOfflineSync(): OfflineSyncStatus {
 
     const handleNetworkChange = () => {
       setIsOnline(isBrowserOnline());
+      setIsManualOffline(isManualOfflineMode());
     };
 
     window.addEventListener('online', handleNetworkChange);
@@ -44,6 +50,7 @@ export function useOfflineSync(): OfflineSyncStatus {
     const unsubscribe = subscribeToOfflineSync(() => {
       setIsOnline(isBrowserOnline());
       setIsSyncing(isCurrentlySyncing());
+      setIsManualOffline(isManualOfflineMode());
       setQueue(getOfflineQueue());
       setLastSync(getLastSyncTime());
     });
@@ -53,6 +60,12 @@ export function useOfflineSync(): OfflineSyncStatus {
       window.removeEventListener('offline', handleNetworkChange);
       unsubscribe();
     };
+  }, []);
+
+  const setManualOffline = useCallback((enabled: boolean) => {
+    setManualOfflineMode(enabled);
+    setIsManualOffline(enabled);
+    setIsOnline(isBrowserOnline());
   }, []);
 
   const triggerSyncNow = useCallback(async () => {
@@ -70,6 +83,8 @@ export function useOfflineSync(): OfflineSyncStatus {
   return {
     isOnline,
     isSyncing,
+    isManualOffline,
+    setManualOffline,
     pendingCount: queue.length,
     queue,
     lastSyncTime,

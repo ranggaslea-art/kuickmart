@@ -65,6 +65,8 @@ interface PosCashierManagerProps {
   onClose?: () => void;
   receiptConfigs?: ReceiptInfo[];
   onUpdateReceiptConfigs?: (configs: ReceiptInfo[]) => void;
+  isSupabaseConnected?: boolean;
+  onOpenSupabaseModal?: () => void;
 }
 
 export interface PosRowItem {
@@ -148,6 +150,8 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   onClose,
   receiptConfigs,
   onUpdateReceiptConfigs,
+  isSupabaseConnected,
+  onOpenSupabaseModal,
 }) => {
   // Store & Cashier Operator
   const [selectedStoreId] = useState(currentStore?.id || stores[0]?.id || 'store_1');
@@ -1260,7 +1264,11 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           </button>
 
           {/* Offline Sync Status */}
-          <OfflineSyncBadge />
+          <OfflineSyncBadge 
+            variant="pos"
+            isSupabaseConnected={isSupabaseConnected}
+            onOpenSupabaseModal={onOpenSupabaseModal}
+          />
 
           {/* Held Bills Button */}
           <button
