@@ -156,6 +156,7 @@ import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { CategoryBrandManager } from './CategoryBrandManager';
 import { VpsDeployManager } from './VpsDeployManager';
+import { SeoGoogleManager } from './SeoGoogleManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
@@ -682,7 +683,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
@@ -2422,6 +2423,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'permissions', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
                 { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
                 { id: 'vps_deploy', moduleKey: 'stores' as SystemModuleKey, label: 'Deploy & Server VPS', icon: <Rocket className="w-4 h-4 text-indigo-600" /> },
+                { id: 'seo_google', moduleKey: 'stores' as SystemModuleKey, label: 'SEO & Google Search', icon: <Search className="w-4 h-4 text-sky-600" /> },
               ].map(item => {
                 const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
                 const isActive = activeTab === item.id;
@@ -5297,6 +5299,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {/* TAB: DEPLOY & SERVER VPS OTOMATIS */}
           {activeTab === 'vps_deploy' && (
             <VpsDeployManager />
+          )}
+
+          {/* TAB: OPTIMASI SEO & GOOGLE SEARCH CONSOLE */}
+          {activeTab === 'seo_google' && (
+            <SeoGoogleManager 
+              currentStoreName={activeTenantIdentity.storeName}
+              storeDomain={typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') ? window.location.origin : 'https://www.toko-online.online'}
+            />
           )}
 
         </div>

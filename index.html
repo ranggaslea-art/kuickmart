@@ -1,10 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <title>toko-online.online - Belanja Minimarket Online & Pengiriman Cepat</title>
-    <meta name="description" content="Aplikasi pemesanan belanja online minimarket cerdas multi-tenant toko-online.online dengan kolom harga modal/beli HPP, modul manajemen kategori dan merk barang (CRUD), kustomisasi nama toko, DOKU payment gateway, integrasi Supabase, dan sistem kasir POS." />
+    <title>toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat</title>
+    <meta name="description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, produk lengkap, pengiriman cepat antar langsung ke rumah." />
+    <meta name="keywords" content="toko online, belanja sembako online, minimarket online, pesan sembako murah, belanja bulanan hemat, pengiriman cepat antar ke rumah, grosir sembako, toko-online.online" />
+    <meta name="author" content="toko-online.online" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://www.toko-online.online/" />
+    
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -21,10 +26,55 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-    <meta property="og:title" content="toko-online.online - Belanja Minimarket Online & Pengiriman Cepat" />
-    <meta property="og:description" content="Aplikasi pemesanan belanja online minimarket cerdas multi-tenant toko-online.online dengan kolom harga modal/beli HPP, modul manajemen kategori dan merk barang (CRUD), kustomisasi nama toko, DOKU payment gateway, integrasi Supabase, dan sistem kasir POS." />
+    <!-- OpenGraph (Facebook, WhatsApp, Telegram, etc.) -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:site_name" content="toko-online.online" />
+    <meta property="og:url" content="https://www.toko-online.online/" />
+    <meta property="og:title" content="toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat" />
+    <meta property="og:description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, pengiriman cepat langsung ke rumah." />
+    <meta property="og:image" content="https://www.toko-online.online/pwa-512x512.png" />
+
+    <!-- Twitter / X Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://www.toko-online.online/" />
+    <meta name="twitter:title" content="toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat" />
+    <meta name="twitter:description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, pengiriman cepat langsung ke rumah." />
+    <meta name="twitter:image" content="https://www.toko-online.online/pwa-512x512.png" />
+
+    <!-- Schema.org Structured Data (JSON-LD) for Google Rich Snippets -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://www.toko-online.online/#website",
+          "url": "https://www.toko-online.online/",
+          "name": "toko-online.online",
+          "description": "Toko belanja sembako dan kebutuhan harian minimarket online hemat dan terpercaya.",
+          "inLanguage": "id-ID",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://www.toko-online.online/?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "OnlineStore",
+          "@id": "https://www.toko-online.online/#store",
+          "name": "toko-online.online",
+          "url": "https://www.toko-online.online/",
+          "logo": "https://www.toko-online.online/pwa-512x512.png",
+          "image": "https://www.toko-online.online/pwa-512x512.png",
+          "description": "Pusat belanja kebutuhan pokok, sembako, bumbu dapur, makanan ringan, dan minuman dingin dengan layanan pesan antar kilat.",
+          "currenciesAccepted": "IDR",
+          "paymentAccepted": "Cash, QRIS, Virtual Account, Credit Card",
+          "priceRange": "Rp1.000 - Rp500.000"
+        }
+      ]
+    }
+    </script>
   </head>
   <body class="w-full min-w-full min-h-screen m-0 p-0 overflow-x-hidden bg-[#F8F9FA]">
     <div id="root" class="w-full min-w-full min-h-screen flex flex-col"></div>

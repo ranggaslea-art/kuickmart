@@ -1,0 +1,13 @@
+# Robots.txt for toko-online.online
+# Allows search engine crawlers (Googlebot, Bingbot, etc.) to index the site
+
+User-agent: *
+Allow: /
+
+# Disallow crawling of internal admin operations and raw API endpoints
+Disallow: /api/
+Disallow: /admin
+
+# Search Engine Sitemap Location
+Sitemap: https://www.toko-online.online/sitemap.xml
+Sitemap: https://toko-online.online/sitemap.xml
