@@ -72,7 +72,9 @@ import {
   ClipboardCheck,
   Undo2,
   ArrowLeftRight,
-  Globe
+  Globe,
+  Server,
+  Rocket
 } from 'lucide-react';
 import { 
   Product, 
@@ -153,6 +155,7 @@ import { StockMutationManager } from './StockMutationManager';
 import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { CategoryBrandManager } from './CategoryBrandManager';
+import { VpsDeployManager } from './VpsDeployManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
@@ -679,7 +682,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
@@ -2338,6 +2341,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <span>{isSupabaseConnected ? 'DB Terhubung' : 'DB Supabase'}</span>
             </button>
 
+            {/* Quick Deploy VPS Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('vps_deploy')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
+                activeTab === 'vps_deploy'
+                  ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400 shadow-xs'
+                  : 'bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-100 border-indigo-400/40'
+              }`}
+              title="Pusat Otomatisasi Deploy & Update Server VPS"
+            >
+              <Rocket className="w-3.5 h-3.5 text-amber-300" />
+              <span>Deploy VPS</span>
+            </button>
+
             <button
               type="button"
               onClick={handleLogout}
@@ -2403,6 +2421,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'users', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
                 { id: 'permissions', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
                 { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
+                { id: 'vps_deploy', moduleKey: 'stores' as SystemModuleKey, label: 'Deploy & Server VPS', icon: <Rocket className="w-4 h-4 text-indigo-600" /> },
               ].map(item => {
                 const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
                 const isActive = activeTab === item.id;
@@ -5274,6 +5293,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               />
             </div>
           ))}
+
+          {/* TAB: DEPLOY & SERVER VPS OTOMATIS */}
+          {activeTab === 'vps_deploy' && (
+            <VpsDeployManager />
+          )}
 
         </div>
 

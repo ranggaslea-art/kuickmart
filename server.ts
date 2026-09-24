@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
+import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
@@ -1562,6 +1563,173 @@ async function startServer() {
       success: true,
       history: pushBroadcastHistory,
     });
+  });
+
+  // ==========================================
+  // SYSTEM & VPS DEPLOYMENT AUTOMATION MANAGER
+  // ==========================================
+  interface SystemDeployState {
+    isDeploying: boolean;
+    status: 'idle' | 'running' | 'success' | 'failed';
+    lastDeployTime: string | null;
+    lastDeployStatus: 'success' | 'failed' | null;
+    logs: string[];
+  }
+
+  const DEPLOY_SECRET_TOKEN = process.env.DEPLOY_SECRET_TOKEN || 'kuickmart_deploy_token_2026';
+
+  const deployState: SystemDeployState = {
+    isDeploying: false,
+    status: 'idle',
+    lastDeployTime: null,
+    lastDeployStatus: null,
+    logs: [
+      `[${new Date().toLocaleTimeString('id-ID', { hour12: false })}] Sistem pemantau server VPS siap. Menunggu perintah deploy.`
+    ],
+  };
+
+  const addDeployLog = (msg: string) => {
+    const timestamp = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    const entry = `[${timestamp}] ${msg}`;
+    deployState.logs.push(entry);
+    if (deployState.logs.length > 150) {
+      deployState.logs.shift();
+    }
+  };
+
+  const runShell = (cmd: string, cwd: string = process.cwd()): Promise<{ stdout: string; stderr: string; code: number }> => {
+    return new Promise((resolve) => {
+      exec(cmd, { 
+        cwd, 
+        maxBuffer: 20 * 1024 * 1024,
+        env: { ...process.env, PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin` }
+      }, (error, stdout, stderr) => {
+        resolve({
+          stdout: (stdout || '').trim(),
+          stderr: (stderr || '').trim(),
+          code: error ? (error.code || 1) : 0
+        });
+      });
+    });
+  };
+
+  const executeDeployment = async () => {
+    deployState.isDeploying = true;
+    deployState.status = 'running';
+    deployState.logs = [];
+    addDeployLog('🚀 Memulai proses otomatisasi deploy...');
+    addDeployLog(`📂 Direktori target: ${process.cwd()}`);
+
+    try {
+      // 1. Cek repositori Git & cabang aktif
+      addDeployLog('🔍 Memeriksa cabang dan status Git...');
+      const branchRes = await runShell('git rev-parse --abbrev-ref HEAD');
+      const branchName = branchRes.stdout || 'main';
+      addDeployLog(`📌 Cabang Git aktif: ${branchName}`);
+
+      // 2. Tarik kode terbaru dari remote git
+      addDeployLog(`⬇️ Menjalankan git pull origin ${branchName}...`);
+      const pullRes = await runShell(`git pull origin ${branchName} || git pull`);
+      if (pullRes.stdout) {
+        addDeployLog(`[git pull]: ${pullRes.stdout}`);
+      }
+      if (pullRes.stderr && pullRes.code !== 0) {
+        addDeployLog(`⚠️ [git notice]: ${pullRes.stderr}`);
+      }
+
+      // 3. Build kode production Vite + esbuild
+      addDeployLog('📦 Menjalankan proses kompilasi production (npm run build)...');
+      const buildRes = await runShell('npm run build');
+      if (buildRes.stdout) {
+        const summary = buildRes.stdout.split('\n').slice(-4).join('\n');
+        addDeployLog(`[build output]:\n${summary}`);
+      }
+
+      if (buildRes.code !== 0) {
+        addDeployLog(`❌ Kompilasi build gagal (exit code ${buildRes.code}): ${buildRes.stderr}`);
+        deployState.status = 'failed';
+        deployState.lastDeployStatus = 'failed';
+        deployState.isDeploying = false;
+        return;
+      }
+
+      addDeployLog('✅ Kompilasi bundle production berhasil 100%!');
+
+      // 4. Restart service PM2
+      addDeployLog('🔄 Memulai ulang service PM2 (pm2 restart kuickmart)...');
+      deployState.status = 'success';
+      deployState.lastDeployStatus = 'success';
+      deployState.lastDeployTime = new Date().toISOString();
+      deployState.isDeploying = false;
+      addDeployLog('🎉 Deployment selesai sukses! Seluruh pembaruan telah aktif di server.');
+
+      // Jalankan pm2 restart dengan jeda singkat agar HTTP response sempat terkirim
+      setTimeout(async () => {
+        await runShell('pm2 restart kuickmart || pm2 restart all || true');
+      }, 1200);
+
+    } catch (err: any) {
+      addDeployLog(`❌ Terjadi kendala fatal saat deploy: ${err.message}`);
+      deployState.status = 'failed';
+      deployState.lastDeployStatus = 'failed';
+      deployState.isDeploying = false;
+    }
+  };
+
+  // GET /api/system/deploy-status
+  app.get('/api/system/deploy-status', async (req, res) => {
+    let gitBranch = 'main';
+    try {
+      const b = await runShell('git rev-parse --abbrev-ref HEAD');
+      if (b.stdout) gitBranch = b.stdout;
+    } catch (_) {}
+
+    res.json({
+      isDeploying: deployState.isDeploying,
+      status: deployState.status,
+      lastDeployTime: deployState.lastDeployTime,
+      lastDeployStatus: deployState.lastDeployStatus,
+      logs: deployState.logs,
+      serverInfo: {
+        platform: `${process.platform} (${process.arch})`,
+        nodeVersion: process.version,
+        uptimeSeconds: Math.floor(process.uptime()),
+        workingDir: process.cwd(),
+        isProduction: process.env.NODE_ENV === 'production',
+        gitBranch,
+      }
+    });
+  });
+
+  // POST /api/system/deploy
+  app.post('/api/system/deploy', (req, res) => {
+    const token = req.query.token || req.body?.token || req.headers['x-deploy-token'];
+    const isAdmin = req.headers['x-admin-request'] === 'true';
+
+    if (!isAdmin && token !== DEPLOY_SECRET_TOKEN) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak: Token autentikasi deploy tidak valid.' });
+    }
+
+    if (deployState.isDeploying) {
+      return res.status(409).json({ success: false, message: 'Deployment sedang berlangsung. Mohon tunggu proses selesai.' });
+    }
+
+    // Jalankan proses asynchronous di latar belakang
+    executeDeployment();
+
+    res.json({
+      success: true,
+      message: 'Perintah deployment berhasil diterima dan sedang diproses di server.',
+    });
+  });
+
+  // POST /api/system/restart-pm2
+  app.post('/api/system/restart-pm2', async (req, res) => {
+    addDeployLog('🔄 Perintah manual: Merestart service PM2...');
+    setTimeout(async () => {
+      await runShell('pm2 restart kuickmart || pm2 restart all || true');
+    }, 800);
+    res.json({ success: true, message: 'PM2 restart telah dijadwalkan dalam 1 detik.' });
   });
 
   // Vite middleware for development or static serving for production
