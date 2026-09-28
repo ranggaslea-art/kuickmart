@@ -18,7 +18,8 @@ import {
   Columns3,
   HelpCircle,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Type
 } from 'lucide-react';
 import { ReceiptInfo, Store, Order } from '../types';
 import { cleanReceiptText } from '../utils/sanitizeReceipt';
@@ -27,7 +28,10 @@ import {
   generateDotMatrixReceiptHtml, 
   printPosReceiptViaIframe,
   downloadPosReceiptTxtFile,
-  copyPosReceiptText
+  copyPosReceiptText,
+  getReceiptFontFamilyCss,
+  getReceiptFontWeightCss,
+  getReceiptFontSizeCss
 } from '../utils/posPrinterHelper';
 import { OsPrinterSearchModal } from './OsPrinterSearchModal';
 import { DiscoveredOsPrinter } from '../types/osPrinter';
@@ -201,7 +205,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'tmu220' | 'header' | 'items' | 'meta' | 'footer'>('tmu220');
+  const [activeTab, setActiveTab] = useState<'tmu220' | 'typography' | 'header' | 'items' | 'meta' | 'footer'>('typography');
   const [previewMode, setPreviewMode] = useState<'dotmatrix_visual' | 'raw_ascii'>('dotmatrix_visual');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -219,6 +223,10 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
         dividerChar: activeConfig.dividerChar || '=',
         itemRowStyle: activeConfig.itemRowStyle || 'two_rows',
         feedLinesBeforeCut: activeConfig.feedLinesBeforeCut || 5,
+        fontFamily: activeConfig.fontFamily || 'courier',
+        fontBoldness: activeConfig.fontBoldness || 'bold',
+        fontSize: activeConfig.fontSize || 'normal',
+        lineSpacing: activeConfig.lineSpacing || 'normal',
       });
     }
   }, [activeConfig]);
@@ -243,6 +251,10 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
       dividerChar: '=',
       itemRowStyle: 'two_rows',
       feedLinesBeforeCut: 5,
+      fontFamily: 'courier',
+      fontBoldness: 'bold',
+      fontSize: 'normal',
+      lineSpacing: 'normal',
       showItemUnit: true,
       showPaymentDetail: true,
       showCashierName: true,
@@ -254,7 +266,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
       footerMessage1: 'TERIMA KASIH TELAH BERBELANJA',
       footerMessage2: 'BARANG YANG SUDAH DIBELI DAPAT DITUKAR MAKS 1X24 JAM DENGAN STRUK ASLI.',
     }));
-    setFeedback('Preset optimal Epson TM-U220 (70mm / 40 Kolom) berhasil dimuat!');
+    setFeedback('Preset optimal Epson TM-U220 (70mm / 40 Kolom / Bold) berhasil dimuat!');
     setTimeout(() => setFeedback(null), 3000);
   };
 
@@ -399,6 +411,19 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
               >
                 <Sliders className="w-3.5 h-3.5 text-amber-600" />
                 <span>Format TM-U220 (70mm)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('typography')}
+                className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0 ${
+                  activeTab === 'typography'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Type className="w-3.5 h-3.5 text-purple-600" />
+                <span className="font-extrabold text-purple-900">Jenis Huruf & Ketajaman</span>
               </button>
 
               <button
@@ -606,7 +631,235 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
               </div>
             )}
 
-            {/* TAB 2: HEADER BRAND & TOKO */}
+            {/* TAB TYPOGRAPHY: JENIS HURUF, KETEBALAN & KETAJAMAN CETAK */}
+            {activeTab === 'typography' && (
+              <div className="bg-white border border-stone-200 rounded-3xl p-5 shadow-xs space-y-5 animate-fadeIn">
+                <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                  <div>
+                    <h4 className="font-extrabold text-sm text-stone-900 flex items-center gap-2">
+                      <Type className="w-4 h-4 text-purple-600" />
+                      <span>Desain & Jenis Huruf Struk (Typography POS)</span>
+                    </h4>
+                    <p className="text-[11px] text-stone-500">
+                      Ganti jenis font, ketebalan, dan ukuran huruf agar hasil print di printer dot matrix & thermal terbaca maksimal dan tajam
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-purple-100 text-purple-900 font-black rounded-xl text-[10px] border border-purple-200">
+                    Maksimal Cetak
+                  </span>
+                </div>
+
+                {/* 1. PILIHAN JENIS HURUF (FONT FAMILY) */}
+                <div className="space-y-2">
+                  <label className="block font-bold text-xs text-stone-800">
+                    Pilih Jenis Huruf (Font Family):
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {[
+                      {
+                        id: 'courier',
+                        name: 'Courier New (Standar Kasir)',
+                        desc: 'Font monospaced bawaan minimarket, proporsional dan presisi pada pita impak.',
+                        previewText: '12345 ABCDE INDOMIE',
+                        fontCss: "'Courier New', Courier, monospace",
+                        badge: 'Standar Pabrik'
+                      },
+                      {
+                        id: 'roboto_mono',
+                        name: 'Roboto Mono (Modern & Tajam)',
+                        desc: 'Huruf monospace modern berjarak tegas, sangat jelas dan mudah dibaca pelanggan.',
+                        previewText: '12345 ABCDE INDOMIE',
+                        fontCss: "'Roboto Mono', monospace",
+                        badge: 'Rekomendasi'
+                      },
+                      {
+                        id: 'consolas',
+                        name: 'Consolas (Tegas & Rapi)',
+                        desc: 'Huruf geometris yang padat, membuat struk terlihat profesional dan tidak blur.',
+                        previewText: '12345 ABCDE INDOMIE',
+                        fontCss: "Consolas, monospace",
+                        badge: 'Sangat Tajam'
+                      },
+                      {
+                        id: 'dot_matrix',
+                        name: 'Lucida Console (Klasik POS)',
+                        desc: 'Font monokrom klasik sistem kasir jadul/vintage, huruf bulat jelas.',
+                        previewText: '12345 ABCDE INDOMIE',
+                        fontCss: "'Lucida Console', monospace",
+                        badge: 'Klasik'
+                      },
+                      {
+                        id: 'space_mono',
+                        name: 'Space Mono (Bold Retro)',
+                        desc: 'Karakter retro dengan sudut tajam, angka harga terlihat sangat mencolok.',
+                        previewText: '12345 ABCDE INDOMIE',
+                        fontCss: "'Space Mono', monospace",
+                        badge: 'Retro POS'
+                      },
+                      {
+                        id: 'inconsolata',
+                        name: 'Inconsolata (Elegan & Ramping)',
+                        desc: 'Karakter langsing dengan kurva halus, memuat banyak teks tanpa berhimpitan.',
+                        previewText: '12345 ABCDE INDOMIE',
+                        fontCss: "Inconsolata, monospace",
+                        badge: 'Ramping'
+                      }
+                    ].map(f => {
+                      const isSelected = (config.fontFamily || 'courier') === f.id;
+                      return (
+                        <div
+                          key={f.id}
+                          onClick={() => setConfig({ ...config, fontFamily: f.id as any })}
+                          className={`p-3 rounded-2xl border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-purple-600 bg-purple-50/50 ring-2 ring-purple-200 shadow-xs'
+                              : 'border-stone-200 bg-stone-50 hover:bg-stone-100/80 text-stone-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-extrabold text-xs text-stone-900">{f.name}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                              isSelected ? 'bg-purple-600 text-white' : 'bg-stone-200 text-stone-700'
+                            }`}>
+                              {f.badge}
+                            </span>
+                          </div>
+                          <div
+                            style={{ fontFamily: f.fontCss }}
+                            className="bg-white p-2 rounded-xl border border-stone-200 text-stone-900 text-xs font-bold tracking-wider my-1.5"
+                          >
+                            {f.previewText} • Rp 35.000
+                          </div>
+                          <p className="text-[10px] text-stone-500 leading-tight">
+                            {f.desc}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. KETEBALAN TINTA / HURUF (FONT BOLDNESS) */}
+                <div className="space-y-2 pt-2 border-t border-stone-100">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-xs text-stone-800">
+                      Tingkat Ketebalan Huruf (Font Weight & Kontras):
+                    </label>
+                    <span className="text-[10px] text-stone-400">
+                      *Tebal disarankan jika pita printer TM-U220 mulai menipis
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: 'normal', label: 'Normal (500)', desc: 'Pita baru / pekat' },
+                      { id: 'semibold', label: 'Semi Tebal (600)', desc: 'Sedang & rapi' },
+                      { id: 'bold', label: 'Tebal (700)', desc: 'Standar Optimal', recommend: true },
+                      { id: 'extra_bold', label: 'Ekstra Tebal (900)', desc: 'Maksimal terbaca' }
+                    ].map(b => {
+                      const isSelected = (config.fontBoldness || 'bold') === b.id;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setConfig({ ...config, fontBoldness: b.id as any })}
+                          className={`p-2.5 rounded-2xl border text-left transition-all ${
+                            isSelected
+                              ? 'border-purple-600 bg-purple-600 text-white shadow-xs'
+                              : 'border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-800'
+                          }`}
+                        >
+                          <div className="font-extrabold text-xs flex items-center justify-between">
+                            <span>{b.label}</span>
+                            {b.recommend && (
+                              <span className={`text-[8px] font-black px-1 rounded ${
+                                isSelected ? 'bg-amber-300 text-stone-950' : 'bg-purple-100 text-purple-900'
+                              }`}>
+                                BEST
+                              </span>
+                            )}
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-purple-100' : 'text-stone-400'}`}>
+                            {b.desc}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. UKURAN HURUF & KERAPATAN BARIS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-stone-100 text-xs">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1.5">
+                      Ukuran Huruf Keseluruhan:
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'compact', label: 'Kompak (10.5px)', desc: 'Hemat kertas' },
+                        { id: 'normal', label: 'Standar (11.5px)', desc: 'Paling pas' },
+                        { id: 'large', label: 'Besar (12.5px)', desc: 'Jelas untuk lansia' }
+                      ].map(s => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setConfig({ ...config, fontSize: s.id as any })}
+                          className={`p-2 rounded-xl text-center border font-bold transition-all ${
+                            (config.fontSize || 'normal') === s.id
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                              : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                          }`}
+                        >
+                          <div>{s.label}</div>
+                          <div className={`text-[9px] mt-0.5 ${(config.fontSize || 'normal') === s.id ? 'text-purple-200' : 'text-stone-400'}`}>
+                            {s.desc}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1.5">
+                      Kerapatan Jarak Antar Baris:
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'compact', label: 'Rapat (1.12)', desc: 'Kompak' },
+                        { id: 'normal', label: 'Normal (1.18)', desc: 'Seimbang' },
+                        { id: 'relaxed', label: 'Longgar (1.28)', desc: 'Nyaman dibaca' }
+                      ].map(sp => (
+                        <button
+                          key={sp.id}
+                          type="button"
+                          onClick={() => setConfig({ ...config, lineSpacing: sp.id as any })}
+                          className={`p-2 rounded-xl text-center border font-bold transition-all ${
+                            (config.lineSpacing || 'normal') === sp.id
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                              : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                          }`}
+                        >
+                          <div>{sp.label}</div>
+                          <div className={`text-[9px] mt-0.5 ${(config.lineSpacing || 'normal') === sp.id ? 'text-purple-200' : 'text-stone-400'}`}>
+                            {sp.desc}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* TIPS KETAJAMAN PRINT DOT MATRIX */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Tips Hasil Print Paling Maksimal pada Epson TM-U220:</strong>
+                    <p className="text-amber-800 mt-0.5 leading-relaxed">
+                      Gunakan font <strong>Roboto Mono</strong> atau <strong>Courier New</strong> dengan ketebalan <strong>Tebal (700)</strong>. Format ini memberikan benturan pin head dot matrix yang tajam pada kertas roll 1-ply maupun kertas rangkap NCR (2-ply/3-ply) tanpa membuat pita beleber.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             {activeTab === 'header' && (
               <div className="bg-white border border-stone-200 rounded-3xl p-5 shadow-xs space-y-4 animate-fadeIn">
                 <div className="flex items-center justify-between pb-3 border-b border-stone-100">
@@ -1069,14 +1322,25 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
               
               {previewMode === 'dotmatrix_visual' ? (
                 /* MODE VISUAL MONOCHROME DOT MATRIX */
-                <div className="w-[280px] bg-white text-black p-4 rounded-xs shadow-md border-x border-stone-300 relative font-mono text-[11.5px] leading-tight font-semibold select-text">
+                <div 
+                  style={{
+                    fontFamily: getReceiptFontFamilyCss(config.fontFamily),
+                    fontWeight: getReceiptFontWeightCss(config.fontBoldness),
+                    fontSize: getReceiptFontSizeCss(config.fontSize).base,
+                    lineHeight: config.lineSpacing === 'compact' ? '1.12' : config.lineSpacing === 'relaxed' ? '1.28' : '1.18'
+                  }}
+                  className="w-[280px] bg-white text-black p-4 rounded-xs shadow-md border-x border-stone-300 relative leading-tight select-text transition-all"
+                >
                   
                   {/* Efek gerigi sobekan kertas atas */}
                   <div className="absolute -top-1.5 left-0 right-0 h-2 bg-[radial-gradient(circle,_transparent_3px,_white_3.5px)] bg-[length:8px_8px]" />
 
                   {/* Header */}
                   <div className="text-center space-y-0.5 pb-2">
-                    <div className="font-black text-sm tracking-wider uppercase">
+                    <div 
+                      style={{ fontSize: getReceiptFontSizeCss(config.fontSize).brand }}
+                      className="font-black tracking-wider uppercase"
+                    >
                       {config.headerBrand || 'NUSA MART EXPRESS'}
                     </div>
                     {config.subHeader && (

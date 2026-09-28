@@ -201,10 +201,63 @@ export function generateRawPosReceiptText(
 }
 
 /**
- * Menghasilkan Dokumen HTML Lengkap Teroptimasi 70mm untuk Printer Dot Matrix Epson TM-U220
+ * Helper untuk mendapatkan CSS font-family string berdasarkan pilihan pengguna
+ */
+export function getReceiptFontFamilyCss(family?: string): string {
+  switch (family) {
+    case 'roboto_mono':
+      return "'Roboto Mono', 'Courier New', Courier, monospace";
+    case 'consolas':
+      return "Consolas, 'Lucida Console', Monaco, monospace";
+    case 'space_mono':
+      return "'Space Mono', 'Courier New', monospace";
+    case 'dot_matrix':
+      return "'Lucida Console', 'Courier New', Monaco, monospace";
+    case 'inconsolata':
+      return "Inconsolata, 'Courier New', monospace";
+    case 'courier':
+    default:
+      return "'Courier New', Courier, 'Lucida Console', Monaco, monospace";
+  }
+}
+
+/**
+ * Helper untuk mendapatkan font-weight numerik untuk ketajaman print fisik
+ */
+export function getReceiptFontWeightCss(boldness?: string): number {
+  switch (boldness) {
+    case 'normal':
+      return 500;
+    case 'semibold':
+      return 600;
+    case 'extra_bold':
+      return 900;
+    case 'bold':
+    default:
+      return 700;
+  }
+}
+
+/**
+ * Helper untuk mendapatkan ukuran font base struk
+ */
+export function getReceiptFontSizeCss(size?: string): { base: string; brand: string; meta: string } {
+  switch (size) {
+    case 'compact':
+      return { base: '10.5px', brand: '13px', meta: '10px' };
+    case 'large':
+      return { base: '12.5px', brand: '15px', meta: '11.5px' };
+    case 'normal':
+    default:
+      return { base: '11.5px', brand: '14px', meta: '11px' };
+  }
+}
+
+/**
+ * Menghasilkan Dokumen HTML Lengkap Teroptimasi 70mm untuk Printer Dot Matrix Epson TM-U220 & Thermal
  * Dirancang khusus:
  * - Ukuran kertas roll 76mm / print area 70mm
- * - Monospace Font murni (Courier New / Lucida Console)
+ * - Pilihan jenis huruf tajam (Courier New, Roboto Mono, Consolas, Lucida Console)
  * - Tinta monokromatik kontras tinggi (#000000 murni)
  * - Garis pemisah tegas dan presisi
  */
@@ -214,15 +267,22 @@ export function generateDotMatrixReceiptHtml(
   cashierName?: string,
   paymentDetails?: { cashReceived?: number; changeAmount?: number }
 ): string {
-  const rawText = generateRawPosReceiptText(order, config, cashierName, paymentDetails);
   const brand = config.headerBrand || 'NUSA MART EXPRESS';
   const store = config.storeName || 'toko-online.online';
+
+  const fontCss = getReceiptFontFamilyCss(config.fontFamily);
+  const weightCss = getReceiptFontWeightCss(config.fontBoldness);
+  const fontSizes = getReceiptFontSizeCss(config.fontSize);
+  const lineSpacingVal = config.lineSpacing === 'compact' ? '1.12' : config.lineSpacing === 'relaxed' ? '1.28' : '1.18';
 
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <title>Struk POS TM-U220 - ${order.orderNumber}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@500;700;900&family=Roboto+Mono:wght@500;600;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     @page {
       size: 76mm auto;
@@ -240,10 +300,13 @@ export function generateDotMatrixReceiptHtml(
       max-width: 70mm;
       background: #ffffff;
       color: #000000;
-      font-family: 'Courier New', Courier, 'Lucida Console', Monaco, monospace;
-      font-size: 11.5px;
-      line-height: 1.18;
-      font-weight: 600;
+      font-family: ${fontCss};
+      font-size: ${fontSizes.base};
+      line-height: ${lineSpacingVal};
+      font-weight: ${weightCss};
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
     .receipt-container {
       width: 70mm;
@@ -256,7 +319,7 @@ export function generateDotMatrixReceiptHtml(
     .text-left { text-align: left; }
     .font-bold { font-weight: 900; }
     .header-brand {
-      font-size: 14px;
+      font-size: ${fontSizes.brand};
       font-weight: 900;
       letter-spacing: 0.5px;
       margin-bottom: 2px;
@@ -277,7 +340,7 @@ export function generateDotMatrixReceiptHtml(
     .meta-table, .item-table, .summary-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: ${fontSizes.meta};
     }
     .meta-table td, .summary-table td {
       padding: 1px 0;

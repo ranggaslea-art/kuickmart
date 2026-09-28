@@ -616,6 +616,9 @@ export interface ReceiptInfo {
   showCashierName?: boolean; // Tampilkan nama kasir
   showMemberPoints?: boolean; // Tampilkan poin perolehan member
   fontSize?: 'compact' | 'normal' | 'large';
+  fontFamily?: 'courier' | 'roboto_mono' | 'consolas' | 'space_mono' | 'dot_matrix' | 'inconsolata'; // Jenis huruf struk
+  fontBoldness?: 'normal' | 'semibold' | 'bold' | 'extra_bold'; // Ketebalan huruf untuk ketajaman print fisik
+  lineSpacing?: 'compact' | 'normal' | 'relaxed'; // Kerapatan jarak antar baris
   headerCustomNote?: string; // Teks catatan khusus di bawah header
 }
 

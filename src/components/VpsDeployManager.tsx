@@ -50,8 +50,13 @@ export const VpsDeployManager: React.FC = () => {
     try {
       const res = await fetch('/api/system/deploy-status');
       if (res.ok) {
-        const data: DeployStatusResponse = await res.json();
-        setStatusData(data);
+        const text = await res.text();
+        if (text) {
+          try {
+            const data: DeployStatusResponse = JSON.parse(text);
+            setStatusData(data);
+          } catch (_) {}
+        }
       }
     } catch (err) {
       console.error('Gagal mengambil status server:', err);
@@ -89,15 +94,37 @@ export const VpsDeployManager: React.FC = () => {
         body: JSON.stringify({ source: 'admin_button' }),
       });
 
-      const json = await res.json();
+      const rawText = await res.text();
+      let json: any = {};
+      try {
+        json = rawText ? JSON.parse(rawText) : {};
+      } catch (_) {
+        json = { message: rawText };
+      }
+
       if (!res.ok) {
-        alert(json.message || 'Gagal memulai deployment');
+        if (res.status === 404) {
+          alert(
+            '⚠️ Service Backend VPS Belum Mendeteksi Rute Deploy (HTTP 404)\n\n' +
+            'Penyebab: Service PM2 di VPS Anda masih menjalankan proses server versi lama di memorinya sebelum tombol ini dibuat.\n\n' +
+            'Solusi (Cukup 1 Kali Ini Saja Lewat Terminal VPS noVNC):\n' +
+            'Jalankan perintah ini di terminal VPS Anda:\n\n' +
+            'cd /var/www/kuickmart && git pull && npm run build && pm2 restart kuickmart\n\n' +
+            'Setelah Anda jalankan perintah di atas sekali ini, PM2 akan memuat kode backend terbaru dan tombol ini bisa dipakai selamanya tanpa terminal!'
+          );
+        } else {
+          alert(json.message || `Gagal memulai deployment (Kode status HTTP ${res.status})`);
+        }
       } else {
         // Immediately refresh status
         await fetchStatus();
       }
     } catch (err: any) {
-      alert('Terjadi kesalahan jaringan saat memicu deploy: ' + err.message);
+      alert(
+        '⚠️ Gagal Terhubung ke Endpoint Deploy VPS:\n' + err.message +
+        '\n\nJika server sedang offline atau belum di-restart, jalankan di terminal VPS:\n' +
+        'cd /var/www/kuickmart && git pull && npm run build && pm2 restart kuickmart'
+      );
     } finally {
       setIsTriggering(false);
     }
@@ -113,8 +140,14 @@ export const VpsDeployManager: React.FC = () => {
           'x-admin-request': 'true',
         },
       });
-      const json = await res.json();
-      alert(json.message || 'PM2 restart telah dipicu');
+      const rawText = await res.text();
+      let json: any = {};
+      try {
+        json = rawText ? JSON.parse(rawText) : {};
+      } catch (_) {
+        json = { message: rawText };
+      }
+      alert(json.message || 'Perintah restart PM2 telah dikirim ke server.');
       fetchStatus();
     } catch (err: any) {
       alert('Gagal me-restart PM2: ' + err.message);

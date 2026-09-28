@@ -1634,12 +1634,22 @@ async function startServer() {
     }
   };
 
-  const runShell = (cmd: string, cwd: string = process.cwd()): Promise<{ stdout: string; stderr: string; code: number }> => {
+  const getAppWorkingDir = (): string => {
+    if (fs.existsSync('/var/www/kuickmart/package.json')) {
+      return '/var/www/kuickmart';
+    }
+    return process.cwd();
+  };
+
+  const runShell = (cmd: string, cwd: string = getAppWorkingDir()): Promise<{ stdout: string; stderr: string; code: number }> => {
     return new Promise((resolve) => {
       exec(cmd, { 
         cwd, 
-        maxBuffer: 20 * 1024 * 1024,
-        env: { ...process.env, PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin` }
+        maxBuffer: 25 * 1024 * 1024,
+        env: { 
+          ...process.env, 
+          PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin` 
+        }
       }, (error, stdout, stderr) => {
         resolve({
           stdout: (stdout || '').trim(),
@@ -1674,9 +1684,9 @@ async function startServer() {
         addDeployLog(`⚠️ [git notice]: ${pullRes.stderr}`);
       }
 
-      // 3. Build kode production Vite + esbuild
-      addDeployLog('📦 Menjalankan proses kompilasi production (npm run build)...');
-      const buildRes = await runShell('npm run build');
+      // 3. Build kode production Vite + esbuild dengan alokasi heap 2GB
+      addDeployLog('📦 Menjalankan kompilasi production (Vite 2GB heap + esbuild)...');
+      const buildRes = await runShell('node --max-old-space-size=2048 ./node_modules/vite/bin/vite.js build && npx esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs');
       if (buildRes.stdout) {
         const summary = buildRes.stdout.split('\n').slice(-4).join('\n');
         addDeployLog(`[build output]:\n${summary}`);
@@ -1738,8 +1748,8 @@ async function startServer() {
     });
   });
 
-  // POST /api/system/deploy
-  app.post('/api/system/deploy', (req, res) => {
+  // ALL /api/system/deploy (Mendukung POST dan GET)
+  app.all('/api/system/deploy', (req, res) => {
     const token = req.query.token || req.body?.token || req.headers['x-deploy-token'];
     const isAdmin = req.headers['x-admin-request'] === 'true';
 
@@ -1760,8 +1770,8 @@ async function startServer() {
     });
   });
 
-  // POST /api/system/restart-pm2
-  app.post('/api/system/restart-pm2', async (req, res) => {
+  // ALL /api/system/restart-pm2 (Mendukung POST dan GET)
+  app.all('/api/system/restart-pm2', async (req, res) => {
     addDeployLog('🔄 Perintah manual: Merestart service PM2...');
     setTimeout(async () => {
       await runShell('pm2 restart kuickmart || pm2 restart all || true');
