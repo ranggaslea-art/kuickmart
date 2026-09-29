@@ -13,9 +13,14 @@ import {
   Megaphone, 
   Tag,
   Hand,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Video,
+  Film,
+  Play,
+  HardDrive
 } from 'lucide-react';
 import { StorePromoInfo } from '../types';
+import { resolvePromoMediaUrl, formatImageUrl } from '../utils/imageHelper';
 
 interface HeroBannerProps {
   onSelectCategory: (slug: string) => void;
@@ -87,19 +92,32 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   ];
 
   const banners = dynamicBanners.length > 0 
-    ? dynamicBanners.map(b => ({
-        badge: b.badgeText || 'PROMO SPESIAL',
-        badgeColor: b.badgeColor || 'bg-red-500 text-white',
-        title: b.title,
-        subtitle: b.subtitle || '',
-        cta: b.ctaText || 'Lihat Promo',
-        category: b.targetCategory || 'all',
-        bgGradient: b.bgGradient || 'from-blue-900 via-indigo-900 to-red-900',
-        image: b.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=60',
-        discountValue: b.discountValue,
-        displayMode: b.displayMode || 'standard',
-      }))
-    : defaultBanners;
+    ? dynamicBanners.map(b => {
+        const media = resolvePromoMediaUrl(b.videoUrl || b.imageUrl, b.mediaType);
+        return {
+          badge: b.badgeText || 'PROMO SPESIAL',
+          badgeColor: b.badgeColor || 'bg-red-500 text-white',
+          title: b.title,
+          subtitle: b.subtitle || '',
+          cta: b.ctaText || 'Lihat Promo',
+          category: b.targetCategory || 'all',
+          bgGradient: b.bgGradient || 'from-blue-900 via-indigo-900 to-red-900',
+          image: b.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=60',
+          videoUrl: b.videoUrl,
+          mediaType: b.mediaType || media.type,
+          driveFileId: b.driveFileId,
+          driveEmbedUrl: media.driveEmbedUrl,
+          discountValue: b.discountValue,
+          displayMode: b.displayMode || 'standard',
+        };
+      })
+    : defaultBanners.map(b => ({
+        ...b,
+        videoUrl: undefined,
+        mediaType: 'photo' as const,
+        driveFileId: undefined,
+        driveEmbedUrl: undefined,
+      }));
 
   // Slide navigation handlers
   const nextSlide = () => {
@@ -248,12 +266,35 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           }`}
           title="Geser ke kiri atau kanan untuk melihat banner promo lainnya"
         >
-          {/* Background Visual (Image & Gradient) */}
-          {currentBanner.displayMode === 'full_image' ? (
-            // Full Image Poster Banner
+          {/* Background Visual (Video, Photo, GIF Animator, Image & Gradient) */}
+          {currentBanner.mediaType === 'video' || currentBanner.videoUrl ? (
+            // Video Background Banner
+            <div className="absolute inset-0 z-0 overflow-hidden bg-black">
+              {currentBanner.driveFileId ? (
+                <iframe
+                  src={`https://drive.google.com/file/d/${currentBanner.driveFileId}/preview`}
+                  className="w-full h-full border-0 pointer-events-none scale-105"
+                  title={currentBanner.title}
+                  allow="autoplay"
+                />
+              ) : (
+                <video
+                  src={currentBanner.videoUrl || currentBanner.image}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover object-center"
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-stone-950/90 via-stone-950/40 to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-stone-950/80 via-stone-950/30 to-transparent pointer-events-none" />
+            </div>
+          ) : currentBanner.displayMode === 'full_image' ? (
+            // Full Image / GIF Animator Poster Banner
             <div className="absolute inset-0 z-0">
               <img
-                src={currentBanner.image}
+                src={formatImageUrl(currentBanner.image)}
                 alt={currentBanner.title}
                 className="w-full h-full object-cover object-center transition-all duration-700"
               />
@@ -261,14 +302,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <div className="absolute inset-0 bg-gradient-to-r from-stone-950/75 via-stone-950/30 to-transparent" />
             </div>
           ) : (
-            // Standard Aesthetic Gradient with High-Clarity Photo
+            // Standard Aesthetic Gradient with High-Clarity Photo or GIF
             <div className="absolute inset-0 z-0 overflow-hidden">
               <div
                 className={`absolute inset-0 bg-gradient-to-r ${currentBanner.bgGradient} opacity-95 transition-all duration-700`}
               />
               {currentBanner.image && (
                 <img
-                  src={currentBanner.image}
+                  src={formatImageUrl(currentBanner.image)}
                   alt={currentBanner.title}
                   className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50 transition-all duration-700"
                 />
@@ -313,6 +354,27 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <span className={`text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full shadow-xs ${currentBanner.badgeColor}`}>
                 {currentBanner.badge}
               </span>
+
+              {/* Media indicator badge in storefront banner */}
+              {currentBanner.mediaType === 'video' || currentBanner.videoUrl ? (
+                <span className="text-[10px] font-bold bg-purple-600/90 text-white px-2 py-0.5 rounded-full flex items-center gap-1 border border-purple-400/50 shadow-xs">
+                  <Video className="w-3 h-3 text-purple-200" />
+                  <span>Video</span>
+                </span>
+              ) : currentBanner.mediaType === 'gif' ? (
+                <span className="text-[10px] font-bold bg-pink-600/90 text-white px-2 py-0.5 rounded-full flex items-center gap-1 border border-pink-400/50 shadow-xs">
+                  <Film className="w-3 h-3 text-pink-200" />
+                  <span>GIF Animasi</span>
+                </span>
+              ) : null}
+
+              {currentBanner.driveFileId && (
+                <span className="text-[9px] font-bold bg-emerald-700/80 text-white px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-emerald-400/30">
+                  <HardDrive className="w-2.5 h-2.5 text-emerald-200" />
+                  <span>Drive</span>
+                </span>
+              )}
+
               {currentBanner.discountValue && (
                 <span className="text-xs bg-white/20 backdrop-blur-xs text-white px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-white/30">
                   <Tag className="w-3 h-3 text-amber-300" />

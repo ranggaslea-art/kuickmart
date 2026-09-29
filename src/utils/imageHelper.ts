@@ -99,7 +99,7 @@ export function formatImageUrl(url?: string): string {
   const driveId = getGoogleDriveFileId(cleanUrl);
   if (driveId) {
     // Google Drive direct thumbnail endpoint - high compatibility
-    return `https://drive.google.com/thumbnail?id=${driveId}&sz=w800`;
+    return `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
   }
 
   // Dropbox URLs
@@ -193,3 +193,53 @@ export function compressImageFile(file: File, maxDim = 600, quality = 0.82): Pro
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Resolve media URL for Promo item (Photo, GIF, or Video from Drive or Direct link)
+ */
+export function resolvePromoMediaUrl(mediaUrl?: string, mediaType?: 'photo' | 'video' | 'gif'): {
+  type: 'photo' | 'video' | 'gif';
+  isGoogleDrive: boolean;
+  srcUrl: string;
+  driveEmbedUrl?: string;
+} {
+  const url = (mediaUrl || '').trim();
+  const driveId = getGoogleDriveFileId(url);
+  const isDrive = Boolean(driveId);
+
+  // Auto-detect type if not provided
+  let detectedType: 'photo' | 'video' | 'gif' = mediaType || 'photo';
+  if (!mediaType) {
+    if (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov') || url.includes('/video')) {
+      detectedType = 'video';
+    } else if (url.endsWith('.gif') || url.includes('image/gif')) {
+      detectedType = 'gif';
+    } else {
+      detectedType = 'photo';
+    }
+  }
+
+  if (isDrive && driveId) {
+    if (detectedType === 'video') {
+      return {
+        type: 'video',
+        isGoogleDrive: true,
+        srcUrl: `https://drive.google.com/uc?export=download&id=${driveId}`,
+        driveEmbedUrl: `https://drive.google.com/file/d/${driveId}/preview`,
+      };
+    } else {
+      return {
+        type: detectedType,
+        isGoogleDrive: true,
+        srcUrl: `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`,
+      };
+    }
+  }
+
+  return {
+    type: detectedType,
+    isGoogleDrive: false,
+    srcUrl: url || DEFAULT_PRODUCT_IMAGE,
+  };
+}
+

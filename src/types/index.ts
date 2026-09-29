@@ -623,6 +623,7 @@ export interface ReceiptInfo {
 }
 
 export type PromoType = 'banner' | 'flash_sale' | 'announcement_bar' | 'perk_card';
+export type PromoMediaType = 'photo' | 'video' | 'gif';
 
 export interface StorePromoInfo {
   id: string;
@@ -636,6 +637,10 @@ export interface StorePromoInfo {
   discountValue?: string; // e.g. "Hemat s.d 35%", "Diskon 40%", "Beli 2 Gratis 1"
   bgGradient?: string;
   imageUrl?: string;
+  videoUrl?: string; // URL video mp4/webm atau Google Drive stream
+  mediaType?: PromoMediaType; // 'photo' | 'video' | 'gif'
+  driveFileId?: string; // Google Drive file ID if stored in drive
+  driveViewUrl?: string; // Google Drive share view URL
   displayMode?: 'standard' | 'full_image'; // Mode tampilan: 'standard' (overlay gradien teks) atau 'full_image' (poster foto penuh)
   flashHours?: number;
   flashMinutes?: number;
