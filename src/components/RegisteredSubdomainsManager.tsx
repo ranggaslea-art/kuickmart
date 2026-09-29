@@ -111,7 +111,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (showLoadingSpinner: boolean = true) => {
     const currentPol = canAccessSubdomainModule();
     setAccessPolicy(currentPol);
     if (!currentPol.allowed) {
@@ -119,7 +119,9 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
       return;
     }
 
-    setIsLoading(true);
+    if (showLoadingSpinner) {
+      setIsLoading(true);
+    }
     try {
       const list = await fetchRegisteredSubdomains();
       setSubdomains(list);
@@ -131,31 +133,20 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
   };
 
   useEffect(() => {
-    loadData();
+    // Muat data saat modul pertama kali dibuka
+    loadData(true);
 
+    // Refresh hanya jika ada event perubahan status atau update toko
     const handleStatusChanged = () => {
-      loadData();
+      loadData(false);
     };
 
     window.addEventListener('subdomain_status_changed', handleStatusChanged);
     window.addEventListener('store_tenant_updated', handleStatusChanged);
 
-    // Auto-refresh when tab is focused / screen unlocked
-    const handleFocus = () => {
-      loadData();
-    };
-    window.addEventListener('focus', handleFocus);
-
-    // Polling every 5 detik agar selalu sinkron real-time antar perangkat
-    const interval = setInterval(() => {
-      loadData();
-    }, 5000);
-
     return () => {
       window.removeEventListener('subdomain_status_changed', handleStatusChanged);
       window.removeEventListener('store_tenant_updated', handleStatusChanged);
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
     };
   }, []);
 
