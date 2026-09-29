@@ -685,6 +685,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Tab State
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
+
+  // Kelompok Modul Menu Navigasi Admin
+  type ModuleGroupKey = 'all' | 'pos' | 'master' | 'inventory' | 'marketing' | 'settings' | 'system';
+  const [selectedGroup, setSelectedGroup] = useState<ModuleGroupKey>('all');
   
   // KPI Stats Summary Visibility (Bisa diciutkan agar modul admin memiliki ruang pandang maksimal)
   const [showKpiSummary, setShowKpiSummary] = useState(false);
@@ -713,7 +717,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
-  }, [activeTab]);
+  }, [activeTab, selectedGroup]);
 
   const [productSearch, setProductSearch] = useState('');
   const [selectedStockCardProductId, setSelectedStockCardProductId] = useState<string | undefined>(undefined);
@@ -2378,8 +2382,50 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           </div>
         </div>
 
-        {/* Tab Navigation (Permission-Aware) - Ditempatkan tepat di bawah Header, Selalu Terlihat & Tidak Pernah Tertutup Modul */}
+        {/* Tab Navigation (Permission-Aware & Grouped by Category) - Ditempatkan tepat di bawah Header, Selalu Terlihat & Tidak Pernah Tertutup Modul */}
         <div className="shrink-0 sticky top-0 z-30 bg-white border-b border-stone-200 shadow-2xs">
+          {/* BARIS 1: KELOMPOK INDUK / KATEGORI MODUL */}
+          <div className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 border-b border-stone-100 bg-stone-50/80 overflow-x-auto scrollbar-none">
+            <span className="text-[10px] font-extrabold text-stone-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+              <Layers className="w-3 h-3 text-stone-400" />
+              <span>Kelompok:</span>
+            </span>
+
+            {[
+              { id: 'all' as const, label: 'Semua Modul', count: 26, badgeColor: 'bg-stone-200 text-stone-700' },
+              { id: 'master' as const, label: '📦 Master Data', count: 5, badgeColor: 'bg-blue-100 text-blue-700' },
+              { id: 'pos' as const, label: '🛒 Kasir & Penjualan', count: 4, badgeColor: 'bg-emerald-100 text-emerald-700' },
+              { id: 'inventory' as const, label: '📋 Inventori & Stok', count: 4, badgeColor: 'bg-amber-100 text-amber-700' },
+              { id: 'marketing' as const, label: '🎁 Promo & Pelanggan', count: 4, badgeColor: 'bg-pink-100 text-pink-700' },
+              { id: 'settings' as const, label: '⚙️ Cabang & Pengaturan', count: 6, badgeColor: 'bg-purple-100 text-purple-700' },
+              { id: 'system' as const, label: '🛡️ User & Keamanan', count: 3, badgeColor: 'bg-indigo-100 text-indigo-700' },
+            ].map((grp) => {
+              const isGrpActive = selectedGroup === grp.id;
+              return (
+                <button
+                  key={grp.id}
+                  type="button"
+                  onClick={() => setSelectedGroup(grp.id)}
+                  className={`shrink-0 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    isGrpActive
+                      ? 'bg-stone-900 text-white shadow-xs scale-102 ring-1 ring-stone-900'
+                      : 'bg-white hover:bg-stone-100 text-stone-700 border border-stone-200/80 hover:border-stone-300'
+                  }`}
+                >
+                  <span>{grp.label}</span>
+                  <span
+                    className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                      isGrpActive ? 'bg-white/20 text-white' : grp.badgeColor
+                    }`}
+                  >
+                    {grp.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* BARIS 2: TAB MODUL AKTIF SESUAI KELOMPOK TERPILIH */}
           <div className="flex items-center justify-between px-1.5 sm:px-3">
             {/* Tombol Geser Kiri Tab Menu */}
             <button
@@ -2397,80 +2443,93 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               className="flex items-center gap-1 overflow-x-auto scrollbar-none py-2 px-1 scroll-smooth w-full"
             >
               {[
-                { id: 'pos_cashier', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
-                { id: 'products', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: products.length },
-                { id: 'categories_brands', moduleKey: 'products' as SystemModuleKey, label: 'Kategori & Merk', icon: <Tag className="w-4 h-4 text-pink-600" />, count: (activeCategories.length + activeBrands.length) },
-                { id: 'stock_card', moduleKey: 'stock_card' as SystemModuleKey, label: 'Kartu Stok & Mutasi', icon: <Layers className="w-4 h-4 text-blue-600" /> },
-                { id: 'stock_opname', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
-                { id: 'returns', moduleKey: 'returns' as SystemModuleKey, label: 'Retur Jual & Beli', icon: <Undo2 className="w-4 h-4 text-rose-600" /> },
-                { id: 'stock_mutations', moduleKey: 'stock_mutations' as SystemModuleKey, label: 'Mutasi Antar Cabang', icon: <ArrowLeftRight className="w-4 h-4 text-purple-600" /> },
-                { id: 'purchases', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-teal-600" />, count: activePurchases.length },
-                { id: 'suppliers', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
-                { id: 'orders', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4 text-stone-700" />, count: orders.length },
-                { id: 'customers', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
-                { id: 'points_rewards', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
-                { id: 'reports', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
-                { id: 'stores', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
-                { id: 'subdomains', moduleKey: 'stores' as SystemModuleKey, label: 'Subdomain Terdaftar', icon: <Globe className="w-4 h-4 text-cyan-600" /> },
-                { id: 'receipts', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
-                { id: 'promos', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Info Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
-                { id: 'push_notifications', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
-                { id: 'brand_info', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
-                { id: 'store_doku_settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & DOKU', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
-                { id: 'couriers', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
-                { id: 'vouchers', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
-                { id: 'users', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
-                { id: 'permissions', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
-                { id: 'bulk_import', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
-                { id: 'vps_deploy', moduleKey: 'stores' as SystemModuleKey, label: 'Deploy & Server VPS', icon: <Rocket className="w-4 h-4 text-indigo-600" /> },
-                { id: 'seo_google', moduleKey: 'stores' as SystemModuleKey, label: 'SEO & Google Search', icon: <Search className="w-4 h-4 text-sky-600" /> },
-              ].map(item => {
-                const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    data-active={isActive ? "true" : "false"}
-                    onClick={() => {
-                      setActiveTab(item.id as any);
-                      setIsAddingProduct(false);
-                      setIsAddingStore(false);
-                      setIsAddingUser(false);
-                      setIsAddingVoucher(false);
-                    }}
-                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-xs font-extrabold ring-2 ring-blue-600/30'
-                        : !perm.canView
-                        ? 'text-stone-400 hover:text-stone-600 hover:bg-stone-100 bg-stone-50/50'
-                        : 'text-stone-700 hover:text-stone-950 hover:bg-stone-100'
-                    }`}
-                    title={
-                      !perm.canView
-                        ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser?.role || 'kasir')}`
-                        : !perm.canEdit
-                        ? `Modul ${item.label} (Hanya Lihat)`
-                        : `Modul ${item.label} (Akses Penuh)`
-                    }
-                  >
-                    {item.icon}
-                    <span>
-                      {item.label} {item.count !== undefined ? `(${item.count})` : ''}
-                    </span>
-                    {!perm.canView ? (
-                      <span className="p-0.5 rounded bg-stone-200/80 text-stone-600" title="Terkunci">
-                        <Lock className="w-2.5 h-2.5" />
+                // 1. KASIR & PENJUALAN
+                { id: 'pos_cashier', group: 'pos', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
+                { id: 'orders', group: 'pos', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4 text-stone-700" />, count: orders.length },
+                { id: 'returns', group: 'pos', moduleKey: 'returns' as SystemModuleKey, label: 'Retur Jual & Beli', icon: <Undo2 className="w-4 h-4 text-rose-600" /> },
+                { id: 'reports', group: 'pos', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
+
+                // 2. MASTER DATA
+                { id: 'products', group: 'master', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: products.length },
+                { id: 'categories_brands', group: 'master', moduleKey: 'products' as SystemModuleKey, label: 'Kategori & Merk', icon: <Tag className="w-4 h-4 text-pink-600" />, count: (activeCategories.length + activeBrands.length) },
+                { id: 'customers', group: 'master', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
+                { id: 'suppliers', group: 'master', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
+                { id: 'bulk_import', group: 'master', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
+
+                // 3. INVENTORI & STOK
+                { id: 'stock_card', group: 'inventory', moduleKey: 'stock_card' as SystemModuleKey, label: 'Kartu Stok & Mutasi', icon: <Layers className="w-4 h-4 text-blue-600" /> },
+                { id: 'stock_opname', group: 'inventory', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
+                { id: 'stock_mutations', group: 'inventory', moduleKey: 'stock_mutations' as SystemModuleKey, label: 'Mutasi Antar Cabang', icon: <ArrowLeftRight className="w-4 h-4 text-purple-600" /> },
+                { id: 'purchases', group: 'inventory', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-teal-600" />, count: activePurchases.length },
+
+                // 4. PROMO & PELANGGAN
+                { id: 'promos', group: 'marketing', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Banner Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
+                { id: 'vouchers', group: 'marketing', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
+                { id: 'points_rewards', group: 'marketing', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
+                { id: 'push_notifications', group: 'marketing', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
+
+                // 5. CABANG & PENGATURAN TOKO
+                { id: 'stores', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
+                { id: 'subdomains', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Subdomain Terdaftar', icon: <Globe className="w-4 h-4 text-cyan-600" /> },
+                { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & DOKU', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
+                { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
+                { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
+                { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
+
+                // 6. USER, KEAMANAN & SERVER
+                { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
+                { id: 'permissions', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
+                { id: 'vps_deploy', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'Deploy & Server VPS', icon: <Rocket className="w-4 h-4 text-indigo-600" /> },
+                { id: 'seo_google', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'SEO & Google Search', icon: <Search className="w-4 h-4 text-sky-600" /> },
+              ]
+                .filter((item) => selectedGroup === 'all' || item.group === selectedGroup)
+                .map((item) => {
+                  const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      data-active={isActive ? "true" : "false"}
+                      onClick={() => {
+                        setActiveTab(item.id as any);
+                        setIsAddingProduct(false);
+                        setIsAddingStore(false);
+                        setIsAddingUser(false);
+                        setIsAddingVoucher(false);
+                      }}
+                      className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-xs font-extrabold ring-2 ring-blue-600/30'
+                          : !perm.canView
+                          ? 'text-stone-400 hover:text-stone-600 hover:bg-stone-100 bg-stone-50/50'
+                          : 'text-stone-700 hover:text-stone-950 hover:bg-stone-100'
+                      }`}
+                      title={
+                        !perm.canView
+                          ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser?.role || 'kasir')}`
+                          : !perm.canEdit
+                          ? `Modul ${item.label} (Hanya Lihat)`
+                          : `Modul ${item.label} (Akses Penuh)`
+                      }
+                    >
+                      {item.icon}
+                      <span>
+                        {item.label} {item.count !== undefined ? `(${item.count})` : ''}
                       </span>
-                    ) : !perm.canEdit ? (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
-                        isActive ? 'bg-blue-500 text-white border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-200'
-                      }`} title="Hanya Lihat">
-                        Lihat
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+                      {!perm.canView ? (
+                        <span className="p-0.5 rounded bg-stone-200/80 text-stone-600" title="Terkunci">
+                          <Lock className="w-2.5 h-2.5" />
+                        </span>
+                      ) : !perm.canEdit ? (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                          isActive ? 'bg-blue-500 text-white border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-200'
+                        }`} title="Hanya Lihat">
+                          Lihat
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
             </div>
 
             {/* Tombol Geser Kanan Tab Menu */}
