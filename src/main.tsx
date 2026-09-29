@@ -9,29 +9,16 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Register PWA Service Worker with aggressive update checking for mobile devices
+// Register PWA Service Worker (stabil tanpa auto-reload loop)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .then((reg) => {
-        // Segera periksa update SW terbaru dari server
-        reg.update().catch(() => {});
+      .then(() => {
+        console.log('[SW] Service worker registered successfully');
       })
       .catch((err) => {
-        console.log('SW registration note:', err);
+        console.log('[SW] Registration note:', err);
       });
-
-    // Dengarkan saat service worker baru aktif mengambil alih kendali
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
-    });
   });
 }
-
-
-
