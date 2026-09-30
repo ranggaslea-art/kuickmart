@@ -74,7 +74,8 @@ import {
   ArrowLeftRight,
   Globe,
   Server,
-  Rocket
+  Rocket,
+  Download
 } from 'lucide-react';
 import { 
   Product, 
@@ -157,6 +158,7 @@ import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { CategoryBrandManager } from './CategoryBrandManager';
 import { VpsDeployManager } from './VpsDeployManager';
 import { SeoGoogleManager } from './SeoGoogleManager';
+import { ProductExportModal } from './ProductExportModal';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
@@ -745,6 +747,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Product Edit/Add State
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   
   const [formName, setFormName] = useState('');
   const [formBrand, setFormBrand] = useState('');
@@ -3335,6 +3338,17 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <span>Kalkulator & Simulasi Konversi</span>
                       </button>
 
+                      {/* TOMBOL EKSPOR KATALOG EXCEL / CSV */}
+                      <button
+                        type="button"
+                        onClick={() => setIsExportModalOpen(true)}
+                        className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                        title="Ekspor seluruh atau sebagian data katalog produk ke format Excel (.xls) atau CSV"
+                      >
+                        <Download className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Ekspor Excel / CSV</span>
+                      </button>
+
                       {currentUserPermissions.bulk_import?.canView && (
                         <button
                           onClick={() => setActiveTab('bulk_import')}
@@ -4162,6 +4176,22 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 <p className="text-[11px] leading-relaxed text-emerald-800">
                   Format per baris: <code>Nama Barang | Harga | Stok | Kategori | Brand</code>
                 </p>
+              </div>
+
+              {/* QUICK BACKUP / EXPORT LINK */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-stone-50 border border-stone-200 rounded-2xl">
+                <span className="text-[11px] text-stone-600 font-medium">
+                  Ingin mengedit produk yang sudah ada secara offline atau membuat salinan cadangan?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsExportModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer"
+                  title="Unduh katalog produk saat ini ke berkas Excel atau CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ekspor / Unduh Katalog Produk Saat Ini (.xls / .csv)</span>
+                </button>
               </div>
 
               <div>
@@ -5690,6 +5720,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         user={selectedUserForPermissions}
         onSavePermissions={handleSaveUserPermissions}
         isCurrentUserAdmin={currentUser?.role === 'admin'}
+      />
+
+      {/* PRODUCT CATALOG EXCEL & CSV EXPORT MODAL */}
+      <ProductExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        allProducts={products || []}
+        filteredProducts={filteredCatalog || []}
+        categories={activeCategories || []}
+        storeName={activeTenantIdentity?.storeName || 'NusaMart Express'}
       />
     </div>
   );
