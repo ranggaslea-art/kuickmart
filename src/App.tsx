@@ -239,11 +239,13 @@ export default function App() {
       const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
       if (saved) {
-        const rawList: Product[] = JSON.parse(saved);
-        return rawList.map(p => ({
-          ...p,
-          image: formatImageUrl(p.image),
-        }));
+        const rawList = JSON.parse(saved);
+        if (Array.isArray(rawList) && rawList.length > 0) {
+          return rawList.map(p => ({
+            ...p,
+            image: formatImageUrl(p?.image),
+          }));
+        }
       }
       return PRODUCTS;
     } catch {
@@ -304,9 +306,14 @@ export default function App() {
     }
   });
   const [vouchers, setVouchers] = useState<Voucher[]>(() => {
-    const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
-    const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
-    if (saved) return JSON.parse(saved);
+    try {
+      const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
     return isNewStore ? [] : VOUCHERS;
   });
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
@@ -315,16 +322,28 @@ export default function App() {
 
   // Member & Loyalty
   const [member, setMember] = useState<MemberProfile>(() => {
-    const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : INITIAL_MEMBER;
+    try {
+      const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return INITIAL_MEMBER;
   });
 
   // Cart State
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    const key = getTenantStorageKey(STORAGE_CART_KEY, currentSlug);
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const key = getTenantStorageKey(STORAGE_CART_KEY, currentSlug);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
   });
 
   // Orders State - Toko baru TERISOLASI dari riwayat order toko lain (0 order awal)
@@ -354,9 +373,13 @@ export default function App() {
 
   // Checkout discounts & points
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(() => {
-    const saved = localStorage.getItem(STORAGE_VOUCHERS_KEY);
-    const initialList = saved ? JSON.parse(saved) : VOUCHERS;
-    return initialList.length > 0 ? initialList[0] : null;
+    try {
+      const saved = localStorage.getItem(STORAGE_VOUCHERS_KEY);
+      const initialList = saved ? JSON.parse(saved) : VOUCHERS;
+      return Array.isArray(initialList) && initialList.length > 0 ? initialList[0] : null;
+    } catch {
+      return null;
+    }
   });
   const [usePoints, setUsePoints] = useState<boolean>(false);
 
@@ -559,7 +582,10 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug);
       const saved = localStorage.getItem(key);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
       return isNewStore ? [] : INITIAL_STORE_PROMOS;
     } catch {
       return isNewStore ? [] : INITIAL_STORE_PROMOS;
@@ -576,7 +602,10 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
       return isNewStore ? [] : INITIAL_COURIERS;
     } catch {
       return isNewStore ? [] : INITIAL_COURIERS;
@@ -593,7 +622,10 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
       if (isNewStore) {
         const tenant = loadStoreTenantConfig(currentSlug);
         const newStoreStaff: StaffUser[] = [

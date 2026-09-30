@@ -748,7 +748,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   
   const [formName, setFormName] = useState('');
   const [formBrand, setFormBrand] = useState('');
-  const [formCategory, setFormCategory] = useState('snack-biscuit');
+  const [formCategory, setFormCategory] = useState('sembako');
   const [formPrice, setFormPrice] = useState(15000);
   const [formOriginalPrice, setFormOriginalPrice] = useState(15000);
   const [formCostPrice, setFormCostPrice] = useState<number>(12000);
@@ -2467,39 +2467,39 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               {[
                 // 1. KASIR & PENJUALAN
                 { id: 'pos_cashier', group: 'pos', moduleKey: 'orders' as SystemModuleKey, label: 'Penjualan Kasir (POS)', icon: <ScanBarcode className="w-4 h-4 text-emerald-600" /> },
-                { id: 'orders', group: 'pos', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4 text-stone-700" />, count: orders.length },
+                { id: 'orders', group: 'pos', moduleKey: 'orders' as SystemModuleKey, label: 'Pesanan Kasir', icon: <Receipt className="w-4 h-4 text-stone-700" />, count: (orders || []).length },
                 { id: 'returns', group: 'pos', moduleKey: 'returns' as SystemModuleKey, label: 'Retur Jual & Beli', icon: <Undo2 className="w-4 h-4 text-rose-600" /> },
                 { id: 'reports', group: 'pos', moduleKey: 'reports' as SystemModuleKey, label: 'Laporan & Keuangan', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
 
                 // 2. MASTER DATA
-                { id: 'products', group: 'master', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: products.length },
-                { id: 'categories_brands', group: 'master', moduleKey: 'products' as SystemModuleKey, label: 'Kategori & Merk', icon: <Tag className="w-4 h-4 text-pink-600" />, count: (activeCategories.length + activeBrands.length) },
-                { id: 'customers', group: 'master', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: activeCustomers.length },
-                { id: 'suppliers', group: 'master', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: activeSuppliers.length },
+                { id: 'products', group: 'master', moduleKey: 'products' as SystemModuleKey, label: 'Katalog & Stok', icon: <Package className="w-4 h-4 text-blue-600" />, count: (products || []).length },
+                { id: 'categories_brands', group: 'master', moduleKey: 'products' as SystemModuleKey, label: 'Kategori & Merk', icon: <Tag className="w-4 h-4 text-pink-600" />, count: ((activeCategories || []).length + (activeBrands || []).length) },
+                { id: 'customers', group: 'master', moduleKey: 'customers' as SystemModuleKey, label: 'Master Pelanggan & Member', icon: <Users className="w-4 h-4 text-sky-600" />, count: (activeCustomers || []).length },
+                { id: 'suppliers', group: 'master', moduleKey: 'suppliers' as SystemModuleKey, label: 'Suplier Barang', icon: <Truck className="w-4 h-4 text-indigo-600" />, count: (activeSuppliers || []).length },
                 { id: 'bulk_import', group: 'master', moduleKey: 'bulk_import' as SystemModuleKey, label: 'Import Cepat Excel', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> },
 
                 // 3. INVENTORI & STOK
                 { id: 'stock_card', group: 'inventory', moduleKey: 'stock_card' as SystemModuleKey, label: 'Kartu Stok & Mutasi', icon: <Layers className="w-4 h-4 text-blue-600" /> },
                 { id: 'stock_opname', group: 'inventory', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
                 { id: 'stock_mutations', group: 'inventory', moduleKey: 'stock_mutations' as SystemModuleKey, label: 'Mutasi Antar Cabang', icon: <ArrowLeftRight className="w-4 h-4 text-purple-600" /> },
-                { id: 'purchases', group: 'inventory', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-teal-600" />, count: activePurchases.length },
+                { id: 'purchases', group: 'inventory', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-teal-600" />, count: (activePurchases || []).length },
 
                 // 4. PROMO & PELANGGAN
-                { id: 'promos', group: 'marketing', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Banner Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: activeStorePromos.length },
-                { id: 'vouchers', group: 'marketing', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: vouchers.length },
+                { id: 'promos', group: 'marketing', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Banner Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: (activeStorePromos || []).length },
+                { id: 'vouchers', group: 'marketing', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: (vouchers || []).length },
                 { id: 'points_rewards', group: 'marketing', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
                 { id: 'push_notifications', group: 'marketing', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
 
                 // 5. CABANG & PENGATURAN TOKO
-                { id: 'stores', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: stores.length },
+                { id: 'stores', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: (stores || []).length },
                 { id: 'subdomains', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Subdomain Terdaftar', icon: <Globe className="w-4 h-4 text-cyan-600" /> },
                 { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & DOKU', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
-                { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: activeReceiptConfigs.length },
-                { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: activeCouriers.length },
+                { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
+                { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
                 { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
 
                 // 6. USER, KEAMANAN & SERVER
-                { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: staffUsers.length },
+                { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: (staffUsers || []).length },
                 { id: 'permissions', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
                 { id: 'vps_deploy', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'Deploy & Server VPS', icon: <Rocket className="w-4 h-4 text-indigo-600" /> },
                 { id: 'seo_google', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'SEO & Google Search', icon: <Search className="w-4 h-4 text-sky-600" /> },
