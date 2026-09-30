@@ -1,6 +1,26 @@
 import { Order, ReceiptInfo } from '../types';
 import { formatRupiah } from './formatters';
 import { cleanReceiptText } from './sanitizeReceipt';
+import { 
+  generateCrispDotMatrixReceiptHtml, 
+  generateEscPosBinaryBuffer, 
+  printDirectRawToSerialPort, 
+  isWebSerialSupported,
+  getOrRequestSerialPort,
+  disconnectSerialPort,
+  printViaRawBt 
+} from './rawPosPrintEngine';
+
+// Re-export untuk kemudahan akses di komponen POS
+export { 
+  generateCrispDotMatrixReceiptHtml, 
+  generateEscPosBinaryBuffer, 
+  printDirectRawToSerialPort, 
+  isWebSerialSupported,
+  getOrRequestSerialPort,
+  disconnectSerialPort,
+  printViaRawBt 
+};
 
 /**
  * Helper untuk format teks rata tengah berdasarkan lebar kolom dot matrix (misal 40 kolom)
@@ -267,6 +287,16 @@ export function generateDotMatrixReceiptHtml(
   cashierName?: string,
   paymentDetails?: { cashReceived?: number; changeAmount?: number }
 ): string {
+  // Format iPos 4 (Native Monospace 40-Kolom Super Tajam & Cepat untuk TM-U220)
+  if (
+    config.receiptLayoutFormat === 'ipos4' || 
+    config.receiptLayoutFormat === undefined || 
+    config.printerType === 'dot_matrix_tmu220' || 
+    config.paperWidth === '70mm_dotmatrix'
+  ) {
+    return generateCrispDotMatrixReceiptHtml(order, config, cashierName, paymentDetails);
+  }
+
   const brand = config.headerBrand || 'NUSA MART EXPRESS';
   const store = config.storeName || 'toko-online.online';
 
@@ -280,9 +310,6 @@ export function generateDotMatrixReceiptHtml(
 <head>
   <meta charset="UTF-8">
   <title>Struk POS TM-U220 - ${order.orderNumber}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@500;700;900&family=Roboto+Mono:wght@500;600;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     @page {
       size: 76mm auto;
@@ -298,15 +325,18 @@ export function generateDotMatrixReceiptHtml(
       padding: 0;
       width: 70mm;
       max-width: 70mm;
-      background: #ffffff;
-      color: #000000;
+      background: #ffffff !important;
+      color: #000000 !important;
       font-family: ${fontCss};
       font-size: ${fontSizes.base};
       line-height: ${lineSpacingVal};
       font-weight: ${weightCss};
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
+      /* Zero antialiasing for maximum dot-matrix needle impact */
+      -webkit-font-smoothing: none !important;
+      -moz-osx-font-smoothing: unset !important;
+      font-smooth: never !important;
+      text-rendering: geometricPrecision !important;
+      image-rendering: pixelated !important;
     }
     .receipt-container {
       width: 70mm;

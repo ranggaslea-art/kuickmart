@@ -531,7 +531,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
 
             <button
               type="button"
-              onClick={loadData}
+              onClick={() => loadData()}
               disabled={isLoading}
               className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 disabled:opacity-50 flex-1 sm:flex-initial"
               title="Perbarui data subdomain"

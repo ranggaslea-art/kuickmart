@@ -17,7 +17,11 @@ import {
   printPosReceiptViaIframe,
   downloadPosReceiptTxtFile,
   copyPosReceiptText,
-  generateRawPosReceiptText
+  generateRawPosReceiptText,
+  generateEscPosBinaryBuffer,
+  printDirectRawToSerialPort,
+  isWebSerialSupported,
+  getOrRequestSerialPort
 } from '../utils/posPrinterHelper';
 import { PosReceiptEditorModal } from './PosReceiptEditorModal';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
@@ -49,6 +53,7 @@ import {
   Download,
   Maximize2,
   Minimize2,
+  Zap,
   FileText,
   Receipt
 } from 'lucide-react';
@@ -758,8 +763,54 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   };
 
   // ===============================================================
-  // 1. DIRECT PRINT TO EPSON TM-U220 (NO MODAL / MODUL PANGGILAN)
+  // 1. DIRECT PRINT TO EPSON TM-U220 (Mendukung Mode iPos 4 Serial & Driver Windows Anti-Blur)
   // ===============================================================
+  const executePosPrint = async (
+    orderToPrint: Order,
+    paymentOpts?: { cashReceived?: number; changeAmount?: number },
+    forceMode?: 'serial' | 'windows'
+  ) => {
+    const isSerialRequested = forceMode === 'serial' || (
+      forceMode === undefined && 
+      (activeReceiptConfig?.printExecutionMode === 'escpos_serial' || activeReceiptConfig?.printExecutionMode === undefined)
+    );
+
+    if (isSerialRequested && isWebSerialSupported()) {
+      try {
+        const rawBytes = generateEscPosBinaryBuffer(
+          orderToPrint,
+          activeReceiptConfig,
+          cashierName,
+          paymentOpts
+        );
+        const res = await printDirectRawToSerialPort(rawBytes, activeReceiptConfig.serialBaudRate || 9600);
+        if (res.success) {
+          setReceiptPrintFeedback(`⚡ Struk #${orderToPrint.orderNumber} dicetak kilat ke Epson TM-U220 (Mode iPos 4: 1.5 dtk & Sangat Tajam)!`);
+          setTimeout(() => setReceiptPrintFeedback(null), 5000);
+          return true;
+        } else {
+          // Jika port serial dibatalkan, fallback ke HTML print monokrom anti-blur
+          const html = generateDotMatrixReceiptHtml(orderToPrint, activeReceiptConfig, cashierName, paymentOpts);
+          await printPosReceiptViaIframe(html);
+          setReceiptPrintFeedback(`🖨️ Struk #${orderToPrint.orderNumber} dicetak via Driver Windows (Mode Anti-Blur).`);
+          setTimeout(() => setReceiptPrintFeedback(null), 5000);
+          return true;
+        }
+      } catch (err: any) {
+        console.warn('Fallback to iframe print:', err);
+        const html = generateDotMatrixReceiptHtml(orderToPrint, activeReceiptConfig, cashierName, paymentOpts);
+        await printPosReceiptViaIframe(html);
+        return true;
+      }
+    } else {
+      const html = generateDotMatrixReceiptHtml(orderToPrint, activeReceiptConfig, cashierName, paymentOpts);
+      await printPosReceiptViaIframe(html);
+      setReceiptPrintFeedback(`🖨️ Struk #${orderToPrint.orderNumber} dicetak via Driver Windows (Mode Anti-Blur).`);
+      setTimeout(() => setReceiptPrintFeedback(null), 5000);
+      return true;
+    }
+  };
+
   const handleFinalizeSale = () => {
     if (validRows.length === 0) {
       alert('Mohon masukkan minimal 1 barang sebelum menyelesaikan transaksi.');
@@ -870,26 +921,13 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     // D. Simpan order terakhir untuk opsi cetak ulang langsung
     setCompletedOrder(newOrder);
 
-    // E. LANGSUNG CETAK KE EPSON TM-U220 VIA IFRAME TANPA MODAL ATAU MODUL LAIN!
-    try {
-      const html = generateDotMatrixReceiptHtml(
-        newOrder, 
-        activeReceiptConfig, 
-        cashierName, 
-        { cashReceived: paymentMethod === 'cash' ? cashReceived : grandTotal, changeAmount }
-      );
-      printPosReceiptViaIframe(html);
-    } catch (err) {
-      console.error('Direct TM-U220 print trigger error:', err);
-    }
-
-    // F. Tampilkan feedback ringkas di status bar
-    setReceiptPrintFeedback(
-      `✅ Transaksi #${orderNum} Selesai (${formatRupiah(grandTotal)}) • Struk langsung dikirim ke printer Epson TM-U220.`
+    // E. LANGSUNG CETAK KE EPSON TM-U220 (Mendukung Mode iPos 4 Direct ESC/POS & Driver Windows Anti-Blur)
+    executePosPrint(
+      newOrder,
+      { cashReceived: paymentMethod === 'cash' ? cashReceived : grandTotal, changeAmount }
     );
-    setTimeout(() => setReceiptPrintFeedback(null), 6000);
 
-    // G. Reset keranjang belanja kasir seketika & kembalikan fokus ke scan barcode
+    // F. Reset keranjang belanja kasir seketika & kembalikan fokus ke scan barcode
     setRows([
       {
         id: `row_${Date.now()}_0`,
@@ -922,19 +960,7 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       alert('Belum ada transaksi sebelumnya untuk dicetak ulang.');
       return;
     }
-    try {
-      const html = generateDotMatrixReceiptHtml(
-        completedOrder, 
-        activeReceiptConfig, 
-        cashierName, 
-        { cashReceived, changeAmount }
-      );
-      await printPosReceiptViaIframe(html);
-      setReceiptPrintFeedback(`🖨️ Struk #${completedOrder.orderNumber} kembali dicetak ke printer Epson TM-U220!`);
-      setTimeout(() => setReceiptPrintFeedback(null), 4000);
-    } catch (err) {
-      console.error('Direct reprint error:', err);
-    }
+    await executePosPrint(completedOrder, { cashReceived, changeAmount });
   };
 
   // List of all orders for reprinting (merging completedOrder and historical orders)
@@ -967,20 +993,16 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   }, [allAvailableOrders, reprintSearchQuery]);
 
   // Print any specific invoice directly to Epson TM-U220
-  const handlePrintSpecificInvoice = async (orderToPrint: Order) => {
+  const handlePrintSpecificInvoice = async (orderToPrint: Order, forceMode?: 'serial' | 'windows') => {
     try {
-      const html = generateDotMatrixReceiptHtml(
+      await executePosPrint(
         orderToPrint,
-        activeReceiptConfig,
-        cashierName,
         {
           cashReceived: orderToPrint.total,
           changeAmount: 0,
-        }
+        },
+        forceMode
       );
-      await printPosReceiptViaIframe(html);
-      setReceiptPrintFeedback(`🖨️ Faktur #${orderToPrint.orderNumber} berhasil dicetak ulang ke Epson TM-U220!`);
-      setTimeout(() => setReceiptPrintFeedback(null), 5000);
     } catch (err) {
       console.error('Error reprinting invoice:', err);
       alert('Gagal mengirim cetak ke printer TM-U220.');
@@ -1229,21 +1251,35 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           </div>
         </div>
 
-        {/* PRINTER STATUS BADGE (LANGSUNG CETAK STRUK TANPA MODUL PILIHAN PRINTER) */}
+        {/* PRINTER STATUS BADGE (LANGSUNG CETAK STRUK DENGAN PILIHAN MODE IPOS 4 ATAU WINDOWS) */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div
-            className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-2xs select-none"
-            title="Cetak Langsung Aktif: Struk otomatis langsung dikirim ke printer tanpa dialog pilihan"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-            </span>
-            <Printer className="w-3.5 h-3.5 text-emerald-700" />
-            <span className="truncate max-w-[220px] sm:max-w-xs font-semibold">
-              {activeOsPrinter ? activeOsPrinter.name : 'Epson TM-U220 (70mm)'} • Langsung Cetak
-            </span>
-          </div>
+          {activeReceiptConfig?.printExecutionMode === 'browser_crisp' ? (
+            <div
+              onClick={() => setIsReceiptEditorModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2 shadow-2xs select-none cursor-pointer transition-all"
+              title="Mode Driver Windows Aktif: Cetak via Spooler Windows dengan format monokrom anti-blur (Klik untuk atur)"
+            >
+              <Printer className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="font-bold text-emerald-900">
+                TM-U220: Mode Windows Anti-Blur
+              </span>
+            </div>
+          ) : (
+            <div
+              onClick={() => setIsReceiptEditorModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100/80 border border-amber-300 text-amber-950 text-xs font-bold flex items-center gap-2 shadow-2xs select-none cursor-pointer transition-all"
+              title="Mode iPos 4 Aktif: Teks ESC/POS dikirim langsung ke port serial TM-U220 (Super Cepat ~1.5 dtk & Sangat Tajam). Klik untuk atur."
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
+              </span>
+              <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+              <span className="font-extrabold text-amber-900">
+                TM-U220: Mode iPos 4 (ESC/POS)
+              </span>
+            </div>
+          )}
 
           {/* Tombol Cetak Ulang Faktur (Nomor Faktur Tertentu / Terakhir) */}
           <button
@@ -2397,14 +2433,29 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
 
                     {/* Action Buttons */}
                     <div className="pt-2 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => handlePrintSpecificInvoice(selectedReprintOrder)}
-                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
-                      >
-                        <Printer className="w-4 h-4 text-emerald-200" />
-                        <span>CETAK ULANG FAKTUR #{selectedReprintOrder.orderNumber} KE EPSON TM-U220</span>
-                      </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* 1. Cetak Langsung ESC/POS (Mode iPos 4) */}
+                        <button
+                          type="button"
+                          onClick={() => handlePrintSpecificInvoice(selectedReprintOrder, 'serial')}
+                          className="py-3 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.99] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-all"
+                          title="Cetak langsung ke port hardware serial TM-U220 dengan eksekusi kilat dan font jarum pekat"
+                        >
+                          <Zap className="w-4 h-4 text-amber-300 fill-amber-300 shrink-0" />
+                          <span>⚡ Cetak ESC/POS (iPos 4)</span>
+                        </button>
+
+                        {/* 2. Cetak Driver Windows (Anti-Blur Monokrom) */}
+                        <button
+                          type="button"
+                          onClick={() => handlePrintSpecificInvoice(selectedReprintOrder, 'windows')}
+                          className="py-3 px-3 bg-stone-900 hover:bg-stone-800 active:scale-[0.99] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-all"
+                          title="Cetak via Spooler Windows Driver dengan layout monokrom anti-blur"
+                        >
+                          <Printer className="w-4 h-4 text-stone-300 shrink-0" />
+                          <span>🖨️ Cetak Driver Windows</span>
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <button

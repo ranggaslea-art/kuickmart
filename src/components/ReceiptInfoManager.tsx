@@ -276,6 +276,9 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         dividerChar: isDotMatrix ? '=' : '-',
         itemRowStyle: 'two_rows',
         feedLinesBeforeCut: isDotMatrix ? 5 : 3,
+        printExecutionMode: isDotMatrix ? 'escpos_serial' : 'browser_crisp',
+        receiptLayoutFormat: 'ipos4',
+        serialBaudRate: 9600,
         isDefault: isDefault || receiptConfigs.length === 0,
         updatedAt: nowFormatted,
       };

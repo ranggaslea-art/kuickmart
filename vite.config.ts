@@ -22,7 +22,7 @@ export default defineConfig(() => {
     build: {
       chunkSizeWarningLimit: 2500,
       sourcemap: false,
-      minify: 'esbuild',
+      minify: 'esbuild' as const,
       rollupOptions: {
         output: {
           manualChunks: {

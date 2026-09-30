@@ -19,13 +19,21 @@ import {
   HelpCircle,
   Eye,
   CheckCircle2,
-  Type
+  Type,
+  Zap,
+  Cpu,
+  Layers,
+  Info
 } from 'lucide-react';
 import { ReceiptInfo, Store, Order } from '../types';
 import { cleanReceiptText } from '../utils/sanitizeReceipt';
 import { 
   generateRawPosReceiptText, 
   generateDotMatrixReceiptHtml, 
+  generateEscPosBinaryBuffer,
+  printDirectRawToSerialPort,
+  isWebSerialSupported,
+  getOrRequestSerialPort,
   printPosReceiptViaIframe,
   downloadPosReceiptTxtFile,
   copyPosReceiptText,
@@ -285,7 +293,47 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
     }
   };
 
-  // Test Print directly to printer
+  // State serial printing
+  const [isSerialPrinting, setIsSerialPrinting] = useState(false);
+
+  // Test Print via Direct Web Serial (Mode iPos 4 - Super Cepat & Tajam)
+  const handleTestSerialPrint = async () => {
+    setIsSerialPrinting(true);
+    try {
+      const bytes = generateEscPosBinaryBuffer(effectiveOrder, config, cashierName, {
+        cashReceived: 100000,
+        changeAmount: 0,
+      });
+      const res = await printDirectRawToSerialPort(bytes, config.serialBaudRate || 9600);
+      if (res.success) {
+        setFeedback('⚡ Berhasil! Perintah ESC/POS mentah berhasil dikirim ke printer Epson TM-U220 (Mode iPos 4).');
+      } else {
+        setFeedback(`⚠️ ${res.message}`);
+      }
+      setTimeout(() => setFeedback(null), 5000);
+    } catch (err: any) {
+      setFeedback(`Gagal serial print: ${err.message || 'Error'}`);
+      setTimeout(() => setFeedback(null), 4000);
+    } finally {
+      setIsSerialPrinting(false);
+    }
+  };
+
+  // Connect or Request Serial Port
+  const handleConnectSerialPort = async () => {
+    try {
+      const port = await getOrRequestSerialPort();
+      if (port) {
+        setFeedback('🔌 Port Serial Epson TM-U220 berhasil terhubung dan siap digunakan!');
+        setTimeout(() => setFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      setFeedback(`Gagal menghubungkan serial port: ${err.message || 'Dibatalkan'}`);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  // Test Print via Windows Driver / Browser Spooler
   const handleTestPrint = async () => {
     setIsPrinting(true);
     try {
@@ -294,6 +342,8 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
         changeAmount: 0,
       });
       await printPosReceiptViaIframe(html);
+      setFeedback('🖨️ Dialog cetak Windows dibuka dengan mode Monokrom Anti-Blur.');
+      setTimeout(() => setFeedback(null), 3500);
     } finally {
       setIsPrinting(false);
     }
@@ -496,7 +546,116 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   </span>
                 </div>
 
+                {/* PENJELASAN TEKNIS: MENGAPA IPOS 4 SANGAT JELAS & CEPAT */}
+                <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200/80 text-xs text-stone-800 space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500 text-stone-950 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs font-black">
+                      <Zap className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <h5 className="font-extrabold text-stone-900 text-xs sm:text-sm">
+                        Mengapa hasil cetak program iPos 4 terlihat lebih jelas dan cepat dieksekusi oleh Epson TM-U220?
+                      </h5>
+                      <p className="text-stone-600 mt-1 leading-relaxed text-[11.5px]">
+                        <strong>1. Kecepatan Kilat (~1.5 Detik):</strong> Program desktop seperti <em>iPos 4</em> mengirim teks mentah (ESC/POS) langsung ke chip ROM printer TM-U220. Kepala jarum mencetak bolak-balik (bi-directional) 4.7 baris/detik tanpa proses rendering grafis sama sekali.<br />
+                        <strong>2. Huruf Pekat 100% Tanpa Blur:</strong> Menggunakan <em>Font A 9×9 dot-pin bawaan printer</em>. Setiap jarum memukul pita dengan gaya maksimal. Tidak ada efek anti-aliasing (abu-abu halus) dari browser yang membuat jarum printer bergerak lambat dan menghasilkan huruf berbayang/samar.<br />
+                        <strong>3. Rekomendasi:</strong> Pilih <strong>Mode iPos 4 (Direct ESC/POS Web Serial)</strong> di bawah ini untuk hasil yang 100% sama dengan program kasir desktop!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  {/* Mode Cetak Utama Kasir */}
+                  <div className="sm:col-span-2 p-3.5 bg-stone-50 rounded-2xl border border-stone-200">
+                    <label className="block font-black text-stone-800 text-xs mb-2">
+                      Mode Eksekusi Cetak Utama Kasir:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setConfig({ ...config, printExecutionMode: 'escpos_serial' })}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          (config.printExecutionMode || 'escpos_serial') === 'escpos_serial'
+                            ? 'bg-amber-400/15 border-amber-500 text-stone-900 shadow-2xs ring-2 ring-amber-400/40'
+                            : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 font-black text-xs text-amber-900">
+                          <Zap className="w-4 h-4 text-amber-600 fill-amber-500" />
+                          <span>Mode iPos 4: Direct ESC/POS Serial</span>
+                          <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold uppercase">
+                            Super Cepat
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-stone-600 mt-1 leading-snug">
+                          Kirim byte mentah langsung ke port COM/USB printer via Web Serial API. Eksekusi kilat ~1.5 detik & ketajaman jarum 100% murni tanpa distorsi.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setConfig({ ...config, printExecutionMode: 'browser_crisp' })}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          config.printExecutionMode === 'browser_crisp'
+                            ? 'bg-amber-400/15 border-amber-500 text-stone-900 shadow-2xs ring-2 ring-amber-400/40'
+                            : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 font-black text-xs text-stone-900">
+                          <Printer className="w-4 h-4 text-stone-600" />
+                          <span>Mode Driver Windows (Anti-Blur)</span>
+                        </div>
+                        <p className="text-[10.5px] text-stone-600 mt-1 leading-snug">
+                          Mencetak melalui dialog peramban / Spooler Windows APD dengan CSS zero-antialiasing monokrom hitam pekat agar tidak blur.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Format Tata Letak Struk */}
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">
+                      Gaya Format Tata Letak Struk:
+                    </label>
+                    <select
+                      value={config.receiptLayoutFormat || 'ipos4'}
+                      onChange={e => setConfig({ ...config, receiptLayoutFormat: e.target.value as any })}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-stone-50 font-bold text-stone-900 focus:bg-white"
+                    >
+                      <option value="ipos4">Format iPos 4 (40 Kolom Klasik - Sangat Jelas)</option>
+                      <option value="standard">Format Standar Tabular</option>
+                    </select>
+                    <span className="text-[10px] text-stone-500 mt-1 block">
+                      *Format iPos 4 menyusun nama barang dan rincian harga berindentasi rapi sesuai software kasir retail
+                    </span>
+                  </div>
+
+                  {/* Serial Baud Rate */}
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">
+                      Baud Rate Port Serial TM-U220:
+                    </label>
+                    <div className="flex gap-2">
+                      {[9600, 19200, 38400].map(rate => (
+                        <button
+                          key={rate}
+                          type="button"
+                          onClick={() => setConfig({ ...config, serialBaudRate: rate as any })}
+                          className={`flex-1 py-2 rounded-xl text-xs font-black border transition-all ${
+                            (config.serialBaudRate || 9600) === rate
+                              ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
+                              : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                          }`}
+                        >
+                          {rate} {rate === 9600 ? '(Default)' : ''}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-stone-500 mt-1 block">
+                      *DIP switch pabrik Epson TM-U220 umumnya disetel pada 9600 bps
+                    </span>
+                  </div>
                   {/* Pilihan Jenis Printer */}
                   <div>
                     <label className="block font-bold text-stone-700 mb-1">
@@ -1220,33 +1379,48 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
 
             {/* ACTION BAR: BUTTONS */}
             <div className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 1. Uji Cetak Direct ESC/POS (Mode iPos 4) */}
+                <button
+                  type="button"
+                  onClick={handleTestSerialPrint}
+                  disabled={isSerialPrinting}
+                  className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 active:scale-95 cursor-pointer"
+                  title="Kirim cetak teks mentah ESC/POS langsung ke port Serial/USB printer Epson TM-U220 (Super Cepat & 100% Tajam)"
+                >
+                  <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                  <span>{isSerialPrinting ? 'Mengirim Serial...' : '⚡ Uji Cetak ESC/POS (Mode iPos 4)'}</span>
+                </button>
+
+                {/* 2. Uji Cetak Driver Windows (Zero Antialiasing) */}
                 <button
                   type="button"
                   onClick={handleTestPrint}
                   disabled={isPrinting}
-                  className="px-4 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-xs disabled:opacity-50"
-                  title="Kirim uji cetak langsung ke printer Epson TM-U220"
+                  className="px-3 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Kirim uji cetak via dialog printer Windows Spooler dengan format Monokrom Anti-Blur"
                 >
-                  <Printer className="w-4 h-4 text-amber-400" />
-                  <span>{isPrinting ? 'Mencetak...' : 'Uji Cetak 70mm'}</span>
+                  <Printer className="w-4 h-4 text-stone-300" />
+                  <span>{isPrinting ? 'Membuka...' : '🖨️ Uji Cetak Windows'}</span>
                 </button>
 
+                {/* 3. Salin RAW */}
                 <button
                   type="button"
                   onClick={handleCopyRaw}
-                  className="px-3 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center gap-1.5 transition-colors"
-                  title="Salin teks ASCII 40 kolom"
+                  className="px-3 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Salin teks ASCII 40 kolom iPos 4 ke clipboard"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Salin RAW</span>
                 </button>
 
+                {/* 4. Unduh .TXT */}
                 <button
                   type="button"
                   onClick={handleDownloadTxt}
-                  className="px-3 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center gap-1.5 transition-colors"
-                  title="Unduh file .txt untuk serial spooler"
+                  className="px-3 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Unduh file .txt untuk batch print atau serial spooler"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Unduh .TXT</span>

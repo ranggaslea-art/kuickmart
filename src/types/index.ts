@@ -620,6 +620,9 @@ export interface ReceiptInfo {
   fontBoldness?: 'normal' | 'semibold' | 'bold' | 'extra_bold'; // Ketebalan huruf untuk ketajaman print fisik
   lineSpacing?: 'compact' | 'normal' | 'relaxed'; // Kerapatan jarak antar baris
   headerCustomNote?: string; // Teks catatan khusus di bawah header
+  printExecutionMode?: 'escpos_serial' | 'browser_crisp'; // Mode eksekusi print: Direct Raw ESC/POS Serial (Super cepat & tajam seperti iPos 4) atau Driver Windows Browser
+  receiptLayoutFormat?: 'ipos4' | 'standard'; // Gaya format struk: Format iPos 4 (40 kolom klasik) atau Format Standar
+  serialBaudRate?: 9600 | 19200 | 38400 | 115200; // Baud rate port serial Epson TM-U220 (default 9600)
 }
 
 export type PromoType = 'banner' | 'flash_sale' | 'announcement_bar' | 'perk_card';
