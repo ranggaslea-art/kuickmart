@@ -27,10 +27,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const unitOptions = useMemo(() => getProductUnitOptions(product), [product]);
   const [selectedUnitIdx, setSelectedUnitIdx] = useState(0);
-  const selectedOption = unitOptions[selectedUnitIdx] || unitOptions[0];
+  const selectedOption = unitOptions[selectedUnitIdx] || unitOptions[0] || {
+    unitName: product.unit || 'Pcs',
+    price: product.price || 0,
+    originalPrice: product.originalPrice,
+    multiplier: 1,
+    breakdownText: '',
+    isBase: true,
+    barcode: product.barcode,
+  };
 
-  const currentPrice = selectedOption.price;
-  const currentOriginalPrice = selectedOption.originalPrice;
+  const currentPrice = selectedOption.price || product.price || 0;
+  const currentOriginalPrice = selectedOption.originalPrice || product.originalPrice;
   const pointsEarned = Math.round(currentPrice * 0.01);
 
   const [imgSrc, setImgSrc] = useState<string>(() => formatImageUrl(product.image));

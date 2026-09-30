@@ -13,7 +13,11 @@ export function computeConversionChains(
   baseUnit: string,
   conversions: ProductUnitConversion[]
 ): ProductUnitConversion[] {
-  if (!conversions || conversions.length === 0) return [];
+  if (!conversions || !Array.isArray(conversions) || conversions.length === 0) return [];
+
+  // Filter only valid entries
+  const validConversions = conversions.filter(c => c && typeof c.unitName === 'string' && c.unitName.trim().length > 0);
+  if (validConversions.length === 0) return [];
 
   const cleanBase = (baseUnit || 'pcs').trim();
   const result: ProductUnitConversion[] = [];
@@ -25,12 +29,12 @@ export function computeConversionChains(
     item: { containsQty: number | string; containsUnit: string; unitName: string },
     currentChain: string[] = []
   ): { multiplier: number; steps: string[] } {
-    const parentUnit = item.containsUnit.trim();
+    const parentUnit = (item.containsUnit || '').trim();
     const rawQty = Number(item.containsQty);
     const qty = !isNaN(rawQty) && rawQty > 0 ? rawQty : 1;
 
     // Direct conversion to base unit
-    if (parentUnit.toLowerCase() === cleanBase.toLowerCase()) {
+    if (!parentUnit || parentUnit.toLowerCase() === cleanBase.toLowerCase()) {
       return {
         multiplier: qty,
         steps: [`${qty} ${cleanBase}`],
@@ -38,14 +42,14 @@ export function computeConversionChains(
     }
 
     // Find if parentUnit matches another conversion in the list
-    const parentConversion = conversions.find(
-      (c) => c.unitName.trim().toLowerCase() === parentUnit.toLowerCase()
+    const parentConversion = validConversions.find(
+      (c) => (c.unitName || '').trim().toLowerCase() === parentUnit.toLowerCase()
     );
 
-    if (parentConversion && !visited.has(parentConversion.unitName.toLowerCase())) {
-      visited.add(parentConversion.unitName.toLowerCase());
+    if (parentConversion && !visited.has((parentConversion.unitName || '').toLowerCase())) {
+      visited.add((parentConversion.unitName || '').toLowerCase());
       const parentResolved = resolveMultiplier(parentConversion, [...currentChain, `${qty} ${parentUnit}`]);
-      visited.delete(parentConversion.unitName.toLowerCase());
+      visited.delete((parentConversion.unitName || '').toLowerCase());
 
       return {
         multiplier: qty * parentResolved.multiplier,
@@ -60,12 +64,13 @@ export function computeConversionChains(
     };
   }
 
-  for (const conv of conversions) {
+  for (const conv of validConversions) {
     visited.clear();
-    visited.add(conv.unitName.toLowerCase());
+    const safeUnitName = (conv.unitName || '').trim();
+    visited.add(safeUnitName.toLowerCase());
     const resolved = resolveMultiplier(conv);
 
-    let formula = `1 ${conv.unitName} = `;
+    let formula = `1 ${safeUnitName} = `;
     if (resolved.steps.length === 1) {
       formula += resolved.steps[0];
     } else {

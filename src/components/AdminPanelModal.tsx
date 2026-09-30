@@ -603,19 +603,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_categories', currentSlug));
-      return saved ? JSON.parse(saved) : CATEGORIES;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return CATEGORIES;
     } catch {
       return CATEGORIES;
     }
   });
-  const activeCategories = propCategories || internalCategories;
+  const activeCategories = useMemo(() => {
+    if (Array.isArray(propCategories) && propCategories.length > 0) return propCategories;
+    if (Array.isArray(internalCategories) && internalCategories.length > 0) return internalCategories;
+    return CATEGORIES;
+  }, [propCategories, internalCategories]);
+
   const handleUpdateCategories = (newCategories: Category[]) => {
-    if (onUpdateCategories) onUpdateCategories(newCategories);
-    setInternalCategories(newCategories);
+    const safeList = Array.isArray(newCategories) ? newCategories : CATEGORIES;
+    if (onUpdateCategories) onUpdateCategories(safeList);
+    setInternalCategories(safeList);
     try {
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
-      localStorage.setItem(key, JSON.stringify(newCategories));
-      saveTenantDataToCloud('categories', newCategories, currentSlug);
+      localStorage.setItem(key, JSON.stringify(safeList));
+      saveTenantDataToCloud('categories', safeList, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -626,19 +636,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_brands', currentSlug));
-      return saved ? JSON.parse(saved) : INITIAL_BRANDS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return INITIAL_BRANDS;
     } catch {
       return INITIAL_BRANDS;
     }
   });
-  const activeBrands = propBrands || internalBrands;
+  const activeBrands = useMemo(() => {
+    if (Array.isArray(propBrands) && propBrands.length > 0) return propBrands;
+    if (Array.isArray(internalBrands) && internalBrands.length > 0) return internalBrands;
+    return INITIAL_BRANDS;
+  }, [propBrands, internalBrands]);
+
   const handleUpdateBrands = (newBrands: BrandItem[]) => {
-    if (onUpdateBrands) onUpdateBrands(newBrands);
-    setInternalBrands(newBrands);
+    const safeList = Array.isArray(newBrands) ? newBrands : INITIAL_BRANDS;
+    if (onUpdateBrands) onUpdateBrands(safeList);
+    setInternalBrands(safeList);
     try {
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
-      localStorage.setItem(key, JSON.stringify(newBrands));
-      saveTenantDataToCloud('brands', newBrands, currentSlug);
+      localStorage.setItem(key, JSON.stringify(safeList));
+      saveTenantDataToCloud('brands', safeList, currentSlug);
     } catch (e) {
       console.error(e);
     }
@@ -1173,7 +1193,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setEditingProduct(null);
     setFormName('');
     setFormBrand('');
-    setFormCategory('snack-biscuit');
+    const defaultCat = activeCategories.find(c => c && c.slug && c.slug !== 'all')?.slug || 'sembako';
+    setFormCategory(defaultCat);
     setFormPrice(15000);
     setFormOriginalPrice(15000);
     setFormCostPrice(12000);
@@ -1189,13 +1210,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
   const handleOpenEdit = (p: Product) => {
     setEditingProduct(p);
-    setFormName(p.name);
-    setFormBrand(p.brand);
-    setFormCategory(p.category);
-    setFormPrice(p.price);
-    setFormOriginalPrice(p.originalPrice || p.price);
-    setFormCostPrice(p.costPrice !== undefined ? p.costPrice : (p.price ? Math.round(p.price * 0.8) : 10000));
-    setFormUnit(p.unit);
+    setFormName(p.name || '');
+    setFormBrand(p.brand || '');
+    const matchedCat = activeCategories.find(c => c && (c.slug === p.category || c.id === p.category));
+    setFormCategory(matchedCat ? (matchedCat.slug || matchedCat.id) : (p.category || 'sembako'));
+    setFormPrice(p.price || 0);
+    setFormOriginalPrice(p.originalPrice || p.price || 0);
+    setFormCostPrice(typeof p.costPrice === 'number' && !isNaN(p.costPrice) ? p.costPrice : (p.price ? Math.round(p.price * 0.8) : 10000));
+    setFormUnit(p.unit || 'Pcs');
     setFormStock(p.stock);
     setFormBarcode(p.barcode);
     setFormImage(p.image);
@@ -2782,7 +2804,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                       />
                       <datalist id="available-brands-list">
                         {activeBrands.map(b => (
-                          <option key={b.id} value={b.name} />
+                          <option key={b.id || b.name} value={b.name} />
                         ))}
                       </datalist>
                     </div>
@@ -2805,8 +2827,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         onChange={e => setFormCategory(e.target.value)}
                         className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-blue-100"
                       >
-                        {activeCategories.map(cat => (
-                          <option key={cat.id} value={cat.id}>
+                        {activeCategories.filter(cat => cat && cat.slug !== 'all').map(cat => (
+                          <option key={cat.id || cat.slug} value={cat.slug || cat.id}>
                             {cat.name}
                           </option>
                         ))}
@@ -3352,10 +3374,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         </thead>
                         <tbody className="divide-y divide-stone-100">
                           {filteredCatalog.map(p => {
-                            const catObj = activeCategories.find(c => c.id === p.category);
-                            const catLabel = catObj?.name || p.category;
-                            const hpp = p.costPrice !== undefined ? p.costPrice : null;
-                            const marginRp = hpp !== null && p.price ? p.price - hpp : null;
+                            const catObj = activeCategories.find(c => c && (c.slug === p.category || c.id === p.category));
+                            const catLabel = catObj?.name || p.category || 'Umum';
+                            const hpp = typeof p.costPrice === 'number' && !isNaN(p.costPrice) ? p.costPrice : null;
+                            const marginRp = hpp !== null && typeof p.price === 'number' ? p.price - hpp : null;
                             const marginPct = marginRp !== null && p.price > 0 ? Math.round((marginRp / p.price) * 100) : null;
 
                             return (
@@ -3415,7 +3437,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                   {marginRp !== null && marginPct !== null && (
                                     <div className="text-[10px] font-semibold flex items-center gap-1 mt-0.5">
                                       <span className={marginRp >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                                        +{formatRupiah(marginRp)} ({marginPct}%)
+                                        {marginRp >= 0 ? '+' : ''}{formatRupiah(marginRp)} ({marginPct}%)
                                       </span>
                                     </div>
                                   )}

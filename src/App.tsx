@@ -280,7 +280,11 @@ export default function App() {
     try {
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
-      return saved ? JSON.parse(saved) : CATEGORIES;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return CATEGORIES;
     } catch {
       return CATEGORIES;
     }
@@ -290,7 +294,11 @@ export default function App() {
     try {
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
-      return saved ? JSON.parse(saved) : INITIAL_BRANDS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return INITIAL_BRANDS;
     } catch {
       return INITIAL_BRANDS;
     }
@@ -1239,34 +1247,42 @@ export default function App() {
   }, [products, currentSlug]);
 
   // Count products by category
-  const productCountByCategory = categories.reduce((acc, cat) => {
+  const productCountByCategory = (categories || []).reduce((acc, cat) => {
+    if (!cat || !cat.slug) return acc;
     if (cat.slug === 'all') {
-      acc[cat.slug] = products.length;
+      acc[cat.slug] = (products || []).length;
     } else if (cat.slug === 'jsm-promo') {
-      acc[cat.slug] = products.filter((p) => p.tags?.includes('JSM') || (p.discountPercent && p.discountPercent > 0)).length;
+      acc[cat.slug] = (products || []).filter((p) => p && (p.tags?.includes('JSM') || ((p.discountPercent || 0) > 0))).length;
     } else {
-      acc[cat.slug] = products.filter((p) => p.category === cat.slug).length;
+      acc[cat.slug] = (products || []).filter((p) => p && (p.category === cat.slug || p.category === cat.id || p.category === `cat_${cat.slug}` || (p.category && p.category.replace('cat_', '') === cat.slug))).length;
     }
     return acc;
   }, {} as Record<string, number>);
 
   // Filter & Sort Products
-  const filteredProducts = products.filter((p) => {
+  const filteredProducts = (products || []).filter((p) => {
+    if (!p) return false;
+
     // 1. Search Query
     if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
       const matchSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.barcode.includes(searchQuery);
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.brand || '').toLowerCase().includes(q) ||
+        (p.barcode || '').includes(searchQuery);
       if (!matchSearch) return false;
     }
 
     // 2. Category Filter
     if (selectedCategory === 'jsm-promo') {
-      const isJsm = p.tags?.includes('JSM') || (p.discountPercent && p.discountPercent > 0);
+      const isJsm = p.tags?.includes('JSM') || ((p.discountPercent || 0) > 0);
       if (!isJsm) return false;
     } else if (selectedCategory !== 'all') {
-      if (p.category !== selectedCategory) return false;
+      const matchCat =
+        p.category === selectedCategory ||
+        p.category === `cat_${selectedCategory}` ||
+        (p.category && p.category.replace('cat_', '') === selectedCategory);
+      if (!matchCat) return false;
     }
 
     // 3. Tag Filter

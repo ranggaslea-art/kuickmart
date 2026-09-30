@@ -41,6 +41,20 @@ export class ErrorBoundary extends React.Component<Props, State> {
       localStorage.removeItem('toko_online_admin_user');
       localStorage.removeItem('kuickmart_admin_user');
       localStorage.removeItem('pos_current_user');
+      // Clean potential corrupted keys
+      ['toko_online_categories', 'kuickmart_categories', 'toko_online_brands', 'kuickmart_brands'].forEach(prefix => {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.includes(prefix)) {
+            try {
+              const val = localStorage.getItem(k);
+              if (val && (!val.startsWith('[') || val === 'null')) {
+                localStorage.removeItem(k);
+              }
+            } catch {}
+          }
+        }
+      });
     } catch (e) {
       console.error(e);
     }

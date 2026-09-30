@@ -90,14 +90,19 @@ export const COLOR_OPTIONS = [
 ];
 
 export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
-  categories,
+  categories = [],
   onUpdateCategories,
-  brands,
+  brands = [],
   onUpdateBrands,
-  products,
+  products = [],
   onUpdateProducts,
   canEdit = true,
 }) => {
+  // Safe array guarantees
+  const safeCategories = useMemo(() => Array.isArray(categories) ? categories.filter(Boolean) : [], [categories]);
+  const safeBrands = useMemo(() => Array.isArray(brands) ? brands.filter(Boolean) : [], [brands]);
+  const safeProducts = useMemo(() => Array.isArray(products) ? products.filter(Boolean) : [], [products]);
+
   // Main subtab: 'categories' | 'brands'
   const [activeSubTab, setActiveSubTab] = useState<'categories' | 'brands'>('categories');
 
@@ -144,8 +149,9 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
   };
 
   // Helper to render Category icon
-  const renderCategoryIcon = (iconName: string, className = "w-4 h-4") => {
-    const found = AVAILABLE_CATEGORY_ICONS.find(i => i.name.toLowerCase() === iconName.toLowerCase());
+  const renderCategoryIcon = (iconName?: string, className = "w-4 h-4") => {
+    const safeIcon = (iconName || 'Store').toLowerCase();
+    const found = AVAILABLE_CATEGORY_ICONS.find(i => i.name.toLowerCase() === safeIcon);
     if (found) {
       const Component = found.component;
       return <Component className={className} />;
@@ -157,19 +163,26 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
   // CATEGORIES LOGIC
   // ----------------------------------------------------
   const filteredCategories = useMemo(() => {
-    return categories.filter(c => 
-      c.name.toLowerCase().includes(catSearch.toLowerCase()) ||
-      c.slug.toLowerCase().includes(catSearch.toLowerCase())
-    );
-  }, [categories, catSearch]);
+    const query = (catSearch || '').trim().toLowerCase();
+    return safeCategories.filter(c => {
+      if (!c) return false;
+      const cName = (c.name || '').toLowerCase();
+      const cSlug = (c.slug || '').toLowerCase();
+      return !query || cName.includes(query) || cSlug.includes(query);
+    });
+  }, [safeCategories, catSearch]);
 
   const productCountPerCategory = useMemo(() => {
     const counts: Record<string, number> = {};
-    products.forEach(p => {
-      counts[p.category] = (counts[p.category] || 0) + 1;
+    safeProducts.forEach(p => {
+      if (p && p.category) {
+        counts[p.category] = (counts[p.category] || 0) + 1;
+        const normalized = p.category.replace('cat_', '');
+        counts[normalized] = (counts[normalized] || 0) + 1;
+      }
     });
     return counts;
-  }, [products]);
+  }, [safeProducts]);
 
   const handleOpenAddCategory = () => {
     setEditingCategory(null);
@@ -184,8 +197,8 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
   const handleOpenEditCategory = (cat: Category) => {
     setEditingCategory(cat);
-    setCatFormName(cat.name);
-    setCatFormSlug(cat.slug);
+    setCatFormName(cat.name || '');
+    setCatFormSlug(cat.slug || '');
     setCatFormIcon(cat.icon || 'Store');
     setCatFormBadge(cat.badge || '');
     setCatFormColor(cat.color || 'blue');
@@ -203,7 +216,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
     const cleanSlug = (catFormSlug.trim() || catFormName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
     
     // Check duplicate slug
-    const duplicate = categories.find(c => c.slug === cleanSlug && (!editingCategory || c.id !== editingCategory.id));
+    const duplicate = safeCategories.find(c => c && c.slug === cleanSlug && (!editingCategory || c.id !== editingCategory.id));
     if (duplicate) {
       triggerFeedback('error', `Slug URL "${cleanSlug}" sudah dipakai oleh kategori lain.`);
       return;
@@ -220,13 +233,13 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         color: catFormColor,
       };
 
-      const newCategories = categories.map(c => c.id === editingCategory.id ? updatedCat : c);
+      const newCategories = safeCategories.map(c => c.id === editingCategory.id ? updatedCat : c);
       onUpdateCategories(newCategories);
 
       // If slug changed and sync requested, update products
       if (oldSlug !== cleanSlug && catSyncProducts && onUpdateProducts) {
-        const updatedProds = products.map(p => {
-          if (p.category === oldSlug) {
+        const updatedProds = safeProducts.map(p => {
+          if (p.category === oldSlug || p.category === `cat_${oldSlug}`) {
             return { ...p, category: cleanSlug };
           }
           return p;
@@ -245,7 +258,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         color: catFormColor,
       };
 
-      onUpdateCategories([...categories, newCat]);
+      onUpdateCategories([...safeCategories, newCat]);
       triggerFeedback('success', `Kategori "${newCat.name}" berhasil ditambahkan.`);
     }
 
@@ -264,14 +277,14 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
     const targetSlug = catDeleteTarget.slug;
     const targetName = catDeleteTarget.name;
 
-    const remainingCategories = categories.filter(c => c.id !== catDeleteTarget.id);
+    const remainingCategories = safeCategories.filter(c => c && c.id !== catDeleteTarget.id);
     onUpdateCategories(remainingCategories);
 
     // Reassign products with this category to fallback ('sembako' or 'all')
     if (onUpdateProducts) {
-      const fallbackCat = remainingCategories.find(c => c.slug === 'sembako')?.slug || remainingCategories[0]?.slug || 'all';
-      const updatedProds = products.map(p => {
-        if (p.category === targetSlug) {
+      const fallbackCat = remainingCategories.find(c => c && c.slug === 'sembako')?.slug || remainingCategories[0]?.slug || 'all';
+      const updatedProds = safeProducts.map(p => {
+        if (p.category === targetSlug || p.category === `cat_${targetSlug}`) {
           return { ...p, category: fallbackCat };
         }
         return p;
@@ -287,33 +300,35 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
   // BRANDS LOGIC
   // ----------------------------------------------------
   const filteredBrands = useMemo(() => {
-    return brands.filter(b => {
-      const matchSearch = 
-        b.name.toLowerCase().includes(brandSearch.toLowerCase()) ||
-        (b.code && b.code.toLowerCase().includes(brandSearch.toLowerCase())) ||
-        (b.description && b.description.toLowerCase().includes(brandSearch.toLowerCase()));
-      
+    const query = (brandSearch || '').trim().toLowerCase();
+    return safeBrands.filter(b => {
+      if (!b) return false;
+      const bName = (b.name || '').toLowerCase();
+      const bCode = (b.code || '').toLowerCase();
+      const bDesc = (b.description || '').toLowerCase();
+      const matchSearch = !query || bName.includes(query) || bCode.includes(query) || bDesc.includes(query);
       const matchCat = brandCategoryFilter === 'all' || b.categorySlug === brandCategoryFilter;
       return matchSearch && matchCat;
     });
-  }, [brands, brandSearch, brandCategoryFilter]);
+  }, [safeBrands, brandSearch, brandCategoryFilter]);
 
   const productCountPerBrand = useMemo(() => {
     const counts: Record<string, number> = {};
-    products.forEach(p => {
-      const brandKey = (p.brand || '').trim().toLowerCase();
+    safeProducts.forEach(p => {
+      const brandKey = (p?.brand || '').trim().toLowerCase();
       if (brandKey) {
         counts[brandKey] = (counts[brandKey] || 0) + 1;
       }
     });
     return counts;
-  }, [products]);
+  }, [safeProducts]);
 
   const handleOpenAddBrand = () => {
     setEditingBrand(null);
     setBrandFormName('');
     setBrandFormCode('');
-    setBrandFormCategorySlug(categories[1]?.slug || 'sembako');
+    const defaultCat = safeCategories.find(c => c && c.slug && c.slug !== 'all')?.slug || 'sembako';
+    setBrandFormCategorySlug(defaultCat);
     setBrandFormDescription('');
     setBrandFormIsActive(true);
     setBrandSyncProducts(true);
@@ -322,7 +337,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
   const handleOpenEditBrand = (brand: BrandItem) => {
     setEditingBrand(brand);
-    setBrandFormName(brand.name);
+    setBrandFormName(brand.name || '');
     setBrandFormCode(brand.code || '');
     setBrandFormCategorySlug(brand.categorySlug || '');
     setBrandFormDescription(brand.description || '');
@@ -342,8 +357,8 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
     const autoCode = (brandFormCode.trim() || trimmedName.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, ''));
 
     // Check duplicate
-    const duplicate = brands.find(b => 
-      b.name.toLowerCase() === trimmedName.toLowerCase() && 
+    const duplicate = safeBrands.find(b => 
+      b && (b.name || '').toLowerCase() === trimmedName.toLowerCase() && 
       (!editingBrand || b.id !== editingBrand.id)
     );
     if (duplicate) {
@@ -352,7 +367,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
     }
 
     if (editingBrand) {
-      const oldName = editingBrand.name;
+      const oldName = editingBrand.name || '';
       const updatedBrand: BrandItem = {
         ...editingBrand,
         name: trimmedName,
@@ -363,12 +378,12 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         updatedAt: new Date().toISOString(),
       };
 
-      const newBrands = brands.map(b => b.id === editingBrand.id ? updatedBrand : b);
+      const newBrands = safeBrands.map(b => b.id === editingBrand.id ? updatedBrand : b);
       onUpdateBrands(newBrands);
 
       // If name changed and sync requested, update products in catalog
       if (oldName.toLowerCase() !== trimmedName.toLowerCase() && brandSyncProducts && onUpdateProducts) {
-        const updatedProds = products.map(p => {
+        const updatedProds = safeProducts.map(p => {
           if ((p.brand || '').trim().toLowerCase() === oldName.trim().toLowerCase()) {
             return { ...p, brand: trimmedName };
           }
@@ -389,7 +404,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         createdAt: new Date().toISOString(),
       };
 
-      onUpdateBrands([...brands, newBrand]);
+      onUpdateBrands([...safeBrands, newBrand]);
       triggerFeedback('success', `Merk "${newBrand.name}" berhasil ditambahkan.`);
     }
 
@@ -399,8 +414,8 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
   const handleConfirmDeleteBrand = () => {
     if (!brandDeleteTarget) return;
 
-    const targetName = brandDeleteTarget.name;
-    const remainingBrands = brands.filter(b => b.id !== brandDeleteTarget.id);
+    const targetName = brandDeleteTarget.name || 'Merk';
+    const remainingBrands = safeBrands.filter(b => b && b.id !== brandDeleteTarget.id);
     onUpdateBrands(remainingBrands);
 
     triggerFeedback('success', `Merk "${targetName}" berhasil dihapus.`);
@@ -409,19 +424,21 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
   // One-click auto-extract all brands from current catalog
   const handleAutoExtractBrands = () => {
-    const existingBrandNames = new Set(brands.map(b => b.name.trim().toLowerCase()));
+    const existingBrandNames = new Set(
+      safeBrands.map(b => (b?.name || '').trim().toLowerCase()).filter(Boolean)
+    );
     const newExtracted: BrandItem[] = [];
 
-    products.forEach(p => {
-      const bName = (p.brand || '').trim();
+    safeProducts.forEach(p => {
+      const bName = (p?.brand || '').trim();
       if (bName && !existingBrandNames.has(bName.toLowerCase())) {
         existingBrandNames.add(bName.toLowerCase());
         newExtracted.push({
           id: `brd_ext_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
           name: bName,
           code: bName.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, ''),
-          categorySlug: p.category,
-          description: `Merk diekstrak otomatis dari produk: ${p.name}`,
+          categorySlug: p.category || undefined,
+          description: `Merk diekstrak otomatis dari produk: ${p.name || bName}`,
           isActive: true,
           createdAt: new Date().toISOString(),
         });
@@ -433,7 +450,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
       return;
     }
 
-    onUpdateBrands([...brands, ...newExtracted]);
+    onUpdateBrands([...safeBrands, ...newExtracted]);
     triggerFeedback('success', `Berhasil menemukan & mendaftarkan ${newExtracted.length} merk baru dari katalog.`);
   };
 
@@ -500,7 +517,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
                 activeSubTab === 'categories' ? 'bg-blue-100 text-blue-700' : 'bg-stone-200 text-stone-600'
               }`}>
-                {categories.length}
+                {safeCategories.length}
               </span>
             </button>
 
@@ -518,7 +535,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
                 activeSubTab === 'brands' ? 'bg-purple-100 text-purple-700' : 'bg-stone-200 text-stone-600'
               }`}>
-                {brands.length}
+                {safeBrands.length}
               </span>
             </button>
           </div>
@@ -696,8 +713,8 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
                     className="px-2.5 py-2 border border-stone-300 rounded-xl bg-stone-50 text-xs font-semibold text-stone-700"
                   >
                     <option value="all">Semua Kategori</option>
-                    {categories.filter(c => c.slug !== 'all').map(c => (
-                      <option key={c.id} value={c.slug}>{c.name}</option>
+                    {safeCategories.filter(c => c && c.slug !== 'all').map(c => (
+                      <option key={c.id || c.slug} value={c.slug}>{c.name}</option>
                     ))}
                   </select>
                 </div>
@@ -751,18 +768,19 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
                       </tr>
                     ) : (
                       filteredBrands.map(b => {
-                        const linkedCount = productCountPerBrand[b.name.trim().toLowerCase()] || 0;
-                        const linkedCat = categories.find(c => c.slug === b.categorySlug);
+                        const brandKey = (b?.name || '').trim().toLowerCase();
+                        const linkedCount = brandKey ? (productCountPerBrand[brandKey] || 0) : 0;
+                        const linkedCat = safeCategories.find(c => c && c.slug === b.categorySlug);
 
                         return (
-                          <tr key={b.id} className="hover:bg-purple-50/40 transition-colors">
+                          <tr key={b.id || brandKey} className="hover:bg-purple-50/40 transition-colors">
                             <td className="p-3 font-mono font-bold text-stone-600">
                               <span className="bg-stone-100 px-2 py-0.5 rounded border border-stone-200 text-[10px]">
                                 {b.code || '---'}
                               </span>
                             </td>
                             <td className="p-3 font-extrabold text-stone-900">
-                              {b.name}
+                              {b.name || 'Tanpa Nama'}
                             </td>
                             <td className="p-3">
                               {linkedCat ? (
@@ -1047,8 +1065,8 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
                     className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium"
                   >
                     <option value="">Umum (Lintas Kategori)</option>
-                    {categories.filter(c => c.slug !== 'all').map(c => (
-                      <option key={c.id} value={c.slug}>{c.name}</option>
+                    {safeCategories.filter(c => c && c.slug !== 'all').map(c => (
+                      <option key={c.id || c.slug} value={c.slug}>{c.name}</option>
                     ))}
                   </select>
                 </div>
@@ -1176,14 +1194,19 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
               </div>
             </div>
 
-            {productCountPerBrand[brandDeleteTarget.name.trim().toLowerCase()] > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong>Informasi:</strong> Ada {productCountPerBrand[brandDeleteTarget.name.trim().toLowerCase()]} produk yang saat ini menggunakan merk ini di katalog.
+            {(() => {
+              const brandKey = (brandDeleteTarget.name || '').trim().toLowerCase();
+              const count = brandKey ? (productCountPerBrand[brandKey] || 0) : 0;
+              if (count <= 0) return null;
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Informasi:</strong> Ada {count} produk yang saat ini menggunakan merk ini di katalog.
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 text-xs font-bold">
               <button

@@ -41,17 +41,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   const unitOptions = useMemo(() => getProductUnitOptions(product), [product]);
   const [selectedUnitIndex, setSelectedUnitIndex] = useState<number>(0);
-  const selectedOption = unitOptions[selectedUnitIndex] || unitOptions[0];
+  const selectedOption = unitOptions[selectedUnitIndex] || unitOptions[0] || {
+    unitName: product.unit || 'Pcs',
+    price: product.price || 0,
+    originalPrice: product.originalPrice,
+    multiplier: 1,
+    breakdownText: '',
+    isBase: true,
+    barcode: product.barcode,
+  };
 
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [isAdded, setIsAdded] = useState(false);
 
   // Maximum allowed order based on base stock converted to this unit
-  const maxStockForSelectedUnit = Math.max(1, Math.floor(product.stock / (selectedOption.multiplier || 1)));
+  const maxStockForSelectedUnit = Math.max(1, Math.floor((product.stock || 0) / (selectedOption.multiplier || 1)));
 
-  const currentPrice = selectedOption.price;
-  const currentOriginalPrice = selectedOption.originalPrice;
+  const currentPrice = selectedOption.price || product.price || 0;
+  const currentOriginalPrice = selectedOption.originalPrice || product.originalPrice;
   const pointsEarned = Math.round(currentPrice * 0.01 * quantity);
 
   const [imgSrc, setImgSrc] = useState<string>(() => formatImageUrl(product.image));
