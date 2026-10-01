@@ -274,6 +274,10 @@ export function generateDotMatrixReceiptHtml(
 <head>
   <meta charset="UTF-8">
   <title>Struk POS - ${order.orderNumber}</title>
+  <!-- Font Monospace Tajam & Pekat -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@600;700;800;900&family=Roboto+Mono:wght@500;600;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     @page {
       size: ${rollWidthMm}mm auto;
@@ -285,6 +289,7 @@ export function generateDotMatrixReceiptHtml(
       padding: 0;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      color-adjust: exact !important;
     }
     html, body {
       margin: 0;
@@ -293,13 +298,15 @@ export function generateDotMatrixReceiptHtml(
       max-width: ${rollWidthMm}mm;
       background: #ffffff !important;
       color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
       font-family: ${fontCss};
       font-size: ${fontSizes.base};
       line-height: ${lineSpacingVal};
       font-weight: ${weightCss};
-      text-rendering: geometricPrecision !important;
-      -webkit-font-smoothing: none !important;
-      -moz-osx-font-smoothing: unset !important;
+      text-rendering: optimizeLegibility !important;
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      image-rendering: pixelated;
     }
     .receipt-container {
       width: ${printWidthMm}mm;
@@ -310,6 +317,9 @@ export function generateDotMatrixReceiptHtml(
       white-space: normal;
       word-break: break-word;
       line-height: ${lineSpacingVal};
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
+      font-weight: ${weightCss};
     }
     .text-center { text-align: center; }
     .text-right { text-align: right; }
@@ -568,7 +578,7 @@ export function printPosReceiptViaIframe(htmlContent: string): Promise<boolean> 
       doc.write(htmlContent);
       doc.close();
 
-      setTimeout(() => {
+      const runPrint = () => {
         try {
           iframe.contentWindow?.focus();
           iframe.contentWindow?.print();
@@ -577,7 +587,20 @@ export function printPosReceiptViaIframe(htmlContent: string): Promise<boolean> 
           console.error('Gagal memicu window.print() iframe:', e);
           resolve(false);
         }
-      }, 350);
+      };
+
+      const docObj = iframe.contentDocument;
+      if (docObj && 'fonts' in docObj) {
+        docObj.fonts.ready
+          .then(() => {
+            setTimeout(runPrint, 150);
+          })
+          .catch(() => {
+            setTimeout(runPrint, 300);
+          });
+      } else {
+        setTimeout(runPrint, 300);
+      }
     } catch (err) {
       console.error('Error saat mencetak via iframe:', err);
       resolve(false);

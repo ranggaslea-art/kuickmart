@@ -57,6 +57,9 @@ export function generateEscPosBinaryBuffer(
   // 1. Initialize Printer
   addBytes(ESC, 0x40); // ESC @ (Initialize printer)
 
+  // Double-strike mode (ESC G 1): Jarum dot-matrix memukul 2x per titik, menghasilkan cetakan hitam pekat dan bebas kabur
+  addBytes(ESC, 0x47, 0x01); // ESC G 1 (Double Strike ON)
+
   // 2. Select Font A (9x9, 40 cols) or Font B (7x9, 33 cols)
   if (cols === 33) {
     addBytes(ESC, 0x4d, 0x01); // ESC M 1 (Font B)
@@ -342,19 +345,21 @@ export function printViaRawBt(rawText: string): void {
  */
 export function getReceiptFontFamilyCss(family?: string): string {
   switch (family) {
+    case 'courier':
+      return "'Courier New', Courier, 'Liberation Mono', monospace";
+    case 'consolas':
+      return "Consolas, 'Courier New', Courier, monospace";
     case 'roboto_mono':
       return "'Roboto Mono', 'Courier New', Courier, monospace";
-    case 'consolas':
-      return "Consolas, 'Lucida Console', Monaco, monospace";
-    case 'space_mono':
-      return "'Space Mono', 'Courier New', monospace";
     case 'dot_matrix':
-      return "'Lucida Console', 'Courier New', Monaco, monospace";
+      return "'Lucida Console', 'Courier New', Consolas, monospace";
+    case 'space_mono':
+      return "'Space Mono', Consolas, monospace";
     case 'inconsolata':
-      return "Inconsolata, 'Courier New', monospace";
-    case 'courier':
+      return "Inconsolata, Consolas, monospace";
     default:
-      return "'Courier New', Courier, 'Lucida Console', Monaco, monospace";
+      // Font monospaced bawaan OS kasir paling tajam dan jelas tanpa blur/antialiasing berlebih
+      return "'Courier New', Consolas, 'Lucida Console', Courier, monospace";
   }
 }
 
@@ -364,40 +369,41 @@ export function getReceiptFontFamilyCss(family?: string): string {
 export function getReceiptFontWeightCss(boldness?: string): number {
   switch (boldness) {
     case 'normal':
-      return 500;
-    case 'semibold':
       return 600;
+    case 'semibold':
+      return 700;
     case 'extra_bold':
       return 900;
     case 'bold':
     default:
-      return 700;
+      return 800; // Bobot 800 memastikan jarum printer menghasilkan benturan solid tebal hitam pekat
   }
 }
 
 /**
  * Helper untuk mendapatkan ukuran font base struk
  */
-export function getReceiptFontSizeCss(size?: string): { base: string; brand: string; meta: string } {
+export function getReceiptFontSizeCss(size?: string): { base: string; brand: string; meta: string; footer: string } {
   switch (size) {
     case 'compact':
-      return { base: '10px', brand: '12.5px', meta: '9.5px' };
+      return { base: '11px', brand: '13px', meta: '10.5px', footer: '10px' };
     case 'large':
-      return { base: '12px', brand: '14.5px', meta: '11px' };
+      return { base: '13px', brand: '15px', meta: '12px', footer: '11.5px' };
     case 'normal':
     default:
-      return { base: '11px', brand: '13.5px', meta: '10.5px' };
+      return { base: '12px', brand: '14px', meta: '11px', footer: '10.5px' };
   }
 }
 
 /**
  * Menghasilkan Dokumen HTML Super Tajam & Rapat (Format Kasir POS / iPos 4)
  * Didesain khusus untuk printer Dot Matrix (Epson TM-U220) dan Thermal POS:
- * 1. Menghilangkan jarak renggang berlebihan antar baris (white-space: normal & table layout)
+ * 1. Mode Huruf Pekat Maksimal (Double-Strike Simulation via text-stroke & text-shadow):
+ *    Mencegah hasil print kabur/samar pada pita ribbon ERC-38
  * 2. Menggunakan margin/padding 0 dengan line-height rapat dan konsisten
- * 3. Memberikan safe left padding 3.5mm agar karakter di tepi kiri tidak terpotong pisau/cutter printer
+ * 3. Safe left padding 3.5mm agar teks tepi kiri tidak terpotong pisau
  * 4. Mendukung penyesuaian lebar kertas (58mm, 70mm TM-U220, 80mm)
- * 5. Tinta monokrom kontras tinggi #000000 murni tanpa blur
+ * 5. Tinta monokrom kontras tinggi 100% #000000 murni (CMYK 100% K)
  */
 export function generateCrispDotMatrixReceiptHtml(
   order: Order,
@@ -448,6 +454,10 @@ export function generateCrispDotMatrixReceiptHtml(
 <head>
   <meta charset="UTF-8">
   <title>Struk POS - ${order.orderNumber}</title>
+  <!-- Font Monospace Tajam & Pekat -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@600;700;800;900&family=Roboto+Mono:wght@500;600;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     @page {
       size: ${rollWidthMm}mm auto;
@@ -459,6 +469,7 @@ export function generateCrispDotMatrixReceiptHtml(
       padding: 0;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      color-adjust: exact !important;
     }
     html, body {
       margin: 0;
@@ -467,13 +478,15 @@ export function generateCrispDotMatrixReceiptHtml(
       max-width: ${rollWidthMm}mm;
       background: #ffffff !important;
       color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
       font-family: ${fontCss};
       font-size: ${fontSizes.base};
       line-height: ${lineSpacingVal};
       font-weight: ${weightCss};
-      text-rendering: geometricPrecision !important;
-      -webkit-font-smoothing: none !important;
-      -moz-osx-font-smoothing: unset !important;
+      text-rendering: optimizeLegibility !important;
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      image-rendering: pixelated;
     }
     .tmu220-receipt {
       width: ${printWidthMm}mm;
@@ -484,6 +497,9 @@ export function generateCrispDotMatrixReceiptHtml(
       white-space: normal;
       word-break: break-word;
       line-height: ${lineSpacingVal};
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
+      font-weight: ${weightCss};
     }
     .text-center { text-align: center; }
     .text-right { text-align: right; }
@@ -506,14 +522,19 @@ export function generateCrispDotMatrixReceiptHtml(
       line-height: ${lineSpacingVal};
       font-size: inherit;
       font-weight: inherit;
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
     }
     .divider {
       overflow: hidden;
       white-space: nowrap;
-      margin: 1.5px 0;
+      margin: 1px 0;
       line-height: 1;
       font-size: ${fontSizes.base};
-      letter-spacing: -0.5px;
+      letter-spacing: -0.2px;
+      font-weight: 900;
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
     }
     .double-title {
       font-size: ${fontSizes.brand};
@@ -523,6 +544,8 @@ export function generateCrispDotMatrixReceiptHtml(
       text-align: center;
       line-height: 1.15;
       text-transform: uppercase;
+      color: #000000 !important;
+      -webkit-text-fill-color: #000000 !important;
     }
     .item-block {
       margin: 0 0 1.5px 0;
@@ -550,10 +573,10 @@ export function generateCrispDotMatrixReceiptHtml(
 <body>
   <div class="tmu220-receipt">
     <div class="double-title">${brand}</div>
-    ${address ? `<div class="text-center" style="font-size: 10px; margin: 0; padding: 0;">${address}</div>` : ''}
-    ${phone ? `<div class="text-center" style="font-size: 10px; margin: 0; padding: 0;">WA: ${phone}${config.csHotline ? ` Fax: ${config.csHotline}` : ''}</div>` : ''}
-    ${config.taxIdOrNpwp ? `<div class="text-center" style="font-size: 9.5px; margin: 0; padding: 0;">${config.taxIdOrNpwp}</div>` : ''}
-    ${config.headerCustomNote ? `<div class="text-center" style="font-size: 9.5px; font-weight: 800; margin: 0; padding: 0;">${config.headerCustomNote}</div>` : ''}
+    ${address ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">${address}</div>` : ''}
+    ${phone ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">WA: ${phone}${config.csHotline ? ` Fax: ${config.csHotline}` : ''}</div>` : ''}
+    ${config.taxIdOrNpwp ? `<div class="text-center" style="font-size: ${fontSizes.footer}; margin: 0; padding: 0;">${config.taxIdOrNpwp}</div>` : ''}
+    ${config.headerCustomNote ? `<div class="text-center" style="font-size: ${fontSizes.footer}; font-weight: 900; margin: 0; padding: 0;">${config.headerCustomNote}</div>` : ''}
     <div class="divider">${divider}</div>
     <table class="receipt-table">
       <tr>
@@ -576,7 +599,7 @@ export function generateCrispDotMatrixReceiptHtml(
       const price = it.unitPrice || it.product.price;
       const subtotal = price * qty;
       return `<div class="item-block">
-        <div>${pName}</div>
+        <div style="font-weight: 900;">${pName}</div>
         <table class="receipt-table">
           <tr>
             <td class="text-left" style="padding-left: 2px;">${price.toLocaleString('id-ID')} × ${qty} ${unit} =</td>
@@ -613,15 +636,15 @@ export function generateCrispDotMatrixReceiptHtml(
       </tr>
     </table>
     <div class="divider">${divider}</div>
-    <div class="text-center" style="font-size: 10px; margin-top: 1px; line-height: 1.15;">
+    <div class="text-center" style="font-size: ${fontSizes.footer}; margin-top: 1px; line-height: 1.15; font-weight: 700;">
       <div>${config.footerMessage1 || 'Terima kasih atas kunjungan Anda!'}</div>
-      <div class="bold">${brand}</div>
-      ${config.footerMessage2 ? `<div style="font-size: 9px; margin-top: 0.5px;">${config.footerMessage2}</div>` : ''}
-      ${config.websiteOrSocial ? `<div style="font-size: 9px; margin-top: 0.5px;">${config.websiteOrSocial}</div>` : ''}
+      <div class="bold" style="font-size: ${fontSizes.base}; color: #000000; -webkit-text-fill-color: #000000;">${brand}</div>
+      ${config.footerMessage2 ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.footerMessage2}</div>` : ''}
+      ${config.websiteOrSocial ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.websiteOrSocial}</div>` : ''}
     </div>
     ${config.showBarcode !== false ? `<div class="text-center" style="margin-top: 3px; line-height: 1;">
       <div style="font-family: monospace; letter-spacing: 2px; font-weight: 900; font-size: 11px;">||||| | |||| ||| || ||||| | ||||</div>
-      <div style="font-size: 9px; font-weight: 800; margin-top: 1px;">*${order.orderNumber}*</div>
+      <div style="font-size: ${fontSizes.footer}; font-weight: 900; margin-top: 1px;">*${order.orderNumber}*</div>
     </div>` : ''}
     <div class="feed-lines"></div>
   </div>

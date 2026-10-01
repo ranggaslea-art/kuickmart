@@ -898,22 +898,22 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   </div>
                 </div>
 
-                {/* 2. KETEBALAN TINTA / HURUF (FONT BOLDNESS) */}
+                {/* 2. KETEBALAN TINTA / HURUF (FONT BOLDNESS & KEPEKATAN) */}
                 <div className="space-y-2 pt-2 border-t border-stone-100">
                   <div className="flex items-center justify-between">
                     <label className="block font-bold text-xs text-stone-800">
-                      Tingkat Ketebalan Huruf (Font Weight & Kontras):
+                      Tingkat Kepekatan & Ketajaman Huruf (Anti-Kabur):
                     </label>
-                    <span className="text-[10px] text-stone-400">
-                      *Tebal disarankan jika pita printer TM-U220 mulai menipis
+                    <span className="text-[10px] text-emerald-600 font-semibold">
+                      ✓ Monokrom 100% Hitam Murni (Vector Crisp)
                     </span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      { id: 'normal', label: 'Normal (500)', desc: 'Pita baru / pekat' },
-                      { id: 'semibold', label: 'Semi Tebal (600)', desc: 'Sedang & rapi' },
-                      { id: 'bold', label: 'Tebal (700)', desc: 'Standar Optimal', recommend: true },
-                      { id: 'extra_bold', label: 'Ekstra Tebal (900)', desc: 'Maksimal terbaca' }
+                      { id: 'normal', label: 'Standar (600)', desc: 'Pita baru / pekat' },
+                      { id: 'semibold', label: 'Tebal (700)', desc: 'Sedang & rapi' },
+                      { id: 'bold', label: 'Sangat Pekat (800)', desc: 'Anti-Kabur / Tajam', recommend: true },
+                      { id: 'extra_bold', label: 'Super Gelap (900)', desc: 'Maksimal terbaca / Pita tipis' }
                     ].map(b => {
                       const isSelected = (config.fontBoldness || 'bold') === b.id;
                       return (
@@ -943,6 +943,15 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                    <span className="text-base">💡</span>
+                    <div>
+                      <strong className="font-bold">Tips Hasil Print Tajam & Jelas:</strong>
+                      <p className="text-[10px] text-amber-800 mt-0.5">
+                        Pilih jenis huruf <strong>Courier New</strong> atau <strong>Consolas</strong> dengan opsi <strong>Sangat Pekat (800)</strong>. Browser kini mengirim instruksi vektor langsung ke printer tanpa filter rasterisasi sehingga bebas kabur dan buram.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
