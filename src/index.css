@@ -41,6 +41,12 @@ body {
     margin: 0;
   }
   
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
   html, body {
     width: 76mm !important;
     max-width: 76mm !important;

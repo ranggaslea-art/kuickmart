@@ -983,9 +983,9 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                     </label>
                     <div className="grid grid-cols-3 gap-1.5">
                       {[
-                        { id: 'compact', label: 'Rapat (1.12)', desc: 'Kompak' },
-                        { id: 'normal', label: 'Normal (1.18)', desc: 'Seimbang' },
-                        { id: 'relaxed', label: 'Longgar (1.28)', desc: 'Nyaman dibaca' }
+                        { id: 'compact', label: 'Sangat Rapat (1.05)', desc: 'Hemat kertas' },
+                        { id: 'normal', label: 'Standar Kasir (1.12)', desc: 'Ideal & rapi' },
+                        { id: 'relaxed', label: 'Sedang (1.20)', desc: 'Nyaman dibaca' }
                       ].map(sp => (
                         <button
                           key={sp.id}
@@ -1501,7 +1501,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                     fontFamily: getReceiptFontFamilyCss(config.fontFamily),
                     fontWeight: getReceiptFontWeightCss(config.fontBoldness),
                     fontSize: getReceiptFontSizeCss(config.fontSize).base,
-                    lineHeight: config.lineSpacing === 'compact' ? '1.12' : config.lineSpacing === 'relaxed' ? '1.28' : '1.18'
+                    lineHeight: config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12'
                   }}
                   className="w-[280px] bg-white text-black p-4 rounded-xs shadow-md border-x border-stone-300 relative leading-tight select-text transition-all"
                 >

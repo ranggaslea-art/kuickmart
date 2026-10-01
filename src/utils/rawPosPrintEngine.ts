@@ -337,6 +337,68 @@ export function printViaRawBt(rawText: string): void {
  * 3. Tidak ada padding border tebal yang bikin jarum pusing
  * 4. Kolom karakter proporsional 40 kolom (Font A) persis seperti struk kasir iPos 4
  */
+/**
+ * Helper untuk mendapatkan CSS font-family string berdasarkan pilihan pengguna
+ */
+export function getReceiptFontFamilyCss(family?: string): string {
+  switch (family) {
+    case 'roboto_mono':
+      return "'Roboto Mono', 'Courier New', Courier, monospace";
+    case 'consolas':
+      return "Consolas, 'Lucida Console', Monaco, monospace";
+    case 'space_mono':
+      return "'Space Mono', 'Courier New', monospace";
+    case 'dot_matrix':
+      return "'Lucida Console', 'Courier New', Monaco, monospace";
+    case 'inconsolata':
+      return "Inconsolata, 'Courier New', monospace";
+    case 'courier':
+    default:
+      return "'Courier New', Courier, 'Lucida Console', Monaco, monospace";
+  }
+}
+
+/**
+ * Helper untuk mendapatkan font-weight numerik untuk ketajaman print fisik
+ */
+export function getReceiptFontWeightCss(boldness?: string): number {
+  switch (boldness) {
+    case 'normal':
+      return 500;
+    case 'semibold':
+      return 600;
+    case 'extra_bold':
+      return 900;
+    case 'bold':
+    default:
+      return 700;
+  }
+}
+
+/**
+ * Helper untuk mendapatkan ukuran font base struk
+ */
+export function getReceiptFontSizeCss(size?: string): { base: string; brand: string; meta: string } {
+  switch (size) {
+    case 'compact':
+      return { base: '10px', brand: '12.5px', meta: '9.5px' };
+    case 'large':
+      return { base: '12px', brand: '14.5px', meta: '11px' };
+    case 'normal':
+    default:
+      return { base: '11px', brand: '13.5px', meta: '10.5px' };
+  }
+}
+
+/**
+ * Menghasilkan Dokumen HTML Super Tajam & Rapat (Format Kasir POS / iPos 4)
+ * Didesain khusus untuk printer Dot Matrix (Epson TM-U220) dan Thermal POS:
+ * 1. Menghilangkan jarak renggang berlebihan antar baris (white-space: normal & table layout)
+ * 2. Menggunakan margin/padding 0 dengan line-height rapat dan konsisten
+ * 3. Memberikan safe left padding 3.5mm agar karakter di tepi kiri tidak terpotong pisau/cutter printer
+ * 4. Mendukung penyesuaian lebar kertas (58mm, 70mm TM-U220, 80mm)
+ * 5. Tinta monokrom kontras tinggi #000000 murni tanpa blur
+ */
 export function generateCrispDotMatrixReceiptHtml(
   order: Order,
   config: ReceiptInfo,
@@ -349,89 +411,127 @@ export function generateCrispDotMatrixReceiptHtml(
   const phone = config.phone || '';
   const dateStr = new Date(order.createdAt).toLocaleDateString('id-ID');
   const timeStr = new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-  const cashierDisp = cashierName || config.cashierName || '01';
-  const customerDisp = order.customerName ? order.customerName.toUpperCase() : 'UMUM';
+  const cashierDisp = cashierName || config.cashierName || 'Kasir 01';
+  const customerDisp = order.customerName ? order.customerName.toUpperCase() : 'PELANGGAN UMUM';
 
   const totalQty = order.items.reduce((acc, i) => acc + i.quantity, 0);
   const cashRec = paymentDetails?.cashReceived || order.total;
   const change = paymentDetails?.changeAmount !== undefined ? paymentDetails.changeAmount : Math.max(0, cashRec - order.total);
 
-  const divider = (config.dividerChar || '=').repeat(cols);
+  const dividerChar = config.dividerChar || '=';
+  const divider = dividerChar.repeat(cols);
   const thinDivider = '-'.repeat(cols);
 
-  // Mode font
-  const fontFamilyChoice = config.fontFamily || 'courier';
-  let fontStack = "'Courier New', Courier, 'Lucida Console', monospace";
-  if (fontFamilyChoice === 'dot_matrix') {
-    fontStack = "'Lucida Console', 'Courier New', monospace";
-  } else if (fontFamilyChoice === 'consolas') {
-    fontStack = "Consolas, 'Courier New', monospace";
+  // Parameter typografi dinamis sesuai konfigurasi
+  const fontCss = getReceiptFontFamilyCss(config.fontFamily);
+  const weightCss = getReceiptFontWeightCss(config.fontBoldness);
+  const fontSizes = getReceiptFontSizeCss(config.fontSize);
+  const lineSpacingVal = config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12';
+
+  // Penyesuaian lebar kertas (76mm roll / 70mm print untuk TM-U220, 58mm, atau 80mm)
+  const paperWidthChoice = config.paperWidth || '70mm_dotmatrix';
+  let rollWidthMm = 76;
+  let printWidthMm = 70;
+  if (paperWidthChoice === '58mm') {
+    rollWidthMm = 58;
+    printWidthMm = 52;
+  } else if (paperWidthChoice === '80mm') {
+    rollWidthMm = 80;
+    printWidthMm = 74;
   }
+
+  // Jarak gulung akhir sebelum potong kertas (dalam pixel terkendali)
+  const feedHeightPx = Math.max(1, config.feedLinesBeforeCut || 3) * 6;
 
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Struk iPos TM-U220 - ${order.orderNumber}</title>
+  <title>Struk POS - ${order.orderNumber}</title>
   <style>
     @page {
-      size: 76mm auto;
+      size: ${rollWidthMm}mm auto;
       margin: 0mm;
     }
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     html, body {
       margin: 0;
       padding: 0;
-      width: 70mm;
-      max-width: 70mm;
-      background: #ffffff;
-      color: #000000;
-      /* Font mono presisi tinggi */
-      font-family: ${fontStack};
-      font-size: 11px;
-      line-height: 1.2;
-      font-weight: 700;
-      /* Anti-blur untuk driver dot-matrix */
-      text-rendering: geometricPrecision;
-      -webkit-font-smoothing: none;
-      -moz-osx-font-smoothing: unset;
+      width: ${rollWidthMm}mm;
+      max-width: ${rollWidthMm}mm;
+      background: #ffffff !important;
+      color: #000000 !important;
+      font-family: ${fontCss};
+      font-size: ${fontSizes.base};
+      line-height: ${lineSpacingVal};
+      font-weight: ${weightCss};
+      text-rendering: geometricPrecision !important;
+      -webkit-font-smoothing: none !important;
+      -moz-osx-font-smoothing: unset !important;
     }
     .tmu220-receipt {
-      width: 70mm;
-      padding: 2mm 1.5mm;
+      width: ${printWidthMm}mm;
+      max-width: ${printWidthMm}mm;
+      padding: 1mm 2mm 1mm 3.5mm;
       margin: 0 auto;
       background: #ffffff;
-      white-space: pre-wrap;
-      word-break: break-all;
+      white-space: normal;
+      word-break: break-word;
+      line-height: ${lineSpacingVal};
     }
     .text-center { text-align: center; }
     .text-right { text-align: right; }
     .text-left { text-align: left; }
     .bold { font-weight: 900; }
+    table.receipt-table {
+      width: 100%;
+      border-collapse: collapse;
+      border-spacing: 0;
+      margin: 0;
+      padding: 0;
+      border: none;
+      line-height: ${lineSpacingVal};
+    }
+    table.receipt-table td {
+      padding: 0.5px 0;
+      margin: 0;
+      border: none;
+      vertical-align: top;
+      line-height: ${lineSpacingVal};
+      font-size: inherit;
+      font-weight: inherit;
+    }
     .divider {
       overflow: hidden;
       white-space: nowrap;
-      margin: 2px 0;
+      margin: 1.5px 0;
+      line-height: 1;
+      font-size: ${fontSizes.base};
       letter-spacing: -0.5px;
     }
     .double-title {
-      font-size: 13.5px;
+      font-size: ${fontSizes.brand};
       font-weight: 900;
-      letter-spacing: 1px;
-      margin-bottom: 2px;
+      letter-spacing: 0.5px;
+      margin: 0 0 1px 0;
       text-align: center;
+      line-height: 1.15;
+      text-transform: uppercase;
     }
-    .flex-row {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
+    .item-block {
+      margin: 0 0 1.5px 0;
+      padding: 0;
+      line-height: ${lineSpacingVal};
     }
     .feed-lines {
-      height: ${Math.max(2, config.feedLinesBeforeCut || 5) * 14}px;
+      height: ${feedHeightPx}px;
+      display: block;
     }
     @media screen {
       body {
@@ -449,89 +549,83 @@ export function generateCrispDotMatrixReceiptHtml(
 </head>
 <body>
   <div class="tmu220-receipt">
-    <!-- Header iPos 4 Style -->
     <div class="double-title">${brand}</div>
-    ${address ? `<div class="text-center" style="font-size: 10px;">${address}</div>` : ''}
-    ${phone ? `<div class="text-center" style="font-size: 10px;">WA : ${phone} ${config.csHotline ? `Fax: ${config.csHotline}` : ''}</div>` : ''}
-    ${config.headerCustomNote ? `<div class="text-center" style="font-size: 9.5px;">${config.headerCustomNote}</div>` : ''}
-
+    ${address ? `<div class="text-center" style="font-size: 10px; margin: 0; padding: 0;">${address}</div>` : ''}
+    ${phone ? `<div class="text-center" style="font-size: 10px; margin: 0; padding: 0;">WA: ${phone}${config.csHotline ? ` Fax: ${config.csHotline}` : ''}</div>` : ''}
+    ${config.taxIdOrNpwp ? `<div class="text-center" style="font-size: 9.5px; margin: 0; padding: 0;">${config.taxIdOrNpwp}</div>` : ''}
+    ${config.headerCustomNote ? `<div class="text-center" style="font-size: 9.5px; font-weight: 800; margin: 0; padding: 0;">${config.headerCustomNote}</div>` : ''}
     <div class="divider">${divider}</div>
-
-    <!-- Meta Info -->
-    <div class="flex-row">
-      <span>No. : ${order.orderNumber}</span>
-      <span>${dateStr}</span>
-    </div>
-    <div class="flex-row">
-      <span>Kasir: ${cashierDisp}</span>
-      <span>${timeStr}</span>
-    </div>
-    <div class="flex-row">
-      <span>Pel. : ${customerDisp}</span>
-      <span></span>
-    </div>
-
+    <table class="receipt-table">
+      <tr>
+        <td class="text-left">No. : ${order.orderNumber}</td>
+        <td class="text-right">${dateStr}</td>
+      </tr>
+      <tr>
+        <td class="text-left">Kasir: ${cashierDisp}</td>
+        <td class="text-right">${timeStr}</td>
+      </tr>
+      ${config.showCustomerName !== false ? `<tr>
+        <td class="text-left" colspan="2">Pel. : ${customerDisp}</td>
+      </tr>` : ''}
+    </table>
     <div class="divider">${thinDivider}</div>
-
-    <!-- Items List (Format iPos 4) -->
-    <div>
-      ${order.items.map((it) => {
-        const pName = it.product.name.toUpperCase();
-        const qty = it.quantity;
-        const unit = (it.selectedUnit || 'PCS').toUpperCase();
-        const price = it.unitPrice || it.product.price;
-        const subtotal = price * qty;
-
-        return `
-        <div style="margin-bottom: 2px;">
-          <div>${pName}</div>
-          <div class="flex-row" style="padding-left: 2px;">
-            <span>${price.toLocaleString('id-ID')} × ${qty} ${unit} =</span>
-            <span class="bold">${subtotal.toLocaleString('id-ID')}</span>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-
+    <div>${order.items.map((it) => {
+      const pName = it.product.name.toUpperCase();
+      const qty = it.quantity;
+      const unit = (it.selectedUnit || 'PCS').toUpperCase();
+      const price = it.unitPrice || it.product.price;
+      const subtotal = price * qty;
+      return `<div class="item-block">
+        <div>${pName}</div>
+        <table class="receipt-table">
+          <tr>
+            <td class="text-left" style="padding-left: 2px;">${price.toLocaleString('id-ID')} × ${qty} ${unit} =</td>
+            <td class="text-right bold">${subtotal.toLocaleString('id-ID')}</td>
+          </tr>
+        </table>
+      </div>`;
+    }).join('')}</div>
     <div class="divider">${thinDivider}</div>
-
-    <!-- Summary Total -->
-    <div class="flex-row">
-      <span>BARIS=${order.items.length}  ,QTY ${totalQty}</span>
-      <span class="bold">${order.subtotal.toLocaleString('id-ID')}</span>
+    <table class="receipt-table">
+      <tr>
+        <td class="text-left">BARIS=${order.items.length}  ,QTY ${totalQty}</td>
+        <td class="text-right bold">${order.subtotal.toLocaleString('id-ID')}</td>
+      </tr>
+      ${order.discountAmount > 0 ? `<tr>
+        <td class="text-left">Diskon</td>
+        <td class="text-right">-${order.discountAmount.toLocaleString('id-ID')}</td>
+      </tr>` : ''}
+      ${config.showTaxSummary && (config.taxRatePercent || 0) > 0 ? `<tr>
+        <td class="text-left">PPN (${config.taxRatePercent}%)</td>
+        <td class="text-right">${Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)).toLocaleString('id-ID')}</td>
+      </tr>` : ''}
+      <tr style="font-weight: 900; font-size: ${fontSizes.brand};">
+        <td class="text-left" style="padding: 1px 0;">TOTAL</td>
+        <td class="text-right bold" style="padding: 1px 0;">${order.total.toLocaleString('id-ID')}</td>
+      </tr>
+      <tr>
+        <td class="text-left">Tunai</td>
+        <td class="text-right">${cashRec.toLocaleString('id-ID')}</td>
+      </tr>
+      <tr>
+        <td class="text-left">Kembali</td>
+        <td class="text-right bold">${change.toLocaleString('id-ID')}</td>
+      </tr>
+    </table>
+    <div class="divider">${divider}</div>
+    <div class="text-center" style="font-size: 10px; margin-top: 1px; line-height: 1.15;">
+      <div>${config.footerMessage1 || 'Terima kasih atas kunjungan Anda!'}</div>
+      <div class="bold">${brand}</div>
+      ${config.footerMessage2 ? `<div style="font-size: 9px; margin-top: 0.5px;">${config.footerMessage2}</div>` : ''}
+      ${config.websiteOrSocial ? `<div style="font-size: 9px; margin-top: 0.5px;">${config.websiteOrSocial}</div>` : ''}
     </div>
-    ${order.discountAmount > 0 ? `
-    <div class="flex-row">
-      <span>Diskon</span>
-      <span>-${order.discountAmount.toLocaleString('id-ID')}</span>
+    ${config.showBarcode !== false ? `<div class="text-center" style="margin-top: 3px; line-height: 1;">
+      <div style="font-family: monospace; letter-spacing: 2px; font-weight: 900; font-size: 11px;">||||| | |||| ||| || ||||| | ||||</div>
+      <div style="font-size: 9px; font-weight: 800; margin-top: 1px;">*${order.orderNumber}*</div>
     </div>` : ''}
-
-    <div class="flex-row bold" style="font-size: 12.5px; margin: 2px 0;">
-      <span>TOTAL</span>
-      <span>${order.total.toLocaleString('id-ID')}</span>
-    </div>
-
-    <div class="flex-row">
-      <span>Tunai</span>
-      <span>${cashRec.toLocaleString('id-ID')}</span>
-    </div>
-    <div class="flex-row">
-      <span>Kembali</span>
-      <span>${change.toLocaleString('id-ID')}</span>
-    </div>
-
-    <div class="divider">${divider}</div>
-
-    <!-- Footer -->
-    <div class="text-center" style="font-size: 10px; margin-top: 2px;">
-      <div>${config.footerMessage1 || 'TERIMA KASIH SUDAH BERBELANJA DI'}</div>
-      <div class="bold">${brand}.</div>
-      ${config.footerMessage2 ? `<div style="font-size: 9px; margin-top: 1px;">${config.footerMessage2}</div>` : ''}
-    </div>
-
-    <!-- Feed lines to reach tear-off knife -->
     <div class="feed-lines"></div>
   </div>
 </body>
 </html>`;
 }
+
