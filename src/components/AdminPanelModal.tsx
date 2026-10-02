@@ -159,6 +159,7 @@ import { CategoryBrandManager } from './CategoryBrandManager';
 import { VpsDeployManager } from './VpsDeployManager';
 import { SeoGoogleManager } from './SeoGoogleManager';
 import { ProductExportModal } from './ProductExportModal';
+import { ExcelQuickImportManager } from './ExcelQuickImportManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
@@ -4168,67 +4169,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             <div className="space-y-4">
               {!currentUserPermissions.bulk_import?.canEdit && renderReadOnlyBanner('Import Cepat Excel')}
 
-              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-xs text-emerald-950 space-y-1.5">
-                <div className="font-bold flex items-center gap-1.5 text-emerald-900">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Import Massal Data Excel / Spreadsheet (Contoh: Daftar Rokok Djarum, Sembako, dll)</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-emerald-800">
-                  Format per baris: <code>Nama Barang | Harga | Stok | Kategori | Brand</code>
-                </p>
-              </div>
-
-              {/* QUICK BACKUP / EXPORT LINK */}
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-stone-50 border border-stone-200 rounded-2xl">
-                <span className="text-[11px] text-stone-600 font-medium">
-                  Ingin mengedit produk yang sudah ada secara offline atau membuat salinan cadangan?
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsExportModalOpen(true)}
-                  className="px-3.5 py-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer"
-                  title="Unduh katalog produk saat ini ke berkas Excel atau CSV"
-                >
-                  <Download className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Ekspor / Unduh Katalog Produk Saat Ini (.xls / .csv)</span>
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Tempelkan (Paste) Teks atau Baris Data Excel di sini:
-                </label>
-                <textarea
-                  rows={8}
-                  value={bulkText}
-                  onChange={e => setBulkText(e.target.value)}
-                  disabled={!currentUserPermissions.bulk_import?.canEdit}
-                  className="w-full p-3 font-mono text-xs border border-stone-300 rounded-2xl bg-white focus:ring-2 focus:ring-emerald-200 disabled:bg-stone-100 disabled:cursor-not-allowed"
-                />
-              </div>
-
-              {importFeedback && (
-                <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>{importFeedback}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-stone-500">
-                  Total baris yang akan diproses: {bulkText.split('\n').filter(l => l.trim().length > 0).length} produk
-                </span>
-
-                {currentUserPermissions.bulk_import?.canEdit && (
-                  <button
-                    onClick={handleBulkImport}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer"
-                  >
-                    <UploadCloud className="w-4 h-4" />
-                    <span>Eksekusi & Masukkan ke Katalog</span>
-                  </button>
-                )}
-              </div>
+              <ExcelQuickImportManager
+                products={products}
+                onUpdateProducts={onUpdateProducts}
+                categories={activeCategories}
+                onUpdateCategories={handleUpdateCategories}
+                brands={activeBrands}
+                onUpdateBrands={handleUpdateBrands}
+                canEdit={Boolean(currentUserPermissions.bulk_import?.canEdit)}
+                onOpenProductCatalog={() => setActiveTab('products')}
+              />
             </div>
           ))}
 

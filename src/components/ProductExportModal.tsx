@@ -20,6 +20,8 @@ import { formatRupiah, formatNumber } from '../utils/formatters';
 import { 
   generateProductCsv, 
   generateProductExcelHtml, 
+  generateProductOfficial49ColumnExcel,
+  generateProductOfficial49ColumnCsv,
   generateBulkImportTextFormat, 
   downloadTextFile, 
   calculateInventoryValuation,
@@ -44,7 +46,7 @@ export const ProductExportModal: React.FC<ProductExportModalProps> = ({
   storeName = 'NusaMart Express',
 }) => {
   const [dataScope, setDataScope] = useState<'all' | 'filtered'>('all');
-  const [exportFormat, setExportFormat] = useState<'excel' | 'csv' | 'bulk_txt'>('excel');
+  const [exportFormat, setExportFormat] = useState<'official_xlsx' | 'excel' | 'csv' | 'bulk_txt'>('official_xlsx');
   const [delimiter, setDelimiter] = useState<CsvDelimiter>(';');
   const [isCopied, setIsCopied] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -68,21 +70,29 @@ export const ProductExportModal: React.FC<ProductExportModalProps> = ({
     const timestamp = new Date().toISOString().slice(0, 10);
     const cleanStoreSlug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
 
-    if (exportFormat === 'excel') {
+    if (exportFormat === 'official_xlsx') {
+      const blob = generateProductOfficial49ColumnExcel(targetProducts, categories);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Format_Excel_49Kolom_${cleanStoreSlug}_${timestamp}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setFeedbackMessage(`Berhasil mengunduh ${targetProducts.length} produk dalam format Excel Resmi 49 Kolom (.xlsx)! Siap diedit dan diimport kembali.`);
+    } else if (exportFormat === 'excel') {
       const htmlContent = generateProductExcelHtml(targetProducts, categories, {
         storeName,
       });
       const fileName = `Katalog_Produk_${cleanStoreSlug}_${timestamp}.xls`;
       downloadTextFile(htmlContent, fileName, 'application/vnd.ms-excel;charset=utf-8');
-      setFeedbackMessage(`Berhasil mengunduh ${targetProducts.length} produk dalam format Excel (.xls)!`);
+      setFeedbackMessage(`Berhasil mengunduh ${targetProducts.length} produk dalam format Excel Laporan (.xls)!`);
     } else if (exportFormat === 'csv') {
-      const csvContent = generateProductCsv(targetProducts, categories, {
-        delimiter,
-        storeName,
-      });
-      const fileName = `Katalog_Produk_${cleanStoreSlug}_${timestamp}.csv`;
+      const csvContent = generateProductOfficial49ColumnCsv(targetProducts, categories, delimiter);
+      const fileName = `Katalog_49Kolom_${cleanStoreSlug}_${timestamp}.csv`;
       downloadTextFile(csvContent, fileName, 'text/csv;charset=utf-8;');
-      setFeedbackMessage(`Berhasil mengunduh ${targetProducts.length} produk dalam format CSV (pemisah "${delimiter}")!`);
+      setFeedbackMessage(`Berhasil mengunduh ${targetProducts.length} produk dalam format CSV 49 Kolom (pemisah "${delimiter}")!`);
     } else {
       // Bulk text import format
       const bulkText = generateBulkImportTextFormat(targetProducts);
@@ -263,8 +273,32 @@ export const ProductExportModal: React.FC<ProductExportModalProps> = ({
               <span>2. Pilih Format Berkas:</span>
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {/* Option A: Excel */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Option 1: Official 49 Column XLSX */}
+              <button
+                type="button"
+                onClick={() => setExportFormat('official_xlsx')}
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  exportFormat === 'official_xlsx'
+                    ? 'bg-emerald-50/70 border-emerald-500 text-emerald-950 ring-2 ring-emerald-400/30'
+                    : 'bg-white border-stone-200 hover:bg-stone-50 text-stone-700'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-1.5 font-extrabold text-xs text-emerald-900">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Excel 49 Kolom (.xlsx)</span>
+                    <span className="ml-auto text-[9px] bg-emerald-600 text-white font-extrabold px-1.5 py-0.5 rounded-full">
+                      Siap Re-Import
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-stone-500 mt-1 leading-snug">
+                    Format 49 kolom resmi (KODEITEM, NAMA, SATUAN1-4, HARGAPOKOK, STOKAWAL, dll). Kompatibel penuh modul import.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Excel Laporan Valuasi */}
               <button
                 type="button"
                 onClick={() => setExportFormat('excel')}
@@ -276,19 +310,16 @@ export const ProductExportModal: React.FC<ProductExportModalProps> = ({
               >
                 <div>
                   <div className="flex items-center gap-1.5 font-extrabold text-xs text-emerald-900">
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Excel (.xls)</span>
-                    <span className="ml-auto text-[9px] bg-emerald-600 text-white font-extrabold px-1.5 py-0.5 rounded-full">
-                      Paling Rapi
-                    </span>
+                    <FileSpreadsheet className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span>Excel Laporan (.xls)</span>
                   </div>
                   <p className="text-[10.5px] text-stone-500 mt-1 leading-snug">
-                    Format spreadsheet Excel dengan tabel warna, format rupiah, dan baris total valuasi stok.
+                    Format spreadsheet Excel berdesain visual rapi dengan ringkasan valuasi aset modal HPP dan potensi omzet.
                   </p>
                 </div>
               </button>
 
-              {/* Option B: CSV */}
+              {/* Option 3: CSV 49 Kolom */}
               <button
                 type="button"
                 onClick={() => setExportFormat('csv')}
@@ -301,15 +332,15 @@ export const ProductExportModal: React.FC<ProductExportModalProps> = ({
                 <div>
                   <div className="flex items-center gap-1.5 font-extrabold text-xs text-stone-900">
                     <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>CSV (.csv)</span>
+                    <span>CSV 49 Kolom (.csv)</span>
                   </div>
                   <p className="text-[10.5px] text-stone-500 mt-1 leading-snug">
-                    Format tabel data universal UTF-8 BOM yang dapat diimpor ke Google Sheets, Excel, atau database.
+                    Format CSV UTF-8 dengan 49 kolom data terstruktur yang dapat diolah di aplikasi spreadsheet manapun.
                   </p>
                 </div>
               </button>
 
-              {/* Option C: Bulk Import Text */}
+              {/* Option 4: Bulk Import Text */}
               <button
                 type="button"
                 onClick={() => setExportFormat('bulk_txt')}
@@ -322,10 +353,10 @@ export const ProductExportModal: React.FC<ProductExportModalProps> = ({
                 <div>
                   <div className="flex items-center gap-1.5 font-extrabold text-xs text-stone-900">
                     <Copy className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>Template Import (.txt)</span>
+                    <span>Teks Sederhana (.txt)</span>
                   </div>
                   <p className="text-[10.5px] text-stone-500 mt-1 leading-snug">
-                    Format baris <code>Nama | Harga | Stok</code> untuk kemudahan edit dan di-import kembali.
+                    Format baris pipe <code>Nama | Harga | Stok | Kategori | Brand</code> untuk edit cepat tanpa Excel.
                   </p>
                 </div>
               </button>

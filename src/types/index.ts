@@ -30,6 +30,24 @@ export interface Product {
   barcode: string;
   isPopular?: boolean;
   storeId?: string; // Multi-tenant store slug / ID
+  // Field Metadata dari Modul Import Cepat Excel (Format iPos / ERP)
+  itemCode?: string; // KODEITEM
+  shelf?: string; // RAK (Lokasi Rak)
+  minStock?: number; // STOKMINIMAL
+  warehouseCode?: string; // KODEGUDANG
+  supplierCode?: string; // KODESUPPLIER
+  itemType?: string; // TIPEITEM (Barang/Jasa/Paket)
+  useSerial?: boolean; // MENGGUNAKANSERIAL
+  isConsignment?: boolean; // KONSINYASI
+  point?: number; // POIN1
+  commission?: number; // KOMISISALES1
+  taxType?: string; // JENISPAJAK
+  taxSystem?: string; // SISTEMPAJAK
+  referenceCode?: string; // KODEREFERENSI
+  sku1?: string;
+  sku2?: string;
+  sku3?: string;
+  sku4?: string;
 }
 
 export interface Category {

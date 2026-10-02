@@ -1,4 +1,6 @@
 import { Product, Category } from '../types';
+import * as XLSX from 'xlsx';
+import { EXCEL_IMPORT_COLUMNS } from './excelImportParser';
 
 export type CsvDelimiter = ';' | ',';
 
@@ -381,3 +383,189 @@ export function downloadTextFile(content: string, fileName: string, mimeType: st
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/**
+ * Ekspor produk langsung ke format resmi Excel (.xlsx) dengan 49 kolom iPos / ritel standar
+ */
+export function generateProductOfficial49ColumnExcel(
+  products: Product[],
+  categories: Category[] = []
+): Blob {
+  const catMap = new Map<string, string>();
+  categories.forEach((c) => {
+    if (c) {
+      if (c.slug) catMap.set(c.slug, c.name);
+      if (c.id) catMap.set(c.id, c.name);
+    }
+  });
+
+  const rows = products.map((p) => {
+    const catName = catMap.get(p.category) || p.category;
+    const u1 = p.unit || 'Pcs';
+    const conv2 = p.unitConversions?.[0];
+    const conv3 = p.unitConversions?.[1];
+    const conv4 = p.unitConversions?.[2];
+
+    const hpp = typeof p.costPrice === 'number' ? p.costPrice : Math.round(p.price * 0.8);
+
+    return {
+      KODEITEM: p.itemCode || p.barcode || p.id,
+      NAMAITEM: p.name || '',
+      JENIS: catName || 'Sembako',
+      MEREK: p.brand || 'Umum',
+      SATUAN1: u1,
+      SATUAN2: conv2?.unitName || '',
+      SATUAN3: conv3?.unitName || '',
+      SATUAN4: conv4?.unitName || '',
+      BARCODESATUAN1: p.barcode || '',
+      BARCODESATUAN2: conv2?.barcode || '',
+      BARCODESATUAN3: conv3?.barcode || '',
+      BARCODESATUAN4: conv4?.barcode || '',
+      KONVERSI1: 1,
+      KONVERSI2: conv2?.totalMultiplier || '',
+      KONVERSI3: conv3?.totalMultiplier || '',
+      KONVERSI4: conv4?.totalMultiplier || '',
+      HARGAPOKOK1: hpp,
+      HARGAPOKOK2: conv2 ? Math.round(hpp * (Number(conv2.totalMultiplier) || 1)) : '',
+      HARGAPOKOK3: conv3 ? Math.round(hpp * (Number(conv3.totalMultiplier) || 1)) : '',
+      HARGAPOKOK4: conv4 ? Math.round(hpp * (Number(conv4.totalMultiplier) || 1)) : '',
+      HARGAJUAL1: p.price || 0,
+      HARGAJUAL2: conv2?.price || '',
+      HARGAJUAL3: conv3?.price || '',
+      HARGAJUAL4: conv4?.price || '',
+      POIN1: p.point || 0,
+      POIN2: '',
+      POIN3: '',
+      POIN4: '',
+      KOMISISALES1: p.commission || 0,
+      KOMISISALES2: '',
+      KOMISISALES3: '',
+      KOMISISALES4: '',
+      STOKAWAL: p.stock || 0,
+      STOKMINIMAL: p.minStock || 5,
+      TIPEITEM: p.itemType || 'Barang',
+      MENGGUNAKANSERIAL: p.useSerial ? 'Y' : 'N',
+      RAK: p.shelf || '',
+      KODEGUDANG: p.warehouseCode || 'GUD-PUSAT',
+      KODESUPPLIER: p.supplierCode || '',
+      KONSINYASI: p.isConsignment ? 'Y' : 'N',
+      KETERANGAN: (p.description || '').replace(/\r?\n/g, ' '),
+      SKU1: p.sku1 || '',
+      SKU2: p.sku2 || '',
+      SKU3: p.sku3 || '',
+      SKU4: p.sku4 || '',
+      JENISPAJAK: p.taxType || 'NON-PAJAK',
+      SISTEMPAJAK: p.taxSystem || 'INCLUDE',
+      KODEREFERENSI: p.referenceCode || '',
+      OPSIBRGJASA: 'Barang',
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(rows, {
+    header: [...EXCEL_IMPORT_COLUMNS],
+  });
+
+  worksheet['!cols'] = EXCEL_IMPORT_COLUMNS.map((col) => {
+    if (col === 'NAMAITEM') return { wch: 35 };
+    if (col === 'KODEITEM' || col === 'JENIS' || col === 'MEREK') return { wch: 18 };
+    if (col.startsWith('BARCODE')) return { wch: 18 };
+    if (col.startsWith('HARGA')) return { wch: 15 };
+    if (col === 'KETERANGAN') return { wch: 40 };
+    return { wch: 12 };
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'MasterItem');
+
+  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  return new Blob([excelBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+/**
+ * Ekspor produk ke CSV dengan 49 kolom resmi
+ */
+export function generateProductOfficial49ColumnCsv(
+  products: Product[],
+  categories: Category[] = [],
+  delimiter: ';' | ',' = ';'
+): string {
+  const catMap = new Map<string, string>();
+  categories.forEach((c) => {
+    if (c) {
+      if (c.slug) catMap.set(c.slug, c.name);
+      if (c.id) catMap.set(c.id, c.name);
+    }
+  });
+
+  const headers = [...EXCEL_IMPORT_COLUMNS];
+  const rows: string[] = [headers.join(delimiter)];
+
+  products.forEach((p) => {
+    const catName = catMap.get(p.category) || p.category;
+    const u1 = p.unit || 'Pcs';
+    const conv2 = p.unitConversions?.[0];
+    const conv3 = p.unitConversions?.[1];
+    const conv4 = p.unitConversions?.[2];
+    const hpp = typeof p.costPrice === 'number' ? p.costPrice : Math.round(p.price * 0.8);
+
+    const values = [
+      p.itemCode || p.barcode || p.id,
+      p.name || '',
+      catName || 'Sembako',
+      p.brand || 'Umum',
+      u1,
+      conv2?.unitName || '',
+      conv3?.unitName || '',
+      conv4?.unitName || '',
+      p.barcode ? `'${p.barcode}` : '',
+      conv2?.barcode ? `'${conv2.barcode}` : '',
+      conv3?.barcode ? `'${conv3.barcode}` : '',
+      conv4?.barcode ? `'${conv4.barcode}` : '',
+      '1',
+      conv2?.totalMultiplier ? String(conv2.totalMultiplier) : '',
+      conv3?.totalMultiplier ? String(conv3.totalMultiplier) : '',
+      conv4?.totalMultiplier ? String(conv4.totalMultiplier) : '',
+      String(hpp),
+      conv2 ? String(Math.round(hpp * (Number(conv2.totalMultiplier) || 1))) : '',
+      conv3 ? String(Math.round(hpp * (Number(conv3.totalMultiplier) || 1))) : '',
+      conv4 ? String(Math.round(hpp * (Number(conv4.totalMultiplier) || 1))) : '',
+      String(p.price || 0),
+      conv2?.price ? String(conv2.price) : '',
+      conv3?.price ? String(conv3.price) : '',
+      conv4?.price ? String(conv4.price) : '',
+      String(p.point || 0),
+      '',
+      '',
+      '',
+      String(p.commission || 0),
+      '',
+      '',
+      '',
+      String(p.stock || 0),
+      String(p.minStock || 5),
+      p.itemType || 'Barang',
+      p.useSerial ? 'Y' : 'N',
+      p.shelf || '',
+      p.warehouseCode || 'GUD-PUSAT',
+      p.supplierCode || '',
+      p.isConsignment ? 'Y' : 'N',
+      (p.description || '').replace(/\r?\n/g, ' '),
+      p.sku1 || '',
+      p.sku2 || '',
+      p.sku3 || '',
+      p.sku4 || '',
+      p.taxType || 'NON-PAJAK',
+      p.taxSystem || 'INCLUDE',
+      p.referenceCode || '',
+      'Barang',
+    ];
+
+    const escaped = values.map((v) => escapeCsvValue(v, delimiter));
+    rows.push(escaped.join(delimiter));
+  });
+
+  return '\uFEFF' + rows.join('\r\n');
+}
+
