@@ -1684,6 +1684,14 @@ async function startServer() {
         addDeployLog(`⚠️ [git notice]: ${pullRes.stderr}`);
       }
 
+      // 2.5 Instal dependensi baru jika ada penambahan paket di package.json
+      addDeployLog('📦 Memeriksa dan memperbarui paket dependensi (npm install)...');
+      const installRes = await runShell('npm install --prefer-offline --no-audit || true');
+      if (installRes.stdout) {
+        const lastLine = installRes.stdout.split('\n').filter(Boolean).slice(-2).join('; ');
+        addDeployLog(`[npm install]: ${lastLine}`);
+      }
+
       // 3. Build kode production Vite + esbuild dengan alokasi heap 2GB
       addDeployLog('📦 Menjalankan kompilasi production (Vite 2GB heap + esbuild)...');
       const buildRes = await runShell('node --max-old-space-size=2048 ./node_modules/vite/bin/vite.js build && npx esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs');

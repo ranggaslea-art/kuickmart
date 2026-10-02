@@ -1,6 +1,43 @@
-import * as XLSX from 'xlsx';
 import { Product, ProductUnitConversion, Category, BrandItem } from '../types';
 import { getProductFallbackImage } from './imageHelper';
+
+let xlsxEnginePromise: Promise<any> | null = null;
+
+export async function getXlsxEngine(): Promise<any> {
+  if (typeof window === 'undefined') return null;
+  if ((window as any).XLSX) return (window as any).XLSX;
+  if (xlsxEnginePromise) return xlsxEnginePromise;
+
+  xlsxEnginePromise = new Promise((resolve) => {
+    const existing = document.querySelector('script[data-xlsx-engine]');
+    if (existing) {
+      if ((window as any).XLSX) {
+        resolve((window as any).XLSX);
+      } else {
+        existing.addEventListener('load', () => resolve((window as any).XLSX));
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.setAttribute('data-xlsx-engine', 'true');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    script.onload = () => resolve((window as any).XLSX);
+    script.onerror = () => {
+      const fallback = document.createElement('script');
+      fallback.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      fallback.onload = () => resolve((window as any).XLSX);
+      fallback.onerror = () => {
+        console.warn('XLSX engine could not be loaded from CDN');
+        resolve(null);
+      };
+      document.head.appendChild(fallback);
+    };
+    document.head.appendChild(script);
+  });
+
+  return xlsxEnginePromise;
+}
 
 export const EXCEL_IMPORT_COLUMNS = [
   'KODEITEM',
@@ -550,13 +587,36 @@ export function parseRawJsonRows(
 }
 
 /**
- * Parsing berkas Excel (.xlsx / .xls / .csv) menggunakan library xlsx
+ * Parsing berkas Excel (.xlsx / .xls / .csv) menggunakan library xlsx atau parser CSV internal
  */
 export async function parseExcelFile(
   file: File,
   existingProducts: Product[] = []
 ): Promise<ExcelImportParseResult> {
   try {
+    const fileName = (file.name || '').toLowerCase();
+
+    // 1. Jika berkas adalah CSV atau teks, proses langsung secara native
+    if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || file.type.includes('csv')) {
+      const text = await file.text();
+      return parsePastedExcelText(text, existingProducts);
+    }
+
+    // 2. Berkas biner Excel (.xlsx / .xls)
+    const XLSX = await getXlsxEngine();
+    if (!XLSX) {
+      return {
+        success: false,
+        totalRowsFound: 0,
+        validRows: [],
+        warningRows: [],
+        detectedColumns: [],
+        newCategoriesDetected: [],
+        newBrandsDetected: [],
+        errorMessage: 'Pustaka pembaca file Excel (.xlsx) biner sedang dimuat atau perangkat Anda offline. Sebagai alternatif cepat, Anda dapat menyimpan file Anda sebagai CSV (.csv) di Excel atau salin sel dan tempel di tab "Tempel Teks Sel".',
+      };
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -590,7 +650,7 @@ export async function parseExcelFile(
     }
 
     // Convert sheet ke json objek
-    const rawData = XLSX.utils.sheet_to_json<any>(targetSheet, { defval: '' });
+    const rawData = XLSX.utils.sheet_to_json(targetSheet, { defval: '' });
     return parseRawJsonRows(rawData, existingProducts);
   } catch (err: any) {
     return {
@@ -961,37 +1021,132 @@ export const SAMPLE_EXCEL_IMPORT_DATA = [
 ];
 
 /**
- * Buat dan unduh berkas template Excel (.xlsx) dengan 49 kolom resmi
+ * Buat dan unduh berkas template Excel dengan 49 kolom resmi
+ * Mendukung format XML Spreadsheet 2003 (.xls) yang dapat langsung dibuka di Excel tanpa library eksternal
+ * atau binary .xlsx jika XLSX engine sudah termuat.
  */
-export function downloadOfficialExcelTemplate(): void {
-  // Format baris untuk worksheet
-  const worksheet = XLSX.utils.json_to_sheet(SAMPLE_EXCEL_IMPORT_DATA, {
-    header: [...EXCEL_IMPORT_COLUMNS],
+export async function downloadOfficialExcelTemplate(): Promise<void> {
+  const XLSX = await getXlsxEngine();
+
+  if (XLSX) {
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(SAMPLE_EXCEL_IMPORT_DATA, {
+        header: [...EXCEL_IMPORT_COLUMNS],
+      });
+
+      worksheet['!cols'] = EXCEL_IMPORT_COLUMNS.map((col) => {
+        if (col === 'NAMAITEM') return { wch: 35 };
+        if (col === 'KODEITEM' || col === 'JENIS' || col === 'MEREK') return { wch: 18 };
+        if (col.startsWith('BARCODE')) return { wch: 18 };
+        if (col.startsWith('HARGA')) return { wch: 15 };
+        if (col === 'KETERANGAN') return { wch: 40 };
+        return { wch: 12 };
+      });
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'MasterItem');
+
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Template_Import_Cepat_Excel_toko_online_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    } catch {
+      // Fallback ke XML Spreadsheet 2003
+    }
+  }
+
+  // Pure XML Spreadsheet 2003 fallback (.xls)
+  const escapeXml = (str: any) => {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  };
+
+  const headerCells = EXCEL_IMPORT_COLUMNS.map(
+    (col) => `<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${escapeXml(col)}</Data></Cell>`
+  ).join('');
+
+  const dataRowsXml = SAMPLE_EXCEL_IMPORT_DATA.map((row) => {
+    const cellsXml = EXCEL_IMPORT_COLUMNS.map((col) => {
+      const val = (row as any)[col] ?? '';
+      const isNum = typeof val === 'number';
+      const type = isNum ? 'Number' : 'String';
+      const styleId = isNum ? 'NumberStyle' : 'TextStyle';
+      return `<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${escapeXml(val)}</Data></Cell>`;
+    }).join('');
+    return `<Row>${cellsXml}</Row>`;
+  }).join('\n');
+
+  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="HeaderStyle">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+   </Borders>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#059669" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="TextStyle">
+   <NumberFormat ss:Format="@"/>
+  </Style>
+  <Style ss:ID="NumberStyle">
+   <NumberFormat ss:Format="#,##0"/>
+   <Alignment ss:Horizontal="Right"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="MasterItem">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="110"/>
+   <Column ss:Width="230"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Row ss:Height="24">
+    ${headerCells}
+   </Row>
+   ${dataRowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xmlContent], {
+    type: 'application/vnd.ms-excel;charset=utf-8;',
   });
-
-  // Atur lebar kolom agar rapi saat dibuka di Microsoft Excel
-  worksheet['!cols'] = EXCEL_IMPORT_COLUMNS.map((col) => {
-    if (col === 'NAMAITEM') return { wch: 35 };
-    if (col === 'KODEITEM' || col === 'JENIS' || col === 'MEREK') return { wch: 18 };
-    if (col.startsWith('BARCODE')) return { wch: 18 };
-    if (col.startsWith('HARGA')) return { wch: 15 };
-    if (col === 'KETERANGAN') return { wch: 40 };
-    return { wch: 12 };
-  });
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'MasterItem');
-
-  // Generate binary Excel file
-  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([excelBuffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Template_Import_Cepat_Excel_toko_online_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  link.download = `Template_Import_Cepat_Excel_toko_online_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

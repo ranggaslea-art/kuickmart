@@ -1,5 +1,4 @@
 import { Product, Category } from '../types';
-import * as XLSX from 'xlsx';
 import { EXCEL_IMPORT_COLUMNS } from './excelImportParser';
 
 export type CsvDelimiter = ';' | ',';
@@ -385,12 +384,100 @@ export function downloadTextFile(content: string, fileName: string, mimeType: st
 }
 
 /**
- * Ekspor produk langsung ke format resmi Excel (.xlsx) dengan 49 kolom iPos / ritel standar
+ * Ekspor produk ke format resmi Excel (.xls) dengan 49 kolom iPos / ritel standar
+ * Menggunakan format XML Spreadsheet 2003 standar resmi Microsoft yang dapat dibuka
+ * langsung oleh Microsoft Excel, LibreOffice, WPS Office, dan Google Sheets secara native tanpa dependensi eksternal.
  */
 export function generateProductOfficial49ColumnExcel(
   products: Product[],
   categories: Category[] = []
 ): Blob {
+  // Jika window.XLSX tersedia secara runtime (misal dari CDN), gunakan binary xlsx
+  if (typeof window !== 'undefined' && (window as any).XLSX) {
+    try {
+      const XLSX = (window as any).XLSX;
+      const catMap = new Map<string, string>();
+      categories.forEach((c) => {
+        if (c) {
+          if (c.slug) catMap.set(c.slug, c.name);
+          if (c.id) catMap.set(c.id, c.name);
+        }
+      });
+
+      const rows = products.map((p) => {
+        const catName = catMap.get(p.category) || p.category;
+        const u1 = p.unit || 'Pcs';
+        const conv2 = p.unitConversions?.[0];
+        const conv3 = p.unitConversions?.[1];
+        const conv4 = p.unitConversions?.[2];
+        const hpp = typeof p.costPrice === 'number' ? p.costPrice : Math.round(p.price * 0.8);
+
+        return {
+          KODEITEM: p.itemCode || p.barcode || p.id,
+          NAMAITEM: p.name || '',
+          JENIS: catName || 'Sembako',
+          MEREK: p.brand || 'Umum',
+          SATUAN1: u1,
+          SATUAN2: conv2?.unitName || '',
+          SATUAN3: conv3?.unitName || '',
+          SATUAN4: conv4?.unitName || '',
+          BARCODESATUAN1: p.barcode || '',
+          BARCODESATUAN2: conv2?.barcode || '',
+          BARCODESATUAN3: conv3?.barcode || '',
+          BARCODESATUAN4: conv4?.barcode || '',
+          KONVERSI1: 1,
+          KONVERSI2: conv2?.totalMultiplier || '',
+          KONVERSI3: conv3?.totalMultiplier || '',
+          KONVERSI4: conv4?.totalMultiplier || '',
+          HARGAPOKOK1: hpp,
+          HARGAPOKOK2: conv2 ? Math.round(hpp * (Number(conv2.totalMultiplier) || 1)) : '',
+          HARGAPOKOK3: conv3 ? Math.round(hpp * (Number(conv3.totalMultiplier) || 1)) : '',
+          HARGAPOKOK4: conv4 ? Math.round(hpp * (Number(conv4.totalMultiplier) || 1)) : '',
+          HARGAJUAL1: p.price || 0,
+          HARGAJUAL2: conv2?.price || '',
+          HARGAJUAL3: conv3?.price || '',
+          HARGAJUAL4: conv4?.price || '',
+          POIN1: p.point || 0,
+          POIN2: '',
+          POIN3: '',
+          POIN4: '',
+          KOMISISALES1: p.commission || 0,
+          KOMISISALES2: '',
+          KOMISISALES3: '',
+          KOMISISALES4: '',
+          STOKAWAL: p.stock || 0,
+          STOKMINIMAL: p.minStock || 5,
+          TIPEITEM: p.itemType || 'Barang',
+          MENGGUNAKANSERIAL: p.useSerial ? 'Y' : 'N',
+          RAK: p.shelf || '',
+          KODEGUDANG: p.warehouseCode || 'GUD-PUSAT',
+          KODESUPPLIER: p.supplierCode || '',
+          KONSINYASI: p.isConsignment ? 'Y' : 'N',
+          KETERANGAN: (p.description || '').replace(/\r?\n/g, ' '),
+          SKU1: p.sku1 || '',
+          SKU2: p.sku2 || '',
+          SKU3: p.sku3 || '',
+          SKU4: p.sku4 || '',
+          JENISPAJAK: p.taxType || 'NON-PAJAK',
+          SISTEMPAJAK: p.taxSystem || 'INCLUDE',
+          KODEREFERENSI: p.referenceCode || '',
+          OPSIBRGJASA: 'Barang',
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: [...EXCEL_IMPORT_COLUMNS] });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'MasterItem');
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      return new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+    } catch {
+      // Fallback ke XML Spreadsheet 2003 di bawah
+    }
+  }
+
+  // Format Standar Microsoft XML Spreadsheet 2003 (Murni zero-dependency, 100% kompatibel Excel)
   const catMap = new Map<string, string>();
   categories.forEach((c) => {
     if (c) {
@@ -399,87 +486,173 @@ export function generateProductOfficial49ColumnExcel(
     }
   });
 
-  const rows = products.map((p) => {
+  const escapeXml = (str: any) => {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  };
+
+  const headerCells = EXCEL_IMPORT_COLUMNS.map(
+    (col) => `<Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${escapeXml(col)}</Data></Cell>`
+  ).join('');
+
+  const dataRowsXml = products.map((p) => {
     const catName = catMap.get(p.category) || p.category;
     const u1 = p.unit || 'Pcs';
     const conv2 = p.unitConversions?.[0];
     const conv3 = p.unitConversions?.[1];
     const conv4 = p.unitConversions?.[2];
-
     const hpp = typeof p.costPrice === 'number' ? p.costPrice : Math.round(p.price * 0.8);
 
-    return {
-      KODEITEM: p.itemCode || p.barcode || p.id,
-      NAMAITEM: p.name || '',
-      JENIS: catName || 'Sembako',
-      MEREK: p.brand || 'Umum',
-      SATUAN1: u1,
-      SATUAN2: conv2?.unitName || '',
-      SATUAN3: conv3?.unitName || '',
-      SATUAN4: conv4?.unitName || '',
-      BARCODESATUAN1: p.barcode || '',
-      BARCODESATUAN2: conv2?.barcode || '',
-      BARCODESATUAN3: conv3?.barcode || '',
-      BARCODESATUAN4: conv4?.barcode || '',
-      KONVERSI1: 1,
-      KONVERSI2: conv2?.totalMultiplier || '',
-      KONVERSI3: conv3?.totalMultiplier || '',
-      KONVERSI4: conv4?.totalMultiplier || '',
-      HARGAPOKOK1: hpp,
-      HARGAPOKOK2: conv2 ? Math.round(hpp * (Number(conv2.totalMultiplier) || 1)) : '',
-      HARGAPOKOK3: conv3 ? Math.round(hpp * (Number(conv3.totalMultiplier) || 1)) : '',
-      HARGAPOKOK4: conv4 ? Math.round(hpp * (Number(conv4.totalMultiplier) || 1)) : '',
-      HARGAJUAL1: p.price || 0,
-      HARGAJUAL2: conv2?.price || '',
-      HARGAJUAL3: conv3?.price || '',
-      HARGAJUAL4: conv4?.price || '',
-      POIN1: p.point || 0,
-      POIN2: '',
-      POIN3: '',
-      POIN4: '',
-      KOMISISALES1: p.commission || 0,
-      KOMISISALES2: '',
-      KOMISISALES3: '',
-      KOMISISALES4: '',
-      STOKAWAL: p.stock || 0,
-      STOKMINIMAL: p.minStock || 5,
-      TIPEITEM: p.itemType || 'Barang',
-      MENGGUNAKANSERIAL: p.useSerial ? 'Y' : 'N',
-      RAK: p.shelf || '',
-      KODEGUDANG: p.warehouseCode || 'GUD-PUSAT',
-      KODESUPPLIER: p.supplierCode || '',
-      KONSINYASI: p.isConsignment ? 'Y' : 'N',
-      KETERANGAN: (p.description || '').replace(/\r?\n/g, ' '),
-      SKU1: p.sku1 || '',
-      SKU2: p.sku2 || '',
-      SKU3: p.sku3 || '',
-      SKU4: p.sku4 || '',
-      JENISPAJAK: p.taxType || 'NON-PAJAK',
-      SISTEMPAJAK: p.taxSystem || 'INCLUDE',
-      KODEREFERENSI: p.referenceCode || '',
-      OPSIBRGJASA: 'Barang',
-    };
-  });
+    const values = [
+      p.itemCode || p.barcode || p.id,
+      p.name || '',
+      catName || 'Sembako',
+      p.brand || 'Umum',
+      u1,
+      conv2?.unitName || '',
+      conv3?.unitName || '',
+      conv4?.unitName || '',
+      p.barcode || '',
+      conv2?.barcode || '',
+      conv3?.barcode || '',
+      conv4?.barcode || '',
+      '1',
+      conv2?.totalMultiplier || '',
+      conv3?.totalMultiplier || '',
+      conv4?.totalMultiplier || '',
+      hpp,
+      conv2 ? Math.round(hpp * (Number(conv2.totalMultiplier) || 1)) : '',
+      conv3 ? Math.round(hpp * (Number(conv3.totalMultiplier) || 1)) : '',
+      conv4 ? Math.round(hpp * (Number(conv4.totalMultiplier) || 1)) : '',
+      p.price || 0,
+      conv2?.price || '',
+      conv3?.price || '',
+      conv4?.price || '',
+      p.point || '',
+      '',
+      '',
+      '',
+      p.commission || '',
+      '',
+      '',
+      '',
+      p.stock || 0,
+      p.minStock || 5,
+      p.itemType || 'Barang',
+      p.useSerial ? 'Y' : 'N',
+      p.shelf || '',
+      p.warehouseCode || 'GUD-PUSAT',
+      p.supplierCode || '',
+      p.isConsignment ? 'Y' : 'N',
+      (p.description || '').replace(/\r?\n/g, ' '),
+      p.sku1 || '',
+      p.sku2 || '',
+      p.sku3 || '',
+      p.sku4 || '',
+      p.taxType || 'NON-PAJAK',
+      p.taxSystem || 'INCLUDE',
+      p.referenceCode || '',
+      'Barang',
+    ];
 
-  const worksheet = XLSX.utils.json_to_sheet(rows, {
-    header: [...EXCEL_IMPORT_COLUMNS],
-  });
+    const cellsXml = values.map((val) => {
+      const isNum = typeof val === 'number' && !isNaN(val);
+      const type = isNum ? 'Number' : 'String';
+      const styleId = isNum ? 'NumberStyle' : 'TextStyle';
+      return `<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${escapeXml(val)}</Data></Cell>`;
+    }).join('');
 
-  worksheet['!cols'] = EXCEL_IMPORT_COLUMNS.map((col) => {
-    if (col === 'NAMAITEM') return { wch: 35 };
-    if (col === 'KODEITEM' || col === 'JENIS' || col === 'MEREK') return { wch: 18 };
-    if (col.startsWith('BARCODE')) return { wch: 18 };
-    if (col.startsWith('HARGA')) return { wch: 15 };
-    if (col === 'KETERANGAN') return { wch: 40 };
-    return { wch: 12 };
-  });
+    return `<Row>${cellsXml}</Row>`;
+  }).join('\n');
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'MasterItem');
+  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="HeaderStyle">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#047857"/>
+   </Borders>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#059669" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="TextStyle">
+   <NumberFormat ss:Format="@"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="NumberStyle">
+   <NumberFormat ss:Format="#,##0"/>
+   <Alignment ss:Horizontal="Right"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/>
+   </Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="MasterItem">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="110"/>
+   <Column ss:Width="230"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="70"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Column ss:Width="95"/>
+   <Row ss:Height="24">
+    ${headerCells}
+   </Row>
+   ${dataRowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
 
-  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-  return new Blob([excelBuffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  return new Blob([xmlContent], {
+    type: 'application/vnd.ms-excel;charset=utf-8;',
   });
 }
 
