@@ -715,7 +715,11 @@ export default function App() {
             ...p,
             image: formatImageUrl(p.image),
           }));
-          setProducts(formattedDb);
+          setProducts((prev) => {
+            const dbIds = new Set(formattedDb.map(p => p.id));
+            const localCustom = prev.filter(p => !dbIds.has(p.id) && (p.id.startsWith('prod_') || p.id.startsWith('custom_')));
+            return [...localCustom, ...formattedDb];
+          });
           try {
             const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
             localStorage.setItem(key, JSON.stringify(formattedDb));
@@ -754,7 +758,16 @@ export default function App() {
         }
       }
       if (dbCategories && dbCategories.length > 0) {
-        setCategories(dbCategories);
+        setCategories((prevCategories) => {
+          const map = new Map<string, Category>();
+          dbCategories.forEach(c => map.set(c.slug || c.id, c));
+          prevCategories.forEach(c => {
+            if (!map.has(c.slug || c.id)) {
+              map.set(c.slug || c.id, c);
+            }
+          });
+          return Array.from(map.values());
+        });
       }
       if (dbVouchers && dbVouchers.length > 0) {
         const relevantVouchers = isNewStore
@@ -881,6 +894,10 @@ export default function App() {
       if (moduleKey === 'products' && Array.isArray(data)) {
         const formatted = data.map(p => ({ ...p, image: formatImageUrl(p.image) }));
         setProducts(formatted);
+      } else if (moduleKey === 'categories' && Array.isArray(data)) {
+        setCategories(data);
+      } else if (moduleKey === 'brands' && Array.isArray(data)) {
+        setBrands(data);
       } else if (moduleKey === 'brand' && data) {
         setBrandConfig(data);
       } else if (moduleKey === 'identity' && data) {
@@ -1173,6 +1190,9 @@ export default function App() {
       import('./lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
         saveCategoriesToMySql(newCategories, currentSlug).catch(() => {});
       });
+      import('./lib/supabase').then(({ saveCategoriesToSupabase }) => {
+        saveCategoriesToSupabase(newCategories, currentSlug).catch(() => {});
+      });
     } catch {}
   };
 
@@ -1184,6 +1204,9 @@ export default function App() {
       saveTenantDataToCloud('brands', newBrands, currentSlug);
       import('./lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
         saveBrandsToMySql(newBrands, currentSlug).catch(() => {});
+      });
+      import('./lib/supabase').then(({ saveBrandsToSupabase }) => {
+        saveBrandsToSupabase(newBrands, currentSlug).catch(() => {});
       });
     } catch {}
   };
@@ -1387,10 +1410,15 @@ export default function App() {
       const isJsm = p.tags?.includes('JSM') || ((p.discountPercent || 0) > 0);
       if (!isJsm) return false;
     } else if (selectedCategory !== 'all') {
+      const matchedCatObj = (categories || []).find(c => c && (c.slug === selectedCategory || c.id === selectedCategory));
+      const targetSlug = matchedCatObj?.slug || selectedCategory;
+      const targetId = matchedCatObj?.id;
       const matchCat =
         p.category === selectedCategory ||
-        p.category === `cat_${selectedCategory}` ||
-        (p.category && p.category.replace('cat_', '') === selectedCategory);
+        p.category === targetSlug ||
+        (targetId && p.category === targetId) ||
+        p.category === `cat_${targetSlug}` ||
+        (p.category && p.category.replace('cat_', '') === targetSlug);
       if (!matchCat) return false;
     }
 

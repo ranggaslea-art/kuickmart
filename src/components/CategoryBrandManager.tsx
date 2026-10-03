@@ -10,6 +10,14 @@ import {
   saveBrandsToMySql, 
   deleteBrandFromMySql 
 } from '../lib/mysqlClientApi';
+import {
+  saveCategoriesToSupabase,
+  deleteCategoryFromSupabase,
+  saveBrandsToSupabase,
+  deleteBrandFromSupabase
+} from '../lib/supabase';
+import { getTenantStorageKey } from '../utils/tenantHelper';
+import { saveTenantDataToCloud } from '../utils/tenantCloudSync';
 import { 
   Tag, 
   Sparkles, 
@@ -221,12 +229,17 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
       return;
     }
 
-    const cleanSlug = (catFormSlug.trim() || catFormName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+    const rawSlug = (catFormSlug.trim() || catFormName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+    const cleanSlug = rawSlug === 'all' ? 'semua-produk' : (rawSlug || `cat-${Date.now()}`);
     
-    // Check duplicate slug
-    const duplicate = safeCategories.find(c => c && c.slug === cleanSlug && (!editingCategory || c.id !== editingCategory.id));
+    // Check duplicate slug or name
+    const duplicate = safeCategories.find(c => 
+      c && 
+      (c.slug.toLowerCase() === cleanSlug.toLowerCase() || c.name.trim().toLowerCase() === catFormName.trim().toLowerCase()) && 
+      (!editingCategory || c.id !== editingCategory.id)
+    );
     if (duplicate) {
-      triggerFeedback('error', `Slug URL "${cleanSlug}" sudah dipakai oleh kategori lain.`);
+      triggerFeedback('error', `Kategori dengan nama atau slug "${catFormName.trim()}" sudah ada.`);
       return;
     }
 
@@ -236,14 +249,22 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         ...editingCategory,
         name: catFormName.trim(),
         slug: cleanSlug,
-        icon: catFormIcon,
+        icon: catFormIcon || 'Store',
         badge: catFormBadge.trim() || undefined,
-        color: catFormColor,
+        color: catFormColor || 'blue',
       };
 
       const newCategories = safeCategories.map(c => c.id === editingCategory.id ? updatedCat : c);
       onUpdateCategories(newCategories);
+      
+      // Multi-layer persistence
+      try {
+        const key = getTenantStorageKey('toko_online_categories', tenantSlug);
+        localStorage.setItem(key, JSON.stringify(newCategories));
+        saveTenantDataToCloud('categories', newCategories, tenantSlug);
+      } catch {}
       saveCategoriesToMySql(newCategories, tenantSlug).catch(console.error);
+      saveCategoriesToSupabase(newCategories, tenantSlug).catch(console.error);
 
       // If slug changed and sync requested, update products
       if (oldSlug !== cleanSlug && catSyncProducts && onUpdateProducts) {
@@ -259,17 +280,26 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
       triggerFeedback('success', `Kategori "${updatedCat.name}" berhasil diperbarui dan tersimpan ke Database.`);
     } else {
       const newCat: Category = {
-        id: `cat_${Date.now()}`,
+        id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         name: catFormName.trim(),
         slug: cleanSlug,
-        icon: catFormIcon,
+        icon: catFormIcon || 'Store',
         badge: catFormBadge.trim() || undefined,
-        color: catFormColor,
+        color: catFormColor || 'blue',
       };
 
       const updatedList = [...safeCategories, newCat];
       onUpdateCategories(updatedList);
+      
+      // Multi-layer persistence
+      try {
+        const key = getTenantStorageKey('toko_online_categories', tenantSlug);
+        localStorage.setItem(key, JSON.stringify(updatedList));
+        saveTenantDataToCloud('categories', updatedList, tenantSlug);
+      } catch {}
       saveCategoriesToMySql(updatedList, tenantSlug).catch(console.error);
+      saveCategoriesToSupabase(updatedList, tenantSlug).catch(console.error);
+
       triggerFeedback('success', `Kategori "${newCat.name}" berhasil ditambahkan dan tersimpan ke Database.`);
     }
 
@@ -291,7 +321,14 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
     const remainingCategories = safeCategories.filter(c => c && c.id !== targetId);
     onUpdateCategories(remainingCategories);
+    
+    try {
+      const key = getTenantStorageKey('toko_online_categories', tenantSlug);
+      localStorage.setItem(key, JSON.stringify(remainingCategories));
+      saveTenantDataToCloud('categories', remainingCategories, tenantSlug);
+    } catch {}
     deleteCategoryFromMySql(targetId, tenantSlug).catch(console.error);
+    deleteCategoryFromSupabase(targetId, tenantSlug).catch(console.error);
 
     // Reassign products with this category to fallback ('sembako' or 'all')
     if (onUpdateProducts) {
@@ -393,7 +430,13 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
       const newBrands = safeBrands.map(b => b.id === editingBrand.id ? updatedBrand : b);
       onUpdateBrands(newBrands);
+      try {
+        const key = getTenantStorageKey('toko_online_brands', tenantSlug);
+        localStorage.setItem(key, JSON.stringify(newBrands));
+        saveTenantDataToCloud('brands', newBrands, tenantSlug);
+      } catch {}
       saveBrandsToMySql(newBrands, tenantSlug).catch(console.error);
+      saveBrandsToSupabase(newBrands, tenantSlug).catch(console.error);
 
       // If name changed and sync requested, update products in catalog
       if (oldName.toLowerCase() !== trimmedName.toLowerCase() && brandSyncProducts && onUpdateProducts) {
@@ -420,7 +463,13 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
       const updatedList = [...safeBrands, newBrand];
       onUpdateBrands(updatedList);
+      try {
+        const key = getTenantStorageKey('toko_online_brands', tenantSlug);
+        localStorage.setItem(key, JSON.stringify(updatedList));
+        saveTenantDataToCloud('brands', updatedList, tenantSlug);
+      } catch {}
       saveBrandsToMySql(updatedList, tenantSlug).catch(console.error);
+      saveBrandsToSupabase(updatedList, tenantSlug).catch(console.error);
       triggerFeedback('success', `Merk "${newBrand.name}" berhasil ditambahkan dan tersimpan ke Database.`);
     }
 
@@ -434,7 +483,13 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
     const targetId = brandDeleteTarget.id;
     const remainingBrands = safeBrands.filter(b => b && b.id !== targetId);
     onUpdateBrands(remainingBrands);
+    try {
+      const key = getTenantStorageKey('toko_online_brands', tenantSlug);
+      localStorage.setItem(key, JSON.stringify(remainingBrands));
+      saveTenantDataToCloud('brands', remainingBrands, tenantSlug);
+    } catch {}
     deleteBrandFromMySql(targetId, tenantSlug).catch(console.error);
+    deleteBrandFromSupabase(targetId, tenantSlug).catch(console.error);
 
     triggerFeedback('success', `Merk "${targetName}" berhasil dihapus dari Database.`);
     setBrandDeleteTarget(null);

@@ -6,6 +6,7 @@ import {
   PurchaseOrder,
   Store, 
   Category, 
+  BrandItem,
   Voucher, 
   CartItem,
   BrandHeaderFooterConfig,
@@ -883,15 +884,30 @@ export async function fetchStoresFromSupabase(): Promise<Store[] | null> {
 }
 
 // Fetch categories from Supabase
-export async function fetchCategoriesFromSupabase(): Promise<Category[] | null> {
+export async function fetchCategoriesFromSupabase(storeId?: string): Promise<Category[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
   try {
-    const { data, error } = await supabase.from('categories').select('*').order('name');
-    if (error || !data || data.length === 0) return null;
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    const isNew = !isDefaultStore(targetSlug);
+    if (isNew) {
+      const cloudCats = await getTenantCloudRecord<Category[]>('categories', targetSlug);
+      if (cloudCats && Array.isArray(cloudCats) && cloudCats.length > 0) {
+        return cloudCats;
+      }
+    }
 
-    return data.map((row: any) => ({
+    const { data, error } = await supabase.from('categories').select('*').order('name');
+    if (error || !data || data.length === 0) {
+      if (isNew) {
+        const cloudCats = await getTenantCloudRecord<Category[]>('categories', targetSlug);
+        return cloudCats || null;
+      }
+      return null;
+    }
+
+    const mapped = data.map((row: any) => ({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -899,8 +915,124 @@ export async function fetchCategoriesFromSupabase(): Promise<Category[] | null> 
       badge: row.badge || undefined,
       color: row.color || undefined,
     }));
+
+    if (isNew) {
+      const cloudCats = await getTenantCloudRecord<Category[]>('categories', targetSlug);
+      if (cloudCats && Array.isArray(cloudCats) && cloudCats.length > 0) {
+        return cloudCats;
+      }
+    }
+
+    return mapped;
   } catch (e) {
     return null;
+  }
+}
+
+// Save single category to Supabase
+export async function saveCategoryToSupabase(category: Category, storeId?: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    const payload = {
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      icon: category.icon || 'Store',
+      badge: category.badge || null,
+      color: category.color || 'blue',
+    };
+    await supabase.from('categories').upsert(payload, { onConflict: 'id' });
+    const currentList = (await getTenantCloudRecord<Category[]>('categories', targetSlug)) || [];
+    const updated = [category, ...currentList.filter(c => c.id !== category.id && c.slug !== category.slug)];
+    await setTenantCloudRecord('categories', targetSlug, updated);
+    return true;
+  } catch (err) {
+    console.warn('saveCategoryToSupabase error:', err);
+    return false;
+  }
+}
+
+// Save entire categories list to Supabase
+export async function saveCategoriesToSupabase(categories: Category[], storeId?: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    const payload = categories.map(c => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      icon: c.icon || 'Store',
+      badge: c.badge || null,
+      color: c.color || 'blue',
+    }));
+    await supabase.from('categories').upsert(payload, { onConflict: 'id' });
+    await setTenantCloudRecord('categories', targetSlug, categories);
+    return true;
+  } catch (err) {
+    console.warn('saveCategoriesToSupabase error:', err);
+    return false;
+  }
+}
+
+// Delete category from Supabase
+export async function deleteCategoryFromSupabase(categoryId: string, storeId?: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    await supabase.from('categories').delete().eq('id', categoryId);
+    const currentList = (await getTenantCloudRecord<Category[]>('categories', targetSlug)) || [];
+    const updated = currentList.filter(c => c.id !== categoryId);
+    await setTenantCloudRecord('categories', targetSlug, updated);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Save single brand to Supabase
+export async function saveBrandToSupabase(brand: BrandItem, storeId?: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    const currentList = (await getTenantCloudRecord<BrandItem[]>('brands', targetSlug)) || [];
+    const updated = [brand, ...currentList.filter(b => b.id !== brand.id)];
+    await setTenantCloudRecord('brands', targetSlug, updated);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Save entire brands list to Supabase
+export async function saveBrandsToSupabase(brands: BrandItem[], storeId?: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    await setTenantCloudRecord('brands', targetSlug, brands);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Delete brand from Supabase
+export async function deleteBrandFromSupabase(brandId: string, storeId?: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  try {
+    const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default';
+    const currentList = (await getTenantCloudRecord<BrandItem[]>('brands', targetSlug)) || [];
+    const updated = currentList.filter(b => b.id !== brandId);
+    await setTenantCloudRecord('brands', targetSlug, updated);
+    return true;
+  } catch {
+    return false;
   }
 }
 

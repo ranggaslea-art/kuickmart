@@ -161,7 +161,17 @@ import { SeoGoogleManager } from './SeoGoogleManager';
 import { MySqlDatabaseManager } from './MySqlDatabaseManager';
 import { ProductExportModal } from './ProductExportModal';
 import { ExcelQuickImportManager } from './ExcelQuickImportManager';
-import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
+import { 
+  syncOrderToSupabase, 
+  saveStaffUserToSupabase, 
+  deleteStaffUserFromSupabase, 
+  saveCustomerToSupabase, 
+  savePurchaseToSupabase,
+  saveProductToSupabase,
+  deleteProductFromSupabase,
+  saveCategoriesToSupabase,
+  saveBrandsToSupabase
+} from '../lib/supabase';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
@@ -633,6 +643,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       import('../lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
         saveCategoriesToMySql(safeList, currentSlug).catch(console.error);
       });
+      saveCategoriesToSupabase(safeList, currentSlug).catch(console.error);
     } catch (e) {
       console.error(e);
     }
@@ -669,6 +680,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       import('../lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
         saveBrandsToMySql(safeList, currentSlug).catch(console.error);
       });
+      saveBrandsToSupabase(safeList, currentSlug).catch(console.error);
     } catch (e) {
       console.error(e);
     }
@@ -794,6 +806,46 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [formConversions, setFormConversions] = useState<ProductUnitConversion[]>([]);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [productFeedback, setProductFeedback] = useState<{ type: 'success' | 'error'; message: string; isRlsError?: boolean } | null>(null);
+  const [showInlineAddCategory, setShowInlineAddCategory] = useState(false);
+  const [inlineCatName, setInlineCatName] = useState('');
+
+  const handleQuickCreateCategory = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = inlineCatName.trim();
+    if (!trimmed) return;
+    const rawSlug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const cleanSlug = rawSlug === 'all' ? 'semua-produk' : (rawSlug || `cat-${Date.now()}`);
+
+    const existing = activeCategories.find(c => c && (c.slug.toLowerCase() === cleanSlug.toLowerCase() || c.name.trim().toLowerCase() === trimmed.toLowerCase()));
+    if (existing) {
+      setFormCategory(existing.slug || existing.id);
+      setShowInlineAddCategory(false);
+      setInlineCatName('');
+      setProductFeedback({
+        type: 'success',
+        message: `Kategori "${existing.name}" sudah ada dan otomatis dipilih!`,
+      });
+      return;
+    }
+
+    const newCat: Category = {
+      id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: trimmed,
+      slug: cleanSlug,
+      icon: 'Tag',
+      color: 'blue',
+    };
+
+    const updated = [...activeCategories, newCat];
+    handleUpdateCategories(updated);
+    setFormCategory(cleanSlug);
+    setShowInlineAddCategory(false);
+    setInlineCatName('');
+    setProductFeedback({
+      type: 'success',
+      message: `Kategori baru "${trimmed}" berhasil dibuat dan langsung dipilih!`,
+    });
+  };
 
   // Orders Sync State & Handler
   const [isSyncingOrders, setIsSyncingOrders] = useState(false);
@@ -1460,27 +1512,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         };
 
         if (onEditProduct) {
-          const res = await onEditProduct(updatedProd);
-          import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
-            saveProductToMySql(updatedProd, currentSlug).catch(console.error);
-          });
-          setProductFeedback({
-            type: 'success',
-            message: `Produk "${updatedProd.name}" berhasil diperbarui dan tersimpan ke Database!`,
-          });
-        } else {
-          onUpdateProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
-          import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
-            saveProductToMySql(updatedProd, currentSlug).catch(console.error);
-          });
-          setProductFeedback({
-            type: 'success',
-            message: `Perubahan produk "${updatedProd.name}" berhasil disimpan ke Database!`,
-          });
+          await onEditProduct(updatedProd);
         }
+        onUpdateProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
+        saveProductToSupabase(updatedProd).catch(console.error);
+        import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+          saveProductToMySql(updatedProd, currentSlug).catch(console.error);
+        });
+        setProductFeedback({
+          type: 'success',
+          message: `Perubahan produk "${updatedProd.name}" berhasil disimpan ke Database!`,
+        });
       } else {
         const newProd: Product = {
-          id: `prod_${Date.now()}`,
+          id: `prod_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           name: formName,
           brand: formBrand,
           category: formCategory,
@@ -1501,12 +1546,29 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
         if (onAddProduct) {
           await onAddProduct(newProd);
-        } else {
-          onUpdateProducts([newProd, ...products]);
         }
+        onUpdateProducts([newProd, ...products.filter(p => p.id !== newProd.id)]);
+        saveProductToSupabase(newProd).catch(console.error);
         import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
           saveProductToMySql(newProd, currentSlug).catch(console.error);
         });
+
+        // Auto-daftarkan brand baru jika belum ada di master merk
+        if (formBrand.trim()) {
+          const brandExists = activeBrands.some(b => (b.name || '').trim().toLowerCase() === formBrand.trim().toLowerCase());
+          if (!brandExists) {
+            const autoBrd: BrandItem = {
+              id: `brd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              name: formBrand.trim(),
+              code: formBrand.trim().substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, ''),
+              categorySlug: formCategory,
+              isActive: true,
+              createdAt: new Date().toISOString(),
+            };
+            handleUpdateBrands([...activeBrands, autoBrd]);
+          }
+        }
+
         setProductFeedback({
           type: 'success',
           message: `Produk "${newProd.name}" berhasil ditambahkan dan tersimpan permanen ke Database!`,
@@ -2845,27 +2907,83 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block font-bold text-stone-700">Kategori Produk:</label>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('categories_brands')}
-                          className="text-[10px] text-pink-700 hover:text-pink-900 font-bold hover:underline flex items-center gap-0.5"
-                          title="Buka modul manajemen kategori dan merk"
-                        >
-                          <Tag className="w-2.5 h-2.5" />
-                          <span>Kelola Kategori</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setShowInlineAddCategory(!showInlineAddCategory)}
+                            className="text-[10px] text-blue-700 hover:text-blue-900 font-bold hover:underline flex items-center gap-0.5 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200 cursor-pointer shadow-2xs transition-colors"
+                            title="Buat kategori baru langsung tanpa keluar form"
+                          >
+                            <Plus className="w-2.5 h-2.5 text-blue-600" />
+                            <span>+ Kategori Baru</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('categories_brands')}
+                            className="text-[10px] text-pink-700 hover:text-pink-900 font-bold hover:underline flex items-center gap-0.5"
+                            title="Buka modul manajemen kategori dan merk"
+                          >
+                            <Tag className="w-2.5 h-2.5" />
+                            <span>Kelola Semua</span>
+                          </button>
+                        </div>
                       </div>
-                      <select
-                        value={formCategory}
-                        onChange={e => setFormCategory(e.target.value)}
-                        className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-blue-100"
-                      >
-                        {activeCategories.filter(cat => cat && cat.slug !== 'all').map(cat => (
-                          <option key={cat.id || cat.slug} value={cat.slug || cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
+
+                      {showInlineAddCategory ? (
+                        <div className="p-2.5 bg-blue-50/90 border border-blue-200 rounded-xl space-y-2 mb-2 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[11px] text-blue-950 flex items-center gap-1">
+                              <Plus className="w-3 h-3 text-blue-600" />
+                              <span>Tambah Kategori Baru Instan:</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowInlineAddCategory(false);
+                                setInlineCatName('');
+                              }}
+                              className="text-[10px] text-stone-400 hover:text-stone-700 font-bold"
+                            >
+                              ✕ Batal
+                            </button>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={inlineCatName}
+                              onChange={e => setInlineCatName(e.target.value)}
+                              placeholder="Ketik nama kategori (cth: Rokok, Kopi, dsb)..."
+                              className="flex-1 px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-300 focus:outline-none"
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleQuickCreateCategory();
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleQuickCreateCategory()}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-2xs whitespace-nowrap cursor-pointer"
+                            >
+                              Simpan & Pakai
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          value={formCategory}
+                          onChange={e => setFormCategory(e.target.value)}
+                          className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-blue-100"
+                        >
+                          {activeCategories.filter(cat => cat && cat.slug !== 'all').map(cat => (
+                            <option key={cat.id || cat.slug} value={cat.slug || cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                     <div>

@@ -7,6 +7,8 @@ import { Product, StoreTenantIdentity, BrandHeaderFooterConfig, Voucher, Receipt
  */
 const STORAGE_KEY_MAPPING: Record<string, string> = {
   products: 'toko_online_products',
+  categories: 'toko_online_categories',
+  brands: 'toko_online_brands',
   identity: STORAGE_TENANT_PREFIX,
   brand: 'toko_online_brand_config',
   vouchers: 'toko_online_vouchers',
