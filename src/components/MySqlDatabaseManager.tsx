@@ -138,8 +138,8 @@ export const MySqlDatabaseManager: React.FC<MySqlDatabaseManagerProps> = ({
     }
   };
 
-  // Skrip Bash otomatis 1 baris untuk instalasi di VPS Debian / Ubuntu
-  const vpsInstallScript = `bash /var/www/kuickmart/scripts/install-mysql.sh || bash -c "apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server php-fpm php-mysql phpmyadmin && mysql -e \\"CREATE DATABASE IF NOT EXISTS kuickmart_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS 'kuickmart_user'@'localhost' IDENTIFIED BY 'Kuickmart2026Secure'; GRANT ALL PRIVILEGES ON kuickmart_db.* TO 'kuickmart_user'@'localhost'; FLUSH PRIVILEGES;\\" && ln -sfn /usr/share/phpmyadmin /var/www/kuickmart/dist/phpmyadmin || true && systemctl enable mariadb && systemctl restart mariadb && systemctl restart nginx"`;
+  // Skrip Bash otomatis 1 baris untuk instalasi MariaDB + phpMyAdmin + konfigurasi Nginx di VPS
+  const vpsInstallScript = `bash /var/www/kuickmart/scripts/setup-phpmyadmin-nginx.sh || bash /var/www/kuickmart/scripts/install-mysql.sh`;
 
   const copyInstallScript = () => {
     navigator.clipboard.writeText(vpsInstallScript);
@@ -148,8 +148,8 @@ export const MySqlDatabaseManager: React.FC<MySqlDatabaseManagerProps> = ({
   };
 
   const phpMyAdminUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/phpmyadmin`
-    : 'https://www.toko-online.online/phpmyadmin';
+    ? `${window.location.origin}/phpmyadmin/`
+    : 'https://www.toko-online.online/phpmyadmin/';
 
   return (
     <div className="space-y-6">

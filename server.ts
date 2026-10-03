@@ -2014,8 +2014,12 @@ async function startServer() {
         orders: 0
       };
 
-      // Pastikan skema tabel sudah siap
-      await initializeMySqlSchema();
+      // Pastikan skema tabel sudah siap dan kolom variants serta LONGTEXT tersedia
+      try {
+        await pool.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSON');
+        await pool.query('ALTER TABLE products MODIFY COLUMN image LONGTEXT');
+        await pool.query('ALTER TABLE products MODIFY COLUMN description LONGTEXT');
+      } catch (_) {}
 
       // 1. Simpan Stores
       for (const s of stores) {
