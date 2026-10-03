@@ -630,6 +630,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
       localStorage.setItem(key, JSON.stringify(safeList));
       saveTenantDataToCloud('categories', safeList, currentSlug);
+      import('../lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
+        saveCategoriesToMySql(safeList, currentSlug).catch(console.error);
+      });
     } catch (e) {
       console.error(e);
     }
@@ -663,6 +666,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
       localStorage.setItem(key, JSON.stringify(safeList));
       saveTenantDataToCloud('brands', safeList, currentSlug);
+      import('../lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
+        saveBrandsToMySql(safeList, currentSlug).catch(console.error);
+      });
     } catch (e) {
       console.error(e);
     }

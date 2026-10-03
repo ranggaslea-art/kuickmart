@@ -1099,6 +1099,9 @@ export default function App() {
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCategories));
       saveTenantDataToCloud('categories', newCategories, currentSlug);
+      import('./lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
+        saveCategoriesToMySql(newCategories, currentSlug).catch(() => {});
+      });
     } catch {}
   };
 
@@ -1108,6 +1111,9 @@ export default function App() {
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
       localStorage.setItem(key, JSON.stringify(newBrands));
       saveTenantDataToCloud('brands', newBrands, currentSlug);
+      import('./lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
+        saveBrandsToMySql(newBrands, currentSlug).catch(() => {});
+      });
     } catch {}
   };
 

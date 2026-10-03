@@ -177,6 +177,55 @@ export async function fetchProductsFromMySql(tenantSlug: string = 'default'): Pr
 }
 
 /**
+ * Simpan daftar kategori ke MySQL
+ */
+export async function saveCategoriesToMySql(categories: Category[], tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch('/api/mysql/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hapus kategori dari MySQL
+ */
+export async function deleteCategoryFromMySql(categoryId: string, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/mysql/categories/${encodeURIComponent(categoryId)}?tenantSlug=${encodeURIComponent(tenantSlug)}`, {
+      method: 'DELETE',
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Simpan daftar merek ke MySQL
+ */
+export async function saveBrandsToMySql(brands: BrandItem[], tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch('/api/mysql/brands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brands, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Simpan transaksi pesanan ke MySQL
  */
 export async function saveOrderToMySql(order: Order, tenantSlug: string = 'default'): Promise<boolean> {

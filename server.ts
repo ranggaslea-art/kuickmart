@@ -1825,6 +1825,79 @@ async function startServer() {
     res.json(result);
   });
 
+  // GET /api/mysql/categories - Ambil kategori dari MySQL
+  app.get('/api/mysql/categories', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      const [rows]: any = await pool.query(
+        'SELECT * FROM categories WHERE tenant_slug = ? ORDER BY name ASC',
+        [tenantSlug]
+      );
+      res.json({ success: true, count: rows.length, categories: rows });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, categories: [] });
+    }
+  });
+
+  // POST /api/mysql/categories - Simpan satu atau banyak kategori ke MySQL
+  app.post('/api/mysql/categories', async (req, res) => {
+    try {
+      const { category, categories, tenantSlug = 'default' } = req.body;
+      const pool = getMySqlPool();
+      const items = categories || (category ? [category] : []);
+      for (const c of items) {
+        if (!c || !c.name) continue;
+        const catId = c.id || `cat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const slug = c.slug || catId;
+        await pool.query(
+          `INSERT INTO categories (id, tenant_slug, slug, name, icon, color, image)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE name=VALUES(name), slug=VALUES(slug), icon=VALUES(icon), color=VALUES(color), image=VALUES(image)`,
+          [catId, tenantSlug, slug, c.name, c.icon || 'Store', c.color || '#10B981', c.image || '']
+        );
+      }
+      res.json({ success: true, message: 'Kategori berhasil disimpan ke MySQL' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // DELETE /api/mysql/categories/:id - Hapus kategori dari MySQL
+  app.delete('/api/mysql/categories/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      await pool.query('DELETE FROM categories WHERE id = ? AND tenant_slug = ?', [id, tenantSlug]);
+      res.json({ success: true, message: 'Kategori berhasil dihapus dari MySQL' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/mysql/brands - Simpan satu atau banyak merek ke MySQL
+  app.post('/api/mysql/brands', async (req, res) => {
+    try {
+      const { brand, brands, tenantSlug = 'default' } = req.body;
+      const pool = getMySqlPool();
+      const items = brands || (brand ? [brand] : []);
+      for (const b of items) {
+        if (!b || !b.name) continue;
+        const bId = b.id || `brd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        await pool.query(
+          `INSERT INTO brands (id, tenant_slug, name, logo, is_active)
+           VALUES (?, ?, ?, ?, 1)
+           ON DUPLICATE KEY UPDATE name=VALUES(name), logo=VALUES(logo)`,
+          [bId, tenantSlug, b.name, b.logo || '']
+        );
+      }
+      res.json({ success: true, message: 'Merek berhasil disimpan ke MySQL' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // GET /api/mysql/products - Ambil daftar produk dari MySQL
   app.get('/api/mysql/products', async (req, res) => {
     try {
@@ -2202,14 +2275,24 @@ async function startServer() {
   });
 
   // Vite middleware for development or static serving for production
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
+  const candidateDistPaths = [
+    path.join(process.cwd(), 'dist'),
+    path.join(__dirname, 'dist'),
+    '/var/www/kuickmart/dist',
+  ];
+  let distPath = candidateDistPaths[0];
+  let hasBuiltDist = false;
+
+  for (const cand of candidateDistPaths) {
+    if (fs.existsSync(path.join(cand, 'index.html'))) {
+      distPath = cand;
+      hasBuiltDist = true;
+      break;
+    }
+  }
+
+  if (process.env.NODE_ENV === 'production' && hasBuiltDist) {
+    console.log(`[Static] Serving production build from: ${distPath}`);
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
@@ -2225,6 +2308,13 @@ async function startServer() {
       res.setHeader('Expires', '0');
       res.sendFile(path.join(distPath, 'index.html'));
     });
+  } else {
+    console.log(`[Vite] Mounting Vite on-the-fly middleware (hasBuiltDist=${hasBuiltDist}, NODE_ENV=${process.env.NODE_ENV})...`);
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
   }
 
   app.listen(PORT, '0.0.0.0', () => {

@@ -86,6 +86,19 @@ export async function saveTenantDataToCloud<T = any>(
       );
     }
 
+    // 4. Sinkronisasikan otomatis ke MySQL (MariaDB)
+    try {
+      if (moduleKey === 'categories' && Array.isArray(data)) {
+        import('../lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
+          saveCategoriesToMySql(data as any, effectiveSlug).catch(() => {});
+        });
+      } else if (moduleKey === 'brands' && Array.isArray(data)) {
+        import('../lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
+          saveBrandsToMySql(data as any, effectiveSlug).catch(() => {});
+        });
+      }
+    } catch (_) {}
+
     return true;
   } catch (err) {
     console.warn(`[CloudSync] Exception saat saveTenantDataToCloud (${cloudDocId}):`, err);
