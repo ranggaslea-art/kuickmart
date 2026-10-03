@@ -5,11 +5,10 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Safe directory detection compatible with both ESM (tsx dev) and CommonJS (dist/server.cjs in production)
+const appDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
 import { 
   getMySqlPool, 
   getMySqlConfig, 
@@ -195,8 +194,8 @@ async function startServer() {
     const swCandidates = [
       path.join(process.cwd(), 'dist', 'sw.js'),
       path.join(process.cwd(), 'public', 'sw.js'),
-      path.join(__dirname, 'dist', 'sw.js'),
-      path.join(__dirname, 'public', 'sw.js'),
+      path.join(appDir, 'dist', 'sw.js'),
+      path.join(appDir, 'public', 'sw.js'),
     ];
     const swPath = swCandidates.find((p) => fs.existsSync(p));
 
@@ -2601,7 +2600,7 @@ async function startServer() {
   // Vite middleware for development or static serving for production
   const candidateDistPaths = [
     path.join(process.cwd(), 'dist'),
-    path.join(__dirname, 'dist'),
+    path.join(appDir, 'dist'),
     '/var/www/kuickmart/dist',
   ];
   let distPath = candidateDistPaths[0];
