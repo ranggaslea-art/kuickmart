@@ -655,6 +655,10 @@ export interface StorePromoInfo {
   badgeColor?: string;
   ctaText?: string;
   targetCategory?: string;
+  targetAction?: 'category' | 'product' | 'flash_sale' | 'voucher' | 'member';
+  targetProductId?: string;
+  targetProductName?: string;
+  targetTag?: string;
   discountValue?: string; // e.g. "Hemat s.d 35%", "Diskon 40%", "Beli 2 Gratis 1"
   bgGradient?: string;
   imageUrl?: string;

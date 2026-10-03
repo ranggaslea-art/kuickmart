@@ -8,6 +8,7 @@ import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 interface ProductCardProps {
   product: Product;
   quantityInCart: number;
+  isHighlighted?: boolean;
   onAddToCart: (
     product: Product, 
     quantity?: number, 
@@ -21,6 +22,7 @@ interface ProductCardProps {
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   quantityInCart,
+  isHighlighted = false,
   onAddToCart,
   onUpdateQuantity,
   onOpenDetail,
@@ -57,7 +59,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden group">
+    <div 
+      id={`product-card-${product.id}`}
+      className={`bg-white rounded-2xl border transition-all duration-300 flex flex-col justify-between overflow-hidden group ${
+        isHighlighted
+          ? 'border-orange-500 ring-4 ring-orange-400/70 shadow-2xl scale-[1.03] z-10'
+          : 'border-stone-200 hover:border-blue-300 hover:shadow-md'
+      }`}
+    >
+      {/* Highlight Banner if targeted by promo */}
+      {isHighlighted && (
+        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-red-500 text-white text-[10px] font-black uppercase tracking-wider py-1 px-2.5 text-center flex items-center justify-center gap-1 shadow-xs animate-pulse">
+          <Sparkles className="w-3 h-3 text-yellow-200 fill-yellow-200" />
+          <span>Produk Promo Terpilih</span>
+        </div>
+      )}
+
       {/* Product Image & Badges */}
       <div 
         onClick={() => onOpenDetail(product)} 

@@ -22,18 +22,30 @@ import {
 import { StorePromoInfo } from '../types';
 import { resolvePromoMediaUrl, formatImageUrl } from '../utils/imageHelper';
 
+export interface PromoNavigationTarget {
+  targetCategory?: string;
+  targetProductId?: string;
+  targetProductName?: string;
+  targetTag?: string;
+  targetAction?: 'category' | 'product' | 'flash_sale' | 'voucher' | 'member';
+  title?: string;
+  ctaText?: string;
+}
+
 interface HeroBannerProps {
   onSelectCategory: (slug: string) => void;
   onOpenMemberModal: () => void;
   storePromos?: StorePromoInfo[];
   onOpenPromoManager?: () => void;
+  onNavigatePromo?: (target: PromoNavigationTarget) => void;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ 
   onSelectCategory, 
   onOpenMemberModal,
   storePromos,
-  onOpenPromoManager 
+  onOpenPromoManager,
+  onNavigatePromo
 }) => {
   const [activeSlide, setActiveSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -59,11 +71,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       title: 'Kebutuhan Dapur & Sembako Hemat s.d. 35%',
       subtitle: 'Minyak Bimoli 2L, Beras Ramos 5kg, & Gula Pasir harga spesial minimarket.',
       cta: 'Serbu Promo JSM',
-      category: 'jsm-promo',
+      category: 'sembako',
+      targetCategory: 'sembako',
+      targetAction: 'category' as const,
+      targetProductId: 'p_01',
+      targetProductName: 'Bimoli Minyak Goreng Pouch 2 Liter',
       bgGradient: 'from-blue-900 via-indigo-900 to-red-900',
       image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=60',
       discountValue: '35%',
-      displayMode: 'standard',
+      displayMode: 'standard' as const,
     },
     {
       badge: 'FLASH SALE KILAT',
@@ -72,10 +88,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       subtitle: 'Pocari Sweat, Ultra Milk, Chitato, & Sosro harga paling juara se-Indonesia!',
       cta: 'Cek Flash Deals',
       category: 'minuman',
+      targetCategory: 'minuman',
+      targetAction: 'category' as const,
+      targetTag: 'Beli 1 Gratis 1',
       bgGradient: 'from-red-900 via-rose-900 to-amber-900',
       image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=60',
       discountValue: 'Beli 2 Gratis 1',
-      displayMode: 'standard',
+      displayMode: 'standard' as const,
     },
     {
       badge: 'GRATIS ONGKIR SEPUASNYA',
@@ -84,10 +103,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       subtitle: 'Bebas ongkos kirim minimum belanja Rp 30.000 dengan kode voucher ONGKIRNUSA.',
       cta: 'Belanja Sekarang',
       category: 'all',
+      targetCategory: 'all',
+      targetAction: 'product' as const,
+      targetProductId: 'p_01',
+      targetProductName: 'Bimoli Minyak Goreng Pouch 2 Liter',
       bgGradient: 'from-emerald-950 via-teal-900 to-blue-900',
       image: 'https://images.unsplash.com/photo-1526367790999-0150786686a2?w=800&auto=format&fit=crop&q=60',
       discountValue: 'Gratis Ongkir',
-      displayMode: 'standard',
+      displayMode: 'standard' as const,
     },
   ];
 
@@ -101,6 +124,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           subtitle: b.subtitle || '',
           cta: b.ctaText || 'Lihat Promo',
           category: b.targetCategory || 'all',
+          targetCategory: b.targetCategory || 'all',
+          targetProductId: b.targetProductId,
+          targetProductName: b.targetProductName,
+          targetTag: b.targetTag,
+          targetAction: b.targetAction || (b.targetProductId ? 'product' : 'category'),
           bgGradient: b.bgGradient || 'from-blue-900 via-indigo-900 to-red-900',
           image: b.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=60',
           videoUrl: b.videoUrl,
@@ -226,6 +254,22 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   }, []);
 
   const currentBanner = banners[activeSlide] || banners[0];
+
+  const handleBannerAction = (banner: typeof currentBanner) => {
+    if (onNavigatePromo) {
+      onNavigatePromo({
+        targetCategory: banner.targetCategory || banner.category,
+        targetProductId: banner.targetProductId,
+        targetProductName: banner.targetProductName,
+        targetTag: banner.targetTag,
+        targetAction: banner.targetAction,
+        title: banner.title,
+        ctaText: banner.cta,
+      });
+    } else {
+      onSelectCategory(banner.category);
+    }
+  };
 
   return (
     <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 pt-3 pb-2">
@@ -404,12 +448,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelectCategory(currentBanner.category);
+                  handleBannerAction(currentBanner);
                 }}
-                className="inline-flex items-center gap-2 bg-white text-stone-950 hover:bg-stone-100 px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-transform active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-2 bg-white text-stone-950 hover:bg-stone-100 hover:shadow-lg px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-md transition-all active:scale-95 cursor-pointer ring-2 ring-white/60"
               >
                 <span>{currentBanner.cta}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-4 h-4 text-orange-600" />
               </button>
 
               {/* Swipe Tip for User Guidance */}
@@ -465,7 +509,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </p>
 
             <button
-              onClick={() => onSelectCategory(activeFlashSale?.targetCategory || 'jsm-promo')}
+              onClick={() => {
+                if (onNavigatePromo) {
+                  onNavigatePromo({
+                    targetCategory: activeFlashSale?.targetCategory || 'all',
+                    targetTag: 'Flash Sale',
+                    targetAction: 'flash_sale',
+                    title: activeFlashSale?.title || 'FLASH SALE KILAT',
+                    ctaText: activeFlashSale?.ctaText,
+                  });
+                } else {
+                  onSelectCategory(activeFlashSale?.targetCategory || 'jsm-promo');
+                }
+              }}
               className="w-full bg-white/20 hover:bg-white/30 text-white font-bold text-xs py-2 px-3 rounded-xl border border-white/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <Zap className="w-3.5 h-3.5 text-yellow-200 fill-yellow-200" />
@@ -475,7 +531,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
           {/* Member Card Perk Highlight */}
           <div 
-            onClick={onOpenMemberModal}
+            onClick={() => {
+              if (onNavigatePromo) {
+                onNavigatePromo({
+                  targetAction: 'member',
+                  title: activePerkCard?.title || 'Stamp & Poin Rewards',
+                });
+              } else {
+                onOpenMemberModal();
+              }
+            }}
             className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between group"
           >
             <div className="flex items-center gap-3">
