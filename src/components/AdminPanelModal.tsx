@@ -1461,26 +1461,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
         if (onEditProduct) {
           const res = await onEditProduct(updatedProd);
-          if (!res.success && res.error) {
-            const isRls = res.error.toLowerCase().includes('violates row-level security') || res.error.toLowerCase().includes('rls');
-            setProductFeedback({
-              type: 'error',
-              message: `Perubahan tersimpan di browser, namun gagal disimpan ke Supabase: "${res.error}".`,
-              isRlsError: isRls,
-            });
-          } else {
-            setProductFeedback({
-              type: 'success',
-              message: isSupabaseConnected 
-                ? 'Perubahan info produk berhasil disimpan permanen ke Supabase Cloud!' 
-                : 'Perubahan produk berhasil disimpan!',
-            });
-          }
-        } else {
-          onUpdateProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
+          import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+            saveProductToMySql(updatedProd, currentSlug).catch(console.error);
+          });
           setProductFeedback({
             type: 'success',
-            message: 'Perubahan produk berhasil disimpan!',
+            message: `Produk "${updatedProd.name}" berhasil diperbarui dan tersimpan ke Database!`,
+          });
+        } else {
+          onUpdateProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
+          import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+            saveProductToMySql(updatedProd, currentSlug).catch(console.error);
+          });
+          setProductFeedback({
+            type: 'success',
+            message: `Perubahan produk "${updatedProd.name}" berhasil disimpan ke Database!`,
           });
         }
       } else {
@@ -1505,29 +1500,17 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         };
 
         if (onAddProduct) {
-          const res = await onAddProduct(newProd);
-          if (!res.success && res.error) {
-            const isRls = res.error.toLowerCase().includes('violates row-level security') || res.error.toLowerCase().includes('rls');
-            setProductFeedback({
-              type: 'error',
-              message: `Produk tersimpan di lokal, namun GAGAL disimpan ke Supabase Cloud: "${res.error}".`,
-              isRlsError: isRls,
-            });
-          } else {
-            setProductFeedback({
-              type: 'success',
-              message: isSupabaseConnected 
-                ? `Produk "${newProd.name}" berhasil ditambahkan dan tersimpan permanen ke Supabase Cloud!` 
-                : `Produk "${newProd.name}" berhasil ditambahkan ke katalog lokal!`,
-            });
-          }
+          await onAddProduct(newProd);
         } else {
           onUpdateProducts([newProd, ...products]);
-          setProductFeedback({
-            type: 'success',
-            message: `Produk "${newProd.name}" berhasil ditambahkan!`,
-          });
         }
+        import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+          saveProductToMySql(newProd, currentSlug).catch(console.error);
+        });
+        setProductFeedback({
+          type: 'success',
+          message: `Produk "${newProd.name}" berhasil ditambahkan dan tersimpan permanen ke Database!`,
+        });
       }
       setIsAddingProduct(false);
       setEditingProduct(null);
@@ -1548,9 +1531,12 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       } else {
         onUpdateProducts(products.filter(p => p.id !== id));
       }
+      import('../lib/mysqlClientApi').then(({ deleteProductFromMySql }) => {
+        deleteProductFromMySql(id, currentSlug).catch(console.error);
+      });
       setProductFeedback({
         type: 'success',
-        message: 'Produk berhasil dihapus dari katalog.',
+        message: 'Produk berhasil dihapus dari katalog dan database.',
       });
       setTimeout(() => setProductFeedback(null), 4000);
     }

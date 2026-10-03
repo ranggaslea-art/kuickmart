@@ -163,6 +163,21 @@ export async function saveProductToMySql(product: Product, tenantSlug: string = 
 }
 
 /**
+ * Hapus produk dari MySQL
+ */
+export async function deleteProductFromMySql(productId: string, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/mysql/products/${encodeURIComponent(productId)}?tenantSlug=${encodeURIComponent(tenantSlug)}`, {
+      method: 'DELETE',
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Ambil daftar produk dari MySQL
  */
 export async function fetchProductsFromMySql(tenantSlug: string = 'default'): Promise<Product[] | null> {

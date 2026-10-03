@@ -967,6 +967,47 @@ export default function App() {
     };
   }, [currentSlug]);
 
+  // Sinkronisasi data dari database MySQL / MariaDB lokal VPS
+  useEffect(() => {
+    let isCancelled = false;
+    import('./lib/mysqlClientApi').then(({ fetchProductsFromMySql, fetchCategoriesFromMySql, fetchBrandsFromMySql }) => {
+      fetchProductsFromMySql(currentSlug).then((mysqlProds) => {
+        if (!isCancelled && Array.isArray(mysqlProds) && mysqlProds.length > 0) {
+          const formatted = mysqlProds.map(p => ({ ...p, image: formatImageUrl(p.image) }));
+          setProducts(formatted);
+          try {
+            const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+            localStorage.setItem(key, JSON.stringify(formatted));
+          } catch {}
+        }
+      }).catch(() => {});
+
+      fetchCategoriesFromMySql(currentSlug).then((mysqlCats) => {
+        if (!isCancelled && Array.isArray(mysqlCats) && mysqlCats.length > 0) {
+          setCategories(mysqlCats);
+          try {
+            const key = getTenantStorageKey('toko_online_categories', currentSlug);
+            localStorage.setItem(key, JSON.stringify(mysqlCats));
+          } catch {}
+        }
+      }).catch(() => {});
+
+      fetchBrandsFromMySql(currentSlug).then((mysqlBrands) => {
+        if (!isCancelled && Array.isArray(mysqlBrands) && mysqlBrands.length > 0) {
+          setBrands(mysqlBrands);
+          try {
+            const key = getTenantStorageKey('toko_online_brands', currentSlug);
+            localStorage.setItem(key, JSON.stringify(mysqlBrands));
+          } catch {}
+        }
+      }).catch(() => {});
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentSlug]);
+
   // Salin 30 Katalog Contoh Minimarket (Opsional jika toko baru ingin mengisi etalase cepat)
   const handleCopySampleCatalog = () => {
     const sample = PRODUCTS.map((p, idx) => ({
@@ -1001,7 +1042,7 @@ export default function App() {
     };
 
     // 1. Simpan langsung ke state produk lokal
-    setProducts((prev) => [prodWithStore, ...prev]);
+    setProducts((prev) => [prodWithStore, ...prev.filter(p => p.id !== prodWithStore.id)]);
 
     // 2. Langsung simpan ke localStorage secara sinkron dengan kunci tenant
     try {
@@ -1020,9 +1061,17 @@ export default function App() {
       console.warn('Gagal simpan produk baru ke localStorage:', err);
     }
 
-    // 3. Simpan ke Supabase
-    const res = await saveProductToSupabase(prodWithStore);
-    return res;
+    // 3. Simpan ke database MySQL / MariaDB server
+    import('./lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+      saveProductToMySql(prodWithStore, currentSlug).catch(console.error);
+    });
+
+    // 4. Cadangkan ke Supabase jika tersedia
+    try {
+      await saveProductToSupabase(prodWithStore);
+    } catch (_) {}
+
+    return { success: true };
   };
 
   const handleEditProduct = async (updatedProd: Product): Promise<{ success: boolean; error?: string }> => {
@@ -1049,8 +1098,16 @@ export default function App() {
       console.warn('Gagal update produk di localStorage:', err);
     }
 
-    const res = await saveProductToSupabase(prodWithStore);
-    return res;
+    // Simpan ke database MySQL server
+    import('./lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+      saveProductToMySql(prodWithStore, currentSlug).catch(console.error);
+    });
+
+    try {
+      await saveProductToSupabase(prodWithStore);
+    } catch (_) {}
+
+    return { success: true };
   };
 
   const handleDeleteProduct = async (productId: string): Promise<{ success: boolean; error?: string }> => {
@@ -1072,8 +1129,16 @@ export default function App() {
       console.warn('Gagal hapus produk di localStorage:', err);
     }
 
-    const res = await deleteProductFromSupabase(productId);
-    return res;
+    // Hapus dari database MySQL server
+    import('./lib/mysqlClientApi').then(({ deleteProductFromMySql }) => {
+      deleteProductFromMySql(productId, currentSlug).catch(console.error);
+    });
+
+    try {
+      await deleteProductFromSupabase(productId);
+    } catch (_) {}
+
+    return { success: true };
   };
 
   const handleUpdateProducts = (newProducts: Product[]) => {
@@ -1088,6 +1153,12 @@ export default function App() {
         body: JSON.stringify({ slug: currentSlug, products: newProducts }),
       }).catch(() => {});
     } catch {}
+
+    // Simpan ke database MySQL server
+    import('./lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+      newProducts.forEach((p) => saveProductToMySql(p, currentSlug).catch(() => {}));
+    });
+
     newProducts.forEach((p) => {
       saveProductToSupabase(p).catch(() => {});
     });

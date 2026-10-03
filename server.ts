@@ -2086,6 +2086,46 @@ async function startServer() {
     try {
       const tenantSlug = String(req.query.tenantSlug || 'default');
       const pool = getMySqlPool();
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS products (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            item_code VARCHAR(100),
+            name VARCHAR(255) NOT NULL,
+            category VARCHAR(100),
+            brand VARCHAR(100),
+            barcode VARCHAR(100),
+            unit VARCHAR(50) DEFAULT 'Pcs',
+            price DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            cost_price DECIMAL(15,2) DEFAULT 0.00,
+            stock INT DEFAULT 0,
+            min_stock INT DEFAULT 5,
+            item_type VARCHAR(50) DEFAULT 'Barang',
+            shelf VARCHAR(100),
+            warehouse_code VARCHAR(100) DEFAULT 'GUD-PUSAT',
+            supplier_code VARCHAR(100),
+            is_consignment CHAR(1) DEFAULT 'N',
+            use_serial CHAR(1) DEFAULT 'N',
+            tax_type VARCHAR(50) DEFAULT 'NON-PAJAK',
+            tax_system VARCHAR(50) DEFAULT 'INCLUDE',
+            image LONGTEXT,
+            description LONGTEXT,
+            point INT DEFAULT 0,
+            commission DECIMAL(15,2) DEFAULT 0.00,
+            sold_count INT DEFAULT 0,
+            rating DECIMAL(3,2) DEFAULT 4.90,
+            unit_conversions JSON,
+            variants JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_prod_tenant (tenant_slug),
+            INDEX idx_prod_barcode (barcode)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
       const [rows]: any = await pool.query(
         'SELECT * FROM products WHERE tenant_slug = ? ORDER BY name ASC',
         [tenantSlug]
@@ -2133,6 +2173,49 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Data produk tidak lengkap' });
       }
       const pool = getMySqlPool();
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS products (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            item_code VARCHAR(100),
+            name VARCHAR(255) NOT NULL,
+            category VARCHAR(100),
+            brand VARCHAR(100),
+            barcode VARCHAR(100),
+            unit VARCHAR(50) DEFAULT 'Pcs',
+            price DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            cost_price DECIMAL(15,2) DEFAULT 0.00,
+            stock INT DEFAULT 0,
+            min_stock INT DEFAULT 5,
+            item_type VARCHAR(50) DEFAULT 'Barang',
+            shelf VARCHAR(100),
+            warehouse_code VARCHAR(100) DEFAULT 'GUD-PUSAT',
+            supplier_code VARCHAR(100),
+            is_consignment CHAR(1) DEFAULT 'N',
+            use_serial CHAR(1) DEFAULT 'N',
+            tax_type VARCHAR(50) DEFAULT 'NON-PAJAK',
+            tax_system VARCHAR(50) DEFAULT 'INCLUDE',
+            image LONGTEXT,
+            description LONGTEXT,
+            point INT DEFAULT 0,
+            commission DECIMAL(15,2) DEFAULT 0.00,
+            soldCount INT DEFAULT 0,
+            rating DECIMAL(3,2) DEFAULT 4.90,
+            unit_conversions JSON,
+            variants JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_prod_tenant (tenant_slug),
+            INDEX idx_prod_barcode (barcode)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        await pool.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSON');
+        await pool.query('ALTER TABLE products MODIFY COLUMN image LONGTEXT');
+        await pool.query('ALTER TABLE products MODIFY COLUMN description LONGTEXT');
+      } catch (_) {}
+
       await pool.query(
         `INSERT INTO products (
           id, tenant_slug, item_code, name, category, brand, barcode, unit,
@@ -2197,6 +2280,20 @@ async function startServer() {
         ]
       );
       res.json({ success: true, message: 'Produk berhasil disimpan ke MySQL' });
+    } catch (err: any) {
+      console.error('[MySQL Product Save Error]:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // DELETE /api/mysql/products/:id - Hapus produk dari MySQL
+  app.delete('/api/mysql/products/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      await pool.query('DELETE FROM products WHERE id = ? AND tenant_slug = ?', [id, tenantSlug]);
+      res.json({ success: true, message: `Produk ${id} berhasil dihapus dari MySQL` });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
