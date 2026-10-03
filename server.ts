@@ -168,6 +168,50 @@ function generateDokuSignature({
 async function startServer() {
   const app = express();
 
+  // Cross-browser CORS & Security headers (Firefox, Chrome, Safari, Edge)
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, x-tenant-slug, x-client-hostname, x-simulate-domain'
+    );
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // Dedicated PWA Service Worker route with explicit Firefox MIME type and scope
+  app.get('/sw.js', (_req, res) => {
+    const swCandidates = [
+      path.join(process.cwd(), 'dist', 'sw.js'),
+      path.join(process.cwd(), 'public', 'sw.js'),
+      path.join(__dirname, 'dist', 'sw.js'),
+      path.join(__dirname, 'public', 'sw.js'),
+    ];
+    const swPath = swCandidates.find((p) => fs.existsSync(p));
+
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    if (swPath) {
+      return res.sendFile(swPath);
+    }
+    res.status(404).send('// Service worker not found');
+  });
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -2575,7 +2619,13 @@ async function startServer() {
     console.log(`[Static] Serving production build from: ${distPath}`);
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+        if (filePath.endsWith('sw.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          res.setHeader('Service-Worker-Allowed', '/');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        } else if (filePath.endsWith('index.html')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           res.setHeader('Pragma', 'no-cache');
           res.setHeader('Expires', '0');

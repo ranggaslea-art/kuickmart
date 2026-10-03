@@ -1,4 +1,5 @@
-const CACHE_NAME = 'toko-online-cache-v4';
+// toko-online.online - PWA Service Worker (v5 Firefox & Cross-Browser Compliant)
+const CACHE_NAME = 'toko-online-cache-v5';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
@@ -11,11 +12,11 @@ const PRECACHE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('Pre-cache warning:', err);
+        console.warn('[SW] Pre-cache warning:', err);
       });
     })
   );
@@ -43,16 +44,20 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Never cache API calls, Supabase endpoints, or socket connections
-  if (event.request.url.includes('/api/') || event.request.url.includes('/rest/v1/') || event.request.url.includes('/socket.io/')) {
+  if (
+    event.request.url.includes('/api/') || 
+    event.request.url.includes('/rest/v1/') || 
+    event.request.url.includes('/socket.io/')
+  ) {
     return;
   }
 
   const isHtml = event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html');
 
   if (isHtml) {
-    // Network-first for HTML pages so latest code and branding are always served
+    // Network-first for HTML pages (Firefox-compliant: no { cache: 'no-cache' } on navigate Request)
     event.respondWith(
-      fetch(event.request, { cache: 'no-cache' })
+      fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseToCache = networkResponse.clone();
@@ -62,19 +67,30 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          return caches.match(event.request).then((cachedResponse) => {
-            return cachedResponse || caches.match('/index.html');
-          });
+        .catch(async () => {
+          const cached = (await caches.match(event.request)) || 
+                         (await caches.match('/')) || 
+                         (await caches.match('/index.html'));
+          if (cached) {
+            return cached;
+          }
+          // Never resolve undefined to event.respondWith in Firefox!
+          return new Response(
+            '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>toko-online.online - Offline</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;background:#F8F9FA;color:#1F2937}h1{color:#E51A24;font-size:24px;margin-bottom:12px}p{font-size:14px;color:#4B5563;max-width:400px;margin:0 auto 24px}button{background:#E51A24;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;font-size:14px}</style></head><body><h1>toko-online.online</h1><p>Halaman sedang offline atau koneksi internet terputus. Silakan periksa jaringan Anda lalu coba lagi.</p><button onclick="window.location.reload()">Muat Ulang Halaman</button></body></html>',
+            {
+              status: 200,
+              headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            }
+          );
         })
     );
     return;
   }
 
+  // Assets (JS, CSS, Images, Icons)
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Cache successful local responses
         if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -83,12 +99,26 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => {
-        // Fallback to cache if offline
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // Fallback for missing offline image
+        if (event.request.destination === 'image') {
+          return new Response(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="#E5E7EB"/><text x="50" y="55" font-family="sans-serif" font-size="12" fill="#9CA3AF" text-anchor="middle">Gambar</text></svg>',
+            {
+              status: 200,
+              headers: { 'Content-Type': 'image/svg+xml' },
+            }
+          );
+        }
+        // Always return a valid Response instead of undefined to prevent Firefox fatal TypeError
+        return new Response('Asset not available offline', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' },
         });
       })
   );

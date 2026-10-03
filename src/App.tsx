@@ -422,10 +422,14 @@ export default function App() {
   });
 
   useEffect(() => {
-    const tenantKey = getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug);
-    localStorage.setItem(tenantKey, JSON.stringify(brandConfig));
-    if (currentSlug === 'default') {
-      localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(brandConfig));
+    try {
+      const tenantKey = getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug);
+      localStorage.setItem(tenantKey, JSON.stringify(brandConfig));
+      if (currentSlug === 'default') {
+        localStorage.setItem(STORAGE_BRAND_CONFIG_KEY, JSON.stringify(brandConfig));
+      }
+    } catch (e) {
+      console.warn('[Storage] brandConfig save error (safe in Firefox private):', e);
     }
   }, [brandConfig, currentSlug]);
 
@@ -1328,26 +1332,42 @@ export default function App() {
 
   // Save Cart to LocalStorage
   useEffect(() => {
-    const key = getTenantStorageKey(STORAGE_CART_KEY, currentSlug);
-    localStorage.setItem(key, JSON.stringify(cartItems));
+    try {
+      const key = getTenantStorageKey(STORAGE_CART_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(cartItems));
+    } catch (e) {
+      console.warn('[Storage] cart save error:', e);
+    }
   }, [cartItems, currentSlug]);
 
   // Save Orders to LocalStorage
   useEffect(() => {
-    const key = getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug);
-    localStorage.setItem(key, JSON.stringify(orders));
+    try {
+      const key = getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(orders));
+    } catch (e) {
+      console.warn('[Storage] orders save error:', e);
+    }
   }, [orders, currentSlug]);
 
   // Save Member to LocalStorage
   useEffect(() => {
-    const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
-    localStorage.setItem(key, JSON.stringify(member));
+    try {
+      const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(member));
+    } catch (e) {
+      console.warn('[Storage] member save error:', e);
+    }
   }, [member, currentSlug]);
 
   // Save Vouchers to LocalStorage & Keep appliedVoucher in sync
   useEffect(() => {
-    const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
-    localStorage.setItem(key, JSON.stringify(vouchers));
+    try {
+      const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(vouchers));
+    } catch (e) {
+      console.warn('[Storage] vouchers save error:', e);
+    }
     if (appliedVoucher) {
       const existing = vouchers.find(v => v.id === appliedVoucher.id);
       if (!existing) {

@@ -330,11 +330,13 @@ export function getStoreSlugFromUrl(): string {
     }
   }
 
-  // 3. Cek penyimpanan aktif sebelumnya di browser
-  const savedSlug = localStorage.getItem(STORAGE_ACTIVE_TENANT_KEY);
-  if (savedSlug && savedSlug.trim()) {
-    return savedSlug.trim().toLowerCase();
-  }
+  // 3. Cek penyimpanan aktif sebelumnya di browser (aman untuk Firefox private browsing)
+  try {
+    const savedSlug = localStorage.getItem(STORAGE_ACTIVE_TENANT_KEY);
+    if (savedSlug && savedSlug.trim()) {
+      return savedSlug.trim().toLowerCase();
+    }
+  } catch {}
 
   return 'default';
 }
