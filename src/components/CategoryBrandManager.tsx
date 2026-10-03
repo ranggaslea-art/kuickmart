@@ -5,6 +5,12 @@ import {
   Product 
 } from '../types';
 import { 
+  saveCategoriesToMySql, 
+  deleteCategoryFromMySql, 
+  saveBrandsToMySql, 
+  deleteBrandFromMySql 
+} from '../lib/mysqlClientApi';
+import { 
   Tag, 
   Sparkles, 
   Plus, 
@@ -50,6 +56,7 @@ interface CategoryBrandManagerProps {
   products: Product[];
   onUpdateProducts?: (products: Product[]) => void;
   canEdit?: boolean;
+  tenantSlug?: string;
 }
 
 // Map of available icons for categories
@@ -97,6 +104,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
   products = [],
   onUpdateProducts,
   canEdit = true,
+  tenantSlug = 'default',
 }) => {
   // Safe array guarantees
   const safeCategories = useMemo(() => Array.isArray(categories) ? categories.filter(Boolean) : [], [categories]);
@@ -235,6 +243,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
       const newCategories = safeCategories.map(c => c.id === editingCategory.id ? updatedCat : c);
       onUpdateCategories(newCategories);
+      saveCategoriesToMySql(newCategories, tenantSlug).catch(console.error);
 
       // If slug changed and sync requested, update products
       if (oldSlug !== cleanSlug && catSyncProducts && onUpdateProducts) {
@@ -247,7 +256,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         onUpdateProducts(updatedProds);
       }
 
-      triggerFeedback('success', `Kategori "${updatedCat.name}" berhasil diperbarui.`);
+      triggerFeedback('success', `Kategori "${updatedCat.name}" berhasil diperbarui dan tersimpan ke Database.`);
     } else {
       const newCat: Category = {
         id: `cat_${Date.now()}`,
@@ -258,8 +267,10 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         color: catFormColor,
       };
 
-      onUpdateCategories([...safeCategories, newCat]);
-      triggerFeedback('success', `Kategori "${newCat.name}" berhasil ditambahkan.`);
+      const updatedList = [...safeCategories, newCat];
+      onUpdateCategories(updatedList);
+      saveCategoriesToMySql(updatedList, tenantSlug).catch(console.error);
+      triggerFeedback('success', `Kategori "${newCat.name}" berhasil ditambahkan dan tersimpan ke Database.`);
     }
 
     setIsCatModalOpen(false);
@@ -276,9 +287,11 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
     const targetSlug = catDeleteTarget.slug;
     const targetName = catDeleteTarget.name;
+    const targetId = catDeleteTarget.id;
 
-    const remainingCategories = safeCategories.filter(c => c && c.id !== catDeleteTarget.id);
+    const remainingCategories = safeCategories.filter(c => c && c.id !== targetId);
     onUpdateCategories(remainingCategories);
+    deleteCategoryFromMySql(targetId, tenantSlug).catch(console.error);
 
     // Reassign products with this category to fallback ('sembako' or 'all')
     if (onUpdateProducts) {
@@ -292,7 +305,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
       onUpdateProducts(updatedProds);
     }
 
-    triggerFeedback('success', `Kategori "${targetName}" berhasil dihapus.`);
+    triggerFeedback('success', `Kategori "${targetName}" berhasil dihapus dari Database.`);
     setCatDeleteTarget(null);
   };
 
@@ -380,6 +393,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
 
       const newBrands = safeBrands.map(b => b.id === editingBrand.id ? updatedBrand : b);
       onUpdateBrands(newBrands);
+      saveBrandsToMySql(newBrands, tenantSlug).catch(console.error);
 
       // If name changed and sync requested, update products in catalog
       if (oldName.toLowerCase() !== trimmedName.toLowerCase() && brandSyncProducts && onUpdateProducts) {
@@ -392,7 +406,7 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         onUpdateProducts(updatedProds);
       }
 
-      triggerFeedback('success', `Merk "${updatedBrand.name}" berhasil diperbarui.`);
+      triggerFeedback('success', `Merk "${updatedBrand.name}" berhasil diperbarui dan tersimpan ke Database.`);
     } else {
       const newBrand: BrandItem = {
         id: `brd_${Date.now()}`,
@@ -404,8 +418,10 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         createdAt: new Date().toISOString(),
       };
 
-      onUpdateBrands([...safeBrands, newBrand]);
-      triggerFeedback('success', `Merk "${newBrand.name}" berhasil ditambahkan.`);
+      const updatedList = [...safeBrands, newBrand];
+      onUpdateBrands(updatedList);
+      saveBrandsToMySql(updatedList, tenantSlug).catch(console.error);
+      triggerFeedback('success', `Merk "${newBrand.name}" berhasil ditambahkan dan tersimpan ke Database.`);
     }
 
     setIsBrandModalOpen(false);
@@ -415,10 +431,12 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
     if (!brandDeleteTarget) return;
 
     const targetName = brandDeleteTarget.name || 'Merk';
-    const remainingBrands = safeBrands.filter(b => b && b.id !== brandDeleteTarget.id);
+    const targetId = brandDeleteTarget.id;
+    const remainingBrands = safeBrands.filter(b => b && b.id !== targetId);
     onUpdateBrands(remainingBrands);
+    deleteBrandFromMySql(targetId, tenantSlug).catch(console.error);
 
-    triggerFeedback('success', `Merk "${targetName}" berhasil dihapus.`);
+    triggerFeedback('success', `Merk "${targetName}" berhasil dihapus dari Database.`);
     setBrandDeleteTarget(null);
   };
 

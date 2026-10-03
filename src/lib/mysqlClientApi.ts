@@ -177,6 +177,37 @@ export async function fetchProductsFromMySql(tenantSlug: string = 'default'): Pr
 }
 
 /**
+ * Ambil daftar kategori dari MySQL
+ */
+export async function fetchCategoriesFromMySql(tenantSlug: string = 'default'): Promise<Category[] | null> {
+  try {
+    const res = await fetch(`/api/mysql/categories?tenantSlug=${encodeURIComponent(tenantSlug)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.categories || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Simpan satu kategori ke MySQL
+ */
+export async function saveCategoryToMySql(category: Category, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch('/api/mysql/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Simpan daftar kategori ke MySQL
  */
 export async function saveCategoriesToMySql(categories: Category[], tenantSlug: string = 'default'): Promise<boolean> {
@@ -209,6 +240,20 @@ export async function deleteCategoryFromMySql(categoryId: string, tenantSlug: st
 }
 
 /**
+ * Ambil daftar merek dari MySQL
+ */
+export async function fetchBrandsFromMySql(tenantSlug: string = 'default'): Promise<BrandItem[] | null> {
+  try {
+    const res = await fetch(`/api/mysql/brands?tenantSlug=${encodeURIComponent(tenantSlug)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.brands || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Simpan daftar merek ke MySQL
  */
 export async function saveBrandsToMySql(brands: BrandItem[], tenantSlug: string = 'default'): Promise<boolean> {
@@ -217,6 +262,21 @@ export async function saveBrandsToMySql(brands: BrandItem[], tenantSlug: string 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brands, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hapus merek dari MySQL
+ */
+export async function deleteBrandFromMySql(brandId: string, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/mysql/brands/${encodeURIComponent(brandId)}?tenantSlug=${encodeURIComponent(tenantSlug)}`, {
+      method: 'DELETE',
     });
     const json = await res.json();
     return Boolean(json.success);

@@ -5,7 +5,11 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { 
   getMySqlPool, 
   getMySqlConfig, 
@@ -1825,16 +1829,45 @@ async function startServer() {
     res.json(result);
   });
 
-  // GET /api/mysql/categories - Ambil kategori dari MySQL
+  // GET /api/mysql/categories - Ambil daftar kategori dari MySQL
   app.get('/api/mysql/categories', async (req, res) => {
     try {
       const tenantSlug = String(req.query.tenantSlug || 'default');
       const pool = getMySqlPool();
+
+      // Buat tabel jika belum ada
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS categories (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            slug VARCHAR(100) NOT NULL,
+            name VARCHAR(150) NOT NULL,
+            icon VARCHAR(50) DEFAULT 'Store',
+            color VARCHAR(30) DEFAULT '#10B981',
+            badge VARCHAR(50) DEFAULT NULL,
+            image TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_cat_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
       const [rows]: any = await pool.query(
         'SELECT * FROM categories WHERE tenant_slug = ? ORDER BY name ASC',
         [tenantSlug]
       );
-      res.json({ success: true, count: rows.length, categories: rows });
+      const categories = rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        icon: r.icon || 'Store',
+        color: r.color || 'blue',
+        badge: r.badge || undefined,
+        image: r.image || undefined,
+      }));
+      res.json({ success: true, count: categories.length, categories });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message, categories: [] });
     }
@@ -1845,20 +1878,67 @@ async function startServer() {
     try {
       const { category, categories, tenantSlug = 'default' } = req.body;
       const pool = getMySqlPool();
-      const items = categories || (category ? [category] : []);
+
+      // Pastikan tabel dan kolom lengkap tersedia
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS categories (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            slug VARCHAR(100) NOT NULL,
+            name VARCHAR(150) NOT NULL,
+            icon VARCHAR(50) DEFAULT 'Store',
+            color VARCHAR(30) DEFAULT '#10B981',
+            badge VARCHAR(50) DEFAULT NULL,
+            image TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_cat_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS badge VARCHAR(50) DEFAULT NULL');
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS image TEXT DEFAULT NULL');
+      } catch (_) {}
+
+      const items = Array.isArray(categories) && categories.length > 0
+        ? categories 
+        : (category ? [category] : []);
+
+      if (items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Data kategori kosong' });
+      }
+
+      let savedCount = 0;
       for (const c of items) {
         if (!c || !c.name) continue;
         const catId = c.id || `cat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const slug = c.slug || catId;
         await pool.query(
-          `INSERT INTO categories (id, tenant_slug, slug, name, icon, color, image)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE name=VALUES(name), slug=VALUES(slug), icon=VALUES(icon), color=VALUES(color), image=VALUES(image)`,
-          [catId, tenantSlug, slug, c.name, c.icon || 'Store', c.color || '#10B981', c.image || '']
+          `INSERT INTO categories (id, tenant_slug, slug, name, icon, color, badge, image)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE 
+             name = VALUES(name), 
+             slug = VALUES(slug), 
+             icon = VALUES(icon), 
+             color = VALUES(color), 
+             badge = VALUES(badge),
+             image = VALUES(image)`,
+          [
+            catId, 
+            tenantSlug, 
+            slug, 
+            c.name, 
+            c.icon || 'Store', 
+            c.color || 'blue', 
+            c.badge || null,
+            c.image || ''
+          ]
         );
+        savedCount++;
       }
-      res.json({ success: true, message: 'Kategori berhasil disimpan ke MySQL' });
+      res.json({ success: true, message: `${savedCount} kategori berhasil disimpan ke MySQL`, count: savedCount });
     } catch (err: any) {
+      console.error('[MySQL Categories Save Error]:', err);
       res.status(500).json({ success: false, message: err.message });
     }
   });
@@ -1876,23 +1956,126 @@ async function startServer() {
     }
   });
 
+  // GET /api/mysql/brands - Ambil daftar merek dari MySQL
+  app.get('/api/mysql/brands', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS brands (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            name VARCHAR(150) NOT NULL,
+            code VARCHAR(50) DEFAULT NULL,
+            category_slug VARCHAR(100) DEFAULT NULL,
+            description TEXT DEFAULT NULL,
+            logo TEXT,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_brand_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
+      const [rows]: any = await pool.query(
+        'SELECT * FROM brands WHERE tenant_slug = ? ORDER BY name ASC',
+        [tenantSlug]
+      );
+      const brands = rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        code: r.code || undefined,
+        categorySlug: r.category_slug || undefined,
+        description: r.description || undefined,
+        logo: r.logo || undefined,
+        isActive: r.is_active === 1,
+      }));
+      res.json({ success: true, count: brands.length, brands });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, brands: [] });
+    }
+  });
+
   // POST /api/mysql/brands - Simpan satu atau banyak merek ke MySQL
   app.post('/api/mysql/brands', async (req, res) => {
     try {
       const { brand, brands, tenantSlug = 'default' } = req.body;
       const pool = getMySqlPool();
-      const items = brands || (brand ? [brand] : []);
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS brands (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            name VARCHAR(150) NOT NULL,
+            code VARCHAR(50) DEFAULT NULL,
+            category_slug VARCHAR(100) DEFAULT NULL,
+            description TEXT DEFAULT NULL,
+            logo TEXT,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_brand_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        await pool.query('ALTER TABLE brands ADD COLUMN IF NOT EXISTS code VARCHAR(50) DEFAULT NULL');
+        await pool.query('ALTER TABLE brands ADD COLUMN IF NOT EXISTS category_slug VARCHAR(100) DEFAULT NULL');
+        await pool.query('ALTER TABLE brands ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL');
+      } catch (_) {}
+
+      const items = Array.isArray(brands) && brands.length > 0 
+        ? brands 
+        : (brand ? [brand] : []);
+
+      if (items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Data merek kosong' });
+      }
+
+      let savedCount = 0;
       for (const b of items) {
         if (!b || !b.name) continue;
         const bId = b.id || `brd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         await pool.query(
-          `INSERT INTO brands (id, tenant_slug, name, logo, is_active)
-           VALUES (?, ?, ?, ?, 1)
-           ON DUPLICATE KEY UPDATE name=VALUES(name), logo=VALUES(logo)`,
-          [bId, tenantSlug, b.name, b.logo || '']
+          `INSERT INTO brands (id, tenant_slug, name, code, category_slug, description, logo, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE 
+             name = VALUES(name), 
+             code = VALUES(code),
+             category_slug = VALUES(category_slug),
+             description = VALUES(description),
+             logo = VALUES(logo),
+             is_active = VALUES(is_active)`,
+          [
+            bId, 
+            tenantSlug, 
+            b.name, 
+            b.code || null,
+            b.categorySlug || null,
+            b.description || null,
+            b.logo || '',
+            b.isActive !== false ? 1 : 0
+          ]
         );
+        savedCount++;
       }
-      res.json({ success: true, message: 'Merek berhasil disimpan ke MySQL' });
+      res.json({ success: true, message: `${savedCount} merek berhasil disimpan ke MySQL`, count: savedCount });
+    } catch (err: any) {
+      console.error('[MySQL Brands Save Error]:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // DELETE /api/mysql/brands/:id - Hapus merek dari MySQL
+  app.delete('/api/mysql/brands/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      await pool.query('DELETE FROM brands WHERE id = ? AND tenant_slug = ?', [id, tenantSlug]);
+      res.json({ success: true, message: 'Merek berhasil dihapus dari MySQL' });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }

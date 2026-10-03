@@ -674,6 +674,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
+  // Muat kategori & merek dari MySQL jika tersedia saat panel admin dibuka
+  useEffect(() => {
+    if (isOpen) {
+      import('../lib/mysqlClientApi').then(({ fetchCategoriesFromMySql, fetchBrandsFromMySql }) => {
+        fetchCategoriesFromMySql(currentSlug).then((cats) => {
+          if (Array.isArray(cats) && cats.length > 0) {
+            setInternalCategories(cats);
+            if (onUpdateCategories) onUpdateCategories(cats);
+          }
+        }).catch(() => {});
+        fetchBrandsFromMySql(currentSlug).then((brds) => {
+          if (Array.isArray(brds) && brds.length > 0) {
+            setInternalBrands(brds);
+            if (onUpdateBrands) onUpdateBrands(brds);
+          }
+        }).catch(() => {});
+      });
+    }
+  }, [isOpen, currentSlug]);
+
   // Login Authentication State - Selalu wajib login setiap kali masuk modul admin
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
@@ -5356,6 +5376,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 products={products}
                 onUpdateProducts={onUpdateProducts}
                 canEdit={currentUserPermissions.products?.canEdit}
+                tenantSlug={currentSlug}
               />
             </div>
           ))}
