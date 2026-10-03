@@ -82,12 +82,61 @@ export async function migrateAllDataToMySql(payload: {
   counts?: Record<string, number>;
 }> {
   try {
-    const res = await fetch('/api/mysql/migrate-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await res.json();
+    const { products = [], categories = [], brands = [], stores = [], customers = [], staffUsers = [], orders = [] } = payload;
+    
+    // Batching untuk menghindari batasan ukuran payload HTTP (misal Nginx 1MB / Cloudflare / Express)
+    const BATCH_SIZE = 15;
+    const totalBatches = Math.max(1, Math.ceil(products.length / BATCH_SIZE));
+    let totalMigratedProducts = 0;
+    let lastCounts: Record<string, number> = {};
+
+    for (let i = 0; i < totalBatches; i++) {
+      const sliceStart = i * BATCH_SIZE;
+      const sliceEnd = sliceStart + BATCH_SIZE;
+      const chunkProducts = products.slice(sliceStart, sliceEnd);
+
+      const batchPayload = {
+        tenantSlug: payload.tenantSlug || 'default',
+        products: chunkProducts,
+        // Kirim metadata hanya di batch pertama
+        categories: i === 0 ? categories : [],
+        brands: i === 0 ? brands : [],
+        stores: i === 0 ? stores : [],
+        customers: i === 0 ? customers : [],
+        staffUsers: i === 0 ? staffUsers : [],
+        orders: i === 0 ? orders : [],
+      };
+
+      const res = await fetch('/api/mysql/migrate-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchPayload),
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(
+          res.status === 413
+            ? 'Ukuran data terlalu besar untuk proxy server. Mengirim data dalam batch lebih kecil...'
+            : `Server merespon dengan status ${res.status}: ${text.slice(0, 100)}`
+        );
+      }
+
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.message || 'Gagal menyimpan batch ke database');
+      }
+
+      totalMigratedProducts += json.counts?.products || chunkProducts.length;
+      lastCounts = { ...json.counts, products: totalMigratedProducts };
+    }
+
+    return {
+      success: true,
+      message: `Migrasi selesai! ${totalMigratedProducts} produk, ${categories.length} kategori, dan ${orders.length} transaksi berhasil disinkronkan ke MySQL.`,
+      counts: lastCounts,
+    };
   } catch (err: any) {
     return {
       success: false,
