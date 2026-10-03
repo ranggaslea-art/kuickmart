@@ -158,6 +158,7 @@ import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { CategoryBrandManager } from './CategoryBrandManager';
 import { VpsDeployManager } from './VpsDeployManager';
 import { SeoGoogleManager } from './SeoGoogleManager';
+import { MySqlDatabaseManager } from './MySqlDatabaseManager';
 import { ProductExportModal } from './ProductExportModal';
 import { ExcelQuickImportManager } from './ExcelQuickImportManager';
 import { syncOrderToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase, saveCustomerToSupabase, savePurchaseToSupabase } from '../lib/supabase';
@@ -209,7 +210,7 @@ interface AdminPanelModalProps {
   onUpdateCategories?: (categories: Category[]) => void;
   brands?: BrandItem[];
   onUpdateBrands?: (brands: BrandItem[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db';
 }
 
 interface AdminUser {
@@ -706,7 +707,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
 
   // Kelompok Modul Menu Navigasi Admin
@@ -2372,6 +2373,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <span>{isSupabaseConnected ? 'DB Terhubung' : 'DB Supabase'}</span>
             </button>
 
+            {/* Quick MySQL & phpMyAdmin Button */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('mysql_db')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
+                activeTab === 'mysql_db'
+                  ? 'bg-amber-400 text-slate-950 font-black border-amber-300 shadow-sm'
+                  : 'bg-emerald-700/60 hover:bg-emerald-600/75 text-white border-emerald-400/50 shadow-xs'
+              }`}
+              title="Database MySQL / MariaDB & phpMyAdmin di VPS"
+            >
+              <Database className="w-3.5 h-3.5 text-amber-300 fill-amber-300/30" />
+              <span>MySQL VPS</span>
+            </button>
+
             {/* Quick Deploy VPS Button */}
             <button
               type="button"
@@ -2505,6 +2521,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 // 6. USER, KEAMANAN & SERVER
                 { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: (staffUsers || []).length },
                 { id: 'permissions', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Hak Akses Modul', icon: <Shield className="w-4 h-4 text-emerald-600" /> },
+                { id: 'mysql_db', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'Database MySQL & phpMyAdmin', icon: <Database className="w-4 h-4 text-emerald-600" /> },
                 { id: 'vps_deploy', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'Deploy & Server VPS', icon: <Rocket className="w-4 h-4 text-indigo-600" /> },
                 { id: 'seo_google', group: 'system', moduleKey: 'stores' as SystemModuleKey, label: 'SEO & Google Search', icon: <Search className="w-4 h-4 text-sky-600" /> },
               ]
@@ -5360,6 +5377,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {/* TAB: DEPLOY & SERVER VPS OTOMATIS */}
           {activeTab === 'vps_deploy' && (
             <VpsDeployManager />
+          )}
+
+          {/* TAB: DATABASE MYSQL & PHPMYADMIN */}
+          {activeTab === 'mysql_db' && (
+            <MySqlDatabaseManager
+              products={products}
+              categories={activeCategories}
+              brands={activeBrands}
+              stores={stores}
+              customers={activeCustomers}
+              staffUsers={staffUsers}
+              orders={orders}
+              tenantSlug={currentSlug}
+            />
           )}
 
           {/* TAB: OPTIMASI SEO & GOOGLE SEARCH CONSOLE */}

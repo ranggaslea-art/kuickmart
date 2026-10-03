@@ -6,6 +6,12 @@ import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+import { 
+  getMySqlPool, 
+  getMySqlConfig, 
+  testMySqlConnection, 
+  initializeMySqlSchema 
+} from './src/lib/mysqlServer';
 
 dotenv.config();
 
@@ -1785,6 +1791,409 @@ async function startServer() {
       await runShell('pm2 restart kuickmart || pm2 restart all || true');
     }, 800);
     res.json({ success: true, message: 'PM2 restart telah dijadwalkan dalam 1 detik.' });
+  });
+
+  // ==========================================
+  // MYSQL / MARIADB DATABASE INTEGRATION APIS
+  // ==========================================
+
+  // GET /api/mysql/status - Cek status koneksi dan statistik tabel
+  app.get('/api/mysql/status', async (req, res) => {
+    const status = await testMySqlConnection();
+    const config = getMySqlConfig();
+    res.json({
+      ...status,
+      config: {
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        database: config.database,
+      },
+    });
+  });
+
+  // POST /api/mysql/test - Uji koneksi manual
+  app.post('/api/mysql/test', async (req, res) => {
+    const status = await testMySqlConnection();
+    res.json(status);
+  });
+
+  // POST /api/mysql/init-schema - Buat tabel dan skema database otomatis
+  app.post('/api/mysql/init-schema', async (req, res) => {
+    const result = await initializeMySqlSchema();
+    res.json(result);
+  });
+
+  // GET /api/mysql/products - Ambil daftar produk dari MySQL
+  app.get('/api/mysql/products', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      const [rows]: any = await pool.query(
+        'SELECT * FROM products WHERE tenant_slug = ? ORDER BY name ASC',
+        [tenantSlug]
+      );
+      const products = rows.map((r: any) => ({
+        id: r.id,
+        itemCode: r.item_code || '',
+        name: r.name,
+        category: r.category || 'Umum',
+        brand: r.brand || 'Umum',
+        barcode: r.barcode || '',
+        unit: r.unit || 'Pcs',
+        price: Number(r.price) || 0,
+        costPrice: Number(r.cost_price) || 0,
+        stock: Number(r.stock) || 0,
+        minStock: Number(r.min_stock) || 5,
+        itemType: r.item_type || 'Barang',
+        shelf: r.shelf || '',
+        warehouseCode: r.warehouse_code || 'GUD-PUSAT',
+        supplierCode: r.supplier_code || '',
+        isConsignment: r.is_consignment === 'Y',
+        useSerial: r.use_serial === 'Y',
+        taxType: r.tax_type || 'NON-PAJAK',
+        taxSystem: r.tax_system || 'INCLUDE',
+        image: r.image || '',
+        description: r.description || '',
+        point: Number(r.point) || 0,
+        commission: Number(r.commission) || 0,
+        soldCount: Number(r.sold_count) || 0,
+        rating: Number(r.rating) || 4.9,
+        unitConversions: typeof r.unit_conversions === 'string' ? JSON.parse(r.unit_conversions || '[]') : (r.unit_conversions || []),
+        variants: typeof r.variants === 'string' ? JSON.parse(r.variants || '[]') : (r.variants || []),
+      }));
+      res.json({ success: true, count: products.length, products });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, products: [] });
+    }
+  });
+
+  // POST /api/mysql/products - Simpan / Upsert satu produk
+  app.post('/api/mysql/products', async (req, res) => {
+    try {
+      const { product, tenantSlug = 'default' } = req.body;
+      if (!product || !product.id || !product.name) {
+        return res.status(400).json({ success: false, message: 'Data produk tidak lengkap' });
+      }
+      const pool = getMySqlPool();
+      await pool.query(
+        `INSERT INTO products (
+          id, tenant_slug, item_code, name, category, brand, barcode, unit,
+          price, cost_price, stock, min_stock, item_type, shelf, warehouse_code,
+          supplier_code, is_consignment, use_serial, tax_type, tax_system,
+          image, description, point, commission, sold_count, rating, unit_conversions, variants
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          item_code = VALUES(item_code),
+          name = VALUES(name),
+          category = VALUES(category),
+          brand = VALUES(brand),
+          barcode = VALUES(barcode),
+          unit = VALUES(unit),
+          price = VALUES(price),
+          cost_price = VALUES(cost_price),
+          stock = VALUES(stock),
+          min_stock = VALUES(min_stock),
+          item_type = VALUES(item_type),
+          shelf = VALUES(shelf),
+          warehouse_code = VALUES(warehouse_code),
+          supplier_code = VALUES(supplier_code),
+          is_consignment = VALUES(is_consignment),
+          use_serial = VALUES(use_serial),
+          tax_type = VALUES(tax_type),
+          tax_system = VALUES(tax_system),
+          image = VALUES(image),
+          description = VALUES(description),
+          point = VALUES(point),
+          commission = VALUES(commission),
+          unit_conversions = VALUES(unit_conversions),
+          variants = VALUES(variants)`,
+        [
+          product.id,
+          tenantSlug,
+          product.itemCode || '',
+          product.name,
+          product.category || 'Umum',
+          product.brand || 'Umum',
+          product.barcode || '',
+          product.unit || 'Pcs',
+          product.price || 0,
+          product.costPrice || 0,
+          product.stock || 0,
+          product.minStock || 5,
+          product.itemType || 'Barang',
+          product.shelf || '',
+          product.warehouseCode || 'GUD-PUSAT',
+          product.supplierCode || '',
+          product.isConsignment ? 'Y' : 'N',
+          product.useSerial ? 'Y' : 'N',
+          product.taxType || 'NON-PAJAK',
+          product.taxSystem || 'INCLUDE',
+          product.image || '',
+          product.description || '',
+          product.point || 0,
+          product.commission || 0,
+          product.soldCount || 0,
+          product.rating || 4.9,
+          JSON.stringify(product.unitConversions || []),
+          JSON.stringify(product.variants || []),
+        ]
+      );
+      res.json({ success: true, message: 'Produk berhasil disimpan ke MySQL' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/mysql/orders - Simpan transaksi pesanan ke MySQL
+  app.post('/api/mysql/orders', async (req, res) => {
+    try {
+      const { order, tenantSlug = 'default' } = req.body;
+      if (!order || !order.id) {
+        return res.status(400).json({ success: false, message: 'Data order tidak valid' });
+      }
+      const pool = getMySqlPool();
+      await pool.query(
+        `INSERT INTO orders (
+          id, tenant_slug, order_number, customer_name, customer_phone, customer_address,
+          total_amount, discount_amount, tax_amount, final_amount, payment_method,
+          payment_status, order_status, cashier_name, store_id, items, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          payment_status = VALUES(payment_status),
+          order_status = VALUES(order_status),
+          notes = VALUES(notes)`,
+        [
+          order.id,
+          tenantSlug,
+          order.orderNumber || order.id,
+          order.customerName || '',
+          order.customerPhone || '',
+          order.customerAddress || '',
+          order.total || 0,
+          order.discount || 0,
+          order.tax || 0,
+          order.finalTotal || order.total || 0,
+          order.paymentMethod || 'CASH',
+          order.paymentStatus || 'COMPLETED',
+          order.status || 'COMPLETED',
+          order.cashierName || '',
+          order.storeId || '',
+          JSON.stringify(order.items || []),
+          order.notes || '',
+        ]
+      );
+      res.json({ success: true, message: 'Pesanan berhasil disimpan ke MySQL' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/mysql/migrate-all - Migrasi massal seluruh data toko ke MySQL
+  app.post('/api/mysql/migrate-all', async (req, res) => {
+    try {
+      const {
+        tenantSlug = 'default',
+        products = [],
+        categories = [],
+        brands = [],
+        stores = [],
+        customers = [],
+        staffUsers = [],
+        orders = []
+      } = req.body;
+
+      const pool = getMySqlPool();
+      const counts: Record<string, number> = {
+        products: 0,
+        categories: 0,
+        brands: 0,
+        stores: 0,
+        customers: 0,
+        staffUsers: 0,
+        orders: 0
+      };
+
+      // Pastikan skema tabel sudah siap
+      await initializeMySqlSchema();
+
+      // 1. Simpan Stores
+      for (const s of stores) {
+        try {
+          await pool.query(
+            `INSERT INTO stores (id, slug, name, address, phone, is_active)
+             VALUES (?, ?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE name=VALUES(name), address=VALUES(address), phone=VALUES(phone)`,
+            [s.id || s.slug, s.slug, s.name, s.address || '', s.phone || '']
+          );
+          counts.stores++;
+        } catch (_) {}
+      }
+
+      // 2. Simpan Categories
+      for (const c of categories) {
+        try {
+          await pool.query(
+            `INSERT INTO categories (id, tenant_slug, slug, name, icon, color, image)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE name=VALUES(name), icon=VALUES(icon), color=VALUES(color)`,
+            [c.id || c.slug, tenantSlug, c.slug, c.name, c.icon || 'Store', c.color || '#10B981', c.image || '']
+          );
+          counts.categories++;
+        } catch (_) {}
+      }
+
+      // 3. Simpan Brands
+      for (const b of brands) {
+        try {
+          await pool.query(
+            `INSERT INTO brands (id, tenant_slug, name, logo, is_active)
+             VALUES (?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+            [b.id, tenantSlug, b.name, b.logo || '']
+          );
+          counts.brands++;
+        } catch (_) {}
+      }
+
+      // 4. Simpan Products
+      for (const p of products) {
+        try {
+          await pool.query(
+            `INSERT INTO products (
+              id, tenant_slug, item_code, name, category, brand, barcode, unit,
+              price, cost_price, stock, min_stock, item_type, shelf, warehouse_code,
+              supplier_code, is_consignment, use_serial, tax_type, tax_system,
+              image, description, point, commission, sold_count, rating, unit_conversions, variants
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              item_code = VALUES(item_code),
+              name = VALUES(name),
+              category = VALUES(category),
+              brand = VALUES(brand),
+              barcode = VALUES(barcode),
+              unit = VALUES(unit),
+              price = VALUES(price),
+              cost_price = VALUES(cost_price),
+              stock = VALUES(stock),
+              min_stock = VALUES(min_stock),
+              item_type = VALUES(item_type),
+              shelf = VALUES(shelf),
+              warehouse_code = VALUES(warehouse_code),
+              supplier_code = VALUES(supplier_code),
+              is_consignment = VALUES(is_consignment),
+              use_serial = VALUES(use_serial),
+              tax_type = VALUES(tax_type),
+              tax_system = VALUES(tax_system),
+              image = VALUES(image),
+              description = VALUES(description),
+              point = VALUES(point),
+              commission = VALUES(commission),
+              unit_conversions = VALUES(unit_conversions),
+              variants = VALUES(variants)`,
+            [
+              p.id,
+              tenantSlug,
+              p.itemCode || '',
+              p.name,
+              p.category || 'Umum',
+              p.brand || 'Umum',
+              p.barcode || '',
+              p.unit || 'Pcs',
+              p.price || 0,
+              p.costPrice || 0,
+              p.stock || 0,
+              p.minStock || 5,
+              p.itemType || 'Barang',
+              p.shelf || '',
+              p.warehouseCode || 'GUD-PUSAT',
+              p.supplierCode || '',
+              p.isConsignment ? 'Y' : 'N',
+              p.useSerial ? 'Y' : 'N',
+              p.taxType || 'NON-PAJAK',
+              p.taxSystem || 'INCLUDE',
+              p.image || '',
+              p.description || '',
+              p.point || 0,
+              p.commission || 0,
+              p.soldCount || 0,
+              p.rating || 4.9,
+              JSON.stringify(p.unitConversions || []),
+              JSON.stringify(p.variants || []),
+            ]
+          );
+          counts.products++;
+        } catch (_) {}
+      }
+
+      // 5. Simpan Customers
+      for (const cust of customers) {
+        try {
+          await pool.query(
+            `INSERT INTO customers (id, tenant_slug, name, phone, email, address, points, tier, total_spend)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE name=VALUES(name), phone=VALUES(phone), points=VALUES(points)`,
+            [cust.id, tenantSlug, cust.name, cust.phone || '', cust.email || '', cust.address || '', cust.points || 0, cust.tier || 'Reguler', cust.totalSpend || 0]
+          );
+          counts.customers++;
+        } catch (_) {}
+      }
+
+      // 6. Simpan Staff Users
+      for (const st of staffUsers) {
+        try {
+          await pool.query(
+            `INSERT INTO staff_users (id, tenant_slug, username, name, role, store_id, permissions, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), permissions=VALUES(permissions)`,
+            [st.id, tenantSlug, st.username, st.name, st.role, st.storeId || '', JSON.stringify(st.permissions || {})]
+          );
+          counts.staffUsers++;
+        } catch (_) {}
+      }
+
+      // 7. Simpan Orders
+      for (const o of orders) {
+        try {
+          await pool.query(
+            `INSERT INTO orders (
+              id, tenant_slug, order_number, customer_name, customer_phone, customer_address,
+              total_amount, discount_amount, tax_amount, final_amount, payment_method,
+              payment_status, order_status, cashier_name, store_id, items, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE payment_status=VALUES(payment_status)`,
+            [
+              o.id,
+              tenantSlug,
+              o.orderNumber || o.id,
+              o.customerName || '',
+              o.customerPhone || '',
+              o.customerAddress || '',
+              o.total || 0,
+              o.discount || 0,
+              o.tax || 0,
+              o.finalTotal || o.total || 0,
+              o.paymentMethod || 'CASH',
+              o.paymentStatus || 'COMPLETED',
+              o.status || 'COMPLETED',
+              o.cashierName || '',
+              o.storeId || '',
+              JSON.stringify(o.items || []),
+              o.notes || '',
+            ]
+          );
+          counts.orders++;
+        } catch (_) {}
+      }
+
+      res.json({
+        success: true,
+        message: `Migrasi selesai! ${counts.products} produk, ${counts.categories} kategori, ${counts.brands} merek berhasil disimpan ke MySQL.`,
+        counts,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: `Migrasi gagal: ${err.message}` });
+    }
   });
 
   // Vite middleware for development or static serving for production
