@@ -40,8 +40,8 @@ interface HeaderProps {
   onOpenSubdomains?: () => void;
   onOpenPosCashier?: () => void;
   onOpenLiveTrafficModal?: () => void;
-  onOpenSupabaseModal?: () => void;
-  isSupabaseConnected?: boolean;
+  onOpenDatabaseManager?: () => void;
+  isDatabaseConnected?: boolean;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onOpenOrderHistory: () => void;
@@ -65,12 +65,12 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMemberModal,
   cartItems,
   onOpenCart,
-  onOpenSupabaseModal,
+  onOpenDatabaseManager,
   onOpenAdminPanel,
   onOpenSubdomains,
   onOpenPosCashier,
   onOpenLiveTrafficModal,
-  isSupabaseConnected,
+  isDatabaseConnected,
   searchQuery,
   onSearchChange,
   onOpenOrderHistory,
@@ -406,11 +406,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Baris Kedua: Tombol Cloud Online, Segarkan, Traffic, & Info Subdomain Berdampingan */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Tombol Cloud Online */}
+            {/* Tombol Status Database MySQL & Sinkronisasi */}
             <OfflineSyncBadge 
               className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" 
-              isSupabaseConnected={isSupabaseConnected}
-              onOpenSupabaseModal={onOpenSupabaseModal}
+              isDatabaseConnected={isDatabaseConnected}
+              onOpenDatabaseManager={onOpenDatabaseManager}
             />
 
             {/* Tombol Segarkan Data Real-time (Sangat berguna di HP untuk update instan) */}

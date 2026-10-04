@@ -2342,6 +2342,73 @@ async function startServer() {
     }
   });
 
+  // GET /api/mysql/orders - Ambil daftar pesanan dari MySQL
+  app.get('/api/mysql/orders', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS orders (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            order_number VARCHAR(100),
+            customer_name VARCHAR(150),
+            customer_phone VARCHAR(50),
+            customer_address TEXT,
+            total_amount DECIMAL(15,2) DEFAULT 0.00,
+            discount_amount DECIMAL(15,2) DEFAULT 0.00,
+            tax_amount DECIMAL(15,2) DEFAULT 0.00,
+            final_amount DECIMAL(15,2) DEFAULT 0.00,
+            payment_method VARCHAR(50) DEFAULT 'CASH',
+            payment_status VARCHAR(50) DEFAULT 'COMPLETED',
+            order_status VARCHAR(50) DEFAULT 'COMPLETED',
+            cashier_name VARCHAR(100),
+            store_id VARCHAR(64),
+            items JSON,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_orders_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
+      const [rows]: any = await pool.query(
+        'SELECT * FROM orders WHERE tenant_slug = ? ORDER BY created_at DESC LIMIT 200',
+        [tenantSlug]
+      );
+      const orders = rows.map((r: any) => {
+        let parsedItems = [];
+        try {
+          parsedItems = typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []);
+        } catch (_) {}
+        return {
+          id: r.id,
+          orderNumber: r.order_number || r.id,
+          date: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+          customerName: r.customer_name || 'Pelanggan Toko',
+          customerPhone: r.customer_phone || '',
+          customerAddress: r.customer_address || '',
+          total: Number(r.total_amount) || 0,
+          discount: Number(r.discount_amount) || 0,
+          tax: Number(r.tax_amount) || 0,
+          finalTotal: Number(r.final_amount) || Number(r.total_amount) || 0,
+          paymentMethod: r.payment_method || 'qris',
+          paymentStatus: r.payment_status || 'COMPLETED',
+          status: r.order_status || 'COMPLETED',
+          cashierName: r.cashier_name || '',
+          storeId: r.store_id || '',
+          items: parsedItems,
+          notes: r.notes || '',
+        };
+      });
+      res.json({ success: true, count: orders.length, orders });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, orders: [] });
+    }
+  });
+
   // POST /api/mysql/orders - Simpan transaksi pesanan ke MySQL
   app.post('/api/mysql/orders', async (req, res) => {
     try {

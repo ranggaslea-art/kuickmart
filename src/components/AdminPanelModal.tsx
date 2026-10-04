@@ -162,16 +162,12 @@ import { MySqlDatabaseManager } from './MySqlDatabaseManager';
 import { ProductExportModal } from './ProductExportModal';
 import { ExcelQuickImportManager } from './ExcelQuickImportManager';
 import { 
-  syncOrderToSupabase, 
-  saveStaffUserToSupabase, 
-  deleteStaffUserFromSupabase, 
-  saveCustomerToSupabase, 
-  savePurchaseToSupabase,
-  saveProductToSupabase,
-  deleteProductFromSupabase,
-  saveCategoriesToSupabase,
-  saveBrandsToSupabase
-} from '../lib/supabase';
+  saveProductToMySql, 
+  deleteProductFromMySql, 
+  saveCategoriesToMySql, 
+  saveBrandsToMySql,
+  saveOrderToMySql 
+} from '../lib/mysqlClientApi';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
@@ -192,8 +188,7 @@ interface AdminPanelModalProps {
   onUpdateStores: (stores: Store[]) => void;
   vouchers: Voucher[];
   onUpdateVouchers: (vouchers: Voucher[]) => void;
-  isSupabaseConnected: boolean;
-  onOpenSupabaseModal: () => void;
+  isDatabaseConnected?: boolean;
   receiptConfigs?: ReceiptInfo[];
   onUpdateReceiptConfigs?: (configs: ReceiptInfo[]) => void;
   storePromos?: StorePromoInfo[];
@@ -254,8 +249,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateStores,
   vouchers,
   onUpdateVouchers,
-  isSupabaseConnected,
-  onOpenSupabaseModal,
+  isDatabaseConnected = true,
   receiptConfigs,
   onUpdateReceiptConfigs,
   storePromos,
@@ -507,10 +501,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     } catch (e) {
       console.error(e);
     }
-    // Sync each purchase to Supabase (or offline queue if disconnected)
-    newPurchases.forEach((p) => {
-      savePurchaseToSupabase(p).catch(() => {});
-    });
   };
 
   // Customers State
@@ -535,10 +525,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     } catch (e) {
       console.error(e);
     }
-    // Sync each customer to Supabase (or offline queue if disconnected)
-    newCustomers.forEach((c) => {
-      saveCustomerToSupabase(c).catch(() => {});
-    });
   };
 
   // Points Config State
@@ -640,10 +626,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
       localStorage.setItem(key, JSON.stringify(safeList));
       saveTenantDataToCloud('categories', safeList, currentSlug);
-      import('../lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
-        saveCategoriesToMySql(safeList, currentSlug).catch(console.error);
-      });
-      saveCategoriesToSupabase(safeList, currentSlug).catch(console.error);
+      saveCategoriesToMySql(safeList, currentSlug).catch(console.error);
     } catch (e) {
       console.error(e);
     }
@@ -677,10 +660,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
       localStorage.setItem(key, JSON.stringify(safeList));
       saveTenantDataToCloud('brands', safeList, currentSlug);
-      import('../lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
-        saveBrandsToMySql(safeList, currentSlug).catch(console.error);
-      });
-      saveBrandsToSupabase(safeList, currentSlug).catch(console.error);
+      saveBrandsToMySql(safeList, currentSlug).catch(console.error);
     } catch (e) {
       console.error(e);
     }
@@ -851,14 +831,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [isSyncingOrders, setIsSyncingOrders] = useState(false);
   const [orderSyncFeedback, setOrderSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const handleSyncAllOrdersToSupabase = async () => {
-    if (!isSupabaseConnected) {
-      setOrderSyncFeedback({
-        type: 'error',
-        message: 'Supabase belum terhubung. Silakan hubungkan database Supabase terlebih dahulu.'
-      });
-      return;
-    }
+  const handleSyncAllOrdersToMySql = async () => {
     if (orders.length === 0) {
       setOrderSyncFeedback({
         type: 'error',
@@ -871,31 +844,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setOrderSyncFeedback(null);
     try {
       let successCount = 0;
-      let lastError = '';
       for (const order of orders) {
-        const res = await syncOrderToSupabase(order);
-        if (res.success) {
-          successCount++;
-        } else if (res.error) {
-          lastError = res.error;
-        }
+        const ok = await saveOrderToMySql(order, currentSlug);
+        if (ok) successCount++;
       }
 
-      if (successCount === orders.length) {
-        setOrderSyncFeedback({
-          type: 'success',
-          message: `Berhasil! Seluruh ${successCount} transaksi pesanan dan rincian barang terjual telah tersimpan aman di database Supabase.`
-        });
-      } else {
-        setOrderSyncFeedback({
-          type: 'error',
-          message: `Tersinkron ${successCount} dari ${orders.length} pesanan. Info: ${lastError}`
-        });
-      }
+      setOrderSyncFeedback({
+        type: 'success',
+        message: `Berhasil! ${successCount} dari ${orders.length} transaksi pesanan telah tersimpan aman di Database MySQL (tabel orders).`
+      });
     } catch (err: any) {
       setOrderSyncFeedback({
         type: 'error',
-        message: `Terjadi kendala sinkronisasi: ${err?.message || err}`
+        message: `Terjadi kendala sinkronisasi MySQL: ${err?.message || err}`
       });
     } finally {
       setIsSyncingOrders(false);
@@ -984,12 +945,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setStaffUsers(updatedList);
 
     const targetUser = staffUsers.find(u => u.id === targetUserId);
-    if (targetUser && isSupabaseConnected) {
-      saveStaffUserToSupabase({
-        ...targetUser,
-        permissions: newPermissions,
-      }).catch(console.error);
-    }
 
     if (targetUser && currentUser && (currentUser.username || '').toLowerCase() === (targetUser.username || '').toLowerCase()) {
       setCurrentUser(prev => prev ? { ...prev, permissions: newPermissions } : null);
@@ -1011,9 +966,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           console.error(e);
         }
       }
-    }
-    if (isSupabaseConnected) {
-      updatedUsers.forEach(u => saveStaffUserToSupabase(u).catch(console.error));
     }
   };
 
@@ -1515,13 +1467,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           await onEditProduct(updatedProd);
         }
         onUpdateProducts(products.map(p => p.id === updatedProd.id ? updatedProd : p));
-        saveProductToSupabase(updatedProd).catch(console.error);
-        import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
-          saveProductToMySql(updatedProd, currentSlug).catch(console.error);
-        });
+        saveProductToMySql(updatedProd, currentSlug).catch(console.error);
         setProductFeedback({
           type: 'success',
-          message: `Perubahan produk "${updatedProd.name}" berhasil disimpan ke Database!`,
+          message: `Perubahan produk "${updatedProd.name}" berhasil disimpan ke Database MySQL!`,
         });
       } else {
         const newProd: Product = {
@@ -1548,10 +1497,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           await onAddProduct(newProd);
         }
         onUpdateProducts([newProd, ...products.filter(p => p.id !== newProd.id)]);
-        saveProductToSupabase(newProd).catch(console.error);
-        import('../lib/mysqlClientApi').then(({ saveProductToMySql }) => {
-          saveProductToMySql(newProd, currentSlug).catch(console.error);
-        });
+        saveProductToMySql(newProd, currentSlug).catch(console.error);
 
         // Auto-daftarkan brand baru jika belum ada di master merk
         if (formBrand.trim()) {
@@ -1853,10 +1799,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         (u.id === editingUser.id || (u?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) ? updated : u
       ));
 
-      if (isSupabaseConnected) {
-        saveStaffUserToSupabase(updated).catch(() => {});
-      }
-
       if ((currentUser?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) {
         const updatedAuth: AdminUser = {
           username: cleanUsername,
@@ -1886,10 +1828,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
       setStaffUsers(prev => [newUser, ...prev]);
 
-      if (isSupabaseConnected) {
-        saveStaffUserToSupabase(newUser).catch(() => {});
-      }
-
       setUserFeedback(`Pengguna baru "${newUser.name}" (@${newUser.username}) berhasil ditambahkan!`);
     }
 
@@ -1906,10 +1844,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
     const updated = staffUsers.map(item => item.id === u.id ? { ...item, isActive: !item.isActive } : item);
     setStaffUsers(updated);
-
-    if (isSupabaseConnected) {
-      saveStaffUserToSupabase({ ...u, isActive: !u.isActive }).catch(() => {});
-    }
 
     setUserFeedback(`Status akun "${u.name}" diubah menjadi ${!u.isActive ? 'AKTIF' : 'NONAKTIF'}.`);
     setTimeout(() => setUserFeedback(null), 3500);
@@ -1929,10 +1863,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
     if (window.confirm(`Yakin ingin menghapus akun pengguna "${u.name}" (@${u.username}) secara permanen?`)) {
       setStaffUsers(prev => prev.filter(item => item.id !== u.id));
-
-      if (isSupabaseConnected) {
-        deleteStaffUserFromSupabase(u.id).catch(() => {});
-      }
 
       setUserFeedback(`Akun pengguna "${u.name}" telah berhasil dihapus.`);
       setTimeout(() => setUserFeedback(null), 3500);
@@ -2438,15 +2368,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               {showKpiSummary ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
-            <button
-              type="button"
-              onClick={onOpenSupabaseModal}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white border border-white/10 cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{isSupabaseConnected ? 'DB Terhubung' : 'DB Supabase'}</span>
-            </button>
-
             {/* Quick MySQL & phpMyAdmin Button */}
             <button
               type="button"
@@ -2788,8 +2709,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 }}
                 receiptConfigs={activeReceiptConfigs}
                 onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
-                isSupabaseConnected={isSupabaseConnected}
-                onOpenSupabaseModal={onOpenSupabaseModal}
+                isDatabaseConnected={isDatabaseConnected}
+                onOpenDatabaseManager={() => setActiveTab('mysql_db')}
                 onClose={() => setActiveTab('products')}
               />
             </div>
@@ -2817,23 +2738,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                       )}
                       <span className="font-bold">{productFeedback.message}</span>
                     </div>
-                    {productFeedback.isRlsError && (
-                      <p className="text-[11px] text-amber-800 font-normal pl-6">
-                        Penyebab: Supabase Row Level Security (RLS) masih mengunci izin INSERT/UPDATE pada tabel <code>products</code>. Buka modal Supabase lalu jalankan script SQL perbaikan izin RLS.
-                      </p>
-                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {productFeedback.isRlsError && (
-                      <button
-                        type="button"
-                        onClick={onOpenSupabaseModal}
-                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-[11px] shadow-sm flex items-center gap-1"
-                      >
-                        <Database className="w-3 h-3" />
-                        <span>Perbaiki Izin RLS</span>
-                      </button>
-                    )}
                     <button
                       type="button"
                       onClick={() => setProductFeedback(null)}
@@ -3684,63 +3590,55 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
               {/* Cloud Database Sync Status Card */}
               <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                isSupabaseConnected 
+                isDatabaseConnected 
                   ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
                   : 'bg-amber-50/70 border-amber-200 text-amber-950'
               }`}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    isSupabaseConnected ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
-                  }`}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-emerald-600 text-white">
                     <Database className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-extrabold text-xs">
-                        {isSupabaseConnected ? 'Penyimpanan Database Cloud (Supabase) Aktif' : 'Penyimpanan Cloud Belum Terhubung'}
+                        Penyimpanan Database MySQL Server Aktif
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isSupabaseConnected ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
-                      }`}>
-                        {isSupabaseConnected ? 'Real-Time Sync' : 'Penyimpanan Lokal'}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
+                        MySQL 8.x / MariaDB
                       </span>
                     </div>
                     <p className="text-[11px] text-stone-600 mt-0.5">
-                      {isSupabaseConnected 
-                        ? 'Setiap barang yang terjual dan transaksi pesanan otomatis disimpan ke database cloud (tabel orders & order_items) serta memperbarui stok.' 
-                        : 'Hubungkan Supabase agar data penjualan dan stok tersimpan permanen di database cloud.'}
+                      Setiap transaksi penjualan kasir dan pesanan disimpan aman ke Database MySQL (tabel <code>orders</code>) serta memperbarui stok secara permanen.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {isSupabaseConnected ? (
-                    <button
-                      onClick={handleSyncAllOrdersToSupabase}
-                      disabled={isSyncingOrders || orders.length === 0}
-                      className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                    >
-                      {isSyncingOrders ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Menyimpan ke Cloud...</span>
-                        </>
-                      ) : (
-                        <>
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <span>Sinkronkan ke Cloud ({orders.length})</span>
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={onOpenSupabaseModal}
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>Hubungkan Supabase</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={handleSyncAllOrdersToMySql}
+                    disabled={isSyncingOrders || orders.length === 0}
+                    className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    {isSyncingOrders ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Menyimpan ke MySQL...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>Sinkronkan ke MySQL ({orders.length})</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('mysql_db')}
+                    className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl flex items-center gap-1.5 border border-stone-300 transition-colors cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-stone-600" />
+                    <span>Kelola DB MySQL</span>
+                  </button>
                 </div>
               </div>
 
@@ -3775,10 +3673,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-xs text-stone-900">{order.orderNumber}</span>
                           <span className="text-[10px] text-stone-400">{order.createdAt}</span>
-                          {isSupabaseConnected && (
+                          {isDatabaseConnected && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
                               <Database className="w-2.5 h-2.5 text-emerald-600" />
-                              <span>Tersimpan di Cloud Database</span>
+                              <span>Tersimpan di MySQL</span>
                             </span>
                           )}
                         </div>

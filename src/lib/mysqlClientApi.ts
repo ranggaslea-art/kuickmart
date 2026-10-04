@@ -316,3 +316,18 @@ export async function saveOrderToMySql(order: Order, tenantSlug: string = 'defau
     return false;
   }
 }
+
+/**
+ * Ambil daftar transaksi pesanan dari MySQL
+ */
+export async function fetchOrdersFromMySql(tenantSlug: string = 'default'): Promise<Order[] | null> {
+  try {
+    const res = await fetch(`/api/mysql/orders?tenantSlug=${encodeURIComponent(tenantSlug)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.orders || null;
+  } catch {
+    return null;
+  }
+}
+

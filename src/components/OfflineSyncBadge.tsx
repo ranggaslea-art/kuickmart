@@ -13,27 +13,26 @@ import {
   ShieldCheck,
   Server,
   Zap,
-  ExternalLink,
   Settings,
   Activity,
   Layers
 } from 'lucide-react';
 import { useOfflineSync } from '../hooks/useOfflineSync';
-import { getStoredSupabaseConfig, testSupabaseConnection } from '../lib/supabase';
+import { fetchMySqlStatus, MySqlStatusResponse } from '../lib/mysqlClientApi';
 import { setLastSyncTime } from '../lib/offlineSync';
 
 export interface OfflineSyncBadgeProps {
   variant?: 'header' | 'pos' | 'admin';
   className?: string;
-  isSupabaseConnected?: boolean;
-  onOpenSupabaseModal?: () => void;
+  isDatabaseConnected?: boolean;
+  onOpenDatabaseManager?: () => void;
 }
 
 export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
   variant = 'header',
   className = '',
-  isSupabaseConnected: propIsSupabaseConnected,
-  onOpenSupabaseModal,
+  isDatabaseConnected: propIsDatabaseConnected,
+  onOpenDatabaseManager,
 }) => {
   const {
     isOnline,
@@ -51,151 +50,74 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
   const [isOpenModal, setIsOpenModal] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
-  // Live Supabase Health State
-  const supabaseConfig = getStoredSupabaseConfig();
-  const isSupabaseConfigured = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
+  // Live MySQL Health State
+  const [mysqlStatus, setMysqlStatus] = useState<MySqlStatusResponse | null>(null);
+  const [isPingingMysql, setIsPingingMysql] = useState(false);
 
-  const [supabaseStatus, setSupabaseStatus] = useState<'checking' | 'connected' | 'offline' | 'unconfigured'>(() => {
-    if (!isSupabaseConfigured) return 'unconfigured';
-    if (propIsSupabaseConnected === true) return 'connected';
-    if (propIsSupabaseConnected === false) return 'offline';
-    return 'checking';
-  });
-  const [supabaseLatency, setSupabaseLatency] = useState<number | null>(null);
-  const [supabaseMessage, setSupabaseMessage] = useState<string>('');
-  const [isPingingSupabase, setIsPingingSupabase] = useState(false);
-
-  // Function to ping and check live Supabase connection
-  const checkSupabaseHealth = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      setSupabaseStatus('unconfigured');
-      setSupabaseMessage('URL dan Anon Key Supabase belum dikonfigurasi.');
-      return;
-    }
-
-    if (!isOnline && !isManualOffline) {
-      setSupabaseStatus('offline');
-      setSupabaseMessage('Perangkat sedang tidak terhubung ke internet.');
-      return;
-    }
-
-    if (isManualOffline) {
-      setSupabaseStatus('offline');
-      setSupabaseMessage('Sistem berjalan dalam mode offline manual.');
-      return;
-    }
-
-    setIsPingingSupabase(true);
-    setSupabaseStatus('checking');
-
+  // Function to ping and check live MySQL connection
+  const checkDatabaseHealth = useCallback(async () => {
+    setIsPingingMysql(true);
     try {
-      const res = await testSupabaseConnection(supabaseConfig.url, supabaseConfig.anonKey);
-      if (res.success) {
-        setSupabaseStatus('connected');
-        setSupabaseLatency(res.latencyMs || null);
-        setSupabaseMessage(res.message || 'Terhubung dengan database Supabase');
-      } else {
-        setSupabaseStatus('offline');
-        setSupabaseLatency(res.latencyMs || null);
-        setSupabaseMessage(res.message || 'Gagal tersambung ke database Supabase');
-      }
-    } catch (err: any) {
-      setSupabaseStatus('offline');
-      setSupabaseMessage(err?.message || 'Koneksi ke Supabase terputus.');
+      const res = await fetchMySqlStatus();
+      setMysqlStatus(res);
+    } catch {
+      setMysqlStatus({
+        connected: false,
+        message: 'Gagal menghubungi server database lokal / backend',
+      });
     } finally {
-      setIsPingingSupabase(false);
+      setIsPingingMysql(false);
     }
-  }, [isSupabaseConfigured, isOnline, isManualOffline, supabaseConfig.url, supabaseConfig.anonKey]);
+  }, []);
 
-  // Sync prop changes
+  // Check connection on modal open or once on mount
   useEffect(() => {
-    if (propIsSupabaseConnected !== undefined) {
-      if (!isSupabaseConfigured) {
-        setSupabaseStatus('unconfigured');
-      } else if (propIsSupabaseConnected) {
-        setSupabaseStatus('connected');
-      } else {
-        setSupabaseStatus('offline');
-      }
-    }
-  }, [propIsSupabaseConnected, isSupabaseConfigured]);
+    checkDatabaseHealth();
+  }, [checkDatabaseHealth]);
 
-  // Check connection on modal open or once on mount if configured
   useEffect(() => {
     if (isOpenModal) {
-      checkSupabaseHealth();
+      checkDatabaseHealth();
     }
-  }, [isOpenModal, checkSupabaseHealth]);
+  }, [isOpenModal, checkDatabaseHealth]);
 
-  // Periodic health check on mount
-  useEffect(() => {
-    if (isOnline && !isManualOffline && isSupabaseConfigured) {
-      checkSupabaseHealth();
-    }
-  }, [isOnline, isManualOffline, isSupabaseConfigured]);
+  const isDbConnected = propIsDatabaseConnected ?? (mysqlStatus?.connected ?? true);
 
   const handleManualSync = async () => {
-    setSyncFeedback('Sedang memproses sinkronisasi data ke Supabase...');
+    setSyncFeedback('Sedang memproses sinkronisasi data ke Database MySQL...');
 
     if (queue.length === 0) {
-      // If queue is empty, do a live verification with Supabase
-      setIsPingingSupabase(true);
-      const res = await testSupabaseConnection(supabaseConfig.url, supabaseConfig.anonKey);
-      setIsPingingSupabase(false);
-
-      if (res.success) {
-        setSupabaseStatus('connected');
-        setSupabaseLatency(res.latencyMs || null);
-        setLastSyncTime(new Date().toISOString());
-        setSyncFeedback(`Koneksi Supabase aktif & stabil (${res.latencyMs || 0} ms). Seluruh data transaksi lokal & cloud tersinkronisasi sempurna!`);
-      } else {
-        setSupabaseStatus('offline');
-        setSupabaseMessage(res.message);
-        setSyncFeedback(`Database Supabase offline: ${res.message}. Transaksi baru tetap aman dicatat di memori lokal.`);
-      }
-      setTimeout(() => setSyncFeedback(null), 5000);
+      await checkDatabaseHealth();
+      setSyncFeedback('Semua data lokal telah sinkron dengan Database MySQL.');
+      setTimeout(() => setSyncFeedback(null), 3000);
       return;
     }
 
-    const result = await triggerSyncNow();
-    if (result.stoppedDueToOffline) {
-      setSyncFeedback('Koneksi internet atau database masih belum stabil. Data tetap aman di antrean lokal.');
-    } else if (result.succeeded > 0) {
-      setSyncFeedback(`Berhasil menyinkronkan ${result.succeeded} data transaksi ke database Supabase!`);
-      setSupabaseStatus('connected');
-    } else if (result.failed > 0) {
-      setSyncFeedback(`Beberapa item (${result.failed}) gagal dikirim. Silakan cek status koneksi database.`);
-    } else {
-      setSyncFeedback('Semua data sudah tersinkronisasi sempurna!');
-      setSupabaseStatus('connected');
-    }
-
-    setTimeout(() => {
-      setSyncFeedback(null);
-    }, 4500);
-  };
-
-  const formatTime = (isoString?: string | null) => {
-    if (!isoString) return 'Belum pernah';
     try {
-      const d = new Date(isoString);
-      return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
-    } catch {
-      return isoString;
+      const result = await triggerSyncNow();
+      if (result.success) {
+        setSyncFeedback(result.message || 'Sinkronisasi berhasil diselesaikan!');
+        setLastSyncTime(Date.now());
+      } else {
+        setSyncFeedback(`Sinkronisasi sebagian: ${result.message || 'Ada data yang gagal'}`);
+      }
+    } catch (err: any) {
+      setSyncFeedback(`Gagal sinkronisasi: ${err?.message || 'Kesalahan jaringan'}`);
+    } finally {
+      await checkDatabaseHealth();
+      setTimeout(() => setSyncFeedback(null), 4000);
     }
   };
 
-  // Determine actual status for badge
-  const isSupabaseOffline = isOnline && !isManualOffline && supabaseStatus === 'offline';
-
-  // Extract clean domain preview
-  const supabaseHost = supabaseConfig.url 
-    ? supabaseConfig.url.replace(/^https?:\/\//i, '').split('/')[0]
-    : 'Belum diisi';
+  const formatTime = (ts: number | null) => {
+    if (!ts) return 'Belum pernah';
+    const date = new Date(ts);
+    return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
 
   return (
     <>
-      {/* TRIGGER BADGE */}
+      {/* COMPACT BADGE TOGGLE BUTTON */}
       <button
         id="offline-sync-status-badge"
         type="button"
@@ -209,7 +131,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
             ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100'
             : pendingCount > 0
             ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-            : isSupabaseOffline
+            : !isDbConnected
             ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
             : variant === 'pos'
             ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800 hover:bg-emerald-900/90'
@@ -217,16 +139,16 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
         } ${className}`}
         title={
           isManualOffline
-            ? 'Mode Offline Manual Kasir Aktif (Simulasi)'
+            ? 'Mode Offline Manual Kasir Aktif'
             : !isOnline
             ? 'Koneksi Offline: Transaksi tersimpan lokal dan akan disinkronkan otomatis saat online'
             : isSyncing
-            ? 'Sedang menyinkronkan data ke Supabase...'
+            ? 'Sedang menyinkronkan data ke Database MySQL...'
             : pendingCount > 0
             ? `${pendingCount} data dalam antrean sinkronisasi`
-            : isSupabaseOffline
-            ? 'Koneksi Internet Online, tetapi Supabase Offline / Tidak Terjangkau'
-            : 'Sistem Online & Database Cloud Terhubung'
+            : !isDbConnected
+            ? 'Server Database MySQL Terputus'
+            : 'Sistem Online & Database MySQL Terhubung Aktif'
         }
       >
         {isManualOffline ? (
@@ -255,11 +177,11 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
               Sync ({pendingCount})
             </span>
           </>
-        ) : isSupabaseOffline ? (
+        ) : !isDbConnected ? (
           <>
             <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
             <span className="font-medium whitespace-nowrap">
-              Supabase Offline
+              DB Offline
             </span>
           </>
         ) : (
@@ -268,9 +190,9 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
             <span className="font-medium whitespace-nowrap">
-              Cloud Online
+              MySQL Online
             </span>
           </>
         )}
@@ -294,29 +216,29 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                     ? 'bg-purple-100 text-purple-700'
                     : !isOnline
                     ? 'bg-amber-100 text-amber-700'
-                    : isSupabaseOffline
+                    : !isDbConnected
                     ? 'bg-rose-100 text-rose-700'
                     : 'bg-emerald-100 text-emerald-700'
                 }`}>
                   {isManualOffline || !isOnline ? (
                     <WifiOff className="w-5 h-5" />
-                  ) : isSupabaseOffline ? (
+                  ) : !isDbConnected ? (
                     <AlertTriangle className="w-5 h-5" />
                   ) : (
-                    <Wifi className="w-5 h-5" />
+                    <Database className="w-5 h-5" />
                   )}
                 </div>
                 <div>
                   <h3 className="font-bold text-stone-900 text-sm sm:text-base flex items-center gap-2">
-                    <span>Status Koneksi & Sinkronisasi Cloud</span>
-                    {supabaseLatency !== null && supabaseStatus === 'connected' && (
+                    <span>Status Database & Koneksi MySQL</span>
+                    {mysqlStatus?.version && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                        {supabaseLatency} ms
+                        {mysqlStatus.version}
                       </span>
                     )}
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Sistem toko-online.online Offline-First & Supabase Sync
+                    Sistem toko-online.online terintegrasi MySQL / MariaDB Server
                   </p>
                 </div>
               </div>
@@ -338,7 +260,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                   ? 'bg-purple-50 border-purple-200 text-purple-900'
                   : !isOnline
                   ? 'bg-amber-50 border-amber-200 text-amber-900'
-                  : isSupabaseOffline
+                  : !isDbConnected
                   ? 'bg-rose-50 border-rose-200 text-rose-900'
                   : pendingCount > 0
                   ? 'bg-sky-50 border-sky-200 text-sky-900'
@@ -348,7 +270,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                   <WifiOff className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
                 ) : !isOnline ? (
                   <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                ) : isSupabaseOffline ? (
+                ) : !isDbConnected ? (
                   <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 ) : pendingCount > 0 ? (
                   <Clock className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
@@ -361,27 +283,27 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                       ? 'Mode Offline Kasir Aktif (Simulasi Manual)'
                       : !isOnline
                       ? 'Koneksi Internet Sedang Terputus (Mode Offline Otomatis)'
-                      : isSupabaseOffline
-                      ? 'Database Supabase Cloud Sedang Offline / Tidak Terjangkau'
+                      : !isDbConnected
+                      ? 'Database MySQL Sedang Offline / Tidak Merespon'
                       : pendingCount > 0
                       ? `Ada ${pendingCount} Transaksi Menunggu Sinkronisasi`
-                      : 'Semua Transaksi Telah Sinkron dengan Cloud Supabase'}
+                      : 'Database MySQL Server Terhubung Normal & Siap Digunakan'}
                   </div>
                   <p className="text-xs mt-1 leading-relaxed opacity-90">
                     {isManualOffline
                       ? 'Sistem dipaksa beroperasi tanpa koneksi internet. Semua pemindaian barcode, cetak struk, dan transaksi kasir disimpan instan di memori lokal perangkat ini tanpa lag jaringan.'
                       : !isOnline
-                      ? 'Kasir dan toko tetap dapat bertransaksi, memindai barcode, mencetak struk, dan memotong stok. Transaksi otomatis dicatat di memori lokal dan akan terkirim ke Supabase saat sinyal kembali.'
-                      : isSupabaseOffline
-                      ? `Perangkat Anda terhubung ke internet, namun database Supabase tidak merespons (${supabaseMessage || 'Koneksi ke server cloud terputus'}). Transaksi kasir tetap berjalan lancar secara lokal (Offline-First) dan otomatis diunggah saat database normal.`
+                      ? 'Kasir dan toko tetap dapat bertransaksi, memindai barcode, mencetak struk, dan memotong stok. Transaksi otomatis dicatat di memori lokal dan akan terkirim ke MySQL saat sinyal kembali.'
+                      : !isDbConnected
+                      ? `Koneksi ke MySQL Server terputus (${mysqlStatus?.message || 'Port 3306 tidak merespons'}). Buka menu Database MySQL di Panel Admin untuk memeriksa konfigurasi host/user/password.`
                       : pendingCount > 0
-                      ? 'Data tersimpan dengan aman di antrean lokal perangkat ini dan sedang/akan otomatis diunggah ke database Supabase secara bertahap.'
-                      : 'Koneksi aktif dan database Supabase telah diverifikasi dengan respon stabil.'}
+                      ? 'Data tersimpan dengan aman di antrean lokal perangkat ini dan sedang/akan otomatis diunggah ke database MySQL secara bertahap.'
+                      : 'Seluruh transaksi, stok, katalog produk, dan kategori tersimpan aman dan terintegrasi langsung di Database MySQL.'}
                   </p>
                 </div>
               </div>
 
-              {/* Status Grid (Koneksi Perangkat, Database Supabase, Mode Kasir) */}
+              {/* Status Grid (Koneksi Perangkat & Database MySQL) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* 1. Koneksi Perangkat */}
                 <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl">
@@ -400,51 +322,63 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                   </span>
                 </div>
 
-                {/* 2. Database Supabase */}
+                {/* 2. Database MySQL */}
                 <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl relative">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-stone-500 font-medium">Database Supabase</span>
+                    <span className="text-xs text-stone-500 font-medium">Database MySQL / MariaDB</span>
                     <button
                       type="button"
-                      onClick={checkSupabaseHealth}
-                      disabled={isPingingSupabase}
+                      onClick={checkDatabaseHealth}
+                      disabled={isPingingMysql}
                       className="p-1 rounded hover:bg-stone-200 text-stone-500 hover:text-stone-800 transition-colors cursor-pointer"
-                      title="Periksa ulang koneksi ke Supabase"
+                      title="Periksa ulang koneksi ke MySQL"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isPingingSupabase ? 'animate-spin text-blue-600' : ''}`} />
+                      <RefreshCw className={`w-3.5 h-3.5 ${isPingingMysql ? 'animate-spin text-blue-600' : ''}`} />
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 mt-1.5">
                     <Database className={`w-3.5 h-3.5 ${
-                      supabaseStatus === 'connected'
+                      isDbConnected
                         ? 'text-emerald-600'
-                        : supabaseStatus === 'offline'
-                        ? 'text-rose-600'
-                        : supabaseStatus === 'checking'
-                        ? 'text-sky-600 animate-spin'
-                        : 'text-stone-400'
+                        : 'text-rose-600'
                     }`} />
                     <span className={`font-bold text-xs sm:text-sm truncate ${
-                      supabaseStatus === 'connected'
+                      isDbConnected
                         ? 'text-emerald-700'
-                        : supabaseStatus === 'offline'
-                        ? 'text-rose-700'
-                        : 'text-stone-900'
+                        : 'text-rose-700'
                     }`}>
-                      {supabaseStatus === 'connected'
-                        ? `Online ${supabaseLatency ? `(${supabaseLatency}ms)` : ''}`
-                        : supabaseStatus === 'offline'
-                        ? 'Offline / Terputus'
-                        : supabaseStatus === 'checking'
-                        ? 'Memeriksa...'
-                        : 'Belum Diisi'}
+                      {isDbConnected ? 'MySQL Terhubung' : 'Terputus'}
                     </span>
                   </div>
-                  <span className="text-[11px] text-stone-400 block mt-1 truncate" title={supabaseConfig.url || ''}>
-                    {supabaseHost}
+                  <span className="text-[11px] text-stone-400 block mt-1 truncate">
+                    {mysqlStatus?.config ? `${mysqlStatus.config.host}:${mysqlStatus.config.port} (${mysqlStatus.config.database})` : '127.0.0.1:3306 (kuickmart_db)'}
                   </span>
                 </div>
               </div>
+
+              {/* Tabel Statistik Data di MySQL */}
+              {mysqlStatus?.tableCounts && (
+                <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl">
+                  <div className="text-xs font-bold text-stone-700 mb-2 flex items-center justify-between">
+                    <span>Statistik Tabel MySQL:</span>
+                    <span className="text-[10px] text-stone-400 font-mono">kuickmart_db</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="bg-white p-2 rounded-lg border border-stone-200">
+                      <span className="text-[10px] text-stone-400 block">Produk</span>
+                      <strong className="text-stone-900 font-bold">{mysqlStatus.tableCounts.products ?? 0}</strong>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-stone-200">
+                      <span className="text-[10px] text-stone-400 block">Kategori</span>
+                      <strong className="text-stone-900 font-bold">{mysqlStatus.tableCounts.categories ?? 0}</strong>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-stone-200">
+                      <span className="text-[10px] text-stone-400 block">Pesanan</span>
+                      <strong className="text-stone-900 font-bold">{mysqlStatus.tableCounts.orders ?? 0}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Mode Offline Kasir (Simulasi / Paksa Offline) */}
               <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-xl flex items-center justify-between gap-3">
@@ -458,7 +392,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                   <p className="text-[11px] text-stone-500 mt-0.5 leading-normal">
                     {isManualOffline
                       ? 'Aktif: Transaksi kasir disimpan instan di memori lokal tanpa menunggu respon jaringan.'
-                      : 'Nonaktif: Transaksi kasir otomatis langsung dikirim ke Cloud Supabase saat dibuat.'}
+                      : 'Nonaktif: Transaksi kasir otomatis langsung dikirim ke Database MySQL saat dibuat.'}
                   </p>
                 </div>
                 <button
@@ -470,7 +404,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                       setSyncFeedback('Mode Offline Manual diaktifkan. Transaksi kasir disimpan di antrean lokal.');
                     } else {
                       setSyncFeedback('Mode Offline dinonaktifkan. Mengembalikan sistem ke sinkronisasi otomatis.');
-                      setTimeout(() => checkSupabaseHealth(), 500);
+                      setTimeout(() => checkDatabaseHealth(), 500);
                     }
                     setTimeout(() => setSyncFeedback(null), 4000);
                   }}
@@ -498,25 +432,6 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-xs flex items-center gap-2 animate-in fade-in">
                   <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
                   <span>{syncFeedback}</span>
-                </div>
-              )}
-
-              {/* Error Detail Alert if Supabase is offline */}
-              {isSupabaseOffline && supabaseMessage && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs flex items-start gap-2 animate-in fade-in">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <span className="font-semibold block">Pesan Status Supabase:</span>
-                    <span className="text-[11px] text-rose-700 leading-relaxed block mt-0.5">{supabaseMessage}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={checkSupabaseHealth}
-                    disabled={isPingingSupabase}
-                    className="px-2 py-1 bg-white border border-rose-300 text-rose-800 rounded text-[11px] font-bold hover:bg-rose-100 transition-colors shrink-0"
-                  >
-                    Tes Ulang
-                  </button>
                 </div>
               )}
 
@@ -597,27 +512,19 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
             {/* Modal Footer */}
             <div className="p-4 border-t border-stone-100 bg-stone-50/80 flex flex-wrap items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
-                {onOpenSupabaseModal ? (
+                {onOpenDatabaseManager && (
                   <button
                     type="button"
                     onClick={() => {
                       setIsOpenModal(false);
-                      onOpenSupabaseModal();
+                      onOpenDatabaseManager();
                     }}
                     className="px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-                    title="Buka pengaturan Supabase (URL, Key & Schema)"
+                    title="Buka panel Database Manager MySQL"
                   >
                     <Settings className="w-3.5 h-3.5 text-stone-500" />
-                    <span>Pengaturan Supabase</span>
+                    <span>Kelola Database MySQL</span>
                   </button>
-                ) : (
-                  <div className="text-[11px] text-stone-500">
-                    {isManualOffline
-                      ? 'Mode Offline aktif'
-                      : isOnline
-                      ? 'Otomatis sync saat online'
-                      : 'Menunggu koneksi internet...'}
-                  </div>
                 )}
               </div>
 
@@ -635,13 +542,13 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                   onClick={handleManualSync}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || isPingingSupabase ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || isPingingMysql ? 'animate-spin' : ''}`} />
                   <span>
                     {isSyncing
                       ? 'Menyinkronkan...'
                       : queue.length > 0
                       ? `Sinkronkan (${queue.length})`
-                      : 'Cek & Sinkron Data'}
+                      : 'Cek Status MySQL'}
                   </span>
                 </button>
               </div>
