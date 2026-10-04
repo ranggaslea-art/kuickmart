@@ -95,11 +95,11 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
 
     try {
       const result = await triggerSyncNow();
-      if (result.success) {
-        setSyncFeedback(result.message || 'Sinkronisasi berhasil diselesaikan!');
-        setLastSyncTime(Date.now());
+      if (result.failed === 0) {
+        setSyncFeedback(`Sinkronisasi berhasil! ${result.succeeded} data tersinkron.`);
+        setLastSyncTime(new Date().toISOString());
       } else {
-        setSyncFeedback(`Sinkronisasi sebagian: ${result.message || 'Ada data yang gagal'}`);
+        setSyncFeedback(`Sinkronisasi selesai sebagian: ${result.succeeded} berhasil, ${result.failed} gagal.`);
       }
     } catch (err: any) {
       setSyncFeedback(`Gagal sinkronisasi: ${err?.message || 'Kesalahan jaringan'}`);
@@ -109,9 +109,10 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
     }
   };
 
-  const formatTime = (ts: number | null) => {
+  const formatTime = (ts: string | number | null | undefined) => {
     if (!ts) return 'Belum pernah';
     const date = new Date(ts);
+    if (isNaN(date.getTime())) return 'Belum pernah';
     return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 

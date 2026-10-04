@@ -189,6 +189,8 @@ interface AdminPanelModalProps {
   vouchers: Voucher[];
   onUpdateVouchers: (vouchers: Voucher[]) => void;
   isDatabaseConnected?: boolean;
+  isSupabaseConnected?: boolean;
+  onOpenSupabaseModal?: () => void;
   receiptConfigs?: ReceiptInfo[];
   onUpdateReceiptConfigs?: (configs: ReceiptInfo[]) => void;
   storePromos?: StorePromoInfo[];
@@ -250,6 +252,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   vouchers,
   onUpdateVouchers,
   isDatabaseConnected = true,
+  isSupabaseConnected,
+  onOpenSupabaseModal,
   receiptConfigs,
   onUpdateReceiptConfigs,
   storePromos,
