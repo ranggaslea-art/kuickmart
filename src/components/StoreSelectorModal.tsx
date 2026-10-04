@@ -28,8 +28,6 @@ export const StoreSelectorModal: React.FC<StoreSelectorModalProps> = ({
   currentStore,
   onSelectStore,
 }) => {
-  if (!isOpen) return null;
-
   const [search, setSearch] = useState('');
 
   const filteredStores = stores.filter(
@@ -38,6 +36,8 @@ export const StoreSelectorModal: React.FC<StoreSelectorModalProps> = ({
       s.address.toLowerCase().includes(search.toLowerCase()) ||
       s.city.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

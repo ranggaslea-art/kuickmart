@@ -45,8 +45,6 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   receiptConfigs,
   onOpenReceiptManager,
 }) => {
-  if (!order) return null;
-
   const [activeTab, setActiveTab] = useState<'tracking' | 'receipt'>('tracking');
   const [driverMsg, setDriverMsg] = useState('');
   const [chatLog, setChatLog] = useState<{ sender: 'user' | 'driver'; text: string; time: string }[]>([
@@ -59,6 +57,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
+
+  if (!order) return null;
 
   // WhatsApp interaction handlers
   const handleOpenWhatsAppChat = () => {

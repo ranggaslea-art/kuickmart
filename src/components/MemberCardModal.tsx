@@ -30,9 +30,9 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
   vouchers,
   onClaimVoucher,
 }) => {
-  if (!isOpen) return null;
-
   const [copiedMemberId, setCopiedMemberId] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(member.barcode);

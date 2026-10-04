@@ -55,8 +55,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   deliveryType,
   onSelectDeliveryType,
 }) => {
-  if (!isOpen) return null;
-
   const [customCouponInput, setCustomCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [showVoucherList, setShowVoucherList] = useState(false);
@@ -124,6 +122,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       setCouponError('Kode voucher tidak ditemukan atau sudah kadaluarsa.');
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-stone-900/60 backdrop-blur-xs flex justify-end">

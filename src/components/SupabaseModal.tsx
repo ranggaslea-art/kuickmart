@@ -62,8 +62,6 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
   onRefreshData,
   currentData,
 }) => {
-  if (!isOpen) return null;
-
   const currentConfig = getStoredSupabaseConfig();
   const [url, setUrl] = useState(currentConfig.url);
   const [anonKey, setAnonKey] = useState(currentConfig.anonKey);
@@ -113,6 +111,8 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
     setCopiedRlsFix(true);
     setTimeout(() => setCopiedRlsFix(false), 2000);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">

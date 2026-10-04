@@ -37,18 +37,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   quantityInCart,
   onAddToCart,
 }) => {
-  if (!product) return null;
-
-  const unitOptions = useMemo(() => getProductUnitOptions(product), [product]);
+  const unitOptions = useMemo(() => product ? getProductUnitOptions(product) : [], [product]);
   const [selectedUnitIndex, setSelectedUnitIndex] = useState<number>(0);
   const selectedOption = unitOptions[selectedUnitIndex] || unitOptions[0] || {
-    unitName: product.unit || 'Pcs',
-    price: product.price || 0,
-    originalPrice: product.originalPrice,
+    unitName: product?.unit || 'Pcs',
+    price: product?.price || 0,
+    originalPrice: product?.originalPrice,
     multiplier: 1,
     breakdownText: '',
     isBase: true,
-    barcode: product.barcode,
+    barcode: product?.barcode || '',
   };
 
   const [quantity, setQuantity] = useState(1);
@@ -56,32 +54,36 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [isAdded, setIsAdded] = useState(false);
 
   // Maximum allowed order based on base stock converted to this unit
-  const maxStockForSelectedUnit = Math.max(1, Math.floor((product.stock || 0) / (selectedOption.multiplier || 1)));
+  const maxStockForSelectedUnit = Math.max(1, Math.floor(((product?.stock) || 0) / (selectedOption.multiplier || 1)));
 
-  const currentPrice = selectedOption.price || product.price || 0;
-  const currentOriginalPrice = selectedOption.originalPrice || product.originalPrice;
+  const currentPrice = selectedOption.price || product?.price || 0;
+  const currentOriginalPrice = selectedOption.originalPrice || product?.originalPrice;
   const pointsEarned = Math.round(currentPrice * 0.01 * quantity);
 
-  const [imgSrc, setImgSrc] = useState<string>(() => formatImageUrl(product.image));
+  const [imgSrc, setImgSrc] = useState<string>(() => product ? formatImageUrl(product.image) : '');
   const [hasFallback, setHasFallback] = useState(false);
 
   useEffect(() => {
-    setImgSrc(formatImageUrl(product.image));
-    setHasFallback(false);
-  }, [product.image]);
+    if (product?.image) {
+      setImgSrc(formatImageUrl(product.image));
+      setHasFallback(false);
+    }
+  }, [product?.image]);
 
   const handleImgError = () => {
-    if (!hasFallback) {
+    if (!hasFallback && product) {
       setHasFallback(true);
       setImgSrc(getProductFallbackImage(product.name, product.category));
     }
   };
 
   const stockInfo = useMemo(() => {
+    if (!product) return { text: '', compact: '', breakdown: [] };
     return formatStockBreakdown(product.stock, product.unit, product.unitConversions);
   }, [product]);
 
   const handleAdd = () => {
+    if (!product) return;
     onAddToCart(product, quantity, notes, selectedOption);
     setIsAdded(true);
     setTimeout(() => {
@@ -89,6 +91,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       onClose();
     }, 600);
   };
+
+  if (!product) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">

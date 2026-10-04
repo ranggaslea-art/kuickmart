@@ -75,8 +75,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   couriers,
   visitorId,
 }) => {
-  if (!isOpen || cartItems.length === 0) return null;
-
   const [deliverySlot, setDeliverySlot] = useState('Instan 30 Menit');
   const [pickupSlot, setPickupSlot] = useState('15 Menit Lagi (Siap Ambil)');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('qris');
@@ -529,6 +527,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       onClose();
     }, 800);
   };
+
+  if (!isOpen || cartItems.length === 0) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
