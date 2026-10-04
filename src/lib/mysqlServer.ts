@@ -45,7 +45,7 @@ export function getMySqlPool(): Pool {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    connectTimeout: 5000,
+    connectTimeout: 2000,
     enableKeepAlive: true,
     keepAliveInitialDelay: 10000,
   };
