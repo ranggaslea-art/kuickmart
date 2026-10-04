@@ -2681,8 +2681,10 @@ async function startServer() {
     }
   }
 
-  if (process.env.NODE_ENV === 'production' && hasBuiltDist) {
-    console.log(`[Static] Serving production build from: ${distPath}`);
+  const isDevMode = process.env.NODE_ENV === 'development';
+
+  if (!isDevMode && hasBuiltDist) {
+    console.log(`[Static] Serving optimized production build from: ${distPath}`);
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('sw.js')) {
