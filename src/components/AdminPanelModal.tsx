@@ -5219,6 +5219,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <PromoInfoManager
                 promos={activeStorePromos}
                 stores={stores}
+                categories={propCategories || []}
+                products={products}
                 canEdit={currentUserPermissions.promos?.canEdit ?? true}
                 onUpdatePromos={handleUpdateStorePromos}
                 onSelectCategory={(cat) => {

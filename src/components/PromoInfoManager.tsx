@@ -35,7 +35,7 @@ import {
   LogOut,
   Loader2
 } from 'lucide-react';
-import { StorePromoInfo, PromoType, Store, PromoMediaType } from '../types';
+import { StorePromoInfo, PromoType, Store, PromoMediaType, Category, Product } from '../types';
 import { compressImageFile, COMMON_IMAGE_PRESETS, formatImageUrl, resolvePromoMediaUrl } from '../utils/imageHelper';
 import { 
   initDriveAuth, 
@@ -53,6 +53,8 @@ import { User } from 'firebase/auth';
 interface PromoInfoManagerProps {
   promos: StorePromoInfo[];
   stores: Store[];
+  categories?: Category[];
+  products?: Product[];
   onUpdatePromos: (promos: StorePromoInfo[]) => void;
   onSelectCategory?: (categorySlug: string) => void;
   canEdit?: boolean;
@@ -61,6 +63,8 @@ interface PromoInfoManagerProps {
 export const PromoInfoManager: React.FC<PromoInfoManagerProps> = ({
   promos,
   stores,
+  categories = [],
+  products = [],
   onUpdatePromos,
   canEdit = true,
 }) => {
@@ -1140,8 +1144,22 @@ export const PromoInfoManager: React.FC<PromoInfoManagerProps> = ({
                   />
                 </div>
 
-                {/* 8. Kategori Tujuan */}
+                {/* 8. Tipe Aksi & Kategori Tujuan */}
                 <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Jenis Aksi Tombol / Link Tujuan
+                  </label>
+                  <select
+                    value={currentPromo.targetAction || 'category'}
+                    onChange={(e: any) => setCurrentPromo({ ...currentPromo, targetAction: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-800 focus:outline-none focus:border-orange-500 mb-2"
+                  >
+                    <option value="category">Buka Katalog Kategori / Belanja Sekarang</option>
+                    <option value="product">Buka Produk Spesifik (Detail Modal)</option>
+                    <option value="flash_sale">Buka Halaman Filter Flash Deals Kilat</option>
+                    <option value="member">Buka Kartu Member & Poin Hadiah</option>
+                  </select>
+
                   <label className="block text-xs font-bold text-stone-700 mb-1">
                     Kategori / Link Tujuan Belanja
                   </label>
@@ -1150,16 +1168,71 @@ export const PromoInfoManager: React.FC<PromoInfoManagerProps> = ({
                     onChange={(e) => setCurrentPromo({ ...currentPromo, targetCategory: e.target.value })}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-800 focus:outline-none focus:border-orange-500"
                   >
-                    <option value="all">Semua Produk Minimarket (all)</option>
-                    <option value="jsm-promo">Promo JSM & Hemat (jsm-promo)</option>
-                    <option value="sembako-dapur">Sembako & Kebutuhan Dapur</option>
-                    <option value="minuman">Minuman & Segar</option>
-                    <option value="snack-biskuit">Makanan Ringan & Biskuit</option>
-                    <option value="buah-sayur">Buah & Sayur Segar</option>
-                    <option value="susu-olahan">Susu & Produk Olahan</option>
-                    <option value="kebersihan">Kebersihan Rumah Tangga</option>
-                    <option value="ibu-bayi">Kebutuhan Ibu & Bayi</option>
+                    <option value="all">Semua Produk Minimarket (Belanja Sekarang - all)</option>
+                    <option value="jsm-promo">Promo JSM & Hemat Akhir Pekan (jsm-promo)</option>
+                    {categories
+                      .filter(c => c.slug !== 'all' && c.slug !== 'jsm-promo')
+                      .map((cat) => (
+                        <option key={cat.id || cat.slug} value={cat.slug}>
+                          {cat.name} ({cat.slug})
+                        </option>
+                      ))}
+                    {categories.length === 0 && (
+                      <>
+                        <option value="sembako">Sembako & Kebutuhan Dapur</option>
+                        <option value="minuman">Minuman & Segar</option>
+                        <option value="snack">Makanan Ringan & Biskuit</option>
+                        <option value="fresh">Buah & Sayur Segar</option>
+                        <option value="perawatan">Perawatan Diri</option>
+                        <option value="rumah-tangga">Kebersihan Rumah Tangga</option>
+                        <option value="ibu-bayi">Kebutuhan Ibu & Bayi</option>
+                      </>
+                    )}
                   </select>
+
+                  {/* Produk Spesifik (Jika Aksi adalah 'product') */}
+                  {currentPromo.targetAction === 'product' && (
+                    <div className="mt-2 p-2.5 bg-orange-50/70 border border-orange-200 rounded-xl">
+                      <label className="block text-[11px] font-bold text-orange-950 mb-1">
+                        Pilih Produk Spesifik yang Dituju:
+                      </label>
+                      <select
+                        value={currentPromo.targetProductId || ''}
+                        onChange={(e) => {
+                          const prodId = e.target.value;
+                          const found = products.find(p => p.id === prodId);
+                          setCurrentPromo({
+                            ...currentPromo,
+                            targetProductId: prodId,
+                            targetProductName: found?.name || '',
+                            targetCategory: found?.category || currentPromo.targetCategory || 'all',
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 bg-white border border-orange-300 rounded-lg text-xs font-semibold text-stone-800 focus:outline-none"
+                      >
+                        <option value="">-- Pilih Produk dari Katalog Toko --</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (Rp {p.price.toLocaleString('id-ID')})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Filter Tag Opsional */}
+                  <div className="mt-2">
+                    <label className="block text-[11px] font-semibold text-stone-600 mb-1">
+                      Filter Tag Tambahan (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentPromo.targetTag || ''}
+                      onChange={(e) => setCurrentPromo({ ...currentPromo, targetTag: e.target.value })}
+                      placeholder="Contoh: Flash Sale, Beli 1 Gratis 1, Diskon"
+                      className="w-full px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg text-xs font-medium text-stone-800 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 {/* 9. Masa Berlaku Promo */}

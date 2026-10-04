@@ -3,7 +3,8 @@ import {
   Header 
 } from './components/Header';
 import { 
-  HeroBanner 
+  HeroBanner,
+  PromoNavigationTarget
 } from './components/HeroBanner';
 import { 
   CategoryBar 
@@ -1674,6 +1675,77 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Handler navigasi langsung ketika pengunjung mengklik tombol/banner di Info Promosi & Diskon
+  const handleNavigatePromo = (target: PromoNavigationTarget) => {
+    setIsViewingOrderHistory(false);
+    setSearchQuery('');
+
+    // Aksi Kartu Member & Poin Loyalty
+    if (target.targetAction === 'member') {
+      setIsMemberModalOpen(true);
+      return;
+    }
+
+    // Aksi Flash Sale
+    if (target.targetAction === 'flash_sale' || target.targetTag === 'Flash Sale') {
+      setSelectedCategory('all');
+      setActiveTagFilter('Flash Sale');
+      setTimeout(() => {
+        const el = document.getElementById('product-catalog-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+      return;
+    }
+
+    // Aksi Voucher
+    if (target.targetAction === 'voucher') {
+      setIsMemberModalOpen(true);
+      return;
+    }
+
+    // Cek apakah aksi adalah belanja umum (seperti "Belanja Sekarang", "Mulai Belanja", dll)
+    const isGeneralShopping = !target.targetAction || target.targetAction === 'category' || 
+      (target.ctaText && (
+        target.ctaText.toLowerCase().includes('belanja') || 
+        target.ctaText.toLowerCase().includes('sekarang')
+      )) || target.targetCategory === 'all';
+
+    // Jika aksi adalah melihat produk spesifik
+    if (target.targetAction === 'product' && target.targetProductId && !isGeneralShopping) {
+      const foundProduct = products.find(p => p.id === target.targetProductId || p.barcode === target.targetProductId);
+      if (foundProduct) {
+        setSelectedProductDetail(foundProduct);
+        if (foundProduct.category) {
+          setSelectedCategory(foundProduct.category);
+        }
+        setTimeout(() => {
+          const el = document.getElementById('product-catalog-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
+        return;
+      }
+    }
+
+    // Atur filter tag jika ada (misal "Beli 1 Gratis 1", "Diskon", dll)
+    if (target.targetTag) {
+      setActiveTagFilter(target.targetTag);
+    } else {
+      setActiveTagFilter(null);
+    }
+
+    // Atur kategori target (misal 'sembako', 'minuman', 'jsm-promo', atau 'all')
+    const targetCat = target.targetCategory || 'all';
+    setSelectedCategory(targetCat);
+
+    // Gulir layar pengunjung secara mulus ke katalog produk belanja
+    setTimeout(() => {
+      const el = document.getElementById('product-catalog-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 60);
+  };
+
   return (
     <div className="min-h-screen w-full min-w-full flex-1 bg-[#F8F9FA] text-[#1E2022] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
       {/* NOTIFIKASI SUBDOMAIN DINONAKTIFKAN */}
@@ -1742,6 +1814,7 @@ export default function App() {
         isSyncing={isSyncing}
         onRefreshData={loadAllFromSupabase}
         onGoHome={handleGoHome}
+        onNavigatePromo={handleNavigatePromo}
       />
 
       {/* Main View Container */}
@@ -1797,6 +1870,11 @@ export default function App() {
             onSelectCategory={(slug) => {
               setSelectedCategory(slug);
               setActiveTagFilter(null);
+              setSearchQuery('');
+              setTimeout(() => {
+                const el = document.getElementById('product-catalog-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 60);
             }}
             onOpenMemberModal={() => setIsMemberModalOpen(true)}
             storePromos={storePromos}
@@ -1804,6 +1882,7 @@ export default function App() {
               setAdminPanelInitialTab('promos');
               setIsAdminPanelOpen(true);
             }}
+            onNavigatePromo={handleNavigatePromo}
           />
 
           {/* Quick Category Bar */}
@@ -1813,6 +1892,11 @@ export default function App() {
             onSelectCategory={(slug) => {
               setSelectedCategory(slug);
               setActiveTagFilter(null);
+              setSearchQuery('');
+              setTimeout(() => {
+                const el = document.getElementById('product-catalog-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 60);
             }}
             productCountByCategory={productCountByCategory}
           />
@@ -1924,17 +2008,33 @@ export default function App() {
           )}
 
           {/* Product Grid Catalog */}
-          <div className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-5">
+          <div id="product-catalog-section" className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-5 scroll-mt-20">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-lg font-black text-stone-900 tracking-tight">
-                  {selectedCategory === 'all'
-                    ? 'Semua Produk Minimarket'
-                    : selectedCategory === 'jsm-promo'
-                    ? 'Promo JSM & Hemat Akhir Pekan'
-                    : categories.find((c) => c.slug === selectedCategory)?.name}
-                </h3>
-                <p className="text-xs text-stone-500">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-black text-stone-900 tracking-tight">
+                    {selectedCategory === 'all'
+                      ? 'Semua Produk Minimarket'
+                      : selectedCategory === 'jsm-promo'
+                      ? 'Promo JSM & Hemat Akhir Pekan'
+                      : categories.find((c) => c.slug === selectedCategory)?.name || 'Katalog Produk'}
+                  </h3>
+                  {activeTagFilter && (
+                    <span className="text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                      <Flame className="w-3 h-3 text-amber-600 fill-amber-500" />
+                      <span>Filter Promo: {activeTagFilter}</span>
+                      <button 
+                        type="button"
+                        onClick={() => setActiveTagFilter(null)}
+                        className="ml-1 text-amber-800 hover:text-amber-950 font-black cursor-pointer"
+                        title="Hapus filter promo"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-stone-500 mt-0.5">
                   Menampilkan {filteredProducts.length} produk siap antar langsung dari {currentStore.name}
                 </p>
               </div>

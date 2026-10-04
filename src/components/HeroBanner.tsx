@@ -104,9 +104,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       cta: 'Belanja Sekarang',
       category: 'all',
       targetCategory: 'all',
-      targetAction: 'product' as const,
-      targetProductId: 'p_01',
-      targetProductName: 'Bimoli Minyak Goreng Pouch 2 Liter',
+      targetAction: 'category' as const,
       bgGradient: 'from-emerald-950 via-teal-900 to-blue-900',
       image: 'https://images.unsplash.com/photo-1526367790999-0150786686a2?w=800&auto=format&fit=crop&q=60',
       discountValue: 'Gratis Ongkir',
@@ -305,10 +303,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          className={`lg:col-span-2 relative overflow-hidden rounded-2xl bg-stone-900 shadow-md min-h-[230px] sm:min-h-[270px] flex flex-col justify-between p-5 sm:p-6 text-white select-none ${
-            isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          onClick={(e) => {
+            if (isDragging) return;
+            if ((e.target as HTMLElement).closest('button')) return;
+            handleBannerAction(currentBanner);
+          }}
+          className={`lg:col-span-2 relative overflow-hidden rounded-2xl bg-stone-900 shadow-md min-h-[230px] sm:min-h-[270px] flex flex-col justify-between p-5 sm:p-6 text-white select-none transition-all ${
+            isDragging ? 'cursor-grabbing' : 'cursor-pointer hover:shadow-lg'
           }`}
-          title="Geser ke kiri atau kanan untuk melihat banner promo lainnya"
+          title="Klik untuk langsung melihat promo ini di katalog atau geser untuk promo lainnya"
         >
           {/* Background Visual (Video, Photo, GIF Animator, Image & Gradient) */}
           {currentBanner.mediaType === 'video' || currentBanner.videoUrl ? (
@@ -492,7 +495,23 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         {/* Right Flash Deals & Loyalty Highlights Card */}
         <div className="flex flex-col gap-3">
           {/* Flash Sale Countdown Mini-Card */}
-          <div className={`rounded-2xl p-4 text-white shadow-sm flex flex-col justify-between flex-1 bg-gradient-to-br ${activeFlashSale?.bgGradient || 'from-amber-500 via-orange-500 to-red-600'}`}>
+          <div 
+            onClick={() => {
+              if (onNavigatePromo) {
+                onNavigatePromo({
+                  targetCategory: activeFlashSale?.targetCategory || 'all',
+                  targetTag: 'Flash Sale',
+                  targetAction: 'flash_sale',
+                  title: activeFlashSale?.title || 'FLASH SALE KILAT',
+                  ctaText: activeFlashSale?.ctaText || 'Lihat Produk Flash Deals',
+                });
+              } else {
+                onSelectCategory(activeFlashSale?.targetCategory || 'jsm-promo');
+              }
+            }}
+            className={`rounded-2xl p-4 text-white shadow-sm flex flex-col justify-between flex-1 bg-gradient-to-br cursor-pointer hover:shadow-md transition-all ${activeFlashSale?.bgGradient || 'from-amber-500 via-orange-500 to-red-600'}`}
+            title="Klik untuk melihat semua produk Flash Sale di katalog"
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 font-extrabold text-sm tracking-tight">
                 <Flame className="w-4 h-4 text-yellow-200 fill-yellow-200 animate-bounce" />
@@ -509,20 +528,22 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </p>
 
             <button
-              onClick={() => {
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 if (onNavigatePromo) {
                   onNavigatePromo({
                     targetCategory: activeFlashSale?.targetCategory || 'all',
                     targetTag: 'Flash Sale',
                     targetAction: 'flash_sale',
                     title: activeFlashSale?.title || 'FLASH SALE KILAT',
-                    ctaText: activeFlashSale?.ctaText,
+                    ctaText: activeFlashSale?.ctaText || 'Lihat Produk Flash Deals',
                   });
                 } else {
                   onSelectCategory(activeFlashSale?.targetCategory || 'jsm-promo');
                 }
               }}
-              className="w-full bg-white/20 hover:bg-white/30 text-white font-bold text-xs py-2 px-3 rounded-xl border border-white/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="w-full bg-white/20 hover:bg-white/30 text-white font-bold text-xs py-2 px-3 rounded-xl border border-white/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer active:scale-95 shadow-2xs"
             >
               <Zap className="w-3.5 h-3.5 text-yellow-200 fill-yellow-200" />
               <span>{activeFlashSale?.ctaText || 'Lihat Produk Flash Deals'}</span>
@@ -541,7 +562,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 onOpenMemberModal();
               }
             }}
-            className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between group"
+            className="bg-white border border-stone-200 rounded-2xl p-4 hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between group active:scale-[0.99]"
+            title="Klik untuk membuka Kartu Member & Poin Rewards"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold">

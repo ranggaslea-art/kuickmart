@@ -22,6 +22,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
+import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
@@ -52,6 +53,7 @@ interface HeaderProps {
   isSyncing?: boolean;
   onRefreshData?: () => void;
   onGoHome?: () => void;
+  onNavigatePromo?: (target: PromoNavigationTarget) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -80,6 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSyncing,
   onRefreshData,
   onGoHome,
+  onNavigatePromo,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -136,7 +139,21 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-30 w-full min-w-full bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       {/* Top Notification / Promo Bar */}
-      <div className={`w-full min-w-full bg-gradient-to-r ${activeAnnouncement?.bgGradient || 'from-red-600 via-rose-600 to-amber-600'} text-white text-xs py-1.5 px-3 sm:px-6 lg:px-8 font-medium transition-all`}>
+      <div 
+        onClick={() => {
+          if (onNavigatePromo) {
+            onNavigatePromo({
+              targetCategory: activeAnnouncement?.targetCategory || 'jsm-promo',
+              targetAction: activeAnnouncement?.targetAction || 'category',
+              targetTag: activeAnnouncement?.targetTag,
+              title: activeAnnouncement?.title,
+              ctaText: activeAnnouncement?.ctaText || 'Lihat Promo',
+            });
+          }
+        }}
+        className={`w-full min-w-full bg-gradient-to-r ${activeAnnouncement?.bgGradient || 'from-red-600 via-rose-600 to-amber-600'} text-white text-xs py-1.5 px-3 sm:px-6 lg:px-8 font-medium transition-all ${onNavigatePromo ? 'cursor-pointer hover:opacity-95' : ''}`}
+        title="Klik untuk langsung melihat promo ini di katalog"
+      >
         <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shadow-2xs ${activeAnnouncement?.badgeColor || 'bg-white text-red-600'}`}>
@@ -148,7 +165,14 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
           <div className="hidden md:flex items-center gap-3 text-[11px] shrink-0">
-            <button onClick={onOpenMemberModal} className="hover:underline flex items-center gap-1 cursor-pointer">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenMemberModal();
+              }} 
+              className="hover:underline flex items-center gap-1 cursor-pointer"
+            >
               <QrCode className="w-3 h-3" />
               <span>Kartu Member: {member.points.toLocaleString('id-ID')} Poin</span>
             </button>
