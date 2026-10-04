@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # SCRIPT OTOMATISASI PERBAIKAN & JALANKAN KUICKMART DI VPS (VERSI CEPAT & RINGAN)
-# Dioptimalkan agar PuTTY tidak macet / freeze / loading parah
+# Dioptimalkan agar PuTTY TIDAK PERNAH MACET / FREEZE / LOADING PARAH
 # ==============================================================================
 
 set -e
@@ -15,10 +15,10 @@ echo "=========================================================="
 echo "⚡ MEMULAI UPDATE & OPTIMASI SERVER KUICKMART"
 echo "=========================================================="
 
-# 1. Pastikan Swap memori aktif agar RAM tidak habis (Penyebab utama PuTTY freeze)
-CURRENT_SWAP=$(free -m | awk '/Swap:/ {print $2}')
+# 1. Pastikan Swap memori aktif (Pencegah utama PuTTY freeze & OOM)
+CURRENT_SWAP=$(free -m | awk '/Swap:/ {print $2}' 2>/dev/null || echo "0")
 if [ -z "$CURRENT_SWAP" ] || [ "$CURRENT_SWAP" -lt 512 ]; then
-  echo "⚠️ Swap rendah atau tidak ada (${CURRENT_SWAP} MB). Menyiapkan 2GB Swap Memory..."
+  echo "⚠️ Swap rendah atau tidak ada (${CURRENT_SWAP} MB). Menyiapkan Swap..."
   if [ -f "scripts/setup-swap.sh" ]; then
     bash scripts/setup-swap.sh || true
   fi
@@ -26,30 +26,28 @@ fi
 
 # 2. Tarik kode terbaru dari Git
 echo ""
-echo "🚀 [1/4] Menarik update repository..."
+echo "🚀 [1/3] Menarik update repository terbaru..."
 git fetch --all 2>/dev/null || true
 git reset --hard origin/main 2>/dev/null || git pull origin main || git pull || true
 
-# 3. Instalasi dependensi hanya jika diperlukan (skip jika node_modules sudah lengkap)
+# 3. Cek dependensi: JIKA SUDAH ADA, JANGAN INSTALL ULANG (Bikin lama/stuck di PuTTY)
 echo ""
-echo "📦 [2/4] Memeriksa dependensi..."
-if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
-  echo "Mengunduh dependensi (mode ringan tanpa animasi PuTTY)..."
-  npm install --progress=false --no-audit --no-fund --prefer-offline
+echo "📦 [2/3] Memeriksa paket dependensi..."
+if [ -d "node_modules/express" ] && [ -d "node_modules/vite" ]; then
+  echo "✅ Paket node_modules sudah lengkap! Melewati npm install (Instan)."
 else
-  echo "Dependensi sudah ada. Memperbarui secara cepat..."
-  npm install --progress=false --no-audit --no-fund --prefer-offline
+  echo "📦 Paket belum lengkap, memasang dependensi (mode cepat & hening)..."
+  npm install --progress=false --no-audit --no-fund --prefer-offline --loglevel=error
 fi
 
 # 4. Bangun bundle production
 echo ""
-echo "🔨 [3/4] Membangun bundle Vite & Server (esbuild)..."
-# Menggunakan Node dengan batas memori teroptimasi
+echo "🔨 [3/3] Membangun bundle Vite & Server..."
 npm run build
 
 # 5. Restart PM2
 echo ""
-echo "🔄 [4/4] Memulai ulang proses PM2 (port 3000)..."
+echo "🔄 Memulai ulang proses PM2 (port 3000)..."
 pm2 delete kuickmart 2>/dev/null || true
 if [ -f "ecosystem.config.cjs" ]; then
   pm2 start ecosystem.config.cjs
