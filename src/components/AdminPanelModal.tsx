@@ -5243,6 +5243,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 products={products}
                 orders={orders}
                 stores={stores}
+                categories={activeCategories}
+                purchases={activePurchases}
+                suppliers={activeSuppliers}
                 onUpdateProducts={onUpdateProducts}
                 canEdit={currentUserPermissions.reports?.canEdit ?? true}
               />

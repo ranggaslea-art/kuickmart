@@ -2715,8 +2715,8 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`toko-online.online Full-Stack Server running on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`toko-online.online Full-Stack Server running on port ${PORT}`);
     console.log(`DOKU Client ID configured: ${DOKU_CLIENT_ID}`);
   });
 }

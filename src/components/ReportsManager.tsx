@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Product, Order, Store, Category } from '../types';
+import { Product, Order, Store, Category, PurchaseOrder, Supplier } from '../types';
+import { INITIAL_PURCHASES, INITIAL_SUPPLIERS } from '../data/mockSupplyAndLoyalty';
+import { PurchaseReportView } from './PurchaseReportView';
+import { TradingCashflowView } from './TradingCashflowView';
 import {
   BarChart3,
   Package,
@@ -26,6 +29,8 @@ import {
   RefreshCw,
   X,
   FileSpreadsheet,
+  CreditCard,
+  Truck,
 } from 'lucide-react';
 
 interface ReportsManagerProps {
@@ -33,6 +38,8 @@ interface ReportsManagerProps {
   orders: Order[];
   stores: Store[];
   categories?: Category[];
+  purchases?: PurchaseOrder[];
+  suppliers?: Supplier[];
   onUpdateProducts?: (products: Product[]) => void;
   canEdit?: boolean;
 }
@@ -50,11 +57,22 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
   orders,
   stores,
   categories,
+  purchases: propPurchases,
+  suppliers: propSuppliers,
   onUpdateProducts,
   canEdit = true,
 }) => {
-  // Main Report Navigation: 1. info_barang, 2. penjualan_periode, 3. rugi_laba
-  const [activeReportTab, setActiveReportTab] = useState<'info_barang' | 'penjualan_periode' | 'rugi_laba'>('info_barang');
+  // Main Report Navigation: 1. penjualan_periode, 2. pembelian_periode, 3. arus_dagang, 4. info_barang, 5. rugi_laba
+  const [activeReportTab, setActiveReportTab] = useState<'penjualan_periode' | 'pembelian_periode' | 'arus_dagang' | 'info_barang' | 'rugi_laba'>('penjualan_periode');
+
+  // Fallback to initial mock if empty so reports always display rich data
+  const purchases = useMemo(() => {
+    return propPurchases && propPurchases.length > 0 ? propPurchases : INITIAL_PURCHASES;
+  }, [propPurchases]);
+
+  const suppliers = useMemo(() => {
+    return propSuppliers && propSuppliers.length > 0 ? propSuppliers : INITIAL_SUPPLIERS;
+  }, [propSuppliers]);
 
   // Helper to safely get HPP (cost price)
   const getProductHpp = (prod: Product): number => {
@@ -193,7 +211,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
   const [salesStoreFilter, setSalesStoreFilter] = useState<string>('all');
   const [salesStatusFilter, setSalesStatusFilter] = useState<string>('completed'); // 'all', 'completed', etc.
   const [salesPayFilter, setSalesPayFilter] = useState<string>('all');
-  const [salesViewMode, setSalesViewMode] = useState<'orders' | 'items' | 'categories' | 'brands' | 'daily'>('orders');
+  const [salesViewMode, setSalesViewMode] = useState<'orders' | 'items' | 'categories' | 'brands' | 'payments' | 'daily'>('orders');
 
   // Selected Order for detail modal
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<Order | null>(null);
@@ -379,6 +397,22 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
 
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
   }, [salesByProduct]);
+
+  // Aggregated Sales: By Payment Method
+  const salesByPaymentMethod = useMemo(() => {
+    const map = new Map<string, { method: string; count: number; totalAmount: number }>();
+    filteredOrders.forEach(ord => {
+      const m = ord.paymentMethod || 'Lainnya';
+      if (!map.has(m)) {
+        map.set(m, { method: m, count: 1, totalAmount: ord.total || 0 });
+      } else {
+        const curr = map.get(m)!;
+        curr.count += 1;
+        curr.totalAmount += (ord.total || 0);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [filteredOrders]);
 
   // Aggregated Sales: Daily Breakdown
   const salesByDay = useMemo(() => {
@@ -614,65 +648,105 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
           </div>
         </div>
 
-        {/* 3 CORE REPORT TABS */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5 pt-4 border-t border-stone-200">
+        {/* 5 CORE REPORT MODULES */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mt-5 pt-4 border-t border-stone-200">
           <button
-            onClick={() => setActiveReportTab('info_barang')}
-            className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-              activeReportTab === 'info_barang'
-                ? 'bg-emerald-50/80 border-emerald-500 shadow-xs'
+            onClick={() => setActiveReportTab('penjualan_periode')}
+            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+              activeReportTab === 'penjualan_periode'
+                ? 'bg-blue-50/90 border-blue-500 shadow-xs ring-2 ring-blue-500/20'
                 : 'bg-stone-50/60 border-stone-200 hover:bg-stone-100/80'
             }`}
           >
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${
-              activeReportTab === 'info_barang' ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-700'
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${
+              activeReportTab === 'penjualan_periode' ? 'bg-blue-600 text-white' : 'bg-stone-200 text-stone-700'
             }`}>
-              <Package className="w-5 h-5" />
+              <Receipt className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Modul 1</div>
-              <div className="text-sm font-black text-stone-900">Laporan Info Barang</div>
-              <div className="text-2xs text-stone-500">Master Stok, HPP & Aset Modal</div>
+            <div className="min-w-0">
+              <div className="text-2xs font-bold text-blue-700 uppercase tracking-wider">Modul 1</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">Laporan Penjualan</div>
+              <div className="text-2xs text-stone-500 truncate">Omzet, Item & Transaksi</div>
             </div>
           </button>
 
           <button
-            onClick={() => setActiveReportTab('penjualan_periode')}
-            className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-              activeReportTab === 'penjualan_periode'
-                ? 'bg-blue-50/80 border-blue-500 shadow-xs'
+            onClick={() => setActiveReportTab('pembelian_periode')}
+            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+              activeReportTab === 'pembelian_periode'
+                ? 'bg-teal-50/90 border-teal-500 shadow-xs ring-2 ring-teal-500/20'
                 : 'bg-stone-50/60 border-stone-200 hover:bg-stone-100/80'
             }`}
           >
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${
-              activeReportTab === 'penjualan_periode' ? 'bg-blue-600 text-white' : 'bg-stone-200 text-stone-700'
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${
+              activeReportTab === 'pembelian_periode' ? 'bg-teal-600 text-white' : 'bg-stone-200 text-stone-700'
             }`}>
-              <Receipt className="w-5 h-5" />
+              <ShoppingBag className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Modul 2</div>
-              <div className="text-sm font-black text-stone-900">Laporan Penjualan Periode</div>
-              <div className="text-2xs text-stone-500">Omzet, Invoice, Item & Brand</div>
+            <div className="min-w-0">
+              <div className="text-2xs font-bold text-teal-700 uppercase tracking-wider">Modul 2</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">Laporan Pembelian</div>
+              <div className="text-2xs text-stone-500 truncate">Faktur PO, Supplier & Tempo</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveReportTab('arus_dagang')}
+            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+              activeReportTab === 'arus_dagang'
+                ? 'bg-purple-50/90 border-purple-500 shadow-xs ring-2 ring-purple-500/20'
+                : 'bg-stone-50/60 border-stone-200 hover:bg-stone-100/80'
+            }`}
+          >
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${
+              activeReportTab === 'arus_dagang' ? 'bg-purple-600 text-white' : 'bg-stone-200 text-stone-700'
+            }`}>
+              <ArrowUpDown className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-2xs font-bold text-purple-700 uppercase tracking-wider">Modul 3</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">Arus Dagang & Kas</div>
+              <div className="text-2xs text-stone-500 truncate">Komparasi Jual vs Beli</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveReportTab('info_barang')}
+            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+              activeReportTab === 'info_barang'
+                ? 'bg-emerald-50/90 border-emerald-500 shadow-xs ring-2 ring-emerald-500/20'
+                : 'bg-stone-50/60 border-stone-200 hover:bg-stone-100/80'
+            }`}
+          >
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${
+              activeReportTab === 'info_barang' ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-700'
+            }`}>
+              <Package className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-2xs font-bold text-emerald-700 uppercase tracking-wider">Modul 4</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">Info Barang & Stok</div>
+              <div className="text-2xs text-stone-500 truncate">Master HPP & Aset Modal</div>
             </div>
           </button>
 
           <button
             onClick={() => setActiveReportTab('rugi_laba')}
-            className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
               activeReportTab === 'rugi_laba'
-                ? 'bg-rose-50/80 border-rose-500 shadow-xs'
+                ? 'bg-rose-50/90 border-rose-500 shadow-xs ring-2 ring-rose-500/20'
                 : 'bg-stone-50/60 border-stone-200 hover:bg-stone-100/80'
             }`}
           >
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold ${
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${
               activeReportTab === 'rugi_laba' ? 'bg-rose-600 text-white' : 'bg-stone-200 text-stone-700'
             }`}>
-              <DollarSign className="w-5 h-5" />
+              <DollarSign className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Modul 3</div>
-              <div className="text-sm font-black text-stone-900">Laporan Rugi Laba</div>
-              <div className="text-2xs text-stone-500">Pendapatan, HPP, Beban & Margin</div>
+            <div className="min-w-0">
+              <div className="text-2xs font-bold text-rose-700 uppercase tracking-wider">Modul 5</div>
+              <div className="text-xs sm:text-sm font-black text-stone-900 truncate">Laporan Rugi Laba</div>
+              <div className="text-2xs text-stone-500 truncate">Gross & Net Margin Usaha</div>
             </div>
           </button>
         </div>
@@ -1186,6 +1260,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
                 { id: 'items', label: `Item Terlaris (${salesByProduct.length})`, icon: <Package className="w-4 h-4" /> },
                 { id: 'categories', label: `Per Kategori (${salesByCategory.length})`, icon: <Layers className="w-4 h-4" /> },
                 { id: 'brands', label: `Per Merk/Brand (${salesByBrand.length})`, icon: <Tag className="w-4 h-4" /> },
+                { id: 'payments', label: `Metode Pembayaran (${salesByPaymentMethod.length})`, icon: <CreditCard className="w-4 h-4" /> },
                 { id: 'daily', label: `Tren Harian (${salesByDay.length} Hari)`, icon: <Calendar className="w-4 h-4" /> },
               ].map(tab => (
                 <button
@@ -1456,13 +1531,97 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
                   </table>
                 </div>
               )}
+
+              {/* VIEW 5: METODE PEMBAYARAN */}
+              {salesViewMode === 'payments' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-stone-100/75 text-stone-600 font-bold border-b border-stone-200 uppercase text-2xs tracking-wider">
+                        <th className="py-3 px-4">Metode Pembayaran</th>
+                        <th className="py-3 px-4 text-center">Jumlah Transaksi</th>
+                        <th className="py-3 px-4 text-right">Total Nominal Omzet (Rp)</th>
+                        <th className="py-3 px-4 text-right">Rata-rata Nilai Order</th>
+                        <th className="py-3 px-4 text-right">Pangsa Pasar (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {salesByPaymentMethod.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-stone-400">
+                            Tidak ada transaksi pada periode ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        salesByPaymentMethod.map(p => {
+                          const share = salesSummary.netRevenue > 0 ? (p.totalAmount / salesSummary.netRevenue) * 100 : 0;
+                          const avgVal = p.count > 0 ? Math.round(p.totalAmount / p.count) : 0;
+                          return (
+                            <tr key={p.method} className="hover:bg-blue-50/40 transition-colors">
+                              <td className="py-3 px-4 font-bold text-stone-900 uppercase">
+                                {p.method}
+                              </td>
+                              <td className="py-3 px-4 text-center font-bold text-stone-700">
+                                {p.count} Transaksi
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-black text-blue-900">
+                                Rp {p.totalAmount.toLocaleString('id-ID')}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono text-stone-600">
+                                Rp {avgVal.toLocaleString('id-ID')}
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <div className="font-bold text-stone-800">{share.toFixed(1)}%</div>
+                                <div className="w-20 h-1.5 bg-stone-100 rounded-full ml-auto overflow-hidden mt-1">
+                                  <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(100, share)}%` }} />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* 3. LAPORAN RUGI LABA (INCOME STATEMENT)                    */}
+      {/* 2. LAPORAN PEMBELIAN & KULAKAN (TAB CONTENT)              */}
+      {/* ========================================================= */}
+      {activeReportTab === 'pembelian_periode' && (
+        <PurchaseReportView
+          purchases={purchases}
+          suppliers={suppliers}
+          stores={stores}
+          products={products}
+          activeDateRange={activeDateRange}
+          datePreset={datePreset}
+          setDatePreset={setDatePreset}
+          customStartDate={customStartDate}
+          setCustomStartDate={setCustomStartDate}
+          customEndDate={customEndDate}
+          setCustomEndDate={setCustomEndDate}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* 3. LAPORAN ARUS DAGANG (KOMPARASI JUAL VS BELI)           */}
+      {/* ========================================================= */}
+      {activeReportTab === 'arus_dagang' && (
+        <TradingCashflowView
+          orders={orders}
+          purchases={purchases}
+          products={products}
+          activeDateRange={activeDateRange}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* 4. LAPORAN RUGI LABA (INCOME STATEMENT)                    */}
       {/* ========================================================= */}
       {activeReportTab === 'rugi_laba' && (
         <div className="space-y-6">
