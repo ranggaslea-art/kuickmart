@@ -2,6 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { PurchaseOrder, Supplier, Store, Product } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
 import {
+  exportPurchaseOrdersToExcel,
+  exportPurchaseItemsDetailToExcel
+} from '../utils/purchaseExport';
+import {
   ShoppingBag,
   Truck,
   Calendar,
@@ -605,16 +609,27 @@ export const PurchaseReportView: React.FC<PurchaseReportViewProps> = ({
           </button>
         </div>
 
-        {/* CSV EXPORT FOR CURRENT VIEW */}
-        <div className="shrink-0 flex items-center gap-2">
+        {/* EXPORT OPTIONS FOR CURRENT VIEW (EXCEL & CSV) */}
+        <div className="shrink-0 flex items-center gap-1.5 flex-wrap">
           {purchaseViewMode === 'invoices' && (
-            <button
-              onClick={handleExportInvoicesCsv}
-              className="px-3 py-1.5 rounded-xl bg-teal-600 text-white hover:bg-teal-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Ekspor Excel Faktur</span>
-            </button>
+            <>
+              <button
+                onClick={() => exportPurchaseOrdersToExcel(filteredPurchases)}
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                title="Unduh Format Resmi Excel (.xls / .xlsx)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Unduh Excel (.xls)</span>
+              </button>
+              <button
+                onClick={handleExportInvoicesCsv}
+                className="px-2.5 py-1.5 rounded-xl bg-stone-200 text-stone-700 hover:bg-stone-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                title="Unduh Format CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>CSV</span>
+              </button>
+            </>
           )}
 
           {purchaseViewMode === 'suppliers' && (
@@ -628,13 +643,23 @@ export const PurchaseReportView: React.FC<PurchaseReportViewProps> = ({
           )}
 
           {purchaseViewMode === 'items' && (
-            <button
-              onClick={handleExportItemsCsv}
-              className="px-3 py-1.5 rounded-xl bg-teal-600 text-white hover:bg-teal-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Ekspor Barang Masuk</span>
-            </button>
+            <>
+              <button
+                onClick={() => exportPurchaseItemsDetailToExcel(filteredPurchases)}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                title="Unduh Rincian Barang Dus & Pcs ke Excel"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Unduh Excel Barang (.xls)</span>
+              </button>
+              <button
+                onClick={handleExportItemsCsv}
+                className="px-2.5 py-1.5 rounded-xl bg-stone-200 text-stone-700 hover:bg-stone-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>CSV</span>
+              </button>
+            </>
           )}
 
           {purchaseViewMode === 'payables' && (

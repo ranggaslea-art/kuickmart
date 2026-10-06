@@ -4,10 +4,20 @@ import {
   PurchaseItem, 
   Supplier, 
   Product, 
-  Store 
+  Store,
+  Order 
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
-import { getProductUnitOptions } from '../utils/unitConversion';
+import { getProductUnitOptions, formatStockBreakdown } from '../utils/unitConversion';
+import { 
+  exportPurchaseOrdersToExcel, 
+  exportPurchaseItemsDetailToExcel, 
+  exportPurchaseOrdersToCsv, 
+  exportPurchaseOrdersToJson 
+} from '../utils/purchaseExport';
+import { ProductPurchaseHistoryModal } from './ProductPurchaseHistoryModal';
+import { PurchaseOrderPrintModal } from './PurchaseOrderPrintModal';
+import { PurchaseOrderWhatsAppModal } from './PurchaseOrderWhatsAppModal';
 import { 
   ShoppingBag, 
   Plus, 
@@ -24,19 +34,24 @@ import {
   Building2, 
   Calendar, 
   FileText, 
-  ArrowUpRight,
   TrendingUp,
   CreditCard,
   Layers,
   X,
-  Scale,
   Boxes,
   Barcode,
   ScanBarcode,
   Camera,
   CornerDownRight,
   Check,
-  RotateCcw
+  RotateCcw,
+  Info,
+  Sparkles,
+  MessageSquare,
+  FileSpreadsheet,
+  ChevronDown,
+  Share2,
+  Package
 } from 'lucide-react';
 
 const COMMON_SUPPLIER_UNITS = [
@@ -65,6 +80,7 @@ interface PurchaseManagerProps {
   suppliers: Supplier[];
   products: Product[];
   stores: Store[];
+  orders?: Order[];
   onUpdatePurchases: (purchases: PurchaseOrder[]) => void;
   onUpdateProducts: (products: Product[]) => void;
   canEdit?: boolean;
@@ -75,6 +91,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   suppliers,
   products,
   stores,
+  orders = [],
   onUpdatePurchases,
   onUpdateProducts,
   canEdit = true,
@@ -88,6 +105,16 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPurchaseDetail, setSelectedPurchaseDetail] = useState<PurchaseOrder | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Print & WhatsApp Modal states
+  const [selectedPrintPo, setSelectedPrintPo] = useState<PurchaseOrder | null>(null);
+  const [selectedWhatsAppPo, setSelectedWhatsAppPo] = useState<PurchaseOrder | null>(null);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  // Item Info & History Modal state
+  const [selectedHistoryProduct, setSelectedHistoryProduct] = useState<Product | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyTargetRowIndex, setHistoryTargetRowIndex] = useState<number | null>(null);
 
   // Form states for creating Purchase
   const [supplierId, setSupplierId] = useState('');
@@ -123,7 +150,8 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
   // Items directly inside the Purchase Order Table
   const [formItems, setFormItems] = useState<PurchaseItem[]>([]);
-  const [quickBarcodeQuery, setQuickBarcodeQuery] = useState('');
+  const [quickSearchQuery, setQuickSearchQuery] = useState('');
+  const [isQuickSearchFocused, setIsQuickSearchFocused] = useState(false);
   const [barcodeFeedback, setBarcodeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -132,7 +160,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const barcodeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const qtyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const priceInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const quickBarcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const quickSearchInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -188,6 +216,22 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     });
   }, [purchases, searchQuery, selectedSupplierFilter, selectedStatusFilter, selectedPaymentFilter]);
 
+  // Live matching products for the Quick Search & Barcode Input
+  // Searches both Product Name AND Barcode of Pcs AND Barcode of Dusan/Karton!
+  const quickSearchResults = useMemo(() => {
+    const q = quickSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+
+    return products.filter(p => {
+      const matchName = p.name.toLowerCase().includes(q);
+      const matchPcsBarcode = p.barcode && p.barcode.toLowerCase().includes(q);
+      const matchDusBarcode = p.unitConversions?.some(uc => uc.barcode && uc.barcode.toLowerCase().includes(q));
+      const matchBrand = p.brand && p.brand.toLowerCase().includes(q);
+      const matchCode = p.itemCode && p.itemCode.toLowerCase().includes(q);
+      return matchName || matchPcsBarcode || matchDusBarcode || matchBrand || matchCode;
+    }).slice(0, 8);
+  }, [quickSearchQuery, products]);
+
   // Handle open create modal: Initialize with 1 empty row in the table ready for barcode/product input
   const handleOpenCreateModal = () => {
     const defaultSup = suppliers.find(s => s.isActive) || suppliers[0];
@@ -206,7 +250,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     setNotes('');
     setAutoUpdateCostPrice(true);
     setImmediatelyReceiveStock(true);
-    setQuickBarcodeQuery('');
+    setQuickSearchQuery('');
     setBarcodeFeedback(null);
     setIsCameraScannerOpen(false);
 
@@ -220,18 +264,30 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     }, 150);
   };
 
-  // Populate row with matched product data
-  const applyProductToRow = (rowIndex: number, prod: Product, customBarcode?: string, customUnit?: string) => {
+  // Populate row with matched product data (handles both Pcs and Dus/Karton)
+  const applyProductToRow = (
+    rowIndex: number, 
+    prod: Product, 
+    customBarcode?: string, 
+    customUnit?: string, 
+    customMultiplier?: number,
+    customPrice?: number
+  ) => {
     const baseUnit = prod.unit || 'Pcs';
     const unitToUse = customUnit || baseUnit;
-    let mult = 1;
-    if (customUnit) {
+    
+    let mult = customMultiplier || 1;
+    if (!customMultiplier && customUnit) {
       const opts = getProductUnitOptions(prod);
       const matched = opts.find(o => o.unitName.toLowerCase() === customUnit.toLowerCase());
       if (matched) mult = matched.multiplier || 1;
     }
 
-    const defaultCost = prod.costPrice ? prod.costPrice * mult : Math.round(prod.price * 0.75 * mult);
+    const defaultCost = customPrice !== undefined && customPrice > 0 
+      ? customPrice 
+      : prod.costPrice 
+        ? prod.costPrice * mult 
+        : Math.round(prod.price * 0.75 * mult);
 
     setFormItems(prev => {
       const updated = [...prev];
@@ -253,6 +309,67 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     });
   };
 
+  // Add product directly from Quick Search / Barcode Bar
+  const insertProductFromQuickSearch = (
+    prod: Product, 
+    unitName: string, 
+    multiplier: number, 
+    barcodeStr: string, 
+    price: number
+  ) => {
+    playScanBeep();
+    const baseUnit = prod.unit || 'Pcs';
+    const cost = price > 0 ? price : prod.costPrice ? prod.costPrice * multiplier : Math.round(prod.price * 0.75 * multiplier);
+
+    setFormItems(prev => {
+      const emptyIdx = prev.findIndex(r => !r.productId);
+      if (emptyIdx >= 0) {
+        const updated = [...prev];
+        updated[emptyIdx] = {
+          ...updated[emptyIdx],
+          productId: prod.id,
+          productName: prod.name,
+          barcode: barcodeStr || prod.barcode || '',
+          unit: unitName,
+          baseUnit: baseUnit,
+          conversionMultiplier: multiplier,
+          quantity: 1,
+          costPrice: cost,
+          subtotal: cost,
+          baseQuantity: multiplier,
+        };
+        return [...updated, createEmptyRow()];
+      } else {
+        const newItem: PurchaseItem = {
+          id: `pitem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          productId: prod.id,
+          productName: prod.name,
+          barcode: barcodeStr || prod.barcode || '',
+          unit: unitName,
+          baseUnit: baseUnit,
+          conversionMultiplier: multiplier,
+          quantity: 1,
+          costPrice: cost,
+          subtotal: cost,
+          baseQuantity: multiplier,
+        };
+        return [...prev, newItem, createEmptyRow()];
+      }
+    });
+
+    setBarcodeFeedback({
+      type: 'success',
+      message: `✓ [${unitName}] ${prod.name} (${barcodeStr || 'Tanpa Barcode'}) ditambahkan ke tabel PO!`,
+    });
+    setTimeout(() => setBarcodeFeedback(null), 3000);
+    setQuickSearchQuery('');
+    setIsQuickSearchFocused(false);
+
+    setTimeout(() => {
+      quickSearchInputRef.current?.focus();
+    }, 50);
+  };
+
   // 1. INLINE TABLE: Barcode change in row
   const handleRowBarcodeChange = (rowIndex: number, val: string) => {
     setFormItems(prev => {
@@ -266,43 +383,80 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   };
 
   // 2. INLINE TABLE: Barcode lookup by Enter or Blur
+  // Supports both PCS barcode and DUSAN/KARTON barcode!
   const handleRowBarcodeLookup = (rowIndex: number, barcodeValue?: string) => {
     const rawCode = (barcodeValue ?? formItems[rowIndex]?.barcode ?? '').trim();
     if (!rawCode) {
-      // If empty, shift focus to quantity or select
       qtyInputRefs.current[rowIndex]?.focus();
       return;
     }
 
-    // Search in products by barcode, id, or unit conversions
+    // A. Check if code matches barcode of Dus / Karton unit conversion
+    for (const prod of products) {
+      if (prod.unitConversions) {
+        const matchedUc = prod.unitConversions.find(
+          uc => uc.barcode && uc.barcode.toLowerCase() === rawCode.toLowerCase()
+        );
+        if (matchedUc) {
+          playScanBeep();
+          const mult = matchedUc.totalMultiplier || 1;
+          const cost = matchedUc.price && matchedUc.price > 0 
+            ? matchedUc.price 
+            : prod.costPrice ? prod.costPrice * mult : Math.round(prod.price * 0.75 * mult);
+
+          applyProductToRow(rowIndex, prod, rawCode, matchedUc.unitName, mult, cost);
+          setBarcodeFeedback({
+            type: 'success',
+            message: `✓ Barcode DUS/Karton terdeteksi: ${prod.name} (Satuan: ${matchedUc.unitName}, isi ${mult} ${prod.unit})`,
+          });
+          setTimeout(() => setBarcodeFeedback(null), 3000);
+
+          setTimeout(() => {
+            qtyInputRefs.current[rowIndex]?.focus();
+            qtyInputRefs.current[rowIndex]?.select();
+          }, 50);
+          return;
+        }
+      }
+    }
+
+    // B. Check if code matches PCS barcode or Product ID
     const matchedProd = products.find(p => 
       (p.barcode && p.barcode.toLowerCase() === rawCode.toLowerCase()) ||
-      p.id.toLowerCase() === rawCode.toLowerCase() ||
-      p.unitConversions?.some(uc => uc.barcode && uc.barcode.toLowerCase() === rawCode.toLowerCase())
+      p.id.toLowerCase() === rawCode.toLowerCase()
     );
 
     if (matchedProd) {
       playScanBeep();
-      const matchedUc = matchedProd.unitConversions?.find(uc => uc.barcode && uc.barcode.toLowerCase() === rawCode.toLowerCase());
-      applyProductToRow(rowIndex, matchedProd, rawCode, matchedUc?.unitName);
+      applyProductToRow(rowIndex, matchedProd, rawCode, matchedProd.unit || 'Pcs', 1);
       
       setBarcodeFeedback({
         type: 'success',
-        message: `✓ Barcode terdeteksi: ${matchedProd.name} (${rawCode})`,
+        message: `✓ Barcode Pcs terdeteksi: ${matchedProd.name} (${rawCode})`,
       });
       setTimeout(() => setBarcodeFeedback(null), 3000);
 
-      // Auto advance to Quantity field in this row
       setTimeout(() => {
         qtyInputRefs.current[rowIndex]?.focus();
         qtyInputRefs.current[rowIndex]?.select();
       }, 50);
     } else {
-      setBarcodeFeedback({
-        type: 'error',
-        message: `Barcode "${rawCode}" tidak ditemukan di master produk. Silakan pilih dari dropdown atau ketik ulang.`,
-      });
-      setTimeout(() => setBarcodeFeedback(null), 4000);
+      // Check if code matches product name partially
+      const nameMatch = products.find(p => p.name.toLowerCase().includes(rawCode.toLowerCase()));
+      if (nameMatch) {
+        applyProductToRow(rowIndex, nameMatch, nameMatch.barcode, nameMatch.unit || 'Pcs', 1);
+        setBarcodeFeedback({
+          type: 'success',
+          message: `✓ Produk dicocokkan: ${nameMatch.name}`,
+        });
+        setTimeout(() => setBarcodeFeedback(null), 3000);
+      } else {
+        setBarcodeFeedback({
+          type: 'error',
+          message: `Barcode/Nama "${rawCode}" tidak ditemukan. Silakan pilih dari dropdown atau ketik nama barang.`,
+        });
+        setTimeout(() => setBarcodeFeedback(null), 4000);
+      }
     }
   };
 
@@ -321,7 +475,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
     applyProductToRow(rowIndex, prod, prod.barcode);
 
-    // Auto advance to Quantity field in this row
     setTimeout(() => {
       qtyInputRefs.current[rowIndex]?.focus();
       qtyInputRefs.current[rowIndex]?.select();
@@ -337,11 +490,14 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       row.unit = newUnit;
 
       let mult = 1;
+      let cost = row.costPrice;
+
       if (prod) {
         const opts = getProductUnitOptions(prod);
         const matched = opts.find(o => o.unitName.toLowerCase() === newUnit.toLowerCase());
         if (matched) {
           mult = matched.multiplier || 1;
+          row.barcode = matched.barcode || row.barcode;
         } else {
           const lower = newUnit.toLowerCase();
           if (lower === 'lusin') mult = 12;
@@ -352,8 +508,15 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
           else if (lower === 'bal') mult = 50;
           else mult = 1;
         }
+
+        // Adjust cost price proportionally to unit multiplier
+        const baseCost = prod.costPrice || Math.round(prod.price * 0.75);
+        cost = baseCost * mult;
       }
+
       row.conversionMultiplier = mult;
+      row.costPrice = cost;
+      row.subtotal = row.quantity * cost;
       row.baseQuantity = row.quantity * mult;
       updated[rowIndex] = row;
       return updated;
@@ -397,7 +560,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     });
   };
 
-  // 8. REQUIREMENT 2: "Input pembelian item barang bergeser ke baris berikutnya apabila telah selesai input item barang"
+  // Advance to next row
   const advanceToNextRow = (currentIndex: number) => {
     const nextIndex = currentIndex + 1;
     setFormItems(prev => {
@@ -407,7 +570,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       return prev;
     });
 
-    // Focus next row's barcode input smoothly
     setTimeout(() => {
       barcodeInputRefs.current[nextIndex]?.focus();
       barcodeInputRefs.current[nextIndex]?.select();
@@ -429,90 +591,128 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const handleRemoveRow = (index: number) => {
     setFormItems(prev => {
       if (prev.length <= 1) {
-        // Keep at least 1 empty row
         return [createEmptyRow('row_0')];
       }
       return prev.filter((_, idx) => idx !== index);
     });
   };
 
-  // 9. REQUIREMENT 3: Fast Quick Barcode Scanner Bar at top of table
-  const handleQuickBarcodeSubmit = (e: React.FormEvent) => {
+  // Handle Quick Search / Barcode form submit (Enter key)
+  const handleQuickSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const code = quickBarcodeQuery.trim();
-    if (!code) return;
+    const query = quickSearchQuery.trim();
+    if (!query) return;
 
-    const matchedProd = products.find(p => 
-      (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) ||
-      p.id.toLowerCase() === code.toLowerCase() ||
-      p.unitConversions?.some(uc => uc.barcode && uc.barcode.toLowerCase() === code.toLowerCase())
-    );
-
-    if (matchedProd) {
-      playScanBeep();
-      const matchedUc = matchedProd.unitConversions?.find(uc => uc.barcode && uc.barcode.toLowerCase() === code.toLowerCase());
-      const baseUnit = matchedProd.unit || 'Pcs';
-      const unitName = matchedUc ? matchedUc.unitName : baseUnit;
-      const mult = matchedUc ? (matchedUc.totalMultiplier || 1) : 1;
-      const cost = matchedProd.costPrice ? matchedProd.costPrice * mult : Math.round(matchedProd.price * 0.75 * mult);
-
-      setFormItems(prev => {
-        // Find if the last row is empty (no productId)
-        const emptyIdx = prev.findIndex(r => !r.productId);
-        if (emptyIdx >= 0) {
-          const updated = [...prev];
-          updated[emptyIdx] = {
-            ...updated[emptyIdx],
-            productId: matchedProd.id,
-            productName: matchedProd.name,
-            barcode: code,
-            unit: unitName,
-            baseUnit: baseUnit,
-            conversionMultiplier: mult,
-            quantity: 1,
-            costPrice: cost,
-            subtotal: cost,
-            baseQuantity: mult,
-          };
-          // Automatically append next empty row ready for next scan
-          return [...updated, createEmptyRow()];
-        } else {
-          // Append this item and an empty row below it
-          const newItem: PurchaseItem = {
-            id: `pitem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-            productId: matchedProd.id,
-            productName: matchedProd.name,
-            barcode: code,
-            unit: unitName,
-            baseUnit: baseUnit,
-            conversionMultiplier: mult,
-            quantity: 1,
-            costPrice: cost,
-            subtotal: cost,
-            baseQuantity: mult,
-          };
-          return [...prev, newItem, createEmptyRow()];
+    // 1. Check if matches Dus/Karton barcode directly
+    for (const prod of products) {
+      if (prod.unitConversions) {
+        const matchedUc = prod.unitConversions.find(
+          uc => uc.barcode && uc.barcode.toLowerCase() === query.toLowerCase()
+        );
+        if (matchedUc) {
+          const mult = matchedUc.totalMultiplier || 1;
+          const cost = matchedUc.price && matchedUc.price > 0 
+            ? matchedUc.price 
+            : prod.costPrice ? prod.costPrice * mult : Math.round(prod.price * 0.75 * mult);
+          insertProductFromQuickSearch(prod, matchedUc.unitName, mult, query, cost);
+          return;
         }
-      });
-
-      setBarcodeFeedback({
-        type: 'success',
-        message: `✓ [Barcode: ${code}] ${matchedProd.name} berhasil diinput ke tabel & bergeser ke baris baru!`,
-      });
-      setTimeout(() => setBarcodeFeedback(null), 3000);
-      setQuickBarcodeQuery('');
-
-      // Keep focus in quick scan input for rapid laser barcode scanning
-      setTimeout(() => {
-        quickBarcodeInputRef.current?.focus();
-      }, 50);
-    } else {
-      setBarcodeFeedback({
-        type: 'error',
-        message: `Barcode "${code}" tidak ditemukan di katalog produk master.`,
-      });
-      setTimeout(() => setBarcodeFeedback(null), 3500);
+      }
     }
+
+    // 2. Check if matches Pcs barcode directly
+    const matchedPcs = products.find(p => p.barcode && p.barcode.toLowerCase() === query.toLowerCase());
+    if (matchedPcs) {
+      insertProductFromQuickSearch(
+        matchedPcs, 
+        matchedPcs.unit || 'Pcs', 
+        1, 
+        query, 
+        matchedPcs.costPrice || Math.round(matchedPcs.price * 0.75)
+      );
+      return;
+    }
+
+    // 3. Check if first result from name search
+    if (quickSearchResults.length > 0) {
+      const topMatch = quickSearchResults[0];
+      const dusOpt = topMatch.unitConversions?.[0];
+      // Default to PCS or first unit
+      insertProductFromQuickSearch(
+        topMatch, 
+        topMatch.unit || 'Pcs', 
+        1, 
+        topMatch.barcode, 
+        topMatch.costPrice || Math.round(topMatch.price * 0.75)
+      );
+      return;
+    }
+
+    setBarcodeFeedback({
+      type: 'error',
+      message: `Tidak ada produk yang cocok dengan "${query}". Coba ketik sebagian nama barang atau scan barcode.`,
+    });
+    setTimeout(() => setBarcodeFeedback(null), 3500);
+  };
+
+  // Open Item Info & History Modal for a product
+  const handleOpenItemHistory = (productOrId: Product | string, rowIndex?: number) => {
+    const prod = typeof productOrId === 'string' ? products.find(p => p.id === productOrId) : productOrId;
+    if (prod) {
+      setSelectedHistoryProduct(prod);
+      setHistoryTargetRowIndex(rowIndex !== undefined ? rowIndex : null);
+      setIsHistoryModalOpen(true);
+    }
+  };
+
+  // Handle Apply Recommendation from Item History Modal
+  const handleApplyOrderRecommendation = (params: {
+    productId: string;
+    productName: string;
+    barcode: string;
+    unit: string;
+    conversionMultiplier: number;
+    quantity: number;
+    costPrice: number;
+  }) => {
+    const prod = products.find(p => p.id === params.productId);
+    if (!prod) return;
+
+    if (historyTargetRowIndex !== null && historyTargetRowIndex >= 0) {
+      // Update targeted row
+      setFormItems(prev => {
+        const updated = [...prev];
+        updated[historyTargetRowIndex] = {
+          ...updated[historyTargetRowIndex],
+          productId: prod.id,
+          productName: prod.name,
+          barcode: params.barcode || prod.barcode || '',
+          unit: params.unit,
+          baseUnit: prod.unit || 'Pcs',
+          conversionMultiplier: params.conversionMultiplier,
+          quantity: params.quantity,
+          costPrice: params.costPrice,
+          subtotal: params.quantity * params.costPrice,
+          baseQuantity: params.quantity * params.conversionMultiplier,
+        };
+        return updated;
+      });
+    } else {
+      // Insert into draft or append
+      insertProductFromQuickSearch(
+        prod, 
+        params.unit, 
+        params.conversionMultiplier, 
+        params.barcode, 
+        params.costPrice
+      );
+    }
+
+    setBarcodeFeedback({
+      type: 'success',
+      message: `✓ Rekomendasi order diterapkan: ${params.quantity} ${params.unit} untuk ${prod.name}!`,
+    });
+    setTimeout(() => setBarcodeFeedback(null), 3000);
   };
 
   // Camera Barcode Scanner setup
@@ -536,7 +736,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
             cameraVideoRef.current.play().catch(() => {});
           }
 
-          // Check if BarcodeDetector API is supported
           if ('BarcodeDetector' in window) {
             const barcodeDetector = new (window as any).BarcodeDetector({
               formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code']
@@ -549,13 +748,11 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   if (barcodes && barcodes.length > 0) {
                     const rawVal = barcodes[0].rawValue;
                     if (rawVal) {
-                      // Process barcode
+                      setQuickSearchQuery(rawVal);
                       const fakeEvent = { preventDefault: () => {} } as any;
-                      setQuickBarcodeQuery(rawVal);
                       setTimeout(() => {
-                        handleQuickBarcodeSubmit(fakeEvent);
+                        handleQuickSearchSubmit(fakeEvent);
                       }, 50);
-                      // Pause briefly
                       clearInterval(intervalId);
                       setTimeout(() => {
                         setIsCameraScannerOpen(false);
@@ -563,7 +760,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     }
                   }
                 } catch {
-                  // Ignore detection loop frame error
+                  // Frame detector error ignored
                 }
               }
             }, 300);
@@ -587,11 +784,10 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     };
   }, [isCameraScannerOpen]);
 
-  // Save Purchase Order & Automatically Increase Stock!
+  // Save Purchase Order & Automatically Increase Stock
   const handleSavePurchaseOrder = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Filter valid items that have a product selected and quantity > 0
     const validItems = formItems.filter(item => item.productId && item.productName && item.quantity > 0);
 
     if (validItems.length === 0) {
@@ -634,8 +830,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       createdAt: new Date().toISOString(),
     };
 
-    // CRITICAL REQUIREMENT: "stok barang bertambah" with correct unit conversion
-    // If immediately received, automatically increase physical stock and update HPP cost price in products!
     if (immediatelyReceiveStock) {
       const updatedProducts = products.map(prod => {
         const matchingItems = validItems.filter(it => it.productId === prod.id);
@@ -646,7 +840,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
           }, 0);
           const newStock = (prod.stock || 0) + addedStock;
           
-          // Cost price per base unit
           const lastItem = matchingItems[matchingItems.length - 1];
           const mult = lastItem.conversionMultiplier || 1;
           const newCostPrice = autoUpdateCostPrice && lastItem.costPrice > 0 
@@ -665,7 +858,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       onUpdateProducts(updatedProducts);
     }
 
-    // Save to purchases list
     onUpdatePurchases([newPurchase, ...purchases]);
     setIsCreateModalOpen(false);
   };
@@ -681,7 +873,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       return;
     }
 
-    // Increase product stock respecting unit conversion
     const updatedProducts = products.map(prod => {
       const matchingItems = po.items.filter(it => it.productId === prod.id);
       if (matchingItems.length > 0) {
@@ -704,7 +895,6 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
     onUpdateProducts(updatedProducts);
 
-    // Update PO status
     const updatedPurchases = purchases.map(p => {
       if (p.id === po.id) {
         return {
@@ -739,75 +929,131 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     }
   };
 
-  // Export CSV
-  const handleExportCSV = () => {
-    const headers = ['No PO', 'No Faktur Supplier', 'Supplier', 'Cabang Toko', 'Tgl Pesan', 'Tgl Diterima', 'Daftar Barang & Satuan', 'Satuan Barang', 'Total Qty', 'Subtotal (Rp)', 'Total (Rp)', 'Status Barang', 'Status Bayar', 'Metode Bayar', 'Stok Masuk'];
-    const rows = filteredPurchases.map(p => [
-      `"${p.purchaseNumber}"`,
-      `"${p.invoiceNumber || '-'}"`,
-      `"${p.supplierName.replace(/"/g, '""')}"`,
-      `"${p.storeName}"`,
-      p.orderDate,
-      p.receivedDate || '-',
-      `"${p.items.map(it => `${it.productName} (${it.quantity} ${it.unit})`).join('; ')}"`,
-      `"${Array.from(new Set(p.items.map(it => it.unit))).join(', ')}"`,
-      p.totalQuantity,
-      p.subtotal,
-      p.totalAmount,
-      p.status,
-      p.paymentStatus,
-      p.paymentMethod,
-      p.stockUpdated ? 'Sudah Ditambah' : 'Belum',
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Laporan_Pembelian_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header & Actions */}
+      {/* HEADER & ACTIONS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
               <ShoppingBag className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-bold text-stone-900">Modul Pembelian Barang & Stok Masuk</h2>
+            <h2 className="text-xl font-bold text-stone-900">Modul Pesanan Pembelian (Purchase Order) & Stok Masuk</h2>
           </div>
           <p className="text-sm text-stone-500 mt-1">
-            Catat pesanan barang dari supplier. Saat status <span className="font-semibold text-emerald-700">Diterima</span>, stok fisik di katalog toko otomatis bertambah dan HPP modal terupdate.
+            Input pesanan barang supplier dengan nama barang atau barcode (Pcs maupun Dusan). Cek history item untuk menentukan kuantitas order, serta ekspor laporan ke berbagai format.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-semibold"
-          >
-            <Download className="w-4 h-4 text-stone-500" />
-            <span>Ekspor CSV</span>
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* MULTI-FORMAT EXPORT DROPDOWN (REQUIREMENT 3) */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-bold transition-colors cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-emerald-600" />
+              <span>Ekspor Laporan PO</span>
+              <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+            </button>
+
+            {isExportDropdownOpen && (
+              <div 
+                className="absolute right-0 mt-1 w-64 bg-white rounded-2xl shadow-xl border border-stone-200 py-2 z-50 animate-fadeIn text-xs"
+                onMouseLeave={() => setIsExportDropdownOpen(false)}
+              >
+                <div className="px-3 py-1.5 text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                  Pilihan Format Ekspor
+                </div>
+
+                <button
+                  onClick={() => {
+                    exportPurchaseOrdersToExcel(filteredPurchases);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <div className="font-bold">Unduh Excel (.xls / .xlsx)</div>
+                    <div className="text-[10px] text-stone-400">Rekap faktur PO lengkap dengan total & format uang</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    exportPurchaseItemsDetailToExcel(filteredPurchases);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <Layers className="w-4 h-4 text-indigo-600" />
+                  <div>
+                    <div className="font-bold">Unduh Excel Rincian Barang</div>
+                    <div className="text-[10px] text-stone-400">Detail item per baris dengan satuan Dus & Pcs</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    exportPurchaseOrdersToCsv(filteredPurchases);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <FileText className="w-4 h-4 text-stone-600" />
+                  <div>
+                    <div className="font-bold">Unduh CSV (.csv)</div>
+                    <div className="text-[10px] text-stone-400">Format data mentah kompatibel spreadsheet</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    exportPurchaseOrdersToJson(filteredPurchases);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <Boxes className="w-4 h-4 text-amber-600" />
+                  <div>
+                    <div className="font-bold">Unduh JSON (.json)</div>
+                    <div className="text-[10px] text-stone-400">Format data terstruktur untuk integrasi sistem</div>
+                  </div>
+                </button>
+
+                <div className="border-t border-stone-100 my-1"></div>
+
+                <button
+                  onClick={() => {
+                    window.print();
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                >
+                  <Printer className="w-4 h-4 text-stone-600" />
+                  <div>
+                    <div className="font-bold">Cetak / Simpan PDF Rekap</div>
+                    <div className="text-[10px] text-stone-400">Buka dialog cetak laporan printer / PDF</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           {canEdit && (
             <button
               onClick={handleOpenCreateModal}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
             >
               <PackagePlus className="w-4 h-4" />
-              <span>+ Beli Barang (Tambah Stok)</span>
+              <span>+ Input Pesanan PO (Tambah Stok)</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
           <div className="text-xs text-stone-500 font-medium">Total Nilai Pembelian</div>
@@ -834,7 +1080,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         </div>
       </div>
 
-      {/* Filters */}
+      {/* FILTERS */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -882,7 +1128,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         </div>
       </div>
 
-      {/* Table of Purchases */}
+      {/* TABLE OF PURCHASES */}
       <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -897,7 +1143,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 <th className="px-3.5 py-3 text-right">Total Pembelian</th>
                 <th className="px-3.5 py-3 text-center">Status Stok</th>
                 <th className="px-3.5 py-3 text-center">Pembayaran</th>
-                <th className="px-3.5 py-3 text-center">Aksi</th>
+                <th className="px-3.5 py-3 text-center">Aksi & Ekspor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
@@ -928,8 +1174,8 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   </td>
 
                   <td className="px-3.5 py-3 max-w-xs">
-                    <div className="font-semibold text-stone-800">
-                      {po.items.length} Macam Produk
+                    <div className="font-semibold text-stone-800 flex items-center gap-1.5">
+                      <span>{po.items.length} Macam Produk</span>
                     </div>
                     <div className="text-[11px] text-stone-500 truncate" title={po.items.map(it => it.productName).join(', ')}>
                       {po.items.map(it => it.productName).join(', ')}
@@ -995,21 +1241,39 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   </td>
 
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
+                    <div className="flex items-center justify-center gap-1">
                       {!po.stockUpdated && canEdit && (
                         <button
                           onClick={() => handleReceiveStockNow(po)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
+                          className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
                           title="Terima Barang & Tambah Stok di Katalog"
                         >
                           <PackagePlus className="w-3 h-3" />
-                          <span>Terima Stok</span>
+                          <span>Terima</span>
                         </button>
                       )}
 
+                      {/* CETAK FAKTUR RESMI (REQUIREMENT 3) */}
+                      <button
+                        onClick={() => setSelectedPrintPo(po)}
+                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 cursor-pointer"
+                        title="Cetak Surat PO Resmi / Simpan PDF"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-stone-700" />
+                      </button>
+
+                      {/* FORMAT WHATSAPP (REQUIREMENT 3) */}
+                      <button
+                        onClick={() => setSelectedWhatsAppPo(po)}
+                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
+                        title="Format Chat WhatsApp ke Supplier"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
+
                       <button
                         onClick={() => setSelectedPurchaseDetail(po)}
-                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
+                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 cursor-pointer"
                         title="Lihat Detail Faktur"
                       >
                         <Eye className="w-3.5 h-3.5" />
@@ -1018,7 +1282,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                       {canEdit && (
                         <button
                           onClick={() => setDeleteConfirmId(po.id)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
                           title="Hapus Faktur"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1037,13 +1301,13 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
             <ShoppingBag className="w-12 h-12 text-stone-300 mx-auto mb-3" />
             <h3 className="text-base font-bold text-stone-700">Belum ada transaksi pembelian barang</h3>
             <p className="text-xs text-stone-400 mt-1 max-w-sm mx-auto">
-              Klik tombol "+ Beli Barang (Tambah Stok)" untuk mencatat pesanan barang masuk dari supplier.
+              Klik tombol "+ Input Pesanan PO (Tambah Stok)" untuk mencatat pesanan barang masuk dari supplier.
             </p>
           </div>
         )}
       </div>
 
-      {/* MODAL INPUT PEMBELIAN BARANG (TAMBAH STOK) */}
+      {/* MODAL INPUT PEMBELIAN BARANG (PURCHASE ORDER FORM) */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-60 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-4 my-8 max-h-[94vh] overflow-y-auto">
@@ -1053,8 +1317,10 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   <PackagePlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-stone-900 text-base">Faktur Pembelian Barang Masuk</h3>
-                  <p className="text-xs text-stone-500">Input barang langsung di tabel dengan barcode atau pilih produk, otomatis geser ke baris berikutnya</p>
+                  <h3 className="font-extrabold text-stone-900 text-base">Faktur Pesanan Pembelian Barang (Purchase Order)</h3>
+                  <p className="text-xs text-stone-500">
+                    Bisa input dengan mengetik nama barang atau barcode (Pcs maupun Dusan). Klik tombol Info Item untuk melihat riwayat sebelum menentukan jumlah order.
+                  </p>
                 </div>
               </div>
               <button
@@ -1160,8 +1426,8 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 </div>
               </div>
 
-              {/* BARCODE SCANNER QUICK INPUT BAR */}
-              <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-stone-50 border border-emerald-200/80 rounded-2xl p-3 sm:p-3.5 space-y-2.5">
+              {/* QUICK SEARCH & BARCODE INPUT BAR (REQUIREMENT 1) */}
+              <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-stone-50 border border-emerald-200/80 rounded-2xl p-3 sm:p-4 space-y-2.5 relative">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-xs">
@@ -1169,49 +1435,148 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     </div>
                     <div>
                       <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
-                        Scan Barcode Cepat (Barcode Scanner Gun / Kamera)
+                        Pencarian Cepat: Ketik Nama Barang atau Barcode (Pcs / Dusan)
                       </span>
-                      <p className="text-[11px] text-stone-500">Scan barcode untuk otomatis memasukkan produk ke tabel & menambah baris baru</p>
+                      <p className="text-[11px] text-stone-500">
+                        Scan barcode scanner gun atau ketik nama barang untuk memilih satuan Pcs atau Dusan secara instan
+                      </p>
                     </div>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setIsCameraScannerOpen(true)}
-                    className="px-3 py-1.5 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors text-xs text-stone-700"
+                    className="px-3 py-1.5 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors text-xs text-stone-700 cursor-pointer"
                   >
                     <Camera className="w-3.5 h-3.5 text-emerald-600" />
                     <span>📷 Buka Kamera Scanner</span>
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Barcode className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      ref={quickBarcodeInputRef}
-                      type="text"
-                      value={quickBarcodeQuery}
-                      onChange={(e) => setQuickBarcodeQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleQuickBarcodeSubmit(e);
-                        }
-                      }}
-                      placeholder="Arahkan Barcode Scanner ke sini atau ketik kode barcode lalu tekan Enter..."
-                      className="w-full pl-9 pr-24 py-2 border border-stone-200 rounded-xl bg-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleQuickBarcodeSubmit}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-colors"
-                    >
-                      + Masukkan
-                    </button>
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        ref={quickSearchInputRef}
+                        type="text"
+                        value={quickSearchQuery}
+                        onChange={(e) => setQuickSearchQuery(e.target.value)}
+                        onFocus={() => setIsQuickSearchFocused(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleQuickSearchSubmit(e);
+                          }
+                        }}
+                        placeholder="Ketik nama barang (contoh: Indomie, Aqua, Minyak) ATAU scan barcode pcs / dusan lalu tekan Enter..."
+                        className="w-full pl-9 pr-24 py-2.5 border border-stone-200 rounded-xl bg-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-2xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleQuickSearchSubmit}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-colors cursor-pointer"
+                      >
+                        + Masukkan
+                      </button>
+                    </div>
                   </div>
+
+                  {/* AUTOCOMPLETE POPUP WHEN TYPING PRODUCT NAME OR BARCODE */}
+                  {quickSearchQuery.trim().length > 0 && quickSearchResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-stone-200 py-2 z-50 max-h-80 overflow-y-auto divide-y divide-stone-100 animate-fadeIn">
+                      <div className="px-3 py-1 text-[10px] font-bold text-stone-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>Hasil Pencarian Barang ({quickSearchResults.length} ditemukan)</span>
+                        <span>Klik Satuan untuk Masukkan ke Tabel</span>
+                      </div>
+
+                      {quickSearchResults.map(prod => {
+                        const unitOpts = getProductUnitOptions(prod);
+                        const baseOpt = unitOpts.find(o => o.isBase) || unitOpts[0];
+                        const dusOpts = unitOpts.filter(o => !o.isBase);
+
+                        return (
+                          <div key={prod.id} className="p-3 hover:bg-stone-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-stone-900 text-xs truncate">{prod.name}</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 font-medium">
+                                  {prod.brand || prod.category}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-3 text-[11px] text-stone-500 mt-1">
+                                <span>Stok: <strong className={prod.stock <= 5 ? 'text-rose-600 font-bold' : 'text-stone-800 font-bold'}>{prod.stock} {prod.unit || 'Pcs'}</strong></span>
+                                <span className="font-mono">Barcode Pcs: {prod.barcode || '-'}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                              {/* BUTTON: INFO & RIWAYAT ITEM (REQUIREMENT 2) */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenItemHistory(prod)}
+                                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] rounded-lg border border-indigo-200 flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Lihat History Penjualan & Pembelian untuk menentukan jumlah order"
+                              >
+                                <Info className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Info Item</span>
+                              </button>
+
+                              {/* BUTTON: INSERT AS PCS */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cost = prod.costPrice || Math.round(prod.price * 0.75);
+                                  insertProductFromQuickSearch(prod, prod.unit || 'Pcs', 1, prod.barcode, cost);
+                                }}
+                                className="px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-[11px] rounded-lg transition-colors cursor-pointer"
+                              >
+                                + {prod.unit || 'Pcs'}
+                              </button>
+
+                              {/* BUTTON(S): INSERT AS DUS / KARTON / MULTI-SATUAN */}
+                              {dusOpts.map(dOpt => (
+                                <button
+                                  key={dOpt.unitName}
+                                  type="button"
+                                  onClick={() => {
+                                    const cost = dOpt.price && dOpt.price > 0 
+                                      ? dOpt.price 
+                                      : (prod.costPrice ? prod.costPrice * dOpt.multiplier : Math.round(prod.price * 0.75 * dOpt.multiplier));
+                                    insertProductFromQuickSearch(prod, dOpt.unitName, dOpt.multiplier, dOpt.barcode || prod.barcode, cost);
+                                  }}
+                                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                                  title={`1 ${dOpt.unitName} = ${dOpt.multiplier} ${prod.unit}`}
+                                >
+                                  <span>+ {dOpt.unitName}</span>
+                                  <span className="text-[10px] text-emerald-600 font-normal">({dOpt.multiplier}x)</span>
+                                </button>
+                              ))}
+
+                              {/* FALLBACK DUS BUTTON IF NOT EXPLICITLY IN UNIT CONVERSIONS */}
+                              {dusOpts.length === 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const mult = 24;
+                                    const cost = (prod.costPrice ? prod.costPrice * mult : Math.round(prod.price * 0.75 * mult));
+                                    insertProductFromQuickSearch(prod, 'Dus', mult, prod.barcode, cost);
+                                  }}
+                                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] rounded-lg transition-colors cursor-pointer"
+                                  title="Masukkan sebagai 1 Dus (= 24 pcs)"
+                                >
+                                  + Dus (24x)
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {/* Barcode feedback banner */}
+                {/* Feedback banner */}
                 {barcodeFeedback && (
                   <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-between animate-fadeIn ${
                     barcodeFeedback.type === 'success' 
@@ -1222,82 +1587,15 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     <button 
                       type="button" 
                       onClick={() => setBarcodeFeedback(null)} 
-                      className="text-stone-400 hover:text-stone-600 text-xs ml-2"
+                      className="text-stone-400 hover:text-stone-600 text-xs ml-2 cursor-pointer"
                     >
                       ✕
                     </button>
                   </div>
                 )}
-
-                {/* Quick Sample Barcode Chips for instant testing */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span className="text-[10px] text-stone-400 font-medium">Tes Barcode Cepat:</span>
-                  {products.filter(p => p.barcode).slice(0, 4).map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setQuickBarcodeQuery(p.barcode || '');
-                        const fakeEvt = { preventDefault: () => {} } as any;
-                        // Trigger immediate lookup
-                        setTimeout(() => {
-                          const code = p.barcode || '';
-                          const matchedProd = p;
-                          playScanBeep();
-                          const baseUnit = matchedProd.unit || 'Pcs';
-                          const defaultCost = matchedProd.costPrice || Math.round(matchedProd.price * 0.75);
-                          setFormItems(prev => {
-                            const emptyIdx = prev.findIndex(r => !r.productId);
-                            if (emptyIdx >= 0) {
-                              const updated = [...prev];
-                              updated[emptyIdx] = {
-                                ...updated[emptyIdx],
-                                productId: matchedProd.id,
-                                productName: matchedProd.name,
-                                barcode: code,
-                                unit: baseUnit,
-                                baseUnit: baseUnit,
-                                conversionMultiplier: 1,
-                                quantity: 1,
-                                costPrice: defaultCost,
-                                subtotal: defaultCost,
-                                baseQuantity: 1,
-                              };
-                              return [...updated, createEmptyRow()];
-                            } else {
-                              const newItem: PurchaseItem = {
-                                id: `pitem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-                                productId: matchedProd.id,
-                                productName: matchedProd.name,
-                                barcode: code,
-                                unit: baseUnit,
-                                baseUnit: baseUnit,
-                                conversionMultiplier: 1,
-                                quantity: 1,
-                                costPrice: defaultCost,
-                                subtotal: defaultCost,
-                                baseQuantity: 1,
-                              };
-                              return [...prev, newItem, createEmptyRow()];
-                            }
-                          });
-                          setBarcodeFeedback({
-                            type: 'success',
-                            message: `✓ [Barcode: ${code}] ${matchedProd.name} dimasukkan ke tabel!`,
-                          });
-                          setTimeout(() => setBarcodeFeedback(null), 3000);
-                        }, 50);
-                      }}
-                      className="px-2 py-0.5 bg-white hover:bg-emerald-50 text-stone-600 hover:text-emerald-700 border border-stone-200 rounded-lg text-[10px] font-mono transition-colors"
-                      title={`Klik untuk tes scan barcode ${p.name}`}
-                    >
-                      {p.name.split(' ')[0]} ({p.barcode})
-                    </button>
-                  ))}
-                </div>
               </div>
 
-              {/* TABEL PEMBELIAN BARANG (DIRECT INLINE TABLE INPUT) */}
+              {/* TABEL DAFTAR BARANG PEMBELIAN (INLINE TABLE INPUT) */}
               <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <div className="font-bold text-stone-900 flex items-center gap-1.5">
@@ -1308,7 +1606,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     </span>
                   </div>
                   <div className="text-[11px] text-stone-500 font-medium">
-                    💡 Tekan <kbd className="px-1.5 py-0.5 bg-stone-100 border border-stone-300 rounded font-mono text-[10px]">Enter</kbd> untuk bergeser antar kolom & baris
+                    💡 Klik <span className="font-bold text-indigo-700">ℹ️ Info Item</span> di samping barang untuk melihat analisis & riwayat penjualan/pembelian
                   </div>
                 </div>
 
@@ -1319,13 +1617,13 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                         <tr>
                           <th className="px-3 py-2.5 text-center w-8">No</th>
                           <th className="px-3 py-2.5 min-w-[130px] w-36">Barcode Barang</th>
-                          <th className="px-3 py-2.5 min-w-[180px]">Nama Produk</th>
+                          <th className="px-3 py-2.5 min-w-[200px]">Nama Produk</th>
                           <th className="px-3 py-2.5 min-w-[110px] w-28 text-center">Satuan</th>
                           <th className="px-3 py-2.5 min-w-[130px] w-32 text-center">Konversi Fisik</th>
                           <th className="px-3 py-2.5 min-w-[80px] w-20 text-center">Qty Beli</th>
                           <th className="px-3 py-2.5 min-w-[120px] w-32 text-right">Harga Modal (Rp)</th>
                           <th className="px-3 py-2.5 min-w-[110px] w-28 text-right">Subtotal</th>
-                          <th className="px-3 py-2.5 w-16 text-center">Aksi</th>
+                          <th className="px-3 py-2.5 w-20 text-center">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
@@ -1343,7 +1641,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                 {idx + 1}
                               </td>
 
-                              {/* 2. Barcode Barang */}
+                              {/* 2. Barcode Barang (Pcs atau Dus) */}
                               <td className="px-3 py-2">
                                 <div className="relative">
                                   <input
@@ -1362,26 +1660,41 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                         handleRowBarcodeLookup(idx);
                                       }
                                     }}
-                                    placeholder="Ketik/Scan..."
+                                    placeholder="Barcode Pcs / Dus..."
                                     className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-xs font-mono focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
                                   />
                                 </div>
                               </td>
 
-                              {/* 3. Nama / Pilih Produk */}
+                              {/* 3. Nama / Pilih Produk & Tombol Info Riwayat Item */}
                               <td className="px-3 py-2">
-                                <select
-                                  value={item.productId || ''}
-                                  onChange={(e) => handleRowProductSelect(idx, e.target.value)}
-                                  className="w-full px-2.5 py-1.5 border border-stone-200 rounded-lg text-xs font-semibold text-stone-900 bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                >
-                                  <option value="">-- Pilih / Cari Produk Master --</option>
-                                  {products.map(p => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.name} (Stok saat ini: {p.stock || 0} {p.unit || 'Pcs'})
-                                    </option>
-                                  ))}
-                                </select>
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={item.productId || ''}
+                                    onChange={(e) => handleRowProductSelect(idx, e.target.value)}
+                                    className="flex-1 px-2.5 py-1.5 border border-stone-200 rounded-lg text-xs font-semibold text-stone-900 bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 truncate"
+                                  >
+                                    <option value="">-- Pilih / Ketik Produk --</option>
+                                    {products.map(p => (
+                                      <option key={p.id} value={p.id}>
+                                        {p.name} (Stok: {p.stock || 0} {p.unit || 'Pcs'})
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  {/* TOMBOL POPUP INFO ITEM & HISTORY (REQUIREMENT 2) */}
+                                  {prod && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenItemHistory(prod, idx)}
+                                      className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                                      title="Buka Popup Riwayat & Info Item ini (History Penjualan & Pembelian)"
+                                    >
+                                      <Info className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+
                                 {item.productName && !item.productId && (
                                   <span className="text-[10px] text-amber-600 font-medium block mt-0.5">
                                     {item.productName}
@@ -1389,7 +1702,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                 )}
                               </td>
 
-                              {/* 4. Satuan Barang */}
+                              {/* 4. Satuan Barang (Pcs, Dus, Karton, dll) */}
                               <td className="px-3 py-2 text-center">
                                 <select
                                   value={item.unit || 'Pcs'}
@@ -1480,7 +1793,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => advanceToNextRow(idx)}
-                                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-md"
+                                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-md cursor-pointer"
                                     title="Selesai & Geser ke baris berikutnya (Enter)"
                                   >
                                     <CornerDownRight className="w-3.5 h-3.5" />
@@ -1488,7 +1801,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveRow(idx)}
-                                    className="p-1 text-rose-500 hover:bg-rose-50 rounded-md"
+                                    className="p-1 text-rose-500 hover:bg-rose-50 rounded-md cursor-pointer"
                                     title="Hapus baris ini"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1536,7 +1849,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   <button
                     type="button"
                     onClick={handleAddNewRow}
-                    className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                    className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5 text-emerald-600" />
                     <span>+ Tambah Baris Berikutnya (Atau tekan Enter di kolom Harga)</span>
@@ -1544,7 +1857,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
                   <div className="flex items-center gap-1 text-[11px] text-stone-500 bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200">
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Alur: Scan/Ketik Barcode ➔ Enter (Qty) ➔ Enter (Harga Modal) ➔ Enter (Geser Baris Baru)</span>
+                    <span>Alur: Ketik/Scan Barcode ➔ Enter (Qty) ➔ Enter (Harga) ➔ Enter (Geser Baris Baru)</span>
                   </div>
                 </div>
               </div>
@@ -1557,7 +1870,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     id="imm-receive"
                     checked={immediatelyReceiveStock}
                     onChange={(e) => setImmediatelyReceiveStock(e.target.checked)}
-                    className="rounded-md border-emerald-400 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    className="rounded-md border-emerald-400 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                   />
                   <label htmlFor="imm-receive" className="text-xs font-bold text-emerald-900 cursor-pointer">
                     ⚡ Langsung Tambahkan Stok Fisik ke Katalog Sekarang (Barang Sudah Diterima)
@@ -1573,7 +1886,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     id="auto-hpp"
                     checked={autoUpdateCostPrice}
                     onChange={(e) => setAutoUpdateCostPrice(e.target.checked)}
-                    className="rounded-md border-emerald-400 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    className="rounded-md border-emerald-400 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                   />
                   <label htmlFor="auto-hpp" className="text-xs font-medium text-emerald-900 cursor-pointer">
                     Perbarui Harga Pokok Modal (HPP) Produk di Katalog sesuai harga beli terbaru dari supplier
@@ -1596,13 +1909,13 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-semibold hover:bg-stone-50"
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-semibold hover:bg-stone-50 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Simpan Faktur & Tambah Stok</span>
@@ -1635,7 +1948,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
               </div>
               <button
                 onClick={() => setSelectedPurchaseDetail(null)}
-                className="p-2 text-stone-400 hover:text-stone-700 rounded-xl"
+                className="p-2 text-stone-400 hover:text-stone-700 rounded-xl cursor-pointer"
               >
                 ✕
               </button>
@@ -1676,7 +1989,17 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   {selectedPurchaseDetail.items.map(it => (
                     <tr key={it.id}>
                       <td className="px-3.5 py-2.5">
-                        <div className="font-semibold text-stone-900">{it.productName}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-stone-900">{it.productName}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenItemHistory(it.productId)}
+                            className="p-1 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer"
+                            title="Buka Info & History Item"
+                          >
+                            <Info className="w-3 h-3" />
+                          </button>
+                        </div>
                         <div className="text-[10px] text-stone-400 font-mono">{it.barcode}</div>
                       </td>
                       <td className="px-3.5 py-2.5 text-center font-bold text-stone-900">
@@ -1724,19 +2047,29 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-stone-100 text-xs">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 font-semibold"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Cetak Faktur</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedPrintPo(selectedPurchaseDetail)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 font-semibold cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-emerald-600" />
+                  <span>Cetak PO Resmi</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedWhatsAppPo(selectedPurchaseDetail)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-emerald-700 hover:bg-emerald-50 font-semibold cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Kirim WhatsApp</span>
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 {!selectedPurchaseDetail.stockUpdated && canEdit && (
                   <button
                     onClick={() => handleReceiveStockNow(selectedPurchaseDetail)}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>Terima Barang & Tambah Stok</span>
@@ -1744,7 +2077,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 )}
                 <button
                   onClick={() => setSelectedPurchaseDetail(null)}
-                  className="px-4 py-2 rounded-xl bg-stone-900 text-white font-bold hover:bg-black"
+                  className="px-4 py-2 rounded-xl bg-stone-900 text-white font-bold hover:bg-black cursor-pointer"
                 >
                   Tutup
                 </button>
@@ -1770,13 +2103,13 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
             <div className="flex items-center justify-center gap-2 pt-2">
               <button
                 onClick={() => setDeleteConfirmId(null)}
-                className="px-4 py-2 rounded-xl border border-stone-200 text-stone-700 font-semibold text-xs"
+                className="px-4 py-2 rounded-xl border border-stone-200 text-stone-700 font-semibold text-xs cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={() => handleDeletePurchase(deleteConfirmId)}
-                className="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700"
+                className="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 cursor-pointer"
               >
                 Hapus Faktur
               </button>
@@ -1784,6 +2117,39 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* POPUP INFO & HISTORY ITEM MODAL (REQUIREMENT 2) */}
+      <ProductPurchaseHistoryModal
+        product={selectedHistoryProduct}
+        isOpen={isHistoryModalOpen}
+        onClose={() => {
+          setIsHistoryModalOpen(false);
+          setSelectedHistoryProduct(null);
+          setHistoryTargetRowIndex(null);
+        }}
+        purchases={purchases}
+        orders={orders}
+        suppliers={suppliers}
+        onApplyRecommendation={handleApplyOrderRecommendation}
+      />
+
+      {/* PRINTABLE OFFICIAL PO MODAL (REQUIREMENT 3) */}
+      <PurchaseOrderPrintModal
+        po={selectedPrintPo}
+        isOpen={!!selectedPrintPo}
+        onClose={() => setSelectedPrintPo(null)}
+        stores={stores}
+        suppliers={suppliers}
+      />
+
+      {/* WHATSAPP SHARE MODAL (REQUIREMENT 3) */}
+      <PurchaseOrderWhatsAppModal
+        po={selectedWhatsAppPo}
+        isOpen={!!selectedWhatsAppPo}
+        onClose={() => setSelectedWhatsAppPo(null)}
+        stores={stores}
+        suppliers={suppliers}
+      />
     </div>
   );
 };
