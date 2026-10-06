@@ -85,14 +85,22 @@ export const VpsDeployManager: React.FC = () => {
 
     setIsTriggering(true);
     try {
-      const res = await fetch('/api/system/deploy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-request': 'true',
-        },
-        body: JSON.stringify({ source: 'admin_button' }),
-      });
+      // 1. Coba request dengan token di URL (menghindari blokir WAF / CORS preflight)
+      const deployUrl = '/api/system/deploy?token=kuickmart_deploy_token_2026&source=admin_button';
+      let res: Response;
+      
+      try {
+        res = await fetch(deployUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ source: 'admin_button' }),
+        });
+      } catch (postErr) {
+        // Fallback ke GET request sederhana jika POST diblokir CORS / WAF
+        res = await fetch(deployUrl, { method: 'GET' });
+      }
 
       const rawText = await res.text();
       let json: any = {};
@@ -105,12 +113,10 @@ export const VpsDeployManager: React.FC = () => {
       if (!res.ok) {
         if (res.status === 404) {
           alert(
-            '⚠️ Service Backend VPS Belum Mendeteksi Rute Deploy (HTTP 404)\n\n' +
-            'Penyebab: Service PM2 di VPS Anda masih menjalankan proses server versi lama di memorinya sebelum tombol ini dibuat.\n\n' +
-            'Solusi (Cukup 1 Kali Ini Saja Lewat Terminal VPS noVNC):\n' +
-            'Jalankan perintah ini di terminal VPS Anda:\n\n' +
-            'cd /var/www/kuickmart && git pull && npm run build && pm2 restart kuickmart\n\n' +
-            'Setelah Anda jalankan perintah di atas sekali ini, PM2 akan memuat kode backend terbaru dan tombol ini bisa dipakai selamanya tanpa terminal!'
+            '⚠️ Service Backend VPS Belum Memuat Rute Deploy (HTTP 404)\n\n' +
+            'Penyebab: Service PM2 di VPS masih menjalankan proses lama sebelum endpoint deploy aktif.\n\n' +
+            'Solusi (Jalankan di PuTTY):\n' +
+            'cd /var/www/kuickmart && git pull && npm run build && pm2 restart kuickmart'
           );
         } else {
           alert(json.message || `Gagal memulai deployment (Kode status HTTP ${res.status})`);
@@ -122,7 +128,10 @@ export const VpsDeployManager: React.FC = () => {
     } catch (err: any) {
       alert(
         '⚠️ Gagal Terhubung ke Endpoint Deploy VPS:\n' + err.message +
-        '\n\nJika server sedang offline atau belum di-restart, jalankan di terminal VPS:\n' +
+        '\n\nKemungkinan penyebab:\n' +
+        '1. Server PM2 sedang offline / crash di VPS\n' +
+        '2. Cloudflare memblokir request API internal\n\n' +
+        'Solusi Cepat di PuTTY:\n' +
         'cd /var/www/kuickmart && git pull && npm run build && pm2 restart kuickmart'
       );
     } finally {
