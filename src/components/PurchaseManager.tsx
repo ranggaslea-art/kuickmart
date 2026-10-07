@@ -18,7 +18,7 @@ import {
 import { ProductPurchaseHistoryModal } from './ProductPurchaseHistoryModal';
 import { PurchaseOrderPrintModal } from './PurchaseOrderPrintModal';
 import { PurchaseOrderWhatsAppModal } from './PurchaseOrderWhatsAppModal';
-import { PurchaseReportModal } from './PurchaseReportModal';
+import { PurchaseReportModal, PurchaseReportType } from './PurchaseReportModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { 
   savePurchaseToMySql, 
@@ -142,6 +142,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [selectedWhatsAppPo, setSelectedWhatsAppPo] = useState<PurchaseOrder | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportModalInitialType, setReportModalInitialType] = useState<PurchaseReportType>('invoices_summary');
 
   // Database MySQL Sync Status
   const [isDbConnected, setIsDbConnected] = useState(true);
@@ -280,12 +281,13 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     const totalOrders = list.length;
     const totalSpend = list.reduce((sum, p) => sum + p.totalAmount, 0);
     const totalItems = list.reduce((sum, p) => sum + p.totalQuantity, 0);
+    const totalItemsReceived = list.filter(p => p.stockUpdated).reduce((sum, p) => sum + p.totalQuantity, 0);
     const pendingCount = list.filter(p => p.status === 'ordered').length;
     const unpaidTempo = list
       .filter(p => p.paymentStatus !== 'paid' && p.status !== 'cancelled')
       .reduce((sum, p) => sum + p.totalAmount, 0);
 
-    return { totalOrders, totalSpend, totalItems, pendingCount, unpaidTempo };
+    return { totalOrders, totalSpend, totalItems, totalItemsReceived, pendingCount, unpaidTempo };
   }, [purchases, activeSubModule]);
 
   // Filtered purchases
@@ -1053,6 +1055,26 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   };
 
   const handleDeletePurchase = (id: string) => {
+    const toDelete = purchases.find(p => p.id === id);
+    if (toDelete && toDelete.stockUpdated) {
+      // Kurangi kembali stok barang gudang jika faktur masuk dihapus
+      const updatedProducts = products.map(prod => {
+        const matchingItems = toDelete.items.filter(it => it.productId === prod.id);
+        if (matchingItems.length > 0) {
+          const removedStock = matchingItems.reduce((sum, it) => {
+            const mult = it.conversionMultiplier || 1;
+            return sum + (it.baseQuantity !== undefined ? it.baseQuantity : (it.quantity * mult));
+          }, 0);
+          return {
+            ...prod,
+            stock: Math.max(0, (prod.stock || 0) - removedStock),
+          };
+        }
+        return prod;
+      });
+      onUpdateProducts(updatedProducts);
+    }
+
     const updated = purchases.filter(p => p.id !== id);
     onUpdatePurchases(updated);
     setDeleteConfirmId(null);
@@ -1066,7 +1088,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         if (ok) {
           setDbNotification({
             type: 'info',
-            message: 'Faktur pembelian berhasil dihapus dari Database MySQL.'
+            message: 'Faktur pembelian berhasil dihapus dari Database MySQL & stok disesuaikan.'
           });
           setTimeout(() => setDbNotification(null), 3000);
         }
@@ -1173,21 +1195,38 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
             {isSyncingDb && <RefreshCw className="w-3 h-3 animate-spin text-stone-500" />}
           </button>
 
-          {/* LAPORAN MODUL TERPILIH */}
+          {/* TOMBOL CETAK 1 DOKUMEN SATUAN (RESMI & LANGSUNG) */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              setReportModalInitialType('single_document');
               setIsReportModalOpen(true);
             }}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
               activeSubModule === 'po'
-                ? 'border-blue-200 text-blue-800 hover:bg-blue-50'
-                : 'border-emerald-200 text-emerald-800 hover:bg-emerald-50'
+                ? 'border-blue-300 text-blue-900 bg-blue-50/80 hover:bg-blue-100 shadow-2xs'
+                : 'border-emerald-300 text-emerald-900 bg-emerald-50/80 hover:bg-emerald-100 shadow-2xs'
             }`}
+            title={activeSubModule === 'po' ? 'Cetak 1 Surat Pesanan PO Tertentu (Bukan Rekap)' : 'Cetak 1 Bukti Faktur Beli Tertentu (Bukan Rekap)'}
           >
-            <FileText className="w-4 h-4 text-emerald-600" />
-            <span>{activeSubModule === 'po' ? 'Laporan Pemesanan PO' : 'Laporan Pembelian Masuk'}</span>
+            <Printer className={`w-4 h-4 ${activeSubModule === 'po' ? 'text-blue-700' : 'text-emerald-700'}`} />
+            <span>{activeSubModule === 'po' ? 'Cetak 1 Surat PO' : 'Cetak 1 Faktur Beli'}</span>
+          </button>
+
+          {/* TOMBOL REKAP LAPORAN LENGKAP */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setReportModalInitialType('invoices_summary');
+              setIsReportModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 text-xs font-bold transition-colors cursor-pointer"
+            title="Buka Rekapitulasi Laporan Transaksi Lengkap"
+          >
+            <FileText className="w-4 h-4 text-stone-500" />
+            <span>{activeSubModule === 'po' ? 'Rekap Laporan PO' : 'Rekap Laporan Pembelian'}</span>
           </button>
 
           {/* MULTI-FORMAT EXPORT DROPDOWN */}
@@ -1535,13 +1574,22 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                         </button>
                       )}
 
-                      {/* CETAK FAKTUR RESMI (REQUIREMENT 3) */}
+                      {/* CETAK DOKUMEN SATUAN RESMI (BUKAN REKAP) */}
                       <button
-                        onClick={() => setSelectedPrintPo(po)}
-                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 cursor-pointer"
-                        title="Cetak Surat PO Resmi / Simpan PDF"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPrintPo(po);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                          activeSubModule === 'po'
+                            ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-2xs'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-2xs'
+                        }`}
+                        title={activeSubModule === 'po' ? 'Cetak Surat Pesanan PO Resmi Ini Sahaja (Bukan Rekap)' : 'Cetak Bukti Faktur Beli Ini Sahaja (Bukan Rekap)'}
                       >
-                        <Printer className="w-3.5 h-3.5 text-stone-700" />
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>{activeSubModule === 'po' ? 'Cetak PO' : 'Cetak Faktur'}</span>
                       </button>
 
                       {/* FORMAT WHATSAPP (REQUIREMENT 3) */}
@@ -2443,6 +2491,8 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
           stores={stores || []}
           products={products || []}
           currentStore={stores?.[0]}
+          mode={activeSubModule === 'po' ? 'po_order' : 'purchase_invoice'}
+          initialReportType={reportModalInitialType}
         />
       </ErrorBoundary>
     </div>

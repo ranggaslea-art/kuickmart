@@ -101,13 +101,20 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
   const [selectedStoreId, setSelectedStoreId] = useState<string>('all');
 
   // Active Store for Kop Surat
-  const storeInfo = currentStore || stores[0] || {
+  const storeInfo: Store = currentStore || stores[0] || ({
     id: 'store_1',
     name: 'KUICKMART STORE',
+    code: 'KM-01',
     address: 'Jl. Raya Utama No. 88, Sentra Niaga',
     phone: '0812-3456-7890',
     city: 'Jakarta',
-  };
+    distanceKm: 0,
+    is24Hours: true,
+    isOpen: true,
+    rating: 5,
+    reviewsCount: 100,
+    features: ['POS', 'Gudang'],
+  } as unknown as Store);
 
   // Preset Date handler
   const handleDatePresetChange = (preset: typeof datePreset) => {
