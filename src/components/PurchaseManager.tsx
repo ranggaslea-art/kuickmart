@@ -30,6 +30,7 @@ import {
 import { getStoreSlugFromUrl } from '../utils/tenantHelper';
 import { 
   ShoppingBag, 
+  ClipboardList,
   Plus, 
   Search, 
   Filter, 
@@ -88,6 +89,8 @@ const COMMON_SUPPLIER_UNITS = [
 ];
 
 interface PurchaseManagerProps {
+  initialSubModule?: 'po' | 'purchase';
+  onSubModuleChange?: (sub: 'po' | 'purchase') => void;
   purchases: PurchaseOrder[];
   suppliers: Supplier[];
   products: Product[];
@@ -99,6 +102,8 @@ interface PurchaseManagerProps {
 }
 
 export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
+  initialSubModule = 'po',
+  onSubModuleChange,
   purchases,
   suppliers,
   products,
@@ -108,6 +113,20 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   onUpdateProducts,
   canEdit = true,
 }) => {
+  // Active Sub-Module: 'po' (Pemesanan ke Salesman - Tdk Tambah Stok) vs 'purchase' (Pembelian Masuk - Otomatis Tambah Stok)
+  const [activeSubModule, setActiveSubModule] = useState<'po' | 'purchase'>(initialSubModule);
+
+  useEffect(() => {
+    if (initialSubModule) {
+      setActiveSubModule(initialSubModule);
+    }
+  }, [initialSubModule]);
+
+  const handleSwitchSubModule = (sub: 'po' | 'purchase') => {
+    setActiveSubModule(sub);
+    if (onSubModuleChange) onSubModuleChange(sub);
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSupplierFilter, setSelectedSupplierFilter] = useState('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all');
@@ -172,8 +191,10 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyTargetRowIndex, setHistoryTargetRowIndex] = useState<number | null>(null);
 
-  // Form states for creating Purchase
+  // Form states for creating Purchase / PO
   const [supplierId, setSupplierId] = useState('');
+  const [salesmanName, setSalesmanName] = useState('');
+  const [salesmanPhone, setSalesmanPhone] = useState('');
   const [storeId, setStoreId] = useState(stores[0]?.id || '');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
@@ -188,6 +209,11 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [notes, setNotes] = useState('');
   const [autoUpdateCostPrice, setAutoUpdateCostPrice] = useState(true);
   const [immediatelyReceiveStock, setImmediatelyReceiveStock] = useState(true);
+
+  // Quick action states
+  const [isPullFromPoModalOpen, setIsPullFromPoModalOpen] = useState(false);
+  const [selectedReceivePo, setSelectedReceivePo] = useState<PurchaseOrder | null>(null);
+  const [receiveSupplierInvoiceNo, setReceiveSupplierInvoiceNo] = useState('');
 
   // Helper to create an empty draft row for inline table input
   const createEmptyRow = (suffix?: string): PurchaseItem => ({
@@ -241,27 +267,44 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     }
   };
 
-  // Summary Metrics
+  // Summary Metrics based on activeSubModule
   const metrics = useMemo(() => {
-    const totalOrders = purchases.length;
-    const totalSpend = purchases.reduce((sum, p) => sum + p.totalAmount, 0);
-    const totalItemsReceived = purchases
-      .filter(p => p.status === 'received')
-      .reduce((sum, p) => sum + p.totalQuantity, 0);
-    const unpaidTempo = purchases
+    const list = purchases.filter(p => {
+      if (activeSubModule === 'po') {
+        return p.type === 'po_order' || (!p.stockUpdated && p.status !== 'received');
+      } else {
+        return p.type === 'purchase_invoice' || p.stockUpdated || p.status === 'received';
+      }
+    });
+
+    const totalOrders = list.length;
+    const totalSpend = list.reduce((sum, p) => sum + p.totalAmount, 0);
+    const totalItems = list.reduce((sum, p) => sum + p.totalQuantity, 0);
+    const pendingCount = list.filter(p => p.status === 'ordered').length;
+    const unpaidTempo = list
       .filter(p => p.paymentStatus !== 'paid' && p.status !== 'cancelled')
       .reduce((sum, p) => sum + p.totalAmount, 0);
 
-    return { totalOrders, totalSpend, totalItemsReceived, unpaidTempo };
-  }, [purchases]);
+    return { totalOrders, totalSpend, totalItems, pendingCount, unpaidTempo };
+  }, [purchases, activeSubModule]);
 
   // Filtered purchases
   const filteredPurchases = useMemo(() => {
     return purchases.filter(p => {
+      // 0. Filter sub-module (PO vs Pembelian Masuk)
+      if (activeSubModule === 'po') {
+        const isPo = p.type === 'po_order' || (!p.stockUpdated && p.status !== 'received');
+        if (!isPo) return false;
+      } else {
+        const isInvoice = p.type === 'purchase_invoice' || p.stockUpdated || p.status === 'received';
+        if (!isInvoice) return false;
+      }
+
       const matchSearch = 
         p.purchaseNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.invoiceNumber && p.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
         p.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.salesmanName && p.salesmanName.toLowerCase().includes(searchQuery.toLowerCase())) ||
         p.items.some(it => it.productName.toLowerCase().includes(searchQuery.toLowerCase()) || it.unit.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchSupplier = selectedSupplierFilter === 'all' || p.supplierId === selectedSupplierFilter;
@@ -270,7 +313,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
       return matchSearch && matchSupplier && matchStatus && matchPayment;
     });
-  }, [purchases, searchQuery, selectedSupplierFilter, selectedStatusFilter, selectedPaymentFilter]);
+  }, [purchases, activeSubModule, searchQuery, selectedSupplierFilter, selectedStatusFilter, selectedPaymentFilter]);
 
   // Live matching products for the Quick Search & Barcode Input
   // Searches both Product Name AND Barcode of Pcs AND Barcode of Dusan/Karton!
@@ -858,7 +901,11 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     const totalQty = validItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalAmount = subtotal;
 
-    const purchaseNum = `PO-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(purchases.length + 1).padStart(3, '0')}`;
+    const isPoMode = activeSubModule === 'po';
+    const shouldAddStock = !isPoMode;
+
+    const prefix = isPoMode ? 'PO' : 'FB';
+    const purchaseNum = `${prefix}-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(purchases.length + 1).padStart(3, '0')}`;
 
     const newPurchase: PurchaseOrder = {
       id: `po_${Date.now()}`,
@@ -866,27 +913,30 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       invoiceNumber: invoiceNumber.trim() || undefined,
       supplierId: sup ? sup.id : 'sup_general',
       supplierName: sup ? sup.name : 'Supplier Umum',
+      salesmanName: isPoMode ? (salesmanName.trim() || undefined) : undefined,
+      salesmanPhone: isPoMode ? (salesmanPhone.trim() || undefined) : undefined,
       storeId: targetStore?.id || 'store_1',
       storeName: targetStore?.name || 'Toko Utama',
       orderDate,
-      receivedDate: immediatelyReceiveStock ? receivedDate : undefined,
+      receivedDate: shouldAddStock ? receivedDate : undefined,
       items: validItems,
       totalQuantity: totalQty,
       subtotal,
       taxAmount: 0,
       discountAmount: 0,
       totalAmount,
-      status: immediatelyReceiveStock ? 'received' : 'ordered',
-      paymentStatus,
+      type: isPoMode ? 'po_order' : 'purchase_invoice',
+      status: shouldAddStock ? 'received' : 'ordered',
+      paymentStatus: isPoMode ? 'unpaid' : paymentStatus,
       paymentMethod,
       dueDate: paymentMethod === 'tempo' ? dueDate : undefined,
       notes: notes.trim() || undefined,
-      stockUpdated: immediatelyReceiveStock,
-      receivedBy: immediatelyReceiveStock ? 'Petugas Gudang / Admin' : undefined,
+      stockUpdated: shouldAddStock,
+      receivedBy: shouldAddStock ? 'Petugas Gudang' : undefined,
       createdAt: new Date().toISOString(),
     };
 
-    if (immediatelyReceiveStock) {
+    if (shouldAddStock) {
       const updatedProducts = products.map(prod => {
         const matchingItems = validItems.filter(it => it.productId === prod.id);
         if (matchingItems.length > 0) {
@@ -1026,26 +1076,96 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* HEADER & ACTIONS */}
+      {/* DUAL-MODULE TAB SWITCHER: 1. PEMESANAN PO vs 2. PEMBELIAN MASUK */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-stone-100 p-2 rounded-3xl border border-stone-200">
+        {/* TAB 1: PEMESANAN PEMBELIAN (PO KE SALESMAN) */}
+        <button
+          type="button"
+          onClick={() => handleSwitchSubModule('po')}
+          className={`flex items-start gap-3.5 p-4 rounded-2xl text-left transition-all cursor-pointer ${
+            activeSubModule === 'po'
+              ? 'bg-white shadow-md border border-blue-200 ring-2 ring-blue-500/20'
+              : 'hover:bg-stone-200/60 text-stone-600'
+          }`}
+        >
+          <div className={`p-3 rounded-2xl shrink-0 ${activeSubModule === 'po' ? 'bg-blue-600 text-white shadow-sm' : 'bg-stone-200 text-stone-600'}`}>
+            <ClipboardList className="w-6 h-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`font-extrabold text-sm sm:text-base ${activeSubModule === 'po' ? 'text-blue-950' : 'text-stone-800'}`}>
+                1. Pemesanan Pembelian (PO ke Salesman)
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                TIDAK Menambah Stok
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+              Tools untuk membuat order barang ke salesman vendor. Dilengkapi cetak surat PO resmi, format chat WA, & laporan pesanan.
+            </p>
+            <div className="text-[11px] font-bold text-blue-700 mt-1.5 flex items-center gap-1.5">
+              <span>{purchases.filter(p => p.type === 'po_order' || (!p.stockUpdated && p.status !== 'received')).length} Pesanan PO Terdaftar</span>
+            </div>
+          </div>
+        </button>
+
+        {/* TAB 2: PEMBELIAN & STOK MASUK (FAKTUR BELI GUDANG) */}
+        <button
+          type="button"
+          onClick={() => handleSwitchSubModule('purchase')}
+          className={`flex items-start gap-3.5 p-4 rounded-2xl text-left transition-all cursor-pointer ${
+            activeSubModule === 'purchase'
+              ? 'bg-white shadow-md border border-emerald-200 ring-2 ring-emerald-500/20'
+              : 'hover:bg-stone-200/60 text-stone-600'
+          }`}
+        >
+          <div className={`p-3 rounded-2xl shrink-0 ${activeSubModule === 'purchase' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-stone-200 text-stone-600'}`}>
+            <ShoppingBag className="w-6 h-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`font-extrabold text-sm sm:text-base ${activeSubModule === 'purchase' ? 'text-emerald-950' : 'text-stone-800'}`}>
+                2. Pembelian & Stok Masuk (Faktur Beli)
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                OTOMATIS Tambah Stok
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+              Pencatatan barang fisik yang masuk ke gudang. Persediaan produk bertambah otomatis & HPP terupdate langsung di etalase dan kasir.
+            </p>
+            <div className="text-[11px] font-bold text-emerald-700 mt-1.5 flex items-center gap-1.5">
+              <span>{purchases.filter(p => p.type === 'purchase_invoice' || p.stockUpdated || p.status === 'received').length} Faktur Beli Gudang</span>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* HEADER & ACTIONS BAR FOR ACTIVE MODULE */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
-              <ShoppingBag className="w-5 h-5" />
+            <div className={`p-2 rounded-xl ${activeSubModule === 'po' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
+              {activeSubModule === 'po' ? <ClipboardList className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
             </div>
-            <h2 className="text-xl font-bold text-stone-900">Modul Pesanan Pembelian (Purchase Order) & Stok Masuk</h2>
+            <h2 className="text-xl font-bold text-stone-900">
+              {activeSubModule === 'po' ? 'Modul Pemesanan Pembelian (PO ke Salesman)' : 'Modul Pembelian Barang Masuk & Penerimaan'}
+            </h2>
           </div>
           <p className="text-sm text-stone-500 mt-1">
-            Input pesanan barang supplier dengan nama barang atau barcode (Pcs maupun Dusan). Cek history item untuk menentukan kuantitas order, serta ekspor laporan ke berbagai format.
+            {activeSubModule === 'po'
+              ? 'Daftar pesanan barang untuk salesman supplier. Mencatat kebutuhan order barang tanpa mempengaruhi stok gudang saat ini.'
+              : 'Faktur pembelian barang riil yang diterima gudang. Menambah kuantitas stok otomatis dan mengupdate harga pokok modal.'}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* DATABASE MYSQL SYNC BUTTON */}
           <button
+            type="button"
             onClick={handleSyncToDatabase}
             disabled={isSyncingDb}
-            title={isDbConnected ? "Database MySQL terhubung. Klik untuk menyinkronkan seluruh PO ke MySQL" : "Klik untuk mencoba menghubungkan dan sinkronkan ke MySQL"}
+            title={isDbConnected ? "Database MySQL terhubung. Klik untuk menyinkronkan seluruh data ke MySQL" : "Klik untuk mencoba menghubungkan dan sinkronkan ke MySQL"}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold transition-colors cursor-pointer"
           >
             <Database className={`w-3.5 h-3.5 ${isDbConnected ? 'text-emerald-600' : 'text-amber-500'}`} />
@@ -1053,18 +1173,27 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
             {isSyncingDb && <RefreshCw className="w-3 h-3 animate-spin text-stone-500" />}
           </button>
 
-          {/* LAPORAN & CETAK PO (PER PEMASOK, PER FAKTUR, PER PERIODE) */}
+          {/* LAPORAN MODUL TERPILIH */}
           <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 text-xs font-bold transition-colors cursor-pointer"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsReportModalOpen(true);
+            }}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
+              activeSubModule === 'po'
+                ? 'border-blue-200 text-blue-800 hover:bg-blue-50'
+                : 'border-emerald-200 text-emerald-800 hover:bg-emerald-50'
+            }`}
           >
             <FileText className="w-4 h-4 text-emerald-600" />
-            <span>Laporan & Cetak PO</span>
+            <span>{activeSubModule === 'po' ? 'Laporan Pemesanan PO' : 'Laporan Pembelian Masuk'}</span>
           </button>
 
-          {/* MULTI-FORMAT EXPORT DROPDOWN (REQUIREMENT 3) */}
+          {/* MULTI-FORMAT EXPORT DROPDOWN */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-bold transition-colors cursor-pointer"
             >
@@ -1083,53 +1212,57 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => {
                     exportPurchaseOrdersToExcel(filteredPurchases);
                     setIsExportDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                   <div>
                     <div className="font-bold">Unduh Excel (.xls / .xlsx)</div>
-                    <div className="text-[10px] text-stone-400">Rekap faktur PO lengkap dengan total & format uang</div>
+                    <div className="text-[10px] text-stone-400">Rekap data lengkap dengan format nilai rupiah</div>
                   </div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     exportPurchaseItemsDetailToExcel(filteredPurchases);
                     setIsExportDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 text-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <Layers className="w-4 h-4 text-indigo-600" />
                   <div>
                     <div className="font-bold">Unduh Excel Rincian Barang</div>
-                    <div className="text-[10px] text-stone-400">Detail item per baris dengan satuan Dus & Pcs</div>
+                    <div className="text-[10px] text-stone-400">Detail per baris barang dengan satuan Dus/Pcs</div>
                   </div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     exportPurchaseOrdersToCsv(filteredPurchases);
                     setIsExportDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <FileText className="w-4 h-4 text-stone-600" />
                   <div>
                     <div className="font-bold">Unduh CSV (.csv)</div>
-                    <div className="text-[10px] text-stone-400">Format data mentah kompatibel spreadsheet</div>
+                    <div className="text-[10px] text-stone-400">Format data mentah kompatibel database</div>
                   </div>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     exportPurchaseOrdersToJson(filteredPurchases);
                     setIsExportDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <Boxes className="w-4 h-4 text-amber-600" />
                   <div>
@@ -1137,33 +1270,40 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                     <div className="text-[10px] text-stone-400">Format data terstruktur untuk integrasi sistem</div>
                   </div>
                 </button>
-
-                <div className="border-t border-stone-100 my-1"></div>
-
-                <button
-                  onClick={() => {
-                    setIsReportModalOpen(true);
-                    setIsExportDropdownOpen(false);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-stone-800 flex items-center gap-2.5 transition-colors"
-                >
-                  <Printer className="w-4 h-4 text-emerald-600" />
-                  <div>
-                    <div className="font-bold">Cetak / Simpan PDF Laporan</div>
-                    <div className="text-[10px] text-stone-400">Laporan formal rapi dengan Kop Toko & Tanda Tangan</div>
-                  </div>
-                </button>
               </div>
             )}
           </div>
 
+          {/* TOMBOL TARIK DARI PO (KHUSUS TAB PEMBELIAN) */}
+          {activeSubModule === 'purchase' && canEdit && (
+            <button
+              type="button"
+              onClick={() => setIsPullFromPoModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 hover:bg-blue-100 text-xs font-bold transition-colors cursor-pointer"
+              title="Tarik data dari pesanan PO yang sudah dibuat sebelumnya agar tidak perlu input ulang"
+            >
+              <ClipboardList className="w-4 h-4 text-blue-600" />
+              <span>Tarik dari Pesanan PO</span>
+            </button>
+          )}
+
+          {/* TOMBOL BUAT / INPUT UTAMA */}
           {canEdit && (
             <button
+              type="button"
               onClick={handleOpenCreateModal}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer ${
+                activeSubModule === 'po'
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
               <PackagePlus className="w-4 h-4" />
-              <span>+ Input Pesanan PO (Tambah Stok)</span>
+              <span>
+                {activeSubModule === 'po' 
+                  ? '+ Buat Pesanan ke Salesman (PO)' 
+                  : '+ Input Pembelian Masuk (Tambah Stok)'}
+              </span>
             </button>
           )}
         </div>

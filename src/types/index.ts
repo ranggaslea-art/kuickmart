@@ -302,13 +302,16 @@ export interface PurchaseItem {
 
 export interface PurchaseOrder {
   id: string;
-  purchaseNumber: string; // e.g. 'FB-202609-001'
-  invoiceNumber?: string; // No Faktur Supplier
+  purchaseNumber: string; // e.g. 'PO-202610-001'
+  invoiceNumber?: string; // No Faktur Supplier (e.g. 'INV-88912')
   supplierId: string;
   supplierName: string;
+  salesmanName?: string; // Nama Salesman vendor/supplier
+  salesmanPhone?: string; // No WhatsApp / Telp Salesman
   storeId: string;
   storeName: string;
   orderDate: string;
+  targetDeliveryDate?: string; // Target tanggal kirim barang dari salesman
   receivedDate?: string;
   items: PurchaseItem[];
   totalQuantity: number;
@@ -316,6 +319,8 @@ export interface PurchaseOrder {
   taxAmount?: number;
   discountAmount?: number;
   totalAmount: number;
+  type?: 'po_order' | 'purchase_invoice'; // 'po_order' = Pemesanan ke salesman (tdk tambah stok), 'purchase_invoice' = Pembelian riil (tambah stok)
+  referencePoNumber?: string; // No PO sumber jika pembelian ini direalisasikan dari PO
   status: 'draft' | 'ordered' | 'received' | 'cancelled';
   paymentStatus: 'paid' | 'unpaid' | 'partial';
   paymentMethod: 'cash' | 'transfer' | 'tempo';

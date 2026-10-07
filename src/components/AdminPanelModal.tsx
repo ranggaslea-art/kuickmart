@@ -18,6 +18,7 @@ import {
   Sparkles,
   DollarSign,
   Boxes,
+  ClipboardList,
   FileSpreadsheet,
   CreditCard,
   Lock,
@@ -752,7 +753,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
 
   // Kelompok Modul Menu Navigasi Admin
@@ -1059,19 +1060,30 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setSelectedUserForPermissions(null);
   };
 
-  // Keyboard Escape shortcut: tutup form aktif terlebih dahulu, atau keluar panel admin
+  // Keyboard Escape shortcut: tutup form/editor aktif jika ada, tapi JANGAN tutup panel admin utama
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Cek jika ada modal cetak, laporan, atau sub-form editor terbuka
+        const hasOverlayOpen = Boolean(
+          document.querySelector('.fixed.inset-0.z-\\[9999\\]') || 
+          document.querySelector('#printable-purchase-report') ||
+          document.querySelector('#isolated-print-iframe')
+        );
+        if (hasOverlayOpen) {
+          return;
+        }
+
         if (isAnySubFormOpen) {
           handleCloseSubForm();
-        } else {
-          handleClose();
         }
+        // JANGAN panggil handleClose() di sini agar tidak keluar dari panel admin saat user selesai cetak / tekan Escape
       }
     };
     window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isAnySubFormOpen]);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isAnySubFormOpen]);
 
@@ -2318,11 +2330,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // ==========================================
   return (
     <div 
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          handleClose();
-        }
-      }}
       className="fixed inset-0 z-50 overflow-hidden bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-1 sm:p-3"
     >
       <div 
@@ -2524,7 +2531,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'stock_card', group: 'inventory', moduleKey: 'stock_card' as SystemModuleKey, label: 'Kartu Stok & Mutasi', icon: <Layers className="w-4 h-4 text-blue-600" /> },
                 { id: 'stock_opname', group: 'inventory', moduleKey: 'stock_opname' as SystemModuleKey, label: 'Opname Stok Fisik', icon: <ClipboardCheck className="w-4 h-4 text-emerald-600" /> },
                 { id: 'stock_mutations', group: 'inventory', moduleKey: 'stock_mutations' as SystemModuleKey, label: 'Mutasi Antar Cabang', icon: <ArrowLeftRight className="w-4 h-4 text-purple-600" /> },
-                { id: 'purchases', group: 'inventory', moduleKey: 'purchases' as SystemModuleKey, label: 'Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-teal-600" />, count: (activePurchases || []).length },
+                { id: 'purchase_orders', group: 'inventory', moduleKey: 'purchases' as SystemModuleKey, label: '1. Pemesanan Pembelian (PO)', icon: <ClipboardList className="w-4 h-4 text-blue-600" />, count: (activePurchases || []).filter(p => p.type === 'po_order' || (!p.stockUpdated && p.status !== 'received')).length },
+                { id: 'purchases', group: 'inventory', moduleKey: 'purchases' as SystemModuleKey, label: '2. Pembelian & Stok Masuk', icon: <ShoppingBag className="w-4 h-4 text-emerald-600" />, count: (activePurchases || []).filter(p => p.type === 'purchase_invoice' || p.stockUpdated || p.status === 'received').length },
 
                 // 4. PROMO & PELANGGAN
                 { id: 'promos', group: 'marketing', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Banner Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: (activeStorePromos || []).length },
@@ -5275,13 +5283,17 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             </div>
           ))}
 
-          {/* TAB: PEMBELIAN BARANG & STOK MASUK (PURCHASE ORDERS) */}
-          {activeTab === 'purchases' && (!currentUserPermissions.purchases?.canView ? (
-            renderAccessDenied('Pembelian Barang & Stok Masuk')
+          {/* TAB: PEMESANAN PEMBELIAN & PEMBELIAN STOK MASUK */}
+          {(activeTab === 'purchases' || activeTab === 'purchase_orders') && (!currentUserPermissions.purchases?.canView ? (
+            renderAccessDenied(activeTab === 'purchase_orders' ? 'Pemesanan Pembelian (PO ke Salesman)' : 'Pembelian Barang & Stok Masuk')
           ) : (
             <div className="space-y-4">
-              {!currentUserPermissions.purchases?.canEdit && renderReadOnlyBanner('Pembelian Barang & Stok Masuk')}
+              {!currentUserPermissions.purchases?.canEdit && renderReadOnlyBanner(activeTab === 'purchase_orders' ? 'Pemesanan Pembelian (PO ke Salesman)' : 'Pembelian Barang & Stok Masuk')}
               <PurchaseManager
+                initialSubModule={activeTab === 'purchase_orders' ? 'po' : 'purchase'}
+                onSubModuleChange={(sub) => {
+                  setActiveTab(sub === 'po' ? 'purchase_orders' : 'purchases');
+                }}
                 purchases={activePurchases}
                 suppliers={activeSuppliers}
                 products={products}

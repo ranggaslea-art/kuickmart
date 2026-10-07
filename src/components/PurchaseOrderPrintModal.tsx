@@ -2,8 +2,12 @@ import React from 'react';
 import { PurchaseOrder, Store, Supplier } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { exportPurchaseOrdersToExcel } from '../utils/purchaseExport';
-import { printHtmlDirectly, generateSinglePurchaseOrderHtml } from '../utils/printDocumentHelper';
-import { Printer, X, Download, Building2, CheckCircle2 } from 'lucide-react';
+import { 
+  printHtmlDirectly, 
+  generateSinglePurchaseOrderHtml, 
+  generateSinglePurchaseInvoiceHtml 
+} from '../utils/printDocumentHelper';
+import { Printer, X, Download, Building2, CheckCircle2, ShoppingBag } from 'lucide-react';
 
 interface PurchaseOrderPrintModalProps {
   po: PurchaseOrder | null;
@@ -22,60 +26,93 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
 }) => {
   if (!isOpen || !po) return null;
 
+  const isInvoice = po.type === 'purchase_invoice' || po.stockUpdated || po.status === 'received';
   const targetStore = stores.find(s => s.id === po.storeId) || stores[0];
   const targetSupplier = suppliers.find(s => s.id === po.supplierId);
 
-  const handlePrint = () => {
-    const html = generateSinglePurchaseOrderHtml(po, targetStore, targetSupplier);
-    printHtmlDirectly(html, { title: `Surat Pesanan Pembelian - ${po.purchaseNumber}` });
+  const handlePrint = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const html = isInvoice
+      ? generateSinglePurchaseInvoiceHtml(po, targetStore, targetSupplier)
+      : generateSinglePurchaseOrderHtml(po, targetStore, targetSupplier);
+    printHtmlDirectly(html, { 
+      title: isInvoice ? `Faktur Penerimaan Barang - ${po.purchaseNumber}` : `Surat Pesanan Pembelian - ${po.purchaseNumber}` 
+    });
   };
 
-  const handleExportExcel = () => {
-    exportPurchaseOrdersToExcel([po], `Faktur_${po.purchaseNumber}`);
+  const handleExportExcel = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    exportPurchaseOrdersToExcel([po], isInvoice ? `Faktur_Beli_${po.purchaseNumber}` : `Surat_PO_${po.purchaseNumber}`);
   };
 
   return (
-    <div className="fixed inset-0 z-80 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn print:p-0 print:bg-white print:static">
-      <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-stone-200 space-y-6 my-6 max-h-[94vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:p-0 print:my-0">
+    <div 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[9999] bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn print:p-0 print:bg-white print:static"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-stone-200 space-y-6 my-6 max-h-[94vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:p-0 print:my-0"
+      >
         {/* NON-PRINT ACTION TOOLBAR */}
         <div className="flex items-center justify-between border-b border-stone-200 pb-3.5 print:hidden">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
-              <Printer className="w-5 h-5" />
+            <div className={`p-2 rounded-xl ${isInvoice ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+              {isInvoice ? <ShoppingBag className="w-5 h-5" /> : <Printer className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="font-extrabold text-stone-900 text-base">Cetak Surat Pesanan Pembelian Resmi (PO)</h3>
-              <p className="text-xs text-stone-500">Format resmi dengan Kop Toko, rincian satuan Dus & Pcs, dan kolom tanda tangan</p>
+              <h3 className="font-extrabold text-stone-900 text-base">
+                {isInvoice ? 'Cetak Bukti Pembelian & Penerimaan Barang (Faktur Beli)' : 'Cetak Surat Pesanan Pembelian Resmi (PO ke Salesman)'}
+              </h3>
+              <p className="text-xs text-stone-500">
+                {isInvoice 
+                  ? 'Format resmi penerimaan barang gudang dengan rincian stok bertambah & tanda tangan'
+                  : 'Format resmi surat pesanan untuk diserahkan ke salesman supplier sebelum kirim'}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-700 text-xs font-bold transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-700 text-xs font-bold transition-colors cursor-pointer"
             >
               <Download className="w-4 h-4 text-emerald-600" />
               <span>Ekspor Excel</span>
             </button>
 
             <button
+              type="button"
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer ${
+                isInvoice ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak / Simpan PDF</span>
+              <span>Cetak Dokumen Satuan / PDF</span>
             </button>
 
             <button
-              onClick={onClose}
-              className="p-2 text-stone-400 hover:text-stone-700 rounded-xl hover:bg-stone-100 transition-colors"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-2 text-stone-400 hover:text-stone-700 rounded-xl hover:bg-stone-100 transition-colors cursor-pointer"
+              title="Tutup"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* PRINTABLE PURCHASE ORDER DOCUMENT */}
+        {/* PRINTABLE PURCHASE ORDER / INVOICE DOCUMENT */}
         <div className="print-area-wrapper p-4 sm:p-6 border border-stone-200 rounded-2xl print:border-none print:p-0 space-y-6 text-stone-900 bg-white">
           {/* HEADER DOKUMEN & KOP SURAT */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-2 border-stone-900 pb-5">
@@ -94,19 +131,28 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
             </div>
 
             <div className="text-left sm:text-right">
-              <span className="text-xs font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                SURAT PESANAN PEMBELIAN
+              <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-md border ${
+                isInvoice 
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200' 
+                  : 'text-blue-700 bg-blue-50 border-blue-200'
+              }`}>
+                {isInvoice ? 'FAKTUR PEMBELIAN & PENERIMAAN' : 'SURAT PESANAN PEMBELIAN'}
               </span>
               <div className="font-mono text-lg font-black text-stone-900 mt-2">
                 {po.purchaseNumber}
               </div>
               {po.invoiceNumber && (
-                <div className="text-xs text-stone-500 font-mono">
+                <div className="text-xs text-stone-600 font-mono font-bold">
                   Ref Faktur Supplier: {po.invoiceNumber}
                 </div>
               )}
+              {po.referencePoNumber && (
+                <div className="text-xs text-stone-500 font-mono">
+                  Realisasi dari: {po.referencePoNumber}
+                </div>
+              )}
               <div className="text-xs text-stone-600 mt-1">
-                Tanggal: <strong>{po.orderDate}</strong>
+                Tanggal: <strong>{isInvoice ? (po.receivedDate || po.orderDate) : po.orderDate}</strong>
               </div>
             </div>
           </div>
@@ -115,9 +161,12 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200">
               <div className="font-bold text-stone-500 uppercase text-[10px] tracking-wider mb-1">
-                Kepada Pemasok / Supplier:
+                {isInvoice ? 'Diterima Dari Supplier / Pemasok:' : 'Kepada Pemasok / Salesman:'}
               </div>
               <div className="font-black text-sm text-stone-900">{po.supplierName}</div>
+              {po.salesmanName && (
+                <div className="text-stone-700 font-medium mt-0.5">Salesman: {po.salesmanName} {po.salesmanPhone ? `(${po.salesmanPhone})` : ''}</div>
+              )}
               {targetSupplier?.address && (
                 <div className="text-stone-600 mt-0.5">{targetSupplier.address}</div>
               )}
@@ -128,11 +177,17 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
 
             <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200">
               <div className="font-bold text-stone-500 uppercase text-[10px] tracking-wider mb-1">
-                Lokasi Kirim & Penerimaan:
+                {isInvoice ? 'Gudang Penerima & Pembayaran:' : 'Lokasi Kirim & Ketentuan:'}
               </div>
               <div className="font-black text-sm text-stone-900">{po.storeName}</div>
-              <div className="text-stone-600 mt-0.5">Status Fisik: <strong className={po.status === 'received' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>{po.status === 'received' ? 'Sudah Diterima' : 'Menunggu Pengiriman'}</strong></div>
-              <div className="text-stone-600 mt-0.5">Metode Bayar: <strong className="uppercase">{po.paymentMethod}</strong> {po.dueDate ? `(Jatuh Tempo: ${po.dueDate})` : ''}</div>
+              <div className="text-stone-600 mt-0.5">
+                Status Fisik: <strong className={isInvoice ? 'text-emerald-700 font-bold' : (po.status === 'received' ? 'text-emerald-700 font-bold' : 'text-blue-700 font-bold')}>
+                  {isInvoice ? '✓ Stok Sudah Masuk Gudang' : (po.status === 'received' ? 'Sudah Diterima' : 'Menunggu Kiriman Salesman (Belum Masuk Stok)')}
+                </strong>
+              </div>
+              <div className="text-stone-600 mt-0.5">
+                Metode Bayar: <strong className="uppercase">{po.paymentMethod}</strong> {po.dueDate ? `(Jatuh Tempo: ${po.dueDate})` : ''}
+              </div>
             </div>
           </div>
 

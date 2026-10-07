@@ -292,8 +292,19 @@ export const ProductPurchaseHistoryModal: React.FC<ProductPurchaseHistoryModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-70 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-5 my-6 max-h-[94vh] overflow-y-auto">
+    <div 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[9999] bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-5 my-6 max-h-[94vh] overflow-y-auto"
+      >
         {/* MODAL HEADER */}
         <div className="flex items-start justify-between border-b border-stone-100 pb-3.5">
           <div className="flex items-center gap-3">
