@@ -778,33 +778,40 @@ export const PurchaseOrderSalesmanReportModal: React.FC<PurchaseOrderSalesmanRep
             </table>
           )}
 
-          {/* SIGNATURES */}
-          <div className="pt-6 border-t border-stone-300 mt-4 break-inside-avoid">
-            <div className="grid grid-cols-3 gap-6 text-center text-xs">
-              <div>
-                <p className="font-bold text-stone-600 uppercase text-[11px]">Dipesan Oleh:</p>
-                <div className="h-14"></div>
-                <div className="border-b border-stone-400 w-32 mx-auto"></div>
-                <p className="font-bold text-stone-900 mt-1">Bagian Pembelian</p>
-                <p className="text-[10px] text-stone-500">Purchasing Toko</p>
-              </div>
+          {/* SIGNATURES (HORIZONTAL 3 KOLOM SEJAJAR) */}
+          <div 
+            className="pt-6 border-t border-stone-300 mt-6 break-inside-avoid"
+            style={{ pageBreakInside: 'avoid', marginTop: '28px', paddingTop: '16px', borderTop: '1px solid #d1d5db' }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse', border: 'none', margin: '0 auto', tableLayout: 'fixed' }}>
+              <tbody>
+                <tr style={{ border: 'none' }}>
+                  <td style={{ width: '33.333%', textAlign: 'center', verticalAlign: 'top', border: 'none', padding: '8px 12px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', color: '#4b5563', letterSpacing: '0.5px' }}>DIPESAN OLEH:</div>
+                    <div style={{ height: '54px' }}></div>
+                    <div style={{ width: '140px', margin: '0 auto', borderBottom: '1.5px solid #111827' }}></div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#111827', marginTop: '5px' }}>Bagian Pembelian</div>
+                    <div style={{ fontSize: '10px', color: '#6b7280' }}>Purchasing Toko</div>
+                  </td>
 
-              <div>
-                <p className="font-bold text-stone-600 uppercase text-[11px]">Disetujui Oleh:</p>
-                <div className="h-14"></div>
-                <div className="border-b border-stone-400 w-32 mx-auto"></div>
-                <p className="font-bold text-stone-900 mt-1">Pimpinan / Store Manager</p>
-                <p className="text-[10px] text-stone-500">Otorisasi Anggaran</p>
-              </div>
+                  <td style={{ width: '33.333%', textAlign: 'center', verticalAlign: 'top', border: 'none', padding: '8px 12px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', color: '#4b5563', letterSpacing: '0.5px' }}>DISETUJUI OLEH:</div>
+                    <div style={{ height: '54px' }}></div>
+                    <div style={{ width: '140px', margin: '0 auto', borderBottom: '1.5px solid #111827' }}></div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#111827', marginTop: '5px' }}>Pimpinan / Store Manager</div>
+                    <div style={{ fontSize: '10px', color: '#6b7280' }}>Otorisasi Anggaran</div>
+                  </td>
 
-              <div>
-                <p className="font-bold text-stone-600 uppercase text-[11px]">Diterima Oleh:</p>
-                <div className="h-14"></div>
-                <div className="border-b border-stone-400 w-32 mx-auto"></div>
-                <p className="font-bold text-stone-900 mt-1">Salesman / Vendor</p>
-                <p className="text-[10px] text-stone-500">Penyedia Barang</p>
-              </div>
-            </div>
+                  <td style={{ width: '33.333%', textAlign: 'center', verticalAlign: 'top', border: 'none', padding: '8px 12px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '11px', textTransform: 'uppercase', color: '#4b5563', letterSpacing: '0.5px' }}>DITERIMA OLEH:</div>
+                    <div style={{ height: '54px' }}></div>
+                    <div style={{ width: '140px', margin: '0 auto', borderBottom: '1.5px solid #111827' }}></div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#111827', marginTop: '5px' }}>Salesman / Vendor</div>
+                    <div style={{ fontSize: '10px', color: '#6b7280' }}>Penyedia Barang</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 

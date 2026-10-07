@@ -440,22 +440,72 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
       padding-top: 16px;
       border-top: 1px solid #e5e7eb;
       page-break-inside: avoid;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      text-align: center;
-      gap: 16px;
+      display: table !important;
+      width: 100% !important;
+      table-layout: fixed !important;
     }
     .signature-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      display: table-cell !important;
+      width: 33.333% !important;
+      vertical-align: top !important;
+      text-align: center !important;
+      padding: 6px 10px !important;
     }
     .signature-line {
       width: 140px;
       height: 1px;
-      background-color: #4b5563;
+      background-color: #111827;
       margin: 45px auto 4px auto;
     }
+
+    /* Fallback grid emulation for print without Tailwind CSS */
+    .grid-cols-3, [class*="grid-cols-3"] {
+      display: table !important;
+      width: 100% !important;
+      table-layout: fixed !important;
+      margin-top: 20px !important;
+    }
+    .grid-cols-3 > div, .grid-cols-3 > td, [class*="grid-cols-3"] > div {
+      display: table-cell !important;
+      width: 33.333% !important;
+      vertical-align: top !important;
+      text-align: center !important;
+      padding: 8px 12px !important;
+    }
+
+    .grid-cols-2, [class*="grid-cols-2"] {
+      display: table !important;
+      width: 100% !important;
+      table-layout: fixed !important;
+    }
+    .grid-cols-2 > div, [class*="grid-cols-2"] > div {
+      display: table-cell !important;
+      width: 50% !important;
+      vertical-align: top !important;
+      padding: 6px !important;
+    }
+
+    .grid-cols-4, [class*="grid-cols-4"] {
+      display: table !important;
+      width: 100% !important;
+      table-layout: fixed !important;
+    }
+    .grid-cols-4 > div, [class*="grid-cols-4"] > div {
+      display: table-cell !important;
+      width: 25% !important;
+      vertical-align: top !important;
+      padding: 4px !important;
+    }
+
+    .break-inside-avoid, [class*="break-inside-avoid"] {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .w-32 { width: 130px !important; }
+    .w-full { width: 100% !important; }
+    .mx-auto { margin-left: auto !important; margin-right: auto !important; }
+    .border-b { border-bottom: 1.5px solid #111827 !important; }
+    .h-14 { height: 50px !important; }
   </style>
 </head>
 <body>
