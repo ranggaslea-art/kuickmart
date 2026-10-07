@@ -2,6 +2,7 @@ import React from 'react';
 import { PurchaseOrder, Store, Supplier } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { exportPurchaseOrdersToExcel } from '../utils/purchaseExport';
+import { printHtmlDirectly, generateSinglePurchaseOrderHtml } from '../utils/printDocumentHelper';
 import { Printer, X, Download, Building2, CheckCircle2 } from 'lucide-react';
 
 interface PurchaseOrderPrintModalProps {
@@ -25,7 +26,8 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
   const targetSupplier = suppliers.find(s => s.id === po.supplierId);
 
   const handlePrint = () => {
-    window.print();
+    const html = generateSinglePurchaseOrderHtml(po, targetStore, targetSupplier);
+    printHtmlDirectly(html, { title: `Surat Pesanan Pembelian - ${po.purchaseNumber}` });
   };
 
   const handleExportExcel = () => {
@@ -74,7 +76,7 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
         </div>
 
         {/* PRINTABLE PURCHASE ORDER DOCUMENT */}
-        <div className="p-4 sm:p-6 border border-stone-200 rounded-2xl print:border-none print:p-0 space-y-6 text-stone-900 bg-white">
+        <div className="print-area-wrapper p-4 sm:p-6 border border-stone-200 rounded-2xl print:border-none print:p-0 space-y-6 text-stone-900 bg-white">
           {/* HEADER DOKUMEN & KOP SURAT */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-2 border-stone-900 pb-5">
             <div>

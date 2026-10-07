@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PurchaseOrder, Supplier, Store, Product } from '../types';
 import { formatRupiah } from '../utils/formatters';
+import { printHtmlDirectly } from '../utils/printDocumentHelper';
 import { 
   Printer, 
   X, 
@@ -330,9 +331,14 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
     return base;
   }, [reportType, selectedSupplierId, invoiceQuery, suppliers]);
 
-  // Handle Browser Print
+  // Handle Browser Print via isolated iframe
   const handlePrint = () => {
-    window.print();
+    const el = document.getElementById('printable-purchase-report');
+    if (el) {
+      printHtmlDirectly(el.innerHTML, { title: reportTitle });
+    } else {
+      window.print();
+    }
   };
 
   // Export to Excel XML
