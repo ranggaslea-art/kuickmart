@@ -1,11 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { PurchaseOrder, Supplier, Store, Product } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
-import {
-  exportPurchaseOrdersToExcel,
-  exportPurchaseItemsDetailToExcel
-} from '../utils/purchaseExport';
+import { exportPurchaseOrdersToExcel, exportPurchaseItemsDetailToExcel } from '../utils/purchaseExport';
 import { PurchaseReportModal } from './PurchaseReportModal';
+import { ErrorBoundary } from './ErrorBoundary';
 import {
   ShoppingBag,
   Truck,
@@ -1281,15 +1279,17 @@ export const PurchaseReportView: React.FC<PurchaseReportViewProps> = ({
       )}
 
       {/* FORMAL PRINTABLE REPORT MODAL (BY SUPPLIER, INVOICE, PERIOD, ETC.) */}
-      <PurchaseReportModal
-        isOpen={isPrintReportModalOpen}
-        onClose={() => setIsPrintReportModalOpen(false)}
-        purchases={purchases}
-        suppliers={suppliers}
-        stores={stores}
-        products={products}
-        currentStore={stores[0]}
-      />
+      <ErrorBoundary fallbackTitle="Kendala Membuka Laporan Pembelian">
+        <PurchaseReportModal
+          isOpen={isPrintReportModalOpen}
+          onClose={() => setIsPrintReportModalOpen(false)}
+          purchases={purchases || []}
+          suppliers={suppliers || []}
+          stores={stores || []}
+          products={products || []}
+          currentStore={stores?.[0]}
+        />
+      </ErrorBoundary>
     </div>
   );
 };

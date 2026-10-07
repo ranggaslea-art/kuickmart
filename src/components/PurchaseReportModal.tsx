@@ -65,8 +65,6 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
   const [stockStatusFilter, setStockStatusFilter] = useState<string>('all');
   const [selectedStoreId, setSelectedStoreId] = useState<string>('all');
 
-  if (!isOpen) return null;
-
   // Active Store for Letterhead Kop Surat
   const storeInfo = currentStore || stores[0] || {
     id: 'store_1',
@@ -109,11 +107,13 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
 
   // Filtered Purchases list
   const filteredPurchases = useMemo(() => {
+    if (!Array.isArray(purchases)) return [];
     return purchases.filter(po => {
+      if (!po) return false;
       // 1. Date Filter
-      const poDateStr = (po.receivedDate || po.orderDate || po.createdAt || '').slice(0, 10);
-      if (startDate && poDateStr < startDate) return false;
-      if (endDate && poDateStr > endDate) return false;
+      const poDateStr = String(po.receivedDate || po.orderDate || po.createdAt || '').slice(0, 10);
+      if (startDate && poDateStr && poDateStr < startDate) return false;
+      if (endDate && poDateStr && poDateStr > endDate) return false;
 
       // 2. Supplier Filter
       if (selectedSupplierId !== 'all' && po.supplierId !== selectedSupplierId) {
@@ -126,7 +126,9 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
         const matchPoNum = po.purchaseNumber?.toLowerCase().includes(q);
         const matchInvNum = po.invoiceNumber?.toLowerCase().includes(q);
         const matchSupName = po.supplierName?.toLowerCase().includes(q);
-        const matchItem = (po.items || []).some(it => it.productName?.toLowerCase().includes(q) || it.barcode?.toLowerCase().includes(q));
+        const matchItem = (Array.isArray(po.items) ? po.items : []).some(
+          it => it && (it.productName?.toLowerCase().includes(q) || it.barcode?.toLowerCase().includes(q))
+        );
         if (!matchPoNum && !matchInvNum && !matchSupName && !matchItem) {
           return false;
         }
@@ -149,8 +151,8 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
 
       return true;
     }).sort((a, b) => {
-      const dateA = new Date(a.receivedDate || a.orderDate || a.createdAt).getTime();
-      const dateB = new Date(b.receivedDate || b.orderDate || b.createdAt).getTime();
+      const dateA = new Date(a.receivedDate || a.orderDate || a.createdAt || 0).getTime() || 0;
+      const dateB = new Date(b.receivedDate || b.orderDate || b.createdAt || 0).getTime() || 0;
       return dateB - dateA;
     });
   }, [
@@ -263,11 +265,12 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
     }> = [];
 
     filteredPurchases.forEach(po => {
-      (po.items || []).forEach(it => {
+      (Array.isArray(po.items) ? po.items : []).forEach(it => {
+        if (!it) return;
         rows.push({
           purchaseNumber: po.purchaseNumber,
           invoiceNumber: po.invoiceNumber,
-          date: po.receivedDate || po.orderDate || po.createdAt.slice(0, 10),
+          date: po.receivedDate || po.orderDate || (po.createdAt ? String(po.createdAt).slice(0, 10) : '') || new Date().toISOString().slice(0, 10),
           supplierName: po.supplierName || 'Pemasok Umum',
           productName: it.productName || 'Item',
           barcode: it.barcode,
@@ -458,6 +461,8 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-80 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn print:p-0 print:bg-white print:static">

@@ -19,6 +19,7 @@ import { ProductPurchaseHistoryModal } from './ProductPurchaseHistoryModal';
 import { PurchaseOrderPrintModal } from './PurchaseOrderPrintModal';
 import { PurchaseOrderWhatsAppModal } from './PurchaseOrderWhatsAppModal';
 import { PurchaseReportModal } from './PurchaseReportModal';
+import { ErrorBoundary } from './ErrorBoundary';
 import { 
   savePurchaseToMySql, 
   deletePurchaseFromMySql, 
@@ -2293,15 +2294,17 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       />
 
       {/* FORMAL PRINTABLE REPORT MODAL (BY SUPPLIER, INVOICE, PERIOD, ETC.) */}
-      <PurchaseReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
-        purchases={purchases}
-        suppliers={suppliers}
-        stores={stores}
-        products={products}
-        currentStore={stores[0]}
-      />
+      <ErrorBoundary fallbackTitle="Kendala Membuka Laporan Pembelian">
+        <PurchaseReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          purchases={purchases || []}
+          suppliers={suppliers || []}
+          stores={stores || []}
+          products={products || []}
+          currentStore={stores?.[0]}
+        />
+      </ErrorBoundary>
     </div>
   );
 };
