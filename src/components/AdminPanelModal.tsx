@@ -478,6 +478,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const key = getTenantStorageKey('toko_online_suppliers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newSuppliers));
       saveTenantDataToCloud('suppliers', newSuppliers, currentSlug);
+      import('../lib/mysqlClientApi').then(({ saveSuppliersToMySql }) => {
+        saveSuppliersToMySql(newSuppliers, currentSlug).catch(console.error);
+      });
     } catch (e) {
       console.error(e);
     }
@@ -502,6 +505,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       const key = getTenantStorageKey('toko_online_purchases', currentSlug);
       localStorage.setItem(key, JSON.stringify(newPurchases));
       saveTenantDataToCloud('purchases', newPurchases, currentSlug);
+      import('../lib/mysqlClientApi').then(({ savePurchasesToMySql }) => {
+        savePurchasesToMySql(newPurchases, currentSlug).catch(console.error);
+      });
     } catch (e) {
       console.error(e);
     }
@@ -670,10 +676,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
-  // Muat kategori & merek dari MySQL jika tersedia saat panel admin dibuka
+  // Muat kategori, merek, pembelian & pemasok dari MySQL jika tersedia saat panel admin dibuka
   useEffect(() => {
     if (isOpen) {
-      import('../lib/mysqlClientApi').then(({ fetchCategoriesFromMySql, fetchBrandsFromMySql }) => {
+      import('../lib/mysqlClientApi').then(({ 
+        fetchCategoriesFromMySql, 
+        fetchBrandsFromMySql,
+        fetchPurchasesFromMySql,
+        fetchSuppliersFromMySql
+      }) => {
         fetchCategoriesFromMySql(currentSlug).then((cats) => {
           if (Array.isArray(cats) && cats.length > 0) {
             setInternalCategories(cats);
@@ -684,6 +695,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           if (Array.isArray(brds) && brds.length > 0) {
             setInternalBrands(brds);
             if (onUpdateBrands) onUpdateBrands(brds);
+          }
+        }).catch(() => {});
+        fetchPurchasesFromMySql(currentSlug).then((pos) => {
+          if (Array.isArray(pos) && pos.length > 0) {
+            setInternalPurchases(pos);
+            if (onUpdatePurchases) onUpdatePurchases(pos);
+          }
+        }).catch(() => {});
+        fetchSuppliersFromMySql(currentSlug).then((sups) => {
+          if (Array.isArray(sups) && sups.length > 0) {
+            setInternalSuppliers(sups);
+            if (onUpdateSuppliers) onUpdateSuppliers(sups);
           }
         }).catch(() => {});
       });

@@ -98,6 +98,14 @@ export async function saveTenantDataToCloud<T = any>(
         import('../lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
           saveBrandsToMySql(data as any, effectiveSlug).catch(() => {});
         });
+      } else if (moduleKey === 'purchases' && Array.isArray(data)) {
+        import('../lib/mysqlClientApi').then(({ savePurchasesToMySql }) => {
+          savePurchasesToMySql(data as any, effectiveSlug).catch(() => {});
+        });
+      } else if (moduleKey === 'suppliers' && Array.isArray(data)) {
+        import('../lib/mysqlClientApi').then(({ saveSuppliersToMySql }) => {
+          saveSuppliersToMySql(data as any, effectiveSlug).catch(() => {});
+        });
       }
     } catch (_) {}
 

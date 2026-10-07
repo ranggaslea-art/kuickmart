@@ -70,7 +70,7 @@ export async function testMySqlConnection(): Promise<{
 
     // Hitung baris di tabel utama jika ada
     const counts: Record<string, number> = {};
-    const tables = ['products', 'orders', 'categories', 'brands', 'customers', 'staff_users'];
+    const tables = ['products', 'orders', 'categories', 'brands', 'customers', 'staff_users', 'purchase_orders', 'suppliers'];
     for (const t of tables) {
       try {
         const [c]: any = await p.query(`SELECT COUNT(*) as count FROM ${t}`);

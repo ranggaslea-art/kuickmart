@@ -331,3 +331,134 @@ export async function fetchOrdersFromMySql(tenantSlug: string = 'default'): Prom
   }
 }
 
+// ==========================================
+// MYSQL PURCHASES (PEMBELIAN) API CLIENT
+// ==========================================
+
+import { PurchaseOrder, Supplier } from '../types';
+
+/**
+ * Simpan satu faktur pesanan pembelian ke database MySQL
+ */
+export async function savePurchaseToMySql(purchase: PurchaseOrder, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch('/api/mysql/purchases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purchase, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error savePurchaseToMySql:', err);
+    return false;
+  }
+}
+
+/**
+ * Simpan daftar faktur pesanan pembelian (batch) ke database MySQL
+ */
+export async function savePurchasesToMySql(purchases: PurchaseOrder[], tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    if (!Array.isArray(purchases) || purchases.length === 0) return true;
+    const res = await fetch('/api/mysql/purchases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purchases, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error savePurchasesToMySql:', err);
+    return false;
+  }
+}
+
+/**
+ * Ambil daftar faktur pesanan pembelian dari database MySQL
+ */
+export async function fetchPurchasesFromMySql(tenantSlug: string = 'default'): Promise<PurchaseOrder[] | null> {
+  try {
+    const res = await fetch(`/api/mysql/purchases?tenantSlug=${encodeURIComponent(tenantSlug)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.purchases || null;
+  } catch (err) {
+    console.error('Error fetchPurchasesFromMySql:', err);
+    return null;
+  }
+}
+
+/**
+ * Hapus faktur pesanan pembelian dari database MySQL
+ */
+export async function deletePurchaseFromMySql(purchaseId: string, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/mysql/purchases/${encodeURIComponent(purchaseId)}?tenantSlug=${encodeURIComponent(tenantSlug)}`, {
+      method: 'DELETE',
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error deletePurchaseFromMySql:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// MYSQL SUPPLIERS (PEMASOK) API CLIENT
+// ==========================================
+
+/**
+ * Simpan satu pemasok ke database MySQL
+ */
+export async function saveSupplierToMySql(supplier: Supplier, tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    const res = await fetch('/api/mysql/suppliers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ supplier, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error saveSupplierToMySql:', err);
+    return false;
+  }
+}
+
+/**
+ * Simpan daftar pemasok (batch) ke database MySQL
+ */
+export async function saveSuppliersToMySql(suppliers: Supplier[], tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    if (!Array.isArray(suppliers) || suppliers.length === 0) return true;
+    const res = await fetch('/api/mysql/suppliers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suppliers, tenantSlug }),
+    });
+    const json = await res.json();
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error saveSuppliersToMySql:', err);
+    return false;
+  }
+}
+
+/**
+ * Ambil daftar pemasok dari database MySQL
+ */
+export async function fetchSuppliersFromMySql(tenantSlug: string = 'default'): Promise<Supplier[] | null> {
+  try {
+    const res = await fetch(`/api/mysql/suppliers?tenantSlug=${encodeURIComponent(tenantSlug)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.suppliers || null;
+  } catch (err) {
+    console.error('Error fetchSuppliersFromMySql:', err);
+    return null;
+  }
+}
+
+

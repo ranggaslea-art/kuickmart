@@ -5,6 +5,7 @@ import {
   exportPurchaseOrdersToExcel,
   exportPurchaseItemsDetailToExcel
 } from '../utils/purchaseExport';
+import { PurchaseReportModal } from './PurchaseReportModal';
 import {
   ShoppingBag,
   Truck,
@@ -12,6 +13,7 @@ import {
   Filter,
   Search,
   Download,
+  Printer,
   Clock,
   CheckCircle2,
   AlertTriangle,
@@ -60,6 +62,7 @@ export const PurchaseReportView: React.FC<PurchaseReportViewProps> = ({
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPoDetail, setSelectedPoDetail] = useState<PurchaseOrder | null>(null);
+  const [isPrintReportModalOpen, setIsPrintReportModalOpen] = useState<boolean>(false);
 
   // Filtered Purchases by Date & Dimensions
   const filteredPurchases = useMemo(() => {
@@ -671,6 +674,16 @@ export const PurchaseReportView: React.FC<PurchaseReportViewProps> = ({
               <span>Ekspor Hutang Tempo</span>
             </button>
           )}
+
+          {/* CETAK LAPORAN RESMI (A4 / PDF DENGAN KOP SURAT) */}
+          <button
+            onClick={() => setIsPrintReportModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-stone-900 text-white hover:bg-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors ml-1"
+            title="Buka dialog Cetak Laporan Formal rapi dengan Kop Toko & Tanda Tangan"
+          >
+            <Printer className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Cetak Laporan / PDF</span>
+          </button>
         </div>
       </div>
 
@@ -1266,6 +1279,17 @@ export const PurchaseReportView: React.FC<PurchaseReportViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* FORMAL PRINTABLE REPORT MODAL (BY SUPPLIER, INVOICE, PERIOD, ETC.) */}
+      <PurchaseReportModal
+        isOpen={isPrintReportModalOpen}
+        onClose={() => setIsPrintReportModalOpen(false)}
+        purchases={purchases}
+        suppliers={suppliers}
+        stores={stores}
+        products={products}
+        currentStore={stores[0]}
+      />
     </div>
   );
 };

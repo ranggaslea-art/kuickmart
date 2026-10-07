@@ -37,36 +37,73 @@ body {
 
 @media print {
   @page {
-    size: 76mm auto;
-    margin: 0;
+    size: A4 portrait;
+    margin: 12mm 10mm;
   }
   
   * {
     box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  html, body {
-    width: 76mm !important;
-    max-width: 76mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background-color: #ffffff !important;
-    color: #000000 !important;
-    font-family: 'Courier New', Courier, 'Lucida Console', Monaco, monospace !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  button, select, input, textarea, .no-print {
+  html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Sembunyikan elemen navigasi dan tombol saat print */
+  button, select, input, textarea, .no-print, nav, aside {
     display: none !important;
   }
 
-  /* Monospace Dot Matrix font rendering */
+  /* Pastikan modal cetak tampil penuh dan bersih */
+  .print-area-wrapper,
+  .print-document,
+  .print-report-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Styling tabel laporan agar rapi dan tidak terpotong */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  /* Khusus Struk Kasir POS Thermal / Dot Matrix (jika diaktifkan) */
+  body.printing-receipt,
   .dotmatrix-receipt-area {
-    width: 70mm !important;
-    max-width: 70mm !important;
+    width: 72mm !important;
+    max-width: 72mm !important;
     margin: 0 auto !important;
     padding: 2mm 1mm !important;
     font-family: 'Courier New', Courier, 'Lucida Console', Monaco, monospace !important;

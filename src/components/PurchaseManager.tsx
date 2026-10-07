@@ -18,6 +18,15 @@ import {
 import { ProductPurchaseHistoryModal } from './ProductPurchaseHistoryModal';
 import { PurchaseOrderPrintModal } from './PurchaseOrderPrintModal';
 import { PurchaseOrderWhatsAppModal } from './PurchaseOrderWhatsAppModal';
+import { PurchaseReportModal } from './PurchaseReportModal';
+import { 
+  savePurchaseToMySql, 
+  deletePurchaseFromMySql, 
+  savePurchasesToMySql, 
+  fetchPurchasesFromMySql,
+  fetchMySqlStatus 
+} from '../lib/mysqlClientApi';
+import { getStoreSlugFromUrl } from '../utils/tenantHelper';
 import { 
   ShoppingBag, 
   Plus, 
@@ -51,7 +60,9 @@ import {
   FileSpreadsheet,
   ChevronDown,
   Share2,
-  Package
+  Package,
+  Database,
+  RefreshCw
 } from 'lucide-react';
 
 const COMMON_SUPPLIER_UNITS = [
@@ -110,6 +121,50 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [selectedPrintPo, setSelectedPrintPo] = useState<PurchaseOrder | null>(null);
   const [selectedWhatsAppPo, setSelectedWhatsAppPo] = useState<PurchaseOrder | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+  // Database MySQL Sync Status
+  const [isDbConnected, setIsDbConnected] = useState(true);
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
+  const [dbNotification, setDbNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Cek koneksi MySQL saat komponen dimuat
+  useEffect(() => {
+    fetchMySqlStatus().then(st => {
+      setIsDbConnected(Boolean(st.connected));
+    }).catch(() => {
+      setIsDbConnected(false);
+    });
+  }, []);
+
+  // Sinkronisasi manual seluruh pesanan pembelian ke MySQL
+  const handleSyncToDatabase = async () => {
+    setIsSyncingDb(true);
+    try {
+      const slug = getStoreSlugFromUrl();
+      const success = await savePurchasesToMySql(purchases, slug);
+      if (success) {
+        setDbNotification({
+          type: 'success',
+          message: `✓ Berhasil menyinkronkan ${purchases.length} faktur pembelian ke Database MySQL!`,
+        });
+        setIsDbConnected(true);
+      } else {
+        setDbNotification({
+          type: 'error',
+          message: 'Gagal menyinkronkan data ke MySQL. Coba periksa koneksi database.',
+        });
+      }
+    } catch (err: any) {
+      setDbNotification({
+        type: 'error',
+        message: `Error sinkronisasi: ${err.message || 'Koneksi terputus'}`,
+      });
+    } finally {
+      setIsSyncingDb(false);
+      setTimeout(() => setDbNotification(null), 5000);
+    }
+  };
 
   // Item Info & History Modal state
   const [selectedHistoryProduct, setSelectedHistoryProduct] = useState<Product | null>(null);
@@ -860,6 +915,23 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
     onUpdatePurchases([newPurchase, ...purchases]);
     setIsCreateModalOpen(false);
+
+    // Simpan otomatis ke Database MySQL
+    try {
+      const slug = getStoreSlugFromUrl();
+      savePurchaseToMySql(newPurchase, slug).then((ok) => {
+        if (ok) {
+          setIsDbConnected(true);
+          setDbNotification({
+            type: 'success',
+            message: `✓ Faktur ${newPurchase.purchaseNumber} berhasil disimpan ke Database MySQL & Stok Produk diperbarui!`
+          });
+          setTimeout(() => setDbNotification(null), 4000);
+        }
+      }).catch(err => {
+        console.warn('Gagal simpan ke MySQL:', err);
+      });
+    } catch (_) {}
   };
 
   // Action to receive an ordered/draft PO and increase stock
@@ -910,6 +982,15 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
     onUpdatePurchases(updatedPurchases);
 
+    // Sinkronkan status penerimaan ke MySQL
+    try {
+      const slug = getStoreSlugFromUrl();
+      const updatedPo = updatedPurchases.find(p => p.id === po.id);
+      if (updatedPo) {
+        savePurchaseToMySql(updatedPo, slug).catch(() => {});
+      }
+    } catch (_) {}
+
     if (selectedPurchaseDetail?.id === po.id) {
       setSelectedPurchaseDetail({
         ...selectedPurchaseDetail,
@@ -927,6 +1008,19 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
     if (selectedPurchaseDetail?.id === id) {
       setSelectedPurchaseDetail(null);
     }
+    // Hapus dari MySQL
+    try {
+      const slug = getStoreSlugFromUrl();
+      deletePurchaseFromMySql(id, slug).then(ok => {
+        if (ok) {
+          setDbNotification({
+            type: 'info',
+            message: 'Faktur pembelian berhasil dihapus dari Database MySQL.'
+          });
+          setTimeout(() => setDbNotification(null), 3000);
+        }
+      }).catch(() => {});
+    } catch (_) {}
   };
 
   return (
@@ -946,6 +1040,27 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* DATABASE MYSQL SYNC BUTTON */}
+          <button
+            onClick={handleSyncToDatabase}
+            disabled={isSyncingDb}
+            title={isDbConnected ? "Database MySQL terhubung. Klik untuk menyinkronkan seluruh PO ke MySQL" : "Klik untuk mencoba menghubungkan dan sinkronkan ke MySQL"}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <Database className={`w-3.5 h-3.5 ${isDbConnected ? 'text-emerald-600' : 'text-amber-500'}`} />
+            <span>{isSyncingDb ? 'Menyinkronkan...' : isDbConnected ? 'MySQL Terhubung' : 'Sinkron MySQL'}</span>
+            {isSyncingDb && <RefreshCw className="w-3 h-3 animate-spin text-stone-500" />}
+          </button>
+
+          {/* LAPORAN & CETAK PO (PER PEMASOK, PER FAKTUR, PER PERIODE) */}
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 text-xs font-bold transition-colors cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-emerald-600" />
+            <span>Laporan & Cetak PO</span>
+          </button>
+
           {/* MULTI-FORMAT EXPORT DROPDOWN (REQUIREMENT 3) */}
           <div className="relative">
             <button
@@ -953,7 +1068,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-bold transition-colors cursor-pointer"
             >
               <Download className="w-4 h-4 text-emerald-600" />
-              <span>Ekspor Laporan PO</span>
+              <span>Ekspor File</span>
               <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
             </button>
 
@@ -1026,15 +1141,15 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
                 <button
                   onClick={() => {
-                    window.print();
+                    setIsReportModalOpen(true);
                     setIsExportDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-stone-50 text-stone-800 flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-stone-800 flex items-center gap-2.5 transition-colors"
                 >
-                  <Printer className="w-4 h-4 text-stone-600" />
+                  <Printer className="w-4 h-4 text-emerald-600" />
                   <div>
-                    <div className="font-bold">Cetak / Simpan PDF Rekap</div>
-                    <div className="text-[10px] text-stone-400">Buka dialog cetak laporan printer / PDF</div>
+                    <div className="font-bold">Cetak / Simpan PDF Laporan</div>
+                    <div className="text-[10px] text-stone-400">Laporan formal rapi dengan Kop Toko & Tanda Tangan</div>
                   </div>
                 </button>
               </div>
@@ -1052,6 +1167,32 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
           )}
         </div>
       </div>
+
+      {/* DATABASE NOTIFICATION BANNER */}
+      {dbNotification && (
+        <div className={`p-3.5 rounded-2xl flex items-center justify-between text-xs font-bold animate-fadeIn ${
+          dbNotification.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+            : dbNotification.type === 'error'
+            ? 'bg-rose-50 text-rose-800 border border-rose-200'
+            : 'bg-blue-50 text-blue-800 border border-blue-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {dbNotification.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{dbNotification.message}</span>
+          </div>
+          <button 
+            onClick={() => setDbNotification(null)}
+            className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -2149,6 +2290,17 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
         onClose={() => setSelectedWhatsAppPo(null)}
         stores={stores}
         suppliers={suppliers}
+      />
+
+      {/* FORMAL PRINTABLE REPORT MODAL (BY SUPPLIER, INVOICE, PERIOD, ETC.) */}
+      <PurchaseReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        purchases={purchases}
+        suppliers={suppliers}
+        stores={stores}
+        products={products}
+        currentStore={stores[0]}
       />
     </div>
   );

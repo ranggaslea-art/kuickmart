@@ -196,3 +196,60 @@ CREATE TABLE IF NOT EXISTS couriers (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_courier_tenant (tenant_slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11. TABEL SUPPLIER / PEMASOK (SUPPLIERS)
+CREATE TABLE IF NOT EXISTS suppliers (
+  id VARCHAR(64) PRIMARY KEY,
+  tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+  code VARCHAR(50),
+  name VARCHAR(150) NOT NULL,
+  contact_person VARCHAR(100),
+  phone VARCHAR(50),
+  email VARCHAR(100),
+  address TEXT,
+  city VARCHAR(100),
+  category VARCHAR(100),
+  bank_account JSON,
+  payment_terms VARCHAR(50) DEFAULT 'tempo_14',
+  is_active TINYINT(1) DEFAULT 1,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_supplier_tenant (tenant_slug),
+  INDEX idx_supplier_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 12. TABEL PESANAN PEMBELIAN BARANG & STOK MASUK (PURCHASE_ORDERS)
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id VARCHAR(64) PRIMARY KEY,
+  tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+  purchase_number VARCHAR(100) NOT NULL,
+  invoice_number VARCHAR(100),
+  supplier_id VARCHAR(64),
+  supplier_name VARCHAR(150),
+  store_id VARCHAR(64),
+  store_name VARCHAR(150),
+  order_date DATE,
+  received_date DATE,
+  total_quantity INT DEFAULT 0,
+  subtotal DECIMAL(15,2) DEFAULT 0.00,
+  tax_amount DECIMAL(15,2) DEFAULT 0.00,
+  discount_amount DECIMAL(15,2) DEFAULT 0.00,
+  total_amount DECIMAL(15,2) DEFAULT 0.00,
+  status VARCHAR(50) DEFAULT 'received',
+  payment_status VARCHAR(50) DEFAULT 'unpaid',
+  payment_method VARCHAR(50) DEFAULT 'tempo',
+  due_date DATE,
+  notes TEXT,
+  stock_updated TINYINT(1) DEFAULT 1,
+  received_by VARCHAR(100),
+  items JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_po_tenant (tenant_slug),
+  INDEX idx_po_number (purchase_number),
+  INDEX idx_po_supplier (supplier_id),
+  INDEX idx_po_order_date (order_date),
+  INDEX idx_po_due_date (due_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

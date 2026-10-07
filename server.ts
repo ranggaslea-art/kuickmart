@@ -2464,6 +2464,401 @@ async function startServer() {
     }
   });
 
+  // ==========================================
+  // MYSQL SUPPLIERS (PEMASOK) API ROUTES
+  // ==========================================
+
+  // GET /api/mysql/suppliers - Ambil daftar supplier dari MySQL
+  app.get('/api/mysql/suppliers', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS suppliers (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            code VARCHAR(50),
+            name VARCHAR(150) NOT NULL,
+            contact_person VARCHAR(100),
+            phone VARCHAR(50),
+            email VARCHAR(100),
+            address TEXT,
+            city VARCHAR(100),
+            category VARCHAR(100),
+            bank_account JSON,
+            payment_terms VARCHAR(50) DEFAULT 'tempo_14',
+            is_active TINYINT(1) DEFAULT 1,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_supplier_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
+      const [rows]: any = await pool.query(
+        'SELECT * FROM suppliers WHERE tenant_slug = ? ORDER BY name ASC',
+        [tenantSlug]
+      );
+
+      const suppliers = rows.map((r: any) => {
+        let parsedBank = undefined;
+        try {
+          parsedBank = typeof r.bank_account === 'string' ? JSON.parse(r.bank_account) : r.bank_account;
+        } catch (_) {}
+
+        return {
+          id: r.id,
+          code: r.code || '',
+          name: r.name,
+          contactPerson: r.contact_person || '',
+          phone: r.phone || '',
+          email: r.email || '',
+          address: r.address || '',
+          city: r.city || '',
+          category: r.category || 'Umum',
+          bankAccount: parsedBank,
+          paymentTerms: r.payment_terms || 'tempo_14',
+          isActive: Boolean(r.is_active),
+          notes: r.notes || '',
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        };
+      });
+
+      res.json({ success: true, count: suppliers.length, suppliers });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, suppliers: [] });
+    }
+  });
+
+  // POST /api/mysql/suppliers - Simpan supplier ke MySQL
+  app.post('/api/mysql/suppliers', async (req, res) => {
+    try {
+      const { supplier, suppliers, tenantSlug = 'default' } = req.body;
+      const pool = getMySqlPool();
+      const list = Array.isArray(suppliers) && suppliers.length > 0
+        ? suppliers
+        : (supplier ? [supplier] : []);
+
+      if (list.length === 0) {
+        return res.status(400).json({ success: false, message: 'Data supplier kosong' });
+      }
+
+      for (const s of list) {
+        if (!s || !s.name) continue;
+        const sId = s.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        await pool.query(
+          `INSERT INTO suppliers (
+            id, tenant_slug, code, name, contact_person, phone, email, address, city,
+            category, bank_account, payment_terms, is_active, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            code = VALUES(code),
+            name = VALUES(name),
+            contact_person = VALUES(contact_person),
+            phone = VALUES(phone),
+            email = VALUES(email),
+            address = VALUES(address),
+            city = VALUES(city),
+            category = VALUES(category),
+            bank_account = VALUES(bank_account),
+            payment_terms = VALUES(payment_terms),
+            is_active = VALUES(is_active),
+            notes = VALUES(notes)`,
+          [
+            sId,
+            tenantSlug,
+            s.code || '',
+            s.name,
+            s.contactPerson || '',
+            s.phone || '',
+            s.email || '',
+            s.address || '',
+            s.city || '',
+            s.category || 'Umum',
+            JSON.stringify(s.bankAccount || null),
+            s.paymentTerms || 'tempo_14',
+            s.isActive !== false ? 1 : 0,
+            s.notes || '',
+          ]
+        );
+      }
+
+      res.json({ success: true, message: `${list.length} supplier berhasil disimpan ke MySQL` });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // DELETE /api/mysql/suppliers/:id - Hapus supplier dari MySQL
+  app.delete('/api/mysql/suppliers/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      await pool.query('DELETE FROM suppliers WHERE id = ? AND tenant_slug = ?', [id, tenantSlug]);
+      res.json({ success: true, message: `Supplier berhasil dihapus dari MySQL` });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // ==========================================
+  // MYSQL PURCHASE ORDERS (PEMBELIAN) API ROUTES
+  // ==========================================
+
+  // GET /api/mysql/purchases - Ambil daftar pembelian dari MySQL
+  app.get('/api/mysql/purchases', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS purchase_orders (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            purchase_number VARCHAR(100) NOT NULL,
+            invoice_number VARCHAR(100),
+            supplier_id VARCHAR(64),
+            supplier_name VARCHAR(150),
+            store_id VARCHAR(64),
+            store_name VARCHAR(150),
+            order_date DATE,
+            received_date DATE,
+            total_quantity INT DEFAULT 0,
+            subtotal DECIMAL(15,2) DEFAULT 0.00,
+            tax_amount DECIMAL(15,2) DEFAULT 0.00,
+            discount_amount DECIMAL(15,2) DEFAULT 0.00,
+            total_amount DECIMAL(15,2) DEFAULT 0.00,
+            status VARCHAR(50) DEFAULT 'received',
+            payment_status VARCHAR(50) DEFAULT 'unpaid',
+            payment_method VARCHAR(50) DEFAULT 'tempo',
+            due_date DATE,
+            notes TEXT,
+            stock_updated TINYINT(1) DEFAULT 1,
+            received_by VARCHAR(100),
+            items JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_po_tenant (tenant_slug),
+            INDEX idx_po_number (purchase_number),
+            INDEX idx_po_supplier (supplier_id),
+            INDEX idx_po_order_date (order_date)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
+      const [rows]: any = await pool.query(
+        'SELECT * FROM purchase_orders WHERE tenant_slug = ? ORDER BY order_date DESC, created_at DESC LIMIT 500',
+        [tenantSlug]
+      );
+
+      const purchases = rows.map((r: any) => {
+        let parsedItems = [];
+        try {
+          parsedItems = typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []);
+        } catch (_) {}
+
+        const formatDate = (d: any) => {
+          if (!d) return undefined;
+          try {
+            const dt = new Date(d);
+            return isNaN(dt.getTime()) ? String(d) : dt.toISOString().slice(0, 10);
+          } catch {
+            return String(d);
+          }
+        };
+
+        return {
+          id: r.id,
+          purchaseNumber: r.purchase_number || r.id,
+          invoiceNumber: r.invoice_number || undefined,
+          supplierId: r.supplier_id || 'sup_general',
+          supplierName: r.supplier_name || 'Supplier Umum',
+          storeId: r.store_id || 'store_1',
+          storeName: r.store_name || 'Toko Utama',
+          orderDate: formatDate(r.order_date) || new Date().toISOString().slice(0, 10),
+          receivedDate: formatDate(r.received_date),
+          items: parsedItems,
+          totalQuantity: Number(r.total_quantity) || 0,
+          subtotal: Number(r.subtotal) || 0,
+          taxAmount: Number(r.tax_amount) || 0,
+          discountAmount: Number(r.discount_amount) || 0,
+          totalAmount: Number(r.total_amount) || 0,
+          status: r.status || 'received',
+          paymentStatus: r.payment_status || 'unpaid',
+          paymentMethod: r.payment_method || 'tempo',
+          dueDate: formatDate(r.due_date),
+          notes: r.notes || undefined,
+          stockUpdated: Boolean(r.stock_updated),
+          receivedBy: r.received_by || undefined,
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        };
+      });
+
+      res.json({ success: true, count: purchases.length, purchases });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, purchases: [] });
+    }
+  });
+
+  // POST /api/mysql/purchases - Simpan faktur pembelian ke MySQL & update stok produk otomatis
+  app.post('/api/mysql/purchases', async (req, res) => {
+    try {
+      const { purchase, purchases, tenantSlug = 'default' } = req.body;
+      const pool = getMySqlPool();
+      const list = Array.isArray(purchases) && purchases.length > 0
+        ? purchases
+        : (purchase ? [purchase] : []);
+
+      if (list.length === 0) {
+        return res.status(400).json({ success: false, message: 'Data pembelian kosong' });
+      }
+
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS purchase_orders (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            purchase_number VARCHAR(100) NOT NULL,
+            invoice_number VARCHAR(100),
+            supplier_id VARCHAR(64),
+            supplier_name VARCHAR(150),
+            store_id VARCHAR(64),
+            store_name VARCHAR(150),
+            order_date DATE,
+            received_date DATE,
+            total_quantity INT DEFAULT 0,
+            subtotal DECIMAL(15,2) DEFAULT 0.00,
+            tax_amount DECIMAL(15,2) DEFAULT 0.00,
+            discount_amount DECIMAL(15,2) DEFAULT 0.00,
+            total_amount DECIMAL(15,2) DEFAULT 0.00,
+            status VARCHAR(50) DEFAULT 'received',
+            payment_status VARCHAR(50) DEFAULT 'unpaid',
+            payment_method VARCHAR(50) DEFAULT 'tempo',
+            due_date DATE,
+            notes TEXT,
+            stock_updated TINYINT(1) DEFAULT 1,
+            received_by VARCHAR(100),
+            items JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_po_tenant (tenant_slug),
+            INDEX idx_po_number (purchase_number),
+            INDEX idx_po_supplier (supplier_id),
+            INDEX idx_po_order_date (order_date)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
+
+      for (const po of list) {
+        if (!po || !po.id) continue;
+        const cleanOrderDate = po.orderDate ? po.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+        const cleanRecvDate = po.receivedDate ? po.receivedDate.slice(0, 10) : null;
+        const cleanDueDate = po.dueDate ? po.dueDate.slice(0, 10) : null;
+
+        await pool.query(
+          `INSERT INTO purchase_orders (
+            id, tenant_slug, purchase_number, invoice_number, supplier_id, supplier_name,
+            store_id, store_name, order_date, received_date, total_quantity, subtotal,
+            tax_amount, discount_amount, total_amount, status, payment_status, payment_method,
+            due_date, notes, stock_updated, received_by, items
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            invoice_number = VALUES(invoice_number),
+            supplier_id = VALUES(supplier_id),
+            supplier_name = VALUES(supplier_name),
+            order_date = VALUES(order_date),
+            received_date = VALUES(received_date),
+            total_quantity = VALUES(total_quantity),
+            subtotal = VALUES(subtotal),
+            total_amount = VALUES(total_amount),
+            status = VALUES(status),
+            payment_status = VALUES(payment_status),
+            payment_method = VALUES(payment_method),
+            due_date = VALUES(due_date),
+            notes = VALUES(notes),
+            stock_updated = VALUES(stock_updated),
+            items = VALUES(items)`,
+          [
+            po.id,
+            tenantSlug,
+            po.purchaseNumber || po.id,
+            po.invoiceNumber || null,
+            po.supplierId || 'sup_general',
+            po.supplierName || 'Supplier Umum',
+            po.storeId || 'store_1',
+            po.storeName || 'Toko Utama',
+            cleanOrderDate,
+            cleanRecvDate,
+            po.totalQuantity || 0,
+            po.subtotal || 0,
+            po.taxAmount || 0,
+            po.discountAmount || 0,
+            po.totalAmount || 0,
+            po.status || 'received',
+            po.paymentStatus || 'unpaid',
+            po.paymentMethod || 'tempo',
+            cleanDueDate,
+            po.notes || null,
+            po.stockUpdated !== false ? 1 : 0,
+            po.receivedBy || 'Petugas Gudang',
+            JSON.stringify(po.items || []),
+          ]
+        );
+
+        // Update stok fisik & HPP modal produk di tabel products MySQL jika status received
+        if (po.stockUpdated && Array.isArray(po.items) && po.items.length > 0) {
+          for (const it of po.items) {
+            if (!it.productId) continue;
+            try {
+              const addedStock = it.baseQuantity || (it.quantity * (it.conversionMultiplier || 1));
+              const newCostPrice = it.costPrice && it.costPrice > 0 
+                ? Math.round(it.costPrice / (it.conversionMultiplier || 1))
+                : undefined;
+
+              if (newCostPrice) {
+                await pool.query(
+                  `UPDATE products 
+                   SET stock = stock + ?, cost_price = ?
+                   WHERE id = ? AND tenant_slug = ?`,
+                  [addedStock, newCostPrice, it.productId, tenantSlug]
+                );
+              } else {
+                await pool.query(
+                  `UPDATE products 
+                   SET stock = stock + ?
+                   WHERE id = ? AND tenant_slug = ?`,
+                  [addedStock, it.productId, tenantSlug]
+                );
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      res.json({ success: true, message: `${list.length} faktur pesanan pembelian berhasil disimpan ke MySQL!` });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // DELETE /api/mysql/purchases/:id - Hapus faktur PO dari MySQL
+  app.delete('/api/mysql/purchases/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantSlug = String(req.query.tenantSlug || 'default');
+      const pool = getMySqlPool();
+      await pool.query('DELETE FROM purchase_orders WHERE id = ? AND tenant_slug = ?', [id, tenantSlug]);
+      res.json({ success: true, message: `Faktur PO berhasil dihapus dari MySQL` });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // POST /api/mysql/migrate-all - Migrasi massal seluruh data toko ke MySQL
   app.post('/api/mysql/migrate-all', async (req, res) => {
     try {
@@ -2475,7 +2870,9 @@ async function startServer() {
         stores = [],
         customers = [],
         staffUsers = [],
-        orders = []
+        orders = [],
+        suppliers = [],
+        purchases = []
       } = req.body;
 
       const pool = getMySqlPool();
@@ -2486,7 +2883,9 @@ async function startServer() {
         stores: 0,
         customers: 0,
         staffUsers: 0,
-        orders: 0
+        orders: 0,
+        suppliers: 0,
+        purchases: 0
       };
 
       // Pastikan skema tabel sudah siap dan kolom variants serta LONGTEXT tersedia
@@ -2665,9 +3064,92 @@ async function startServer() {
         } catch (_) {}
       }
 
+      // 8. Simpan Suppliers
+      for (const s of suppliers) {
+        try {
+          const sId = s.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          await pool.query(
+            `INSERT INTO suppliers (
+              id, tenant_slug, code, name, contact_person, phone, email, address,
+              city, category, bank_account, payment_terms, is_active, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              name = VALUES(name),
+              phone = VALUES(phone),
+              address = VALUES(address)`,
+            [
+              sId,
+              tenantSlug,
+              s.code || '',
+              s.name,
+              s.contactPerson || '',
+              s.phone || '',
+              s.email || '',
+              s.address || '',
+              s.city || '',
+              s.category || 'Umum',
+              JSON.stringify(s.bankAccount || null),
+              s.paymentTerms || 'tempo_14',
+              s.isActive !== false ? 1 : 0,
+              s.notes || '',
+            ]
+          );
+          counts.suppliers++;
+        } catch (_) {}
+      }
+
+      // 9. Simpan Purchases (Pesanan Pembelian)
+      for (const po of purchases) {
+        try {
+          const cleanOrderDate = po.orderDate ? po.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+          const cleanRecvDate = po.receivedDate ? po.receivedDate.slice(0, 10) : null;
+          const cleanDueDate = po.dueDate ? po.dueDate.slice(0, 10) : null;
+
+          await pool.query(
+            `INSERT INTO purchase_orders (
+              id, tenant_slug, purchase_number, invoice_number, supplier_id, supplier_name,
+              store_id, store_name, order_date, received_date, total_quantity, subtotal,
+              tax_amount, discount_amount, total_amount, status, payment_status, payment_method,
+              due_date, notes, stock_updated, received_by, items
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              invoice_number = VALUES(invoice_number),
+              supplier_name = VALUES(supplier_name),
+              total_amount = VALUES(total_amount),
+              payment_status = VALUES(payment_status)`,
+            [
+              po.id,
+              tenantSlug,
+              po.purchaseNumber || po.id,
+              po.invoiceNumber || null,
+              po.supplierId || 'sup_general',
+              po.supplierName || 'Supplier Umum',
+              po.storeId || 'store_1',
+              po.storeName || 'Toko Utama',
+              cleanOrderDate,
+              cleanRecvDate,
+              po.totalQuantity || 0,
+              po.subtotal || 0,
+              po.taxAmount || 0,
+              po.discountAmount || 0,
+              po.totalAmount || 0,
+              po.status || 'received',
+              po.paymentStatus || 'unpaid',
+              po.paymentMethod || 'tempo',
+              cleanDueDate,
+              po.notes || null,
+              po.stockUpdated !== false ? 1 : 0,
+              po.receivedBy || 'Petugas Gudang',
+              JSON.stringify(po.items || []),
+            ]
+          );
+          counts.purchases++;
+        } catch (_) {}
+      }
+
       res.json({
         success: true,
-        message: `Migrasi selesai! ${counts.products} produk, ${counts.categories} kategori, ${counts.brands} merek berhasil disimpan ke MySQL.`,
+        message: `Migrasi selesai! ${counts.products} produk, ${counts.categories} kategori, ${counts.purchases} faktur pembelian berhasil disimpan ke MySQL.`,
         counts,
       });
     } catch (err: any) {
