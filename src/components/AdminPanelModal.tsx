@@ -714,35 +714,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [isOpen, currentSlug]);
 
-  // Login Authentication State - Otomatis aktifkan akun Admin agar seluruh 26 modul dapat diakses langsung
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('toko_online_admin_user') || localStorage.getItem('kuickmart_admin_user');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return DEFAULT_ACCOUNTS[0];
-  });
+  // Login Authentication State - Wajib login setiap kali membuka panel admin demi keamanan
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Sinkronkan tab dan sesi saat modal dibuka
+  // Wajibkan login setiap kali modal admin dibuka
   useEffect(() => {
     if (isOpen) {
-      if (!currentUser) {
-        try {
-          const saved = localStorage.getItem('toko_online_admin_user') || localStorage.getItem('kuickmart_admin_user');
-          if (saved) {
-            setCurrentUser(JSON.parse(saved));
-          } else {
-            setCurrentUser(DEFAULT_ACCOUNTS[0]);
-          }
-        } catch {
-          setCurrentUser(DEFAULT_ACCOUNTS[0]);
-        }
-      }
+      // Selalu munculkan form login saat membuka panel admin
+      setCurrentUser(null);
+      setInputUsername('');
+      setInputPin('');
+      setLoginError(null);
+
       if (initialTab) {
         setActiveTab(initialTab);
         // Otomatis kelompokkan tab sesuai tab awal yang dipanggil
@@ -761,10 +749,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         else if (systemTabs.includes(initialTab)) setSelectedGroup('system');
         else setSelectedGroup('all');
       }
+    } else {
+      setCurrentUser(null);
+      setInputUsername('');
+      setInputPin('');
+      setLoginError(null);
     }
   }, [isOpen, initialTab]);
 
   const handleClose = () => {
+    setCurrentUser(null);
+    setInputUsername('');
+    setInputPin('');
+    setLoginError(null);
     onClose();
   };
 
@@ -2319,7 +2316,12 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           </button>
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => {
+              setCurrentUser(null);
+              setInputUsername('');
+              setInputPin('');
+              setLoginError(null);
+            }}
             className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
             Ganti Akun Lain
