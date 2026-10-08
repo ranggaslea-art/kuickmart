@@ -3,6 +3,7 @@ import { Product, Order, Store, Category, PurchaseOrder, Supplier } from '../typ
 import { INITIAL_PURCHASES, INITIAL_SUPPLIERS } from '../data/mockSupplyAndLoyalty';
 import { PurchaseReportView } from './PurchaseReportView';
 import { TradingCashflowView } from './TradingCashflowView';
+import { FinancialReportPrintModal, FinancialReportType } from './FinancialReportPrintModal';
 import {
   BarChart3,
   Package,
@@ -582,8 +583,26 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
     exportCsv(`Laporan_Laba_Rugi_toko-online.online_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, rows);
   };
 
-  const handlePrint = () => {
-    window.print();
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printModalReportType, setPrintModalReportType] = useState<FinancialReportType>('sales');
+
+  const handlePrint = (typeOverride?: FinancialReportType) => {
+    let t: FinancialReportType = 'sales';
+    if (typeOverride) {
+      t = typeOverride;
+    } else if (activeReportTab === 'penjualan_periode') {
+      t = 'sales';
+    } else if (activeReportTab === 'pembelian_periode') {
+      t = 'purchases';
+    } else if (activeReportTab === 'arus_dagang') {
+      t = 'trade_flow';
+    } else if (activeReportTab === 'info_barang') {
+      t = 'inventory';
+    } else if (activeReportTab === 'rugi_laba') {
+      t = 'profit_loss';
+    }
+    setPrintModalReportType(t);
+    setIsPrintModalOpen(true);
   };
 
   return (
@@ -608,12 +627,12 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={handlePrint}
-              className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-300 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              title="Cetak Laporan ke Printer atau PDF"
+              onClick={() => handlePrint()}
+              className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white flex items-center gap-2 transition-all cursor-pointer shadow-xs border border-emerald-500/50"
+              title="Buka Pratinjau & Cetak Laporan Resmi A4 ke Printer / PDF"
             >
-              <Printer className="w-4 h-4 text-stone-600" />
-              <span>Cetak / PDF</span>
+              <Printer className="w-4 h-4 text-emerald-100" />
+              <span>Cetak Laporan (A4 Resmi)</span>
             </button>
 
             {activeReportTab === 'info_barang' && (
@@ -941,12 +960,23 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
 
           {/* TABEL MASTER INFO BARANG */}
           <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs overflow-hidden">
-            <div className="px-5 py-3.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+            <div className="px-5 py-3.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between flex-wrap gap-2">
               <div className="text-xs font-bold text-stone-700">
                 Menampilkan <span className="text-emerald-700 font-black">{filteredProducts.length}</span> dari total {products.length} SKU Barang
               </div>
-              <div className="text-2xs text-stone-400">
-                *Klik tombol edit pada HPP untuk menyesuaikan harga modal supplier
+              <div className="flex items-center gap-3">
+                <span className="text-2xs text-stone-400 hidden sm:inline">
+                  *Klik tombol edit pada HPP untuk menyesuaikan harga modal supplier
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handlePrint('inventory')}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  title="Cetak Laporan Master Barang & Nilai Aset Stok Resmi A4"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Aset Stok (A4)</span>
+                </button>
               </div>
             </div>
 
@@ -1187,12 +1217,21 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
             )}
 
             {/* ACTIVE PERIOD LABEL */}
-            <div className="flex items-center justify-between pt-2 border-t border-stone-100 text-xs text-stone-500">
+            <div className="flex items-center justify-between pt-2 border-t border-stone-100 text-xs text-stone-500 flex-wrap gap-2">
               <div>
                 Rentang Aktif: <strong className="text-stone-900">{activeDateRange.start.toLocaleDateString('id-ID', { dateStyle: 'medium' })}</strong> s/d <strong className="text-stone-900">{activeDateRange.end.toLocaleDateString('id-ID', { dateStyle: 'medium' })}</strong>
               </div>
-              <div>
-                Total Transaksi Terfilter: <strong className="text-blue-700">{filteredOrders.length} Pesanan</strong>
+              <div className="flex items-center gap-3">
+                <span>Total Terfilter: <strong className="text-blue-700">{filteredOrders.length} Pesanan</strong></span>
+                <button
+                  type="button"
+                  onClick={() => handlePrint('sales')}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  title="Cetak Laporan Penjualan Resmi A4"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Penjualan (A4)</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1617,6 +1656,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
           purchases={purchases}
           products={products}
           activeDateRange={activeDateRange}
+          onPrint={() => handlePrint('trade_flow')}
         />
       )}
 
@@ -1663,16 +1703,28 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
           {/* INCOME STATEMENT DOCUMENT (STANDAR LAPORAN KEUANGAN) */}
           <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs p-6 sm:p-8 space-y-6">
             {/* Header Document */}
-            <div className="text-center border-b border-stone-200 pb-5">
-              <div className="text-xs font-black tracking-widest uppercase text-stone-500">
-                TOKO-ONLINE.ONLINE PANGANDARAN - LAPORAN KEUANGAN
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-200 pb-5 gap-3">
+              <div className="w-28 hidden sm:block" />
+              <div className="text-center flex-1">
+                <div className="text-xs font-black tracking-widest uppercase text-stone-500">
+                  TOKO-ONLINE.ONLINE PANGANDARAN - LAPORAN KEUANGAN
+                </div>
+                <h3 className="text-2xl font-black text-stone-900 mt-1">
+                  Laporan Laba Rugi Komprehensif
+                </h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  Periode: {activeDateRange.start.toLocaleDateString('id-ID', { dateStyle: 'long' })} s/d {activeDateRange.end.toLocaleDateString('id-ID', { dateStyle: 'long' })}
+                </p>
               </div>
-              <h3 className="text-2xl font-black text-stone-900 mt-1">
-                Laporan Laba Rugi Komprehensif
-              </h3>
-              <p className="text-xs text-stone-500 mt-1">
-                Periode: {activeDateRange.start.toLocaleDateString('id-ID', { dateStyle: 'long' })} s/d {activeDateRange.end.toLocaleDateString('id-ID', { dateStyle: 'long' })}
-              </p>
+              <button
+                type="button"
+                onClick={() => handlePrint('profit_loss')}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer shrink-0 self-center sm:self-auto"
+                title="Cetak Laporan Laba Rugi Resmi A4 ke Printer / PDF"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Cetak Laba Rugi (A4)</span>
+              </button>
             </div>
 
             {/* STATEMENT CONTENT */}
@@ -2039,6 +2091,24 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* MODAL 4: CETAK LAPORAN TERISOLASI A4 (BEBAS KACAU / OVERLAY) */}
+      {/* ========================================================= */}
+      <FinancialReportPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        initialReportType={printModalReportType}
+        products={products}
+        orders={orders}
+        stores={stores}
+        purchases={purchases || propPurchases || INITIAL_PURCHASES}
+        suppliers={suppliers || propSuppliers || INITIAL_SUPPLIERS}
+        categories={categories}
+        operationalExpenses={operationalExpenses}
+        activeDateRange={activeDateRange}
+        currentStore={stores[0]}
+      />
     </div>
   );
 };

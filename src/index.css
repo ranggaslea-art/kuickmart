@@ -65,6 +65,29 @@ body {
     display: none !important;
   }
 
+  /* Hapus backdrop hitam modal, fixed position, dan scroll cut-off saat cetak */
+  .fixed,
+  [class*="fixed inset-0"],
+  .backdrop-blur-xs,
+  .backdrop-blur-sm {
+    position: static !important;
+    background: transparent !important;
+    background-color: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  [class*="h-\["], [class*="max-h-\["], [class*="overflow-hidden"], [class*="overflow-y-auto"] {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
   /* Pastikan modal cetak tampil penuh dan bersih */
   .print-area-wrapper,
   .print-document,
@@ -76,6 +99,31 @@ body {
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Khusus Jika Modal Laporan Keuangan Terbuka: Sembunyikan Semua Elemen Aplikasi & Toolbar di Luar Dokumen */
+  body.financial-report-open #root > div > *:not([class*="z-[9999]"]),
+  body.financial-report-open [class*="bg-stone-900"],
+  body.financial-report-open [class*="border-b border-stone-800"],
+  body.financial-report-open [class*="border-b border-stone-200"],
+  body.financial-report-open .no-print,
+  body.financial-report-open header,
+  body.financial-report-open footer,
+  body.financial-report-open nav,
+  body.financial-report-open aside {
+    display: none !important;
+  }
+
+  body.financial-report-open #printable-financial-report-content {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
     background: #ffffff !important;
   }
 

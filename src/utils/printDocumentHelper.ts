@@ -320,23 +320,26 @@ export function generateSinglePurchaseInvoiceHtml(
 export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOptions = {}): Promise<boolean> {
   return new Promise((resolve) => {
     try {
-      const { title = 'Surat Pesanan Pembelian (PO)', landscape = false } = options;
+      const { title = 'Dokumen Laporan & Keuangan', landscape = false } = options;
 
       // Cari atau buat hidden iframe khusus print
       let iframe = document.getElementById('isolated-print-iframe') as HTMLIFrameElement;
       if (!iframe) {
         iframe = document.createElement('iframe');
         iframe.id = 'isolated-print-iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        iframe.style.visibility = 'hidden';
-        iframe.style.zIndex = '-9999';
         document.body.appendChild(iframe);
       }
+
+      // Pastikan iframe memiliki dimensi nyata untuk kalkulasi layout printer
+      iframe.style.position = 'fixed';
+      iframe.style.left = '0';
+      iframe.style.top = '0';
+      iframe.style.width = landscape ? '297mm' : '210mm';
+      iframe.style.height = landscape ? '210mm' : '297mm';
+      iframe.style.border = '0';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
+      iframe.style.zIndex = '-9999';
 
       const doc = iframe.contentWindow?.document || iframe.contentDocument;
       if (!doc) {
@@ -355,157 +358,375 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
   <style>
     @page {
       size: ${landscape ? 'A4 landscape' : 'A4 portrait'};
-      margin: 12mm 10mm 15mm 10mm;
+      margin: ${landscape ? '10mm 12mm 12mm 12mm' : '12mm 10mm 14mm 10mm'};
     }
     * {
-      box-sizing: border-box;
+      box-sizing: border-box !important;
       margin: 0;
       padding: 0;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #111827;
-      background-color: #ffffff;
-      padding: 0;
-      font-size: 12px;
-      line-height: 1.35;
-      width: 100%;
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+      color: #111827 !important;
+      background-color: #ffffff !important;
+      font-size: 11px !important;
+      line-height: 1.35 !important;
+      width: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
     }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    .text-left { text-align: left; }
-    .font-bold { font-weight: bold; }
-    .font-black { font-weight: 900; }
-    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-    .uppercase { text-transform: uppercase; }
-    .capitalize { text-transform: capitalize; }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      page-break-inside: auto;
-      margin-top: 8px;
-      margin-bottom: 8px;
+
+    /* KOP SURAT RESMI BISNIS */
+    .kop-header, .report-kop-header {
+      border-bottom: 2.5px solid #111827 !important;
+      padding-bottom: 10px !important;
+      margin-bottom: 12px !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+      width: 100% !important;
     }
-    tr {
-      page-break-inside: avoid;
-      page-break-after: auto;
+    .kop-title, .report-kop-title {
+      font-size: 18px !important;
+      font-weight: 900 !important;
+      letter-spacing: -0.3px !important;
+      color: #065f46 !important;
+      text-transform: uppercase !important;
+      line-height: 1.15 !important;
+    }
+    .kop-meta, .report-kop-meta {
+      font-size: 10.5px !important;
+      color: #4b5563 !important;
+      margin-top: 3px !important;
+      line-height: 1.3 !important;
+    }
+    .doc-badge, .report-badge {
+      display: inline-block !important;
+      font-size: 9.5px !important;
+      font-weight: 900 !important;
+      background-color: #111827 !important;
+      color: #ffffff !important;
+      padding: 2.5px 8px !important;
+      border-radius: 4px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.8px !important;
+      margin-bottom: 4px !important;
+    }
+
+    /* JUDUL DOKUMEN */
+    .report-title-section {
+      text-align: center !important;
+      margin: 8px 0 12px 0 !important;
+    }
+    .report-main-title {
+      font-size: 14px !important;
+      font-weight: 900 !important;
+      text-transform: uppercase !important;
+      color: #111827 !important;
+      letter-spacing: 0.5px !important;
+    }
+    .report-subtitle {
+      font-size: 10px !important;
+      color: #6b7280 !important;
+      margin-top: 2px !important;
+    }
+
+    /* RINGKASAN METRIK / KPI BOX */
+    .report-kpi-grid, [class*="grid-cols-4"], [class*="sm:grid-cols-4"] {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 8px !important;
+      margin: 8px 0 12px 0 !important;
+      width: 100% !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .report-kpi-grid-3, [class*="grid-cols-3"] {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 10px !important;
+      margin: 8px 0 12px 0 !important;
+      width: 100% !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .report-kpi-card {
+      background-color: #f9fafb !important;
+      border: 1px solid #d1d5db !important;
+      border-radius: 6px !important;
+      padding: 6px 8px !important;
+    }
+    .report-kpi-label {
+      font-size: 8.5px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      color: #6b7280 !important;
+      letter-spacing: 0.3px !important;
+    }
+    .report-kpi-value {
+      font-size: 12.5px !important;
+      font-weight: 900 !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      margin-top: 2px !important;
+      color: #111827 !important;
+    }
+    .report-kpi-sub {
+      font-size: 8.5px !important;
+      color: #9ca3af !important;
+      margin-top: 1px !important;
+    }
+
+    /* TABEL DATA FORMAL RESMI */
+    table, .report-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 6px 0 !important;
+      page-break-inside: auto !important;
     }
     thead {
-      display: table-header-group;
+      display: table-header-group !important;
     }
     tfoot {
-      display: table-footer-group;
+      display: table-footer-group !important;
     }
-    th, td {
-      border: 1px solid #d1d5db;
-      padding: 5px 7px;
-      font-size: 11px;
+    tr {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     th {
       background-color: #f3f4f6 !important;
-      font-weight: bold;
-      color: #1f2937;
+      color: #111827 !important;
+      font-weight: 700 !important;
+      border: 1px solid #9ca3af !important;
+      padding: 5px 6px !important;
+      font-size: 9.5px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.3px !important;
+      line-height: 1.2 !important;
+      vertical-align: middle !important;
     }
-    .kop-header {
-      border-bottom: 2px solid #111827;
-      padding-bottom: 12px;
-      margin-bottom: 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+    td {
+      border: 1px solid #d1d5db !important;
+      padding: 4px 6px !important;
+      font-size: 9.5px !important;
+      vertical-align: middle !important;
+      line-height: 1.25 !important;
+      word-break: break-word !important;
     }
-    .kop-title {
-      font-size: 20px;
-      font-weight: 900;
-      letter-spacing: -0.5px;
-      color: #065f46;
-      text-transform: uppercase;
+    tbody tr:nth-child(even) {
+      background-color: #fafaf9 !important;
     }
-    .doc-badge {
-      font-size: 10px;
-      font-weight: 900;
-      background-color: #065f46;
-      color: #ffffff;
-      padding: 3px 8px;
-      border-radius: 4px;
-      display: inline-block;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+    tfoot tr {
+      background-color: #f3f4f6 !important;
+      font-weight: 700 !important;
+      border-top: 2px solid #111827 !important;
     }
-    .signatures-block {
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid #e5e7eb;
-      page-break-inside: avoid;
-      display: table !important;
+    tfoot td {
+      font-weight: 700 !important;
+      border: 1px solid #9ca3af !important;
+      padding: 6px 6px !important;
+    }
+
+    /* FORMAT LAPORAN LABA RUGI (FINANCIAL STATEMENT) */
+    .pl-table {
       width: 100% !important;
-      table-layout: fixed !important;
+      max-width: 680px !important;
+      margin: 0 auto !important;
+      border-collapse: collapse !important;
+      border: 1px solid #9ca3af !important;
     }
-    .signature-box {
-      display: table-cell !important;
-      width: 33.333% !important;
-      vertical-align: top !important;
+    .pl-indent-1 {
+      padding-left: 20px !important;
+    }
+    .pl-indent-2 {
+      padding-left: 32px !important;
+    }
+    .pl-header {
+      background-color: #f3f4f6 !important;
+      font-weight: 800 !important;
+      text-transform: uppercase !important;
+      font-size: 10px !important;
+      letter-spacing: 0.3px !important;
+      color: #111827 !important;
+      border-top: 1.5px solid #6b7280 !important;
+    }
+    .pl-subtotal {
+      background-color: #ecfdf5 !important;
+      font-weight: 700 !important;
+      color: #064e3b !important;
+      border-top: 1px solid #9ca3af !important;
+    }
+    .pl-gross-profit {
+      background-color: #eff6ff !important;
+      font-weight: 800 !important;
+      color: #1e40af !important;
+      border-top: 1.5px solid #3b82f6 !important;
+    }
+    .pl-netprofit {
+      background-color: #f0fdf4 !important;
+      border-top: 2px solid #16a34a !important;
+      border-bottom: 3px double #16a34a !important;
+      font-weight: 900 !important;
+      font-size: 11.5px !important;
+      color: #052e16 !important;
+    }
+    .pl-netloss {
+      background-color: #fff1f2 !important;
+      border-top: 2px solid #e11d48 !important;
+      border-bottom: 3px double #e11d48 !important;
+      font-weight: 900 !important;
+      font-size: 11.5px !important;
+      color: #4c0519 !important;
+    }
+
+    /* FORMAT KOMPARASI ARUS DAGANG (CASH FLOW) */
+    .report-cashflow-grid, [class*="md:grid-cols-2"] {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px !important;
+      margin-top: 8px !important;
+      width: 100% !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    /* BLOK TANDA TANGAN 3 PIHAK */
+    .report-signatures, .signatures-block {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 16px !important;
       text-align: center !important;
-      padding: 6px 10px !important;
-    }
-    .signature-line {
-      width: 140px;
-      height: 1px;
-      background-color: #111827;
-      margin: 45px auto 4px auto;
-    }
-
-    /* Fallback grid emulation for print without Tailwind CSS */
-    .grid-cols-3, [class*="grid-cols-3"] {
-      display: table !important;
+      margin-top: 22px !important;
+      padding-top: 14px !important;
+      border-top: 1px solid #d1d5db !important;
       width: 100% !important;
-      table-layout: fixed !important;
-      margin-top: 20px !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
-    .grid-cols-3 > div, .grid-cols-3 > td, [class*="grid-cols-3"] > div {
-      display: table-cell !important;
-      width: 33.333% !important;
-      vertical-align: top !important;
+    .signature-box, .sig-box {
       text-align: center !important;
-      padding: 8px 12px !important;
+      padding: 4px 6px !important;
+    }
+    .sig-role {
+      font-size: 9.5px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      color: #6b7280 !important;
+    }
+    .sig-title {
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      color: #111827 !important;
+      margin-top: 2px !important;
+    }
+    .signature-line, .sig-line {
+      width: 130px !important;
+      height: 1px !important;
+      border-bottom: 1.5px solid #111827 !important;
+      margin: 45px auto 4px auto !important;
+    }
+    .sig-name {
+      font-size: 9.5px !important;
+      color: #4b5563 !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    }
+    .sig-note {
+      text-align: center !important;
+      font-size: 8.5px !important;
+      color: #9ca3af !important;
+      font-style: italic !important;
+      margin-top: 12px !important;
+      width: 100% !important;
     }
 
-    .grid-cols-2, [class*="grid-cols-2"] {
-      display: table !important;
-      width: 100% !important;
-      table-layout: fixed !important;
-    }
-    .grid-cols-2 > div, [class*="grid-cols-2"] > div {
-      display: table-cell !important;
-      width: 50% !important;
-      vertical-align: top !important;
-      padding: 6px !important;
-    }
+    /* UTILITY CLASSES FALLBACK */
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .font-bold { font-weight: 700 !important; }
+    .font-semibold { font-weight: 600 !important; }
+    .font-medium { font-weight: 500 !important; }
+    .font-black { font-weight: 900 !important; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; }
+    .uppercase { text-transform: uppercase !important; }
+    .capitalize { text-transform: capitalize !important; }
+    .italic { font-style: italic !important; }
+    .w-full { width: 100% !important; }
+    .mx-auto { margin-left: auto !important; margin-right: auto !important; }
+    .flex { display: flex !important; }
+    .items-center { align-items: center !important; }
+    .items-start { align-items: flex-start !important; }
+    .justify-between { justify-content: space-between !important; }
+    .justify-end { justify-content: flex-end !important; }
+    .shrink-0 { flex-shrink: 0 !important; }
+    .gap-1 { gap: 4px !important; }
+    .gap-2 { gap: 8px !important; }
+    .gap-3 { gap: 12px !important; }
+    .gap-4 { gap: 16px !important; }
+    .space-y-4 > * + * { margin-top: 12px !important; }
+    .space-y-3 > * + * { margin-top: 8px !important; }
+    .space-y-2 > * + * { margin-top: 6px !important; }
+    .p-1 { padding: 4px !important; }
+    .p-1\\.5, .p-1\.5 { padding: 6px !important; }
+    .p-2 { padding: 8px !important; }
+    .p-2\\.5, .p-2\.5 { padding: 10px !important; }
+    .p-3 { padding: 12px !important; }
+    .p-3\\.5, .p-3\.5 { padding: 14px !important; }
+    .p-4 { padding: 16px !important; }
+    .pl-4 { padding-left: 16px !important; }
+    .pl-6 { padding-left: 24px !important; }
+    .my-2 { margin-top: 6px !important; margin-bottom: 6px !important; }
+    .my-3 { margin-top: 10px !important; margin-bottom: 10px !important; }
+    .my-3\\.5, .my-3\.5 { margin-top: 12px !important; margin-bottom: 12px !important; }
+    .border { border: 1px solid #d1d5db !important; }
+    .border-b { border-bottom: 1px solid #d1d5db !important; }
+    .border-b-2 { border-bottom: 2px solid #111827 !important; }
+    .border-t { border-top: 1px solid #d1d5db !important; }
+    .border-t-2 { border-top: 2px solid #111827 !important; }
+    .border-t-4 { border-top: 4px solid #111827 !important; }
+    .border-double { border-style: double !important; }
+    .rounded-lg { border-radius: 6px !important; }
+    .rounded-xl { border-radius: 8px !important; }
+    .rounded { border-radius: 4px !important; }
 
-    .grid-cols-4, [class*="grid-cols-4"] {
-      display: table !important;
-      width: 100% !important;
-      table-layout: fixed !important;
-    }
-    .grid-cols-4 > div, [class*="grid-cols-4"] > div {
-      display: table-cell !important;
-      width: 25% !important;
-      vertical-align: top !important;
-      padding: 4px !important;
-    }
+    /* WARNA TEKS */
+    .text-emerald-700 { color: #047857 !important; }
+    .text-emerald-800 { color: #065f46 !important; }
+    .text-emerald-900 { color: #064e3b !important; }
+    .text-emerald-950 { color: #022c22 !important; }
+    .text-blue-600 { color: #2563eb !important; }
+    .text-blue-700 { color: #1d4ed8 !important; }
+    .text-blue-800 { color: #1e40af !important; }
+    .text-rose-600 { color: #e11d48 !important; }
+    .text-rose-700 { color: #be123c !important; }
+    .text-rose-800 { color: #9f1239 !important; }
+    .text-amber-700 { color: #b45309 !important; }
+    .text-stone-400 { color: #a8a29e !important; }
+    .text-stone-500 { color: #78716c !important; }
+    .text-stone-600 { color: #57534e !important; }
+    .text-stone-700 { color: #44403c !important; }
+    .text-stone-800 { color: #292524 !important; }
+    .text-stone-900 { color: #1c1917 !important; }
+    .text-white { color: #ffffff !important; }
+
+    /* BACKGROUND TEKS / BARIS */
+    .bg-white { background-color: #ffffff !important; }
+    .bg-stone-50 { background-color: #fafaf9 !important; }
+    .bg-stone-100 { background-color: #f5f5f4 !important; }
+    .bg-emerald-50 { background-color: #ecfdf5 !important; }
+    .bg-emerald-100 { background-color: #d1fae5 !important; }
+    .bg-blue-50 { background-color: #eff6ff !important; }
+    .bg-rose-50 { background-color: #fff1f2 !important; }
+    .bg-rose-100 { background-color: #ffe4e6 !important; }
+    .bg-amber-50 { background-color: #fffbeb !important; }
 
     .break-inside-avoid, [class*="break-inside-avoid"] {
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
-    .w-32 { width: 130px !important; }
-    .w-full { width: 100% !important; }
-    .mx-auto { margin-left: auto !important; margin-right: auto !important; }
-    .border-b { border-bottom: 1.5px solid #111827 !important; }
-    .h-14 { height: 50px !important; }
   </style>
 </head>
 <body>

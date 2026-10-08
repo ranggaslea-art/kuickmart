@@ -11,6 +11,7 @@ import {
   Calendar,
   CheckCircle2,
   AlertTriangle,
+  Printer,
 } from 'lucide-react';
 
 interface TradingCashflowViewProps {
@@ -18,12 +19,14 @@ interface TradingCashflowViewProps {
   purchases: PurchaseOrder[];
   products: Product[];
   activeDateRange: { start: Date; end: Date };
+  onPrint?: () => void;
 }
 
 export const TradingCashflowView: React.FC<TradingCashflowViewProps> = ({
   orders,
   purchases,
   activeDateRange,
+  onPrint,
 }) => {
   // Filtered Orders
   const filteredOrders = useMemo(() => {
@@ -221,13 +224,26 @@ export const TradingCashflowView: React.FC<TradingCashflowViewProps> = ({
               Periode: {activeDateRange.start.toLocaleDateString('id-ID')} s/d {activeDateRange.end.toLocaleDateString('id-ID')}
             </p>
           </div>
-          <button
-            onClick={handleExportCsv}
-            className="px-3 py-1.5 rounded-xl bg-stone-800 text-white hover:bg-stone-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Ekspor Komparasi</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {onPrint && (
+              <button
+                type="button"
+                onClick={onPrint}
+                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                title="Cetak Laporan Arus Dagang & Kas Resmi A4 ke Printer / PDF"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Cetak Arus Kas (A4)</span>
+              </button>
+            )}
+            <button
+              onClick={handleExportCsv}
+              className="px-3 py-1.5 rounded-xl bg-stone-800 text-white hover:bg-stone-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Ekspor Komparasi</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
