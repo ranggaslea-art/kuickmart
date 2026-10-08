@@ -2362,7 +2362,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       >
         
         {/* Top Header - Selalu Menempel di Atas (Shrink-0) */}
-        <div className="shrink-0 p-3 sm:p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between gap-3 z-30">
+        <div className="shrink-0 p-3 sm:p-4 sm:px-6 border-b border-stone-100 bg-gradient-to-r from-stone-900 via-stone-800 to-blue-950 text-white flex items-center justify-between gap-3 z-30 no-print">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div 
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-black shadow-md shrink-0 text-sm sm:text-base text-white overflow-hidden"
@@ -2478,7 +2478,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         </div>
 
         {/* Tab Navigation (Permission-Aware & Grouped by Category) - Ditempatkan tepat di bawah Header, Selalu Terlihat & Tidak Pernah Tertutup Modul */}
-        <div className="shrink-0 sticky top-0 z-30 bg-white border-b border-stone-200 shadow-2xs">
+        <div className="shrink-0 sticky top-0 z-30 bg-white border-b border-stone-200 shadow-2xs no-print">
           {/* BARIS 1: KELOMPOK INDUK / KATEGORI MODUL */}
           <div className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 border-b border-stone-100 bg-stone-50/80 overflow-x-auto scrollbar-none">
             <span className="text-[10px] font-extrabold text-stone-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
@@ -2651,7 +2651,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
         {/* Quick KPI Stats Summary (Collapsible & Compact) */}
         {showKpiSummary && (
-          <div className="shrink-0 bg-stone-50 border-b border-stone-200 p-3 sm:px-6 text-xs transition-all animate-in fade-in duration-200">
+          <div className="shrink-0 bg-stone-50 border-b border-stone-200 p-3 sm:px-6 text-xs transition-all animate-in fade-in duration-200 no-print">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider flex items-center gap-1.5">
                 <BarChart3 className="w-3.5 h-3.5 text-stone-500" />
@@ -2733,7 +2733,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
         {/* Mini KPI Bar saat panel metrik diciutkan (Menghemat ruang vertikal layar untuk modul) */}
         {!showKpiSummary && (
-          <div className="shrink-0 bg-stone-50/90 border-b border-stone-200 px-3 sm:px-6 py-1.5 flex items-center justify-between text-[11px] text-stone-500">
+          <div className="shrink-0 bg-stone-50/90 border-b border-stone-200 px-3 sm:px-6 py-1.5 flex items-center justify-between text-[11px] text-stone-500 no-print">
             <div className="flex items-center gap-2 sm:gap-4 overflow-hidden truncate">
               <span className="font-semibold text-stone-700">Omzet: <strong className="text-emerald-700">{formatRupiah(totalRevenue)}</strong></span>
               <span className="text-stone-300">•</span>
@@ -5300,7 +5300,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {activeTab === 'reports' && (!currentUserPermissions.reports?.canView ? (
             renderAccessDenied('Laporan & Analisis Finansial')
           ) : (
-            <div className="space-y-4">
+            <div className="print-area-wrapper space-y-4">
               {!currentUserPermissions.reports?.canEdit && renderReadOnlyBanner('Laporan & Analisis Finansial')}
               <ReportsManager
                 products={products}
@@ -5510,7 +5510,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-stone-100 bg-stone-50 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+        <div className="p-4 border-t border-stone-100 bg-stone-50 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 no-print">
           <div className="text-stone-500 flex items-center gap-1.5 flex-wrap">
             <Settings className="w-3.5 h-3.5 text-stone-400" />
             <span>{activeTenantIdentity.storeName} POS & Inventory Management v2.5</span>

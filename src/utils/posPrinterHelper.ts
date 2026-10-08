@@ -1,6 +1,6 @@
 import { Order, ReceiptInfo } from '../types';
 import { formatRupiah } from './formatters';
-import { cleanReceiptText } from './sanitizeReceipt';
+import { cleanReceiptText, formatReceiptAddress } from './sanitizeReceipt';
 import { 
   generateCrispDotMatrixReceiptHtml, 
   generateEscPosBinaryBuffer, 
@@ -71,17 +71,21 @@ export function generateRawPosReceiptText(
   const lines: string[] = [];
 
   // 1. Header Brand & Toko
-  const brand = (config.headerBrand || 'NUSA MART EXPRESS').toUpperCase();
-  lines.push(centerText(brand, cols));
+  const brand = (config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || '').trim().toUpperCase();
+  if (brand) {
+    lines.push(centerText(brand, cols));
+  }
 
   if (config.subHeader) {
     lines.push(centerText(config.subHeader.toUpperCase(), cols));
   }
 
-  const storeName = config.storeName || order.pickupStoreName || order.store?.name || 'toko-online.online';
-  lines.push(centerText(storeName, cols));
+  const storeName = (config.storeName || '').trim();
+  if (storeName && (!brand || storeName.toUpperCase() !== brand)) {
+    lines.push(centerText(storeName, cols));
+  }
 
-  const address = cleanReceiptText(config.address || '');
+  const address = formatReceiptAddress(config);
   if (address) {
     // Bungkus jika alamat panjang
     const words = address.split(' ');
@@ -261,8 +265,9 @@ export function generateDotMatrixReceiptHtml(
     return generateCrispDotMatrixReceiptHtml(order, config, cashierName, paymentDetails);
   }
 
-  const brand = config.headerBrand || 'NUSA MART EXPRESS';
-  const store = config.storeName || 'toko-online.online';
+  const brand = (config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || '').trim().toUpperCase();
+  const store = (config.storeName || '').trim();
+  const address = formatReceiptAddress(config);
 
   const fontCss = getReceiptFontFamilyCss(config.fontFamily);
   const weightCss = getReceiptFontWeightCss(config.fontBoldness);
@@ -423,10 +428,10 @@ export function generateDotMatrixReceiptHtml(
 <body>
   <div class="receipt-container">
     <div class="text-center">
-      <div class="header-brand">${brand}</div>
+      ${brand ? `<div class="header-brand">${brand}</div>` : ''}
       ${config.subHeader ? `<div class="header-sub">${config.subHeader}</div>` : ''}
-      <div style="font-size: 11px; font-weight: 800;">${store}</div>
-      <div style="font-size: 10px; margin-top: 0.5px;">${cleanReceiptText(config.address || '')}</div>
+      ${store && (!brand || store.toUpperCase() !== brand) ? `<div style="font-size: 11px; font-weight: 800;">${store}</div>` : ''}
+      ${address ? `<div style="font-size: 10px; margin-top: 0.5px;">${address}</div>` : ''}
       ${config.phone ? `<div style="font-size: 10px;">TELP: ${config.phone}</div>` : ''}
       ${config.taxIdOrNpwp ? `<div style="font-size: 9.5px;">${config.taxIdOrNpwp}</div>` : ''}
       ${config.headerCustomNote ? `<div style="font-size: 10px; font-weight: 800; margin-top: 1px;">${config.headerCustomNote}</div>` : ''}

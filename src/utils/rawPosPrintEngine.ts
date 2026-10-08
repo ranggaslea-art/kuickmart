@@ -20,7 +20,7 @@
 
 import { Order, ReceiptInfo } from '../types';
 import { formatRupiah } from './formatters';
-import { cleanReceiptText } from './sanitizeReceipt';
+import { cleanReceiptText, formatReceiptAddress } from './sanitizeReceipt';
 
 // ESC/POS Byte Constants
 export const ESC = 0x1b;
@@ -67,30 +67,31 @@ export function generateEscPosBinaryBuffer(
     addBytes(ESC, 0x4d, 0x00); // ESC M 0 (Font A - Standard 40 cols)
   }
 
-  // 3. Header Toko (Center)
+  // 3. Header Toko (Center) - Bersih sesuai input pengguna di modul struk
   addBytes(ESC, 0x61, 0x01); // ESC a 1 (Align Center)
 
-  // Brand Name - Emphasized / Double Width
-  addBytes(ESC, 0x45, 0x01); // ESC E 1 (Emphasized/Bold ON)
-  addBytes(ESC, 0x21, 0x20); // ESC ! 32 (Double width)
-  const defaultBrand = config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || 'NUSA MART EXPRESS';
-  addLine(defaultBrand.toUpperCase());
-
-  addBytes(ESC, 0x21, 0x00); // Normal width
-  addBytes(ESC, 0x45, 0x00); // Bold OFF
+  const brand = (config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || '').trim();
+  if (brand) {
+    // Brand Name - Emphasized / Double Width
+    addBytes(ESC, 0x45, 0x01); // ESC E 1 (Emphasized/Bold ON)
+    addBytes(ESC, 0x21, 0x20); // ESC ! 32 (Double width)
+    addLine(brand.toUpperCase());
+    addBytes(ESC, 0x21, 0x00); // Normal width
+    addBytes(ESC, 0x45, 0x00); // Bold OFF
+  }
 
   if (config.subHeader) {
     addLine(config.subHeader.toUpperCase());
   }
 
-  const storeName = config.storeName || order.pickupStoreName || order.store?.name || 'KUICKMART';
-  if (storeName && storeName !== config.headerBrand) {
+  const storeName = (config.storeName || '').trim();
+  if (storeName && (!brand || storeName.toUpperCase() !== brand.toUpperCase())) {
     addLine(storeName);
   }
 
-  const address = cleanReceiptText(config.address || '');
+  const address = formatReceiptAddress(config);
   if (address) {
-    // Split per 40 karakter agar rapi
+    // Split per jumlah kolom agar rapi
     const words = address.split(' ');
     let line = '';
     for (const w of words) {
@@ -109,6 +110,9 @@ export function generateEscPosBinaryBuffer(
   }
   if (config.taxIdOrNpwp) {
     addLine(config.taxIdOrNpwp);
+  }
+  if (config.headerCustomNote) {
+    addLine(config.headerCustomNote);
   }
 
   // 4. Garis Pemisah
@@ -194,15 +198,23 @@ export function generateEscPosBinaryBuffer(
     addLine(padBetweenEsc(leftSig, rightSig, cols));
   }
 
-  // 8. Footer Pesan
+  // 8. Footer Pesan - Hanya berdasarkan input pengguna di modul struk
   addLine(divider);
   addBytes(ESC, 0x61, 0x01); // Center
-  addLine(config.footerMessage1 || 'TERIMA KASIH SUDAH BERBELANJA');
+  if (config.footerMessage1) {
+    addLine(config.footerMessage1);
+  }
   if (config.footerMessage2) {
     addLine(config.footerMessage2);
   }
   if (config.csHotline) {
-    addLine(config.csHotline);
+    const csText = config.csHotline.startsWith('CS') || config.csHotline.startsWith('Call') || config.csHotline.startsWith('Layanan')
+      ? config.csHotline
+      : `CS: ${config.csHotline}`;
+    addLine(csText);
+  }
+  if (config.websiteOrSocial) {
+    addLine(config.websiteOrSocial);
   }
 
   // 9. Feed Lines
@@ -423,9 +435,11 @@ export function generateCrispDotMatrixReceiptHtml(
   paymentDetails?: { cashReceived?: number; changeAmount?: number }
 ): string {
   const cols = config.charactersPerLine || 40;
-  const brand = (config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || 'NUSA MART EXPRESS').toUpperCase();
-  const address = cleanReceiptText(config.address || '');
-  const phone = config.phone || '';
+  const brand = (config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || '').trim().toUpperCase();
+  const subHeader = (config.subHeader || '').trim();
+  const storeName = (config.storeName || '').trim();
+  const address = formatReceiptAddress(config);
+  const phone = (config.phone || '').trim();
   const dateStr = new Date(order.createdAt).toLocaleDateString('id-ID');
   const timeStr = new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   const cashierDisp = cashierName || config.cashierName || 'Kasir 01';
@@ -583,9 +597,11 @@ export function generateCrispDotMatrixReceiptHtml(
 </head>
 <body>
   <div class="tmu220-receipt">
-    <div class="double-title">${brand}</div>
+    ${brand ? `<div class="double-title">${brand}</div>` : ''}
+    ${subHeader ? `<div class="text-center" style="font-size: 10px; margin: 0 0 1px 0; font-style: italic;">${subHeader}</div>` : ''}
+    ${storeName && (!brand || storeName.toUpperCase() !== brand.toUpperCase()) ? `<div class="text-center bold" style="font-size: ${fontSizes.base}; margin: 0 0 1px 0;">${storeName}</div>` : ''}
     ${address ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">${address}</div>` : ''}
-    ${phone ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">WA: ${phone}${config.csHotline ? ` Fax: ${config.csHotline}` : ''}</div>` : ''}
+    ${phone ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">TELP: ${phone}</div>` : ''}
     ${config.taxIdOrNpwp ? `<div class="text-center" style="font-size: ${fontSizes.footer}; margin: 0; padding: 0;">${config.taxIdOrNpwp}</div>` : ''}
     ${config.headerCustomNote ? `<div class="text-center" style="font-size: ${fontSizes.footer}; font-weight: 900; margin: 0; padding: 0;">${config.headerCustomNote}</div>` : ''}
     <div class="divider">${divider}</div>
@@ -664,9 +680,9 @@ export function generateCrispDotMatrixReceiptHtml(
     ` : ''}
     <div class="divider">${divider}</div>
     <div class="text-center" style="font-size: ${fontSizes.footer}; margin-top: 1px; line-height: 1.15; font-weight: 700;">
-      <div>${config.footerMessage1 || 'Terima kasih atas kunjungan Anda!'}</div>
-      <div class="bold" style="font-size: ${fontSizes.base}; color: #000000; -webkit-text-fill-color: #000000;">${brand}</div>
+      ${config.footerMessage1 ? `<div>${config.footerMessage1}</div>` : ''}
       ${config.footerMessage2 ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.footerMessage2}</div>` : ''}
+      ${config.csHotline ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.csHotline.startsWith('CS') || config.csHotline.startsWith('Call') || config.csHotline.startsWith('Layanan') ? config.csHotline : `CS: ${config.csHotline}`}</div>` : ''}
       ${config.websiteOrSocial ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.websiteOrSocial}</div>` : ''}
     </div>
     ${config.showBarcode !== false ? `<div class="text-center" style="margin-top: 3px; line-height: 1;">
