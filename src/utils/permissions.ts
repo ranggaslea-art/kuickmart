@@ -219,49 +219,49 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<'admin' | 'supervisor' | 'kasir' |
     stock_card: { canView: true, canEdit: true }, // Supervisor bisa akses kartu stok & laporan
   },
   kasir: {
-    // Kasir dapat melihat katalog, promo, pelanggan, dan poin belanja, serta retur penjualan
-    products: { canView: true, canEdit: false }, // Kasir dapat melihat katalog & stok produk
-    promos: { canView: true, canEdit: false }, // Kasir dapat melihat promo aktif
-    customers: { canView: true, canEdit: true }, // Kasir dapat mendaftar/mencari member
-    points_rewards: { canView: true, canEdit: false }, // Kasir dapat melihat info poin
-    returns: { canView: true, canEdit: true }, // Kasir dapat menerima retur barang jual dari pembeli
-    orders: { canView: false, canEdit: false }, // Terkunci
-    stores: { canView: false, canEdit: false }, // Terkunci
-    receipts: { canView: false, canEdit: false }, // Terkunci
-    brand_info: { canView: false, canEdit: false }, // Terkunci
-    couriers: { canView: false, canEdit: false }, // Terkunci
-    vouchers: { canView: false, canEdit: false }, // Terkunci
-    users: { canView: false, canEdit: false }, // Terkunci
-    bulk_import: { canView: false, canEdit: false }, // Terkunci
-    push_notifications: { canView: false, canEdit: false }, // Terkunci
-    reports: { canView: false, canEdit: false }, // Terkunci
-    purchases: { canView: false, canEdit: false }, // Terkunci
-    suppliers: { canView: false, canEdit: false }, // Terkunci
-    stock_opname: { canView: false, canEdit: false }, // Terkunci
-    stock_mutations: { canView: false, canEdit: false }, // Terkunci
-    stock_card: { canView: true, canEdit: false }, // Kasir dapat memeriksa alur kartu stok (hanya lihat)
+    // Kasir dapat mengakses penjualan POS, pesanan, struk, retur, katalog, member, dan melihat seluruh modul operasional
+    products: { canView: true, canEdit: true },
+    orders: { canView: true, canEdit: true },
+    receipts: { canView: true, canEdit: true },
+    reports: { canView: true, canEdit: true },
+    customers: { canView: true, canEdit: true },
+    points_rewards: { canView: true, canEdit: true },
+    returns: { canView: true, canEdit: true },
+    stock_card: { canView: true, canEdit: true },
+    promos: { canView: true, canEdit: false },
+    vouchers: { canView: true, canEdit: false },
+    couriers: { canView: true, canEdit: false },
+    stores: { canView: true, canEdit: false },
+    brand_info: { canView: true, canEdit: false },
+    users: { canView: true, canEdit: false },
+    bulk_import: { canView: true, canEdit: false },
+    push_notifications: { canView: true, canEdit: false },
+    purchases: { canView: true, canEdit: false },
+    suppliers: { canView: true, canEdit: false },
+    stock_opname: { canView: true, canEdit: true },
+    stock_mutations: { canView: true, canEdit: true },
   },
   gudang: {
-    products: { canView: true, canEdit: true }, // Gudang bisa update ketersediaan stok produk
-    orders: { canView: true, canEdit: true }, // Gudang memproses status picking / pengemasan barang
-    purchases: { canView: true, canEdit: true }, // Gudang menerima pembelian barang & input stok masuk
-    suppliers: { canView: true, canEdit: false }, // Gudang melihat data pemasok
-    stock_opname: { canView: true, canEdit: true }, // Gudang berhak penuh opname stok
-    returns: { canView: true, canEdit: true }, // Gudang memproses retur barang
-    stock_mutations: { canView: true, canEdit: true }, // Gudang memproses mutasi antar cabang
-    stock_card: { canView: true, canEdit: true }, // Gudang dapat mengaudit & cetak kartu stok
-    stores: { canView: true, canEdit: false }, // Gudang melihat cabang untuk mutasi
-    receipts: { canView: false, canEdit: false },
-    promos: { canView: false, canEdit: false },
-    brand_info: { canView: false, canEdit: false },
-    couriers: { canView: true, canEdit: false }, // Gudang melihat kurir penjemput
-    vouchers: { canView: false, canEdit: false },
-    users: { canView: false, canEdit: false },
+    products: { canView: true, canEdit: true },
+    orders: { canView: true, canEdit: true },
+    purchases: { canView: true, canEdit: true },
+    suppliers: { canView: true, canEdit: true },
+    stock_opname: { canView: true, canEdit: true },
+    returns: { canView: true, canEdit: true },
+    stock_mutations: { canView: true, canEdit: true },
+    stock_card: { canView: true, canEdit: true },
+    stores: { canView: true, canEdit: true },
+    receipts: { canView: true, canEdit: true },
+    promos: { canView: true, canEdit: false },
+    brand_info: { canView: true, canEdit: false },
+    couriers: { canView: true, canEdit: true },
+    vouchers: { canView: true, canEdit: false },
+    users: { canView: true, canEdit: false },
     bulk_import: { canView: true, canEdit: true },
-    push_notifications: { canView: false, canEdit: false },
-    reports: { canView: false, canEdit: false },
-    customers: { canView: false, canEdit: false },
-    points_rewards: { canView: false, canEdit: false },
+    push_notifications: { canView: true, canEdit: false },
+    reports: { canView: true, canEdit: true },
+    customers: { canView: true, canEdit: false },
+    points_rewards: { canView: true, canEdit: false },
   },
 };
 

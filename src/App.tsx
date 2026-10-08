@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Header 
 } from './components/Header';
@@ -423,6 +423,41 @@ export default function App() {
   });
 
   useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isSupabaseModalOpen) {
+          setIsSupabaseModalOpen(false);
+        } else if (isLiveTrafficModalOpen) {
+          setIsLiveTrafficModalOpen(false);
+        } else if (isStoreSelectorOpen) {
+          setIsStoreSelectorOpen(false);
+        } else if (isMemberModalOpen) {
+          setIsMemberModalOpen(false);
+        } else if (selectedProductDetail) {
+          setSelectedProductDetail(null);
+        } else if (trackedOrder) {
+          setTrackedOrder(null);
+        } else if (isCheckoutOpen) {
+          setIsCheckoutOpen(false);
+        } else if (isCartOpen) {
+          setIsCartOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [
+    isSupabaseModalOpen,
+    isLiveTrafficModalOpen,
+    isStoreSelectorOpen,
+    isMemberModalOpen,
+    selectedProductDetail,
+    trackedOrder,
+    isCheckoutOpen,
+    isCartOpen,
+  ]);
+
+  useEffect(() => {
     try {
       const tenantKey = getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug);
       localStorage.setItem(tenantKey, JSON.stringify(brandConfig));
@@ -676,9 +711,12 @@ export default function App() {
   // Supabase State
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false);
 
   // Load all live catalog & system data from Supabase
   const loadAllFromSupabase = async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     setIsSyncing(true);
     try {
       const [
@@ -876,6 +914,7 @@ export default function App() {
       console.warn('Gagal memuat data dari Supabase:', e);
     } finally {
       setIsSyncing(false);
+      isSyncingRef.current = false;
     }
   };
 
@@ -947,10 +986,12 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 5. Background polling every 5 seconds to keep all devices completely in sync
+    // 5. Lightweight background polling (45s, active tab only) to keep memory & CPU smooth
     const interval = setInterval(() => {
-      loadAllFromSupabase();
-    }, 5000);
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        loadAllFromSupabase();
+      }
+    }, 45000);
 
     return () => {
       unsubscribe();

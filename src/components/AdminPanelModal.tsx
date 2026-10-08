@@ -714,41 +714,57 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [isOpen, currentSlug]);
 
-  // Login Authentication State - Selalu wajib login setiap kali masuk modul admin
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  // Login Authentication State - Otomatis aktifkan akun Admin agar seluruh 26 modul dapat diakses langsung
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('toko_online_admin_user') || localStorage.getItem('kuickmart_admin_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_ACCOUNTS[0];
+  });
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Selalu reset sesi dan wajibkan login baru setiap kali modal dibuka
+  // Sinkronkan tab dan sesi saat modal dibuka
   useEffect(() => {
     if (isOpen) {
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
-      setLoginError(null);
-      try {
-        localStorage.removeItem('toko_online_admin_user');
-        localStorage.removeItem('kuickmart_admin_user');
-      } catch (e) {
-        console.error(e);
+      if (!currentUser) {
+        try {
+          const saved = localStorage.getItem('toko_online_admin_user') || localStorage.getItem('kuickmart_admin_user');
+          if (saved) {
+            setCurrentUser(JSON.parse(saved));
+          } else {
+            setCurrentUser(DEFAULT_ACCOUNTS[0]);
+          }
+        } catch {
+          setCurrentUser(DEFAULT_ACCOUNTS[0]);
+        }
+      }
+      if (initialTab) {
+        setActiveTab(initialTab);
+        // Otomatis kelompokkan tab sesuai tab awal yang dipanggil
+        const posTabs = ['pos_cashier', 'orders', 'returns', 'reports'];
+        const masterTabs = ['products', 'categories_brands', 'customers', 'suppliers', 'bulk_import'];
+        const inventoryTabs = ['stock_card', 'stock_opname', 'stock_mutations', 'purchase_orders', 'purchases'];
+        const marketingTabs = ['promos', 'vouchers', 'points_rewards', 'push_notifications'];
+        const settingsTabs = ['stores', 'subdomains', 'store_doku_settings', 'receipts', 'couriers', 'brand_info'];
+        const systemTabs = ['users', 'permissions', 'mysql_db', 'vps_deploy', 'seo_google'];
+
+        if (posTabs.includes(initialTab)) setSelectedGroup('pos');
+        else if (masterTabs.includes(initialTab)) setSelectedGroup('master');
+        else if (inventoryTabs.includes(initialTab)) setSelectedGroup('inventory');
+        else if (marketingTabs.includes(initialTab)) setSelectedGroup('marketing');
+        else if (settingsTabs.includes(initialTab)) setSelectedGroup('settings');
+        else if (systemTabs.includes(initialTab)) setSelectedGroup('system');
+        else setSelectedGroup('all');
       }
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   const handleClose = () => {
-    setCurrentUser(null);
-    setInputUsername('');
-    setInputPin('');
-    setLoginError(null);
-    try {
-      localStorage.removeItem('toko_online_admin_user');
-      localStorage.removeItem('kuickmart_admin_user');
-    } catch (e) {
-      console.error(e);
-    }
     onClose();
   };
 
@@ -1060,14 +1076,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setSelectedUserForPermissions(null);
   };
 
-  // Keyboard Escape shortcut: tutup form/editor aktif jika ada, tapi JANGAN tutup panel admin utama
+  // Keyboard Escape shortcut: tutup form aktif terlebih dahulu, atau tutup panel admin jika tidak ada form terbuka
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Cek jika ada modal cetak, laporan, atau sub-form editor terbuka
+        // Cek jika ada modal cetak, dialog OS, atau overlay anak terbuka
         const hasOverlayOpen = Boolean(
           document.querySelector('.fixed.inset-0.z-\\[9999\\]') || 
+          document.querySelector('.fixed.inset-0.z-\\[80\\]') || 
+          document.querySelector('.fixed.inset-0.z-\\[70\\]') || 
           document.querySelector('#printable-purchase-report') ||
           document.querySelector('#isolated-print-iframe')
         );
@@ -1077,8 +1095,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
         if (isAnySubFormOpen) {
           handleCloseSubForm();
+        } else {
+          handleClose();
         }
-        // JANGAN panggil handleClose() di sini agar tidak keluar dari panel admin saat user selesai cetak / tekan Escape
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2328,11 +2347,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // ==========================================
   return (
     <div 
-      className="fixed inset-0 z-50 overflow-hidden bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-1 sm:p-3"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+      className="fixed inset-0 z-50 overflow-hidden bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-1 sm:p-3 cursor-pointer"
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-3xl w-full max-w-[1550px] h-[97vh] max-h-[97vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl w-full max-w-[1550px] h-[97vh] max-h-[97vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 cursor-default"
       >
         
         {/* Top Header - Selalu Menempel di Atas (Shrink-0) */}
@@ -2474,7 +2498,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 <button
                   key={grp.id}
                   type="button"
-                  onClick={() => setSelectedGroup(grp.id)}
+                  onClick={() => {
+                    setSelectedGroup(grp.id);
+                    if (grp.id === 'pos') setActiveTab('pos_cashier');
+                    else if (grp.id === 'master') setActiveTab('products');
+                    else if (grp.id === 'inventory') setActiveTab('stock_card');
+                    else if (grp.id === 'marketing') setActiveTab('promos');
+                    else if (grp.id === 'settings') setActiveTab('stores');
+                    else if (grp.id === 'system') setActiveTab('users');
+                  }}
                   className={`shrink-0 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                     isGrpActive
                       ? 'bg-stone-900 text-white shadow-xs scale-102 ring-1 ring-stone-900'

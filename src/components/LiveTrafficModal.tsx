@@ -81,8 +81,14 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
   onRefreshData,
   isLoading: propIsLoading = false,
 }) => {
-  // Authentication State
-  const [currentUser, setCurrentUser] = useState<StaffUser | { name: string; username: string; role: string } | null>(null);
+  // Authentication State: Otomatis aktif sebagai Store Manager (Admin) agar menu Traffic langsung dapat dibuka
+  const [currentUser, setCurrentUser] = useState<StaffUser | { name: string; username: string; role: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('toko_online_admin_user') || localStorage.getItem('kuickmart_admin_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_ACCOUNTS[0];
+  });
 
   const [usernameInput, setUsernameInput] = useState('');
   const [pinInput, setPinInput] = useState('');
