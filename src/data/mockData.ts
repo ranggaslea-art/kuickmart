@@ -293,6 +293,7 @@ export const INITIAL_RECEIPT_CONFIGS: ReceiptInfo[] = [
     showCustomerName: true,
     showCashierName: true,
     showMemberPoints: true,
+    showSignatures: true,
     fontSize: 'normal',
     headerCustomNote: 'STRUK PENJUALAN RESMI POS',
     printExecutionMode: 'escpos_serial',

@@ -638,6 +638,7 @@ export interface ReceiptInfo {
   showCustomerName?: boolean; // Tampilkan nama pelanggan
   showCashierName?: boolean; // Tampilkan nama kasir
   showMemberPoints?: boolean; // Tampilkan poin perolehan member
+  showSignatures?: boolean; // Tampilkan kolom tanda tangan kasir & pelanggan di struk (layout horizontal flexbox/grid)
   fontSize?: 'compact' | 'normal' | 'large';
   fontFamily?: 'courier' | 'roboto_mono' | 'consolas' | 'space_mono' | 'dot_matrix' | 'inconsolata'; // Jenis huruf struk
   fontBoldness?: 'normal' | 'semibold' | 'bold' | 'extra_bold'; // Ketebalan huruf untuk ketajaman print fisik

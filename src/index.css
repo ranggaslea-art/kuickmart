@@ -112,4 +112,15 @@ body {
     line-height: 1.15 !important;
     font-weight: bold !important;
   }
+
+  /* Komponen Penandatanganan Struk Horizontal (Kasir & Pelanggan Sejajar) */
+  .receipt-signatures {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
 }

@@ -196,6 +196,17 @@ export function generateRawPosReceiptText(
     lines.push(centerText(`POIN DIPEROLEH: +${order.pointsEarned} POIN`, cols));
   }
 
+  // Tanda Tangan Kasir & Pelanggan (Sejajar Horizontal 2 Sisi Kiri & Kanan)
+  if (config.showSignatures !== false) {
+    lines.push(thinDivider);
+    lines.push(padBetween('Kasir,', 'Pelanggan,', cols));
+    lines.push('');
+    lines.push('');
+    const leftSig = `( ${(cashierDisplay || 'Kasir').slice(0, 12)} )`;
+    const rightSig = `( ${(order.customerName || 'Pelanggan').slice(0, 12)} )`;
+    lines.push(padBetween(leftSig, rightSig, cols));
+  }
+
   // 8. Footer Pesan & Kebijakan
   lines.push(divider);
   if (config.footerMessage1) {
@@ -512,6 +523,23 @@ export function generateDotMatrixReceiptHtml(
     </div>` : ''}
 
     <div class="divider-double"></div>
+
+    ${config.showSignatures !== false ? `
+    <!-- Komponen Penandatanganan Struk (Flexbox justify-between & Grid 2-kolom horizontal) -->
+    <div class="receipt-signatures" style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin: 6px 0 4px 0; font-size: 10px; text-align: center; box-sizing: border-box;">
+      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
+        <div>Kasir,</div>
+        <div style="height: 26px;"></div>
+        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierName || config.cashierName || 'Kasir 01'} )</div>
+      </div>
+      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
+        <div>Pelanggan,</div>
+        <div style="height: 26px;"></div>
+        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${order.customerName || 'Pelanggan'} )</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    ` : ''}
 
     <div class="text-center" style="font-size: 9.5px; line-height: 1.15; margin-top: 2px;">
       ${config.footerMessage1 ? `<div>${config.footerMessage1}</div>` : ''}

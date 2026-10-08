@@ -785,6 +785,31 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   </div>
                 </div>
 
+                {/* Komponen Penandatanganan Struk (Flexbox layout justify-between / grid horizontal agar tanda tangan kasir dan pelanggan tersebar rapi di kiri & kanan dan tidak menumpuk) */}
+                {resolvedReceipt.showSignatures !== false && (
+                  <div className="pt-3 pb-1 my-2 border-t border-dashed border-stone-300">
+                    <div className="flex justify-between items-end text-center text-xs select-none">
+                      {/* Kolom Tanda Tangan Kasir (Kiri) */}
+                      <div className="w-[45%] flex flex-col items-center">
+                        <span className="text-stone-500 font-medium text-[11px]">Kasir Toko,</span>
+                        <div className="h-9"></div>
+                        <span className="font-bold text-stone-800 border-t border-stone-400 pt-0.5 w-full block truncate">
+                          ( {resolvedReceipt.cashierName || 'Kasir 01'} )
+                        </span>
+                      </div>
+
+                      {/* Kolom Tanda Tangan Pelanggan (Kanan) */}
+                      <div className="w-[45%] flex flex-col items-center">
+                        <span className="text-stone-500 font-medium text-[11px]">Pelanggan,</span>
+                        <div className="h-9"></div>
+                        <span className="font-bold text-stone-800 border-t border-stone-400 pt-0.5 w-full block truncate">
+                          ( {order.customerName || 'Pelanggan'} )
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Barcode & Footer Messages */}
                 <div className="text-center pt-2 flex flex-col items-center space-y-1.5">
                   {resolvedReceipt.showBarcode !== false && (

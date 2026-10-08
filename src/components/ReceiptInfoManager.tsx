@@ -72,6 +72,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
   const [showBarcode, setShowBarcode] = useState(true);
   const [showStoreLogo, setShowStoreLogo] = useState(true);
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm' | '70mm_dotmatrix'>('58mm');
+  const [showSignatures, setShowSignatures] = useState(true);
   const [isDefault, setIsDefault] = useState(false);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
@@ -99,6 +100,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     setCsHotline('1500-888');
     setShowBarcode(true);
     setShowStoreLogo(true);
+    setShowSignatures(true);
     setPaperWidth('58mm');
     setIsDefault(receiptConfigs.length === 0);
     setIsEditing(true);
@@ -123,6 +125,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     setCsHotline(item.csHotline || '1500-888');
     setShowBarcode(item.showBarcode !== false);
     setShowStoreLogo(item.showStoreLogo !== false);
+    setShowSignatures(item.showSignatures !== false);
     setPaperWidth(item.paperWidth || '58mm');
     setIsDefault(Boolean(item.isDefault));
     setSelectedPreviewId(item.id);
@@ -232,6 +235,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
             csHotline: csHotline.trim(),
             showBarcode,
             showStoreLogo,
+            showSignatures,
             paperWidth,
             printerType: paperWidth === '70mm_dotmatrix' ? 'dot_matrix_tmu220' : (r.printerType || 'thermal'),
             charactersPerLine: paperWidth === '70mm_dotmatrix' ? (r.charactersPerLine || 40) : (paperWidth === '80mm' ? 48 : 32),
@@ -270,6 +274,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         csHotline: csHotline.trim(),
         showBarcode,
         showStoreLogo,
+        showSignatures,
         paperWidth,
         printerType: isDotMatrix ? 'dot_matrix_tmu220' : 'thermal',
         charactersPerLine: isDotMatrix ? 40 : (paperWidth === '80mm' ? 48 : 32),
@@ -759,6 +764,16 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-800 select-none">
                     <input
                       type="checkbox"
+                      checked={showSignatures}
+                      onChange={e => setShowSignatures(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded-sm border-stone-300"
+                    />
+                    <span>Tampilkan Kolom Tanda Tangan Kasir & Pelanggan (Sejajar Horizontal)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-800 select-none">
+                    <input
+                      type="checkbox"
                       checked={showBarcode}
                       onChange={e => setShowBarcode(e.target.checked)}
                       className="w-4 h-4 text-blue-600 rounded-sm border-stone-300"
@@ -1149,6 +1164,31 @@ export const ReceiptVisualCard: React.FC<ReceiptVisualCardProps> = ({ receipt, i
           <span className="font-semibold text-stone-800">Antar Kurir Instan</span>
         </div>
       </div>
+
+      {/* Komponen Penandatanganan Struk (Flexbox justify-between / Grid horizontal agar tidak menumpuk) */}
+      {receipt.showSignatures !== false && (
+        <div className="pt-3 pb-1 my-2 border-t border-dashed border-stone-300">
+          <div className="flex justify-between items-end text-center text-xs select-none">
+            {/* Kolom Tanda Tangan Kasir (Kiri) */}
+            <div className="w-[45%] flex flex-col items-center">
+              <span className="text-stone-500 font-medium text-[11px]">Kasir,</span>
+              <div className="h-9"></div>
+              <span className="font-bold text-stone-800 border-t border-stone-400 pt-0.5 w-full block truncate">
+                ( {receipt.cashierName || 'Kasir 01'} )
+              </span>
+            </div>
+
+            {/* Kolom Tanda Tangan Pelanggan (Kanan) */}
+            <div className="w-[45%] flex flex-col items-center">
+              <span className="text-stone-500 font-medium text-[11px]">Pelanggan,</span>
+              <div className="h-9"></div>
+              <span className="font-bold text-stone-800 border-t border-stone-400 pt-0.5 w-full block truncate">
+                ( Pelanggan Umum )
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Barcode & Footer Messages */}
       <div className="text-center pt-2 flex flex-col items-center space-y-1.5">

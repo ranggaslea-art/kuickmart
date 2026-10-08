@@ -119,13 +119,13 @@ export function generateEscPosBinaryBuffer(
   const dateStr = new Date(order.createdAt).toLocaleDateString('id-ID');
   const timeStr = new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   const cashierDisp = cashierName || config.cashierName || '01';
+  const customerDisp = order.customerName ? order.customerName.toUpperCase() : 'PELANGGAN';
 
   addLine(padBetweenEsc(`No. : ${order.orderNumber}`, dateStr, cols));
   addLine(padBetweenEsc(`Kasir: ${cashierDisp}`, timeStr, cols));
 
   if (config.showCustomerName !== false) {
-    const cust = order.customerName ? order.customerName.toUpperCase() : 'UMUM';
-    addLine(padBetweenEsc(`Pel. : ${cust}`, '', cols));
+    addLine(padBetweenEsc(`Pel. : ${customerDisp}`, '', cols));
   }
 
   addLine(thinDivider);
@@ -182,6 +182,17 @@ export function generateEscPosBinaryBuffer(
 
   addLine(padBetweenEsc('Tunai', formatNumberNoRp(cashRec), cols));
   addLine(padBetweenEsc('Kembali', formatNumberNoRp(change), cols));
+
+  // Tanda Tangan Kasir & Pelanggan (Sejajar Horizontal 2 Sisi Kiri & Kanan)
+  if (config.showSignatures !== false) {
+    addLine(thinDivider);
+    addLine(padBetweenEsc('Kasir,', 'Pelanggan,', cols));
+    addLine('');
+    addLine('');
+    const leftSig = `( ${(cashierDisp || 'Kasir').slice(0, 12)} )`;
+    const rightSig = `( ${(customerDisp || 'Pelanggan').slice(0, 12)} )`;
+    addLine(padBetweenEsc(leftSig, rightSig, cols));
+  }
 
   // 8. Footer Pesan
   addLine(divider);
@@ -635,6 +646,22 @@ export function generateCrispDotMatrixReceiptHtml(
         <td class="text-right bold">${change.toLocaleString('id-ID')}</td>
       </tr>
     </table>
+    ${config.showSignatures !== false ? `
+    <div class="divider">${thinDivider}</div>
+    <!-- Komponen Penandatanganan Struk (Flexbox justify-between & Grid 2-kolom horizontal) -->
+    <div class="receipt-signatures" style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin: 6px 0 4px 0; font-size: ${fontSizes.meta}; text-align: center; box-sizing: border-box;">
+      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
+        <div style="font-weight: 700;">Kasir,</div>
+        <div style="height: 26px;"></div>
+        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierDisp} )</div>
+      </div>
+      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
+        <div style="font-weight: 700;">Pelanggan,</div>
+        <div style="height: 26px;"></div>
+        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${customerDisp} )</div>
+      </div>
+    </div>
+    ` : ''}
     <div class="divider">${divider}</div>
     <div class="text-center" style="font-size: ${fontSizes.footer}; margin-top: 1px; line-height: 1.15; font-weight: 700;">
       <div>${config.footerMessage1 || 'Terima kasih atas kunjungan Anda!'}</div>

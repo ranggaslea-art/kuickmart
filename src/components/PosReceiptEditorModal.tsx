@@ -208,6 +208,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
       showCustomerName: true,
       showCashierName: true,
       showMemberPoints: true,
+      showSignatures: true,
       headerCustomNote: 'STRUK PENJUALAN RESMI POS',
       isDefault: true,
     };
@@ -235,6 +236,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
         fontBoldness: activeConfig.fontBoldness || 'bold',
         fontSize: activeConfig.fontSize || 'normal',
         lineSpacing: activeConfig.lineSpacing || 'normal',
+        showSignatures: activeConfig.showSignatures !== undefined ? activeConfig.showSignatures : true,
       });
     }
   }, [activeConfig]);
@@ -1371,7 +1373,22 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2">
+                    <label className="flex items-start gap-2.5 p-3 bg-stone-50 hover:bg-stone-100 rounded-xl border border-stone-200 cursor-pointer font-bold text-stone-800">
+                      <input
+                        type="checkbox"
+                        checked={config.showSignatures !== false}
+                        onChange={e => setConfig({ ...config, showSignatures: e.target.checked })}
+                        className="w-4 h-4 rounded text-amber-600 border-stone-300 mt-0.5"
+                      />
+                      <div>
+                        <div>Cetak Kolom Tanda Tangan Kasir & Pelanggan</div>
+                        <div className="text-[11px] text-stone-500 font-normal mt-0.5">
+                          Menggunakan tata letak horizontal flexbox (justify-between) agar tanda tangan kasir dan pelanggan tersebar rapi di kiri & kanan dan tidak menumpuk di satu sisi.
+                        </div>
+                      </div>
+                    </label>
+
                     <label className="flex items-center gap-2 p-3 bg-stone-50 hover:bg-stone-100 rounded-xl border border-stone-200 cursor-pointer font-bold text-stone-800">
                       <input
                         type="checkbox"
@@ -1675,6 +1692,31 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   {config.showMemberPoints !== false && effectiveOrder.pointsEarned > 0 && (
                     <div className="text-center text-[10px] font-bold py-1 border-y border-dashed border-stone-400 my-1.5">
                       ★ POIN DIPEROLEH: +{effectiveOrder.pointsEarned} POIN ★
+                    </div>
+                  )}
+
+                  {/* Komponen Penandatanganan Struk (Flexbox layout justify-between / grid horizontal agar tanda tangan kasir dan pelanggan tersebar rapi di kiri & kanan dan tidak menumpuk) */}
+                  {config.showSignatures !== false && (
+                    <div className="pt-2.5 pb-1 my-1.5 border-t border-dashed border-stone-400">
+                      <div className="flex justify-between items-end text-center text-[10px] leading-tight select-none">
+                        {/* Kolom Tanda Tangan Kasir (Kiri) */}
+                        <div className="w-[45%] flex flex-col items-center">
+                          <span className="font-semibold text-stone-700">Kasir,</span>
+                          <div className="h-8"></div>
+                          <span className="font-bold border-t border-stone-800 pt-0.5 w-full block truncate">
+                            ( {cashierName} )
+                          </span>
+                        </div>
+
+                        {/* Kolom Tanda Tangan Pelanggan (Kanan) */}
+                        <div className="w-[45%] flex flex-col items-center">
+                          <span className="font-semibold text-stone-700">Pelanggan,</span>
+                          <div className="h-8"></div>
+                          <span className="font-bold border-t border-stone-800 pt-0.5 w-full block truncate">
+                            ( {effectiveOrder.customerName || 'Pelanggan'} )
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
 
