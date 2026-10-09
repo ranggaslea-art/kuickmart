@@ -575,35 +575,30 @@ export function printPosReceiptViaIframe(htmlContent: string): Promise<boolean> 
       const frameId = '__pos_tmu220_print_frame__';
       let iframe = document.getElementById(frameId) as HTMLIFrameElement;
       
-      if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.id = frameId;
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        iframe.style.visibility = 'hidden';
-        document.body.appendChild(iframe);
+      if (iframe && iframe.parentNode) {
+        try {
+          iframe.parentNode.removeChild(iframe);
+        } catch {
+          // ignore
+        }
       }
+
+      iframe = document.createElement('iframe');
+      iframe.id = frameId;
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '10px';
+      iframe.style.height = '10px';
+      iframe.style.opacity = '0.01';
+      iframe.style.border = 'none';
+      iframe.style.pointerEvents = 'none';
+      iframe.style.zIndex = '-9999';
+      document.body.appendChild(iframe);
 
       const doc = iframe.contentWindow?.document || iframe.contentDocument;
       if (!doc) {
-        // Fallback jika iframe diblokir
-        const printWin = window.open('', '_blank', 'width=350,height=600');
-        if (printWin) {
-          printWin.document.write(htmlContent);
-          printWin.document.close();
-          printWin.focus();
-          setTimeout(() => {
-            printWin.print();
-            printWin.close();
-            resolve(true);
-          }, 350);
-        } else {
-          resolve(false);
-        }
+        resolve(false);
         return;
       }
 

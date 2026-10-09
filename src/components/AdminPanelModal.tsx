@@ -76,7 +76,8 @@ import {
   Globe,
   Server,
   Rocket,
-  Download
+  Download,
+  Sliders,
 } from 'lucide-react';
 import { 
   Product, 
@@ -156,6 +157,8 @@ import { ReturnsManager } from './ReturnsManager';
 import { StockMutationManager } from './StockMutationManager';
 import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
+import { SubdomainModuleControlManager } from './SubdomainModuleControlManager';
+import { isSubdomainModuleEnabled, SUBDOMAIN_MODULE_POLICY_EVENT, CONTROLLABLE_SUBDOMAIN_MODULES } from '../utils/subdomainModuleControl';
 import { CategoryBrandManager } from './CategoryBrandManager';
 import { VpsDeployManager } from './VpsDeployManager';
 import { SeoGoogleManager } from './SeoGoogleManager';
@@ -169,7 +172,7 @@ import {
   saveBrandsToMySql,
   saveOrderToMySql 
 } from '../lib/mysqlClientApi';
-import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig } from '../utils/tenantHelper';
+import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig, canAccessSubdomainModule } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
 interface AdminPanelModalProps {
@@ -218,7 +221,7 @@ interface AdminPanelModalProps {
   onUpdateCategories?: (categories: Category[]) => void;
   brands?: BrandItem[];
   onUpdateBrands?: (brands: BrandItem[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db';
 }
 
 interface AdminUser {
@@ -289,6 +292,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const activeTenantIdentity = useMemo(() => {
     return loadStoreTenantConfig(currentSlug);
   }, [currentSlug]);
+
+  // Otoritas Domain Utama: Kontrol modul subdomain HANYA ada di domain utama (toko-online.online)
+  const hasSubdomainAuthority = useMemo(() => {
+    return canAccessSubdomainModule().allowed;
+  }, []);
+
+  const [subdomainPolicyVersion, setSubdomainPolicyVersion] = useState(0);
+  useEffect(() => {
+    const handlePolicyChange = () => {
+      setSubdomainPolicyVersion((v) => v + 1);
+    };
+    window.addEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+    return () => {
+      window.removeEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+    };
+  }, []);
+
+  const isModuleDisabledBySubdomain = (moduleId: string): boolean => {
+    // Domain utama tidak pernah dibatasi oleh kebijakan subdomain
+    if (hasSubdomainAuthority) return false;
+    return !isSubdomainModuleEnabled(moduleId, currentSlug);
+  };
 
   // Helper to ensure all staff users have permissions and default accounts exist
   const ensureStaffPermissions = (users: StaffUser[]): StaffUser[] => {
@@ -738,7 +763,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         const masterTabs = ['products', 'categories_brands', 'customers', 'suppliers', 'bulk_import'];
         const inventoryTabs = ['stock_card', 'stock_opname', 'stock_mutations', 'purchase_orders', 'purchases'];
         const marketingTabs = ['promos', 'vouchers', 'points_rewards', 'push_notifications'];
-        const settingsTabs = ['stores', 'subdomains', 'store_doku_settings', 'receipts', 'couriers', 'brand_info'];
+        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'brand_info'];
         const systemTabs = ['users', 'permissions', 'mysql_db', 'vps_deploy', 'seo_google'];
 
         if (posTabs.includes(initialTab)) setSelectedGroup('pos');
@@ -766,7 +791,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
 
   // Kelompok Modul Menu Navigasi Admin
@@ -2331,6 +2356,37 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     );
   };
 
+  const renderSubdomainDisabledNotice = (moduleTitle: string) => {
+    return (
+      <div className="p-8 sm:p-12 text-center bg-amber-50/90 border-2 border-amber-300 rounded-3xl space-y-4 max-w-2xl mx-auto my-6 animate-in fade-in shadow-xs">
+        <div className="w-16 h-16 bg-amber-100 text-amber-800 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="font-extrabold text-base sm:text-lg text-amber-950">
+            Modul {moduleTitle} Dinonaktifkan di Subdomain Ini
+          </h3>
+          <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed font-medium">
+            Modul ini telah dinonaktifkan untuk toko/subdomain <strong className="font-mono">{currentSlug}</strong> oleh Administrator Domain Utama (<strong>{ROOT_AUTHORITY_DOMAIN}</strong>).
+          </p>
+        </div>
+        <div className="bg-white/95 p-4 rounded-2xl border border-amber-200 text-left text-xs space-y-2 max-w-md mx-auto font-mono text-stone-700 shadow-2xs">
+          <div className="flex justify-between items-center">
+            <span className="text-stone-500 font-sans">Status Modul:</span>
+            <span className="font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200 text-[11px]">Nonaktif (Disabled)</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-stone-500 font-sans">Otoritas Pengendali:</span>
+            <span className="font-bold text-stone-900">{ROOT_AUTHORITY_DOMAIN}</span>
+          </div>
+          <div className="text-[11px] font-sans text-stone-500 pt-1.5 border-t border-amber-100">
+            Pengaturan aktivasi modul subdomain dikontrol secara sentral dan eksklusif dari domain utama platform.
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderReadOnlyBanner = (moduleTitle: string) => (
     <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-950 mb-4">
       <div className="flex items-center gap-2">
@@ -2487,13 +2543,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             </span>
 
             {[
-              { id: 'all' as const, label: 'Semua Modul', count: 26, badgeColor: 'bg-stone-200 text-stone-700' },
+              { id: 'all' as const, label: 'Semua Modul', count: hasSubdomainAuthority ? 27 : 26, badgeColor: 'bg-stone-200 text-stone-700' },
               { id: 'master' as const, label: '📦 Master Data', count: 5, badgeColor: 'bg-blue-100 text-blue-700' },
               { id: 'pos' as const, label: '🛒 Kasir & Penjualan', count: 4, badgeColor: 'bg-emerald-100 text-emerald-700' },
-              { id: 'inventory' as const, label: '📋 Inventori & Stok', count: 4, badgeColor: 'bg-amber-100 text-amber-700' },
+              { id: 'inventory' as const, label: '📋 Inventori & Stok', count: 5, badgeColor: 'bg-amber-100 text-amber-700' },
               { id: 'marketing' as const, label: '🎁 Promo & Pelanggan', count: 4, badgeColor: 'bg-pink-100 text-pink-700' },
-              { id: 'settings' as const, label: '⚙️ Cabang & Pengaturan', count: 6, badgeColor: 'bg-purple-100 text-purple-700' },
-              { id: 'system' as const, label: '🛡️ User & Keamanan', count: 3, badgeColor: 'bg-indigo-100 text-indigo-700' },
+              { id: 'settings' as const, label: '⚙️ Cabang & Pengaturan', count: hasSubdomainAuthority ? 7 : 6, badgeColor: 'bg-purple-100 text-purple-700' },
+              { id: 'system' as const, label: '🛡️ User & Keamanan', count: 5, badgeColor: 'bg-indigo-100 text-indigo-700' },
             ].map((grp) => {
               const isGrpActive = selectedGroup === grp.id;
               return (
@@ -2575,6 +2631,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 // 5. CABANG & PENGATURAN TOKO
                 { id: 'stores', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Cabang Toko', icon: <StoreIcon className="w-4 h-4 text-purple-600" />, count: (stores || []).length },
                 { id: 'subdomains', group: 'settings', moduleKey: 'stores' as SystemModuleKey, label: 'Subdomain Terdaftar', icon: <Globe className="w-4 h-4 text-cyan-600" /> },
+                ...(hasSubdomainAuthority ? [{
+                  id: 'subdomain_modules',
+                  group: 'settings' as const,
+                  moduleKey: 'stores' as SystemModuleKey,
+                  label: 'Kontrol Modul Subdomain',
+                  icon: <Sliders className="w-4 h-4 text-indigo-600" />
+                }] : []),
                 { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & DOKU', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
                 { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
                 { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
@@ -2591,6 +2654,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 .map((item) => {
                   const perm = currentUserPermissions[item.moduleKey] || { canView: false, canEdit: false };
                   const isActive = activeTab === item.id;
+                  const isSubDisabled = isModuleDisabledBySubdomain(item.id);
                   return (
                     <button
                       key={item.id}
@@ -2605,12 +2669,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                       className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                         isActive
                           ? 'bg-blue-600 text-white shadow-xs font-extrabold ring-2 ring-blue-600/30'
+                          : isSubDisabled
+                          ? 'text-stone-400 hover:text-stone-700 bg-amber-50/60 border border-amber-200/60'
                           : !perm.canView
                           ? 'text-stone-400 hover:text-stone-600 hover:bg-stone-100 bg-stone-50/50'
                           : 'text-stone-700 hover:text-stone-950 hover:bg-stone-100'
                       }`}
                       title={
-                        !perm.canView
+                        isSubDisabled
+                          ? `Modul ${item.label} dinonaktifkan di subdomain ini oleh Administrator Domain Utama`
+                          : !perm.canView
                           ? `Modul ${item.label} dibatasi untuk peran ${getRoleDisplayName(currentUser?.role || 'kasir')}`
                           : !perm.canEdit
                           ? `Modul ${item.label} (Hanya Lihat)`
@@ -2621,7 +2689,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                       <span>
                         {item.label} {item.count !== undefined ? `(${item.count})` : ''}
                       </span>
-                      {!perm.canView ? (
+                      {isSubDisabled ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200" title="Dinonaktifkan oleh Domain Utama">
+                          Nonaktif
+                        </span>
+                      ) : !perm.canView ? (
                         <span className="p-0.5 rounded bg-stone-200/80 text-stone-600" title="Terkunci">
                           <Lock className="w-2.5 h-2.5" />
                         </span>
@@ -2755,9 +2827,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
         {/* Tab Body - Area modul yang dapat digulir mandiri tanpa pernah menutup tab menu */}
         <div className="p-3 sm:p-6 flex-1 min-h-0 overflow-y-auto relative">
-          
-          {/* TAB: PENJUALAN KASIR (POS MINIMARKET) DENGAN DISPLAY TOTAL BELANJA BESAR */}
-          {activeTab === 'pos_cashier' && (!currentUserPermissions.orders?.canView ? (
+          {isModuleDisabledBySubdomain(activeTab) ? (
+            renderSubdomainDisabledNotice(
+              CONTROLLABLE_SUBDOMAIN_MODULES.find(m => m.id === activeTab)?.name || activeTab
+            )
+          ) : (
+            <>
+              {/* TAB: PENJUALAN KASIR (POS MINIMARKET) DENGAN DISPLAY TOTAL BELANJA BESAR */}
+              {activeTab === 'pos_cashier' && (!currentUserPermissions.orders?.canView ? (
             renderAccessDenied('Penjualan Kasir (POS)')
           ) : (
             <div className="space-y-4">
@@ -5245,6 +5322,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 onOpenStoreSettings={() => {
                   setActiveTab('store_doku_settings');
                 }}
+                onOpenSubdomainModuleControl={() => {
+                  setActiveTab('subdomain_modules');
+                }}
                 onNavigateToStore={(targetSlug) => {
                   const url = typeof window !== 'undefined'
                     ? `${window.location.origin}${window.location.pathname}?store=${targetSlug}`
@@ -5254,6 +5334,38 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               />
             </div>
           ))}
+
+          {/* TAB: KONTROL MODUL SUBDOMAIN (HANYA ADA DI DOMAIN UTAMA) */}
+          {activeTab === 'subdomain_modules' && (
+            !hasSubdomainAuthority ? (
+              <div className="p-8 sm:p-12 text-center bg-rose-50 border-2 border-rose-300 rounded-3xl space-y-4 max-w-2xl mx-auto my-6 animate-in fade-in shadow-xs">
+                <div className="w-16 h-16 bg-rose-100 text-rose-700 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-base sm:text-lg text-rose-950">Akses Ditolak: Otoritas Khusus Domain Utama</h3>
+                  <p className="text-xs text-rose-700 max-w-md mx-auto leading-relaxed font-medium">
+                    Modul <strong>Kontrol Modul Subdomain</strong> hanya tersedia dan dapat dikelola secara eksklusif melalui domain utama <strong>{ROOT_AUTHORITY_DOMAIN}</strong>. Subdomain toko cabang tidak memiliki akses ke modul ini.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('products')}
+                    className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    Kembali ke Katalog Produk
+                  </button>
+                </div>
+              </div>
+            ) : !currentUserPermissions.stores?.canView ? (
+              renderAccessDenied('Kontrol Modul Subdomain')
+            ) : (
+              <div className="space-y-4">
+                <SubdomainModuleControlManager />
+              </div>
+            )
+          )}
 
           {/* TAB 11: PUSH NOTIFIKASI PROMO PWA (VAPID) */}
           {activeTab === 'push_notifications' && (!currentUserPermissions.push_notifications?.canView ? (
@@ -5505,6 +5617,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               currentStoreName={activeTenantIdentity.storeName}
               storeDomain={typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') ? window.location.origin : 'https://www.toko-online.online'}
             />
+          )}
+            </>
           )}
 
         </div>

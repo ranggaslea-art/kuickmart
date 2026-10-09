@@ -30,6 +30,7 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
+  Sliders,
 } from 'lucide-react';
 import {
   RegisteredSubdomain,
@@ -46,11 +47,13 @@ import {
 interface RegisteredSubdomainsManagerProps {
   onOpenStoreSettings?: (storeSlug: string) => void;
   onNavigateToStore?: (storeSlug: string) => void;
+  onOpenSubdomainModuleControl?: () => void;
 }
 
 export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerProps> = ({
   onOpenStoreSettings,
   onNavigateToStore,
+  onOpenSubdomainModuleControl,
 }) => {
   const [accessPolicy, setAccessPolicy] = useState(() => canAccessSubdomainModule());
   const [subdomains, setSubdomains] = useState<RegisteredSubdomain[]>([]);
@@ -518,6 +521,18 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>{simulationState.isSimulating ? 'Reset Simulasi' : 'Uji Blokir'}</span>
             </button>
+
+            {onOpenSubdomainModuleControl && (
+              <button
+                type="button"
+                onClick={onOpenSubdomainModuleControl}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 shadow-xs flex-1 sm:flex-initial"
+                title="Buka modul kontrol aktif/nonaktif fitur untuk seluruh subdomain"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Kontrol Modul</span>
+              </button>
+            )}
 
             <button
               type="button"
