@@ -24,9 +24,10 @@ import {
   Sliders,
   Search
 } from 'lucide-react';
-import { ReceiptInfo, Store } from '../types';
+import { ReceiptInfo, Store, Order } from '../types';
 import { formatRupiah } from '../utils/formatters';
-import { cleanReceiptText } from '../utils/sanitizeReceipt';
+import { cleanReceiptText, formatReceiptAddress } from '../utils/sanitizeReceipt';
+import { generateDotMatrixReceiptHtml, printPosReceiptViaIframe } from '../utils/posPrinterHelper';
 import { PosReceiptEditorModal } from './PosReceiptEditorModal';
 import { OsPrinterSearchModal } from './OsPrinterSearchModal';
 
@@ -309,12 +310,12 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         id: editingId || 'preview_temp',
         profileName: profileName || 'Pratinjau Struk Toko',
         storeId,
-        headerBrand: headerBrand || 'NUSA MART EXPRESS',
+        headerBrand: headerBrand || storeName || '',
         subHeader,
-        storeName: storeName || 'toko-online.online - Sudirman Thamrin',
-        address: address || 'Jl. Jendral Sudirman No. 18, Menteng',
+        storeName: storeName || '',
+        address: address || '',
         city,
-        phone: phone || '021-5551234',
+        phone: phone || '',
         taxIdOrNpwp,
         websiteOrSocial,
         cashierName,
@@ -323,21 +324,106 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
         csHotline,
         showBarcode,
         showStoreLogo,
+        showSignatures,
         paperWidth,
         isDefault,
       }
-    : receiptConfigs.find(r => r.id === selectedPreviewId) || receiptConfigs[0] || {
+    : (receiptConfigs.find(r => r.id === selectedPreviewId) || receiptConfigs[0] || {
         id: 'fallback',
         profileName: 'Struk Default',
-        headerBrand: 'NUSA MART EXPRESS',
-        storeName: 'toko-online.online',
-        address: 'Jl. Jendral Sudirman No. 18',
-        phone: '021-5551234',
-        footerMessage1: 'Struk ini adalah bukti pembayaran sah dari NusaMart Express.',
-      };
+        headerBrand: 'STRUK TOKO',
+        storeName: '',
+        address: '',
+        city: '',
+        phone: '',
+        footerMessage1: 'Terima kasih atas kunjungan Anda.',
+      });
 
-  const handlePrintSample = () => {
-    window.print();
+  const handlePrintSample = async () => {
+    const sampleOrder: Order = {
+      id: 'sample-test-01',
+      orderNumber: 'TRX-SAMPLE-01',
+      customerId: 'usr_sample',
+      customerName: 'Pelanggan Umum',
+      customerPhone: '0812-3456-7890',
+      items: [
+        {
+          product: {
+            id: 'p1',
+            name: 'Minyakita 2 Liter Pouch',
+            category: 'sembako',
+            brand: 'Minyakita',
+            unit: 'Pcs',
+            soldCount: 1,
+            barcode: '899123456701',
+            price: 34500,
+            stock: 10,
+            description: '',
+            image: '',
+            rating: 5,
+            isPopular: true
+          },
+          quantity: 2,
+          selectedUnit: 'Pcs',
+          unitPrice: 34500
+        },
+        {
+          product: {
+            id: 'p2',
+            name: 'Gula Pasir Gulaku 1Kg',
+            category: 'sembako',
+            brand: 'Gulaku',
+            unit: 'Kg',
+            soldCount: 1,
+            barcode: '899123456702',
+            price: 18000,
+            stock: 10,
+            description: '',
+            image: '',
+            rating: 5,
+            isPopular: true
+          },
+          quantity: 1,
+          selectedUnit: 'Kg',
+          unitPrice: 18000
+        }
+      ],
+      subtotal: 87000,
+      deliveryFee: 0,
+      discountAmount: 0,
+      total: 87000,
+      deliveryType: 'pickup',
+      paymentMethod: 'cash',
+      paymentStatus: 'paid',
+      status: 'completed',
+      createdAt: new Date().toISOString(),
+      pickupStoreName: activePreviewData.storeName || '',
+      pointsUsed: 0,
+      pointsEarned: 870,
+      store: {
+        id: 'str-01',
+        name: activePreviewData.storeName || '',
+        code: 'KM-01',
+        address: activePreviewData.address || '',
+        city: activePreviewData.city || '',
+        phone: activePreviewData.phone || '',
+        distanceKm: 0,
+        is24Hours: false,
+        isOpen: true,
+        openHours: '08:00 - 21:00',
+        readyForPickup: true,
+        readyForDelivery: true,
+        deliveryFee: 0,
+        minOrder: 0
+      },
+      trackingSteps: []
+    };
+
+    const html = generateDotMatrixReceiptHtml(sampleOrder, activePreviewData, activePreviewData.cashierName, {
+      cashReceived: 100000,
+      changeAmount: 13000
+    });
+    await printPosReceiptViaIframe(html);
   };
 
   return (
@@ -889,8 +975,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                       <div className="text-[11px] text-stone-500 flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-red-500 shrink-0" />
                         <span className="line-clamp-1">
-                          {cleanReceiptText(item.address)}
-                          {cleanReceiptText(item.city) ? `, ${cleanReceiptText(item.city)}` : ''}
+                          {formatReceiptAddress(item)}
                         </span>
                       </div>
 
@@ -1064,7 +1149,7 @@ export const ReceiptVisualCard: React.FC<ReceiptVisualCardProps> = ({ receipt, i
       <div className="text-center pb-4 border-b border-dashed border-stone-300 space-y-1">
         {/* Brand Header */}
         <div className="font-black text-xl text-blue-900 tracking-tight">
-          {receipt.headerBrand || 'NUSA MART EXPRESS'}
+          {receipt.headerBrand || receipt.storeName || ''}
         </div>
 
         {/* Optional Slogan / Subheader */}
@@ -1075,16 +1160,24 @@ export const ReceiptVisualCard: React.FC<ReceiptVisualCardProps> = ({ receipt, i
         )}
 
         {/* Store Name */}
-        <p className="text-xs text-stone-700 font-bold">
-          {receipt.storeName || 'toko-online.online - Sudirman Thamrin'}
-        </p>
+        {receipt.storeName && (!receipt.headerBrand || receipt.storeName.toUpperCase() !== receipt.headerBrand.toUpperCase()) && (
+          <p className="text-xs text-stone-700 font-bold">
+            {receipt.storeName}
+          </p>
+        )}
 
         {/* Address and Phone */}
-        <p className="text-[10px] text-stone-500 leading-relaxed">
-          {cleanReceiptText(receipt.address) || 'Jl. Jendral Sudirman No. 18, Menteng'}
-          {cleanReceiptText(receipt.city) ? `, ${cleanReceiptText(receipt.city)}` : ''}
-          {receipt.phone ? ` • Telp: ${receipt.phone}` : ''}
-        </p>
+        {formatReceiptAddress(receipt) && (
+          <p className="text-[10px] text-stone-500 leading-relaxed">
+            {formatReceiptAddress(receipt)}
+            {receipt.phone ? ` • Telp: ${receipt.phone}` : ''}
+          </p>
+        )}
+        {!formatReceiptAddress(receipt) && receipt.phone && (
+          <p className="text-[10px] text-stone-500 leading-relaxed">
+            Telp: {receipt.phone}
+          </p>
+        )}
 
         {/* Tax NPWP / Website if provided */}
         {(receipt.taxIdOrNpwp || receipt.websiteOrSocial) && (
@@ -1215,7 +1308,13 @@ export const ReceiptVisualCard: React.FC<ReceiptVisualCardProps> = ({ receipt, i
 
         {receipt.csHotline && (
           <div className="text-[9px] text-stone-400 font-semibold pt-1">
-            Layanan Pelanggan 24 Jam: <strong className="text-stone-700">{receipt.csHotline}</strong>
+            Layanan Pelanggan: <strong className="text-stone-700">{receipt.csHotline}</strong>
+          </div>
+        )}
+
+        {receipt.websiteOrSocial && (
+          <div className="text-[9px] text-stone-400 pt-0.5">
+            {receipt.websiteOrSocial}
           </div>
         )}
       </div>

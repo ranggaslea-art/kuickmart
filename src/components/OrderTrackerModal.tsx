@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 import { Order, OrderStatus, ReceiptInfo, CourierInfo } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
-import { cleanReceiptText } from '../utils/sanitizeReceipt';
+import { cleanReceiptText, formatReceiptAddress } from '../utils/sanitizeReceipt';
+import { generateDotMatrixReceiptHtml, printPosReceiptViaIframe } from '../utils/posPrinterHelper';
 import { cleanPhoneNumber, generateOrderWhatsAppMessage, getWhatsAppChatUrl, openWhatsAppDirect } from '../utils/whatsappHelper';
 
 interface OrderTrackerModalProps {
@@ -117,29 +118,30 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
         // ignore
       }
     }
-    // 1. Match by store id or store name
+    // 1. Match default receipt set by user
+    const defaultOne = list?.find(r => r.isDefault);
+    if (defaultOne) return defaultOne;
+
+    // 2. Match by store id or store name
     const matchByStore = list?.find(
-      r => (r.storeId && r.storeId === order?.store.id) || 
+      r => (r.storeId && r.storeId !== 'all' && r.storeId === order?.store.id) || 
            (r.storeName && order?.store.name && r.storeName.toLowerCase() === order?.store.name.toLowerCase())
     );
     if (matchByStore) return matchByStore;
 
-    // 2. Match default receipt
-    const defaultOne = list?.find(r => r.isDefault);
-    if (defaultOne) return defaultOne;
-
     // 3. First available
     if (list && list.length > 0) return list[0];
 
-    // 4. Fallback default
+    // 4. Fallback default strictly using order's store data
     return {
       id: 'default_rcp',
       profileName: 'Struk Standar',
-      headerBrand: 'NUSA MART EXPRESS',
-      storeName: order?.store.name || 'toko-online.online - Sudirman Thamrin',
-      address: order?.store.address || 'Jl. Jendral Sudirman No. 18, Menteng',
-      phone: order?.store.phone || '021-5551234',
-      footerMessage1: 'Struk ini adalah bukti pembayaran sah dari NusaMart Express.',
+      headerBrand: order?.store.name || 'STRUK PENJUALAN',
+      storeName: order?.store.name || '',
+      address: order?.store.address || '',
+      city: order?.store.city || '',
+      phone: order?.store.phone || '',
+      footerMessage1: 'Terima kasih telah berbelanja.',
       showBarcode: true,
     };
   })();
@@ -204,6 +206,12 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
         },
       ]);
     }, 1000);
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!order) return;
+    const html = generateDotMatrixReceiptHtml(order, resolvedReceipt, resolvedReceipt.cashierName);
+    await printPosReceiptViaIframe(html);
   };
 
   return (
@@ -659,8 +667,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   )}
                   <button
                     type="button"
-                    onClick={() => window.print()}
-                    className="px-3 py-1.5 bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95"
+                    onClick={handlePrintReceipt}
+                    className="px-3 py-1.5 bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Cetak Struk</span>
@@ -673,21 +681,29 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 {/* Receipt Header */}
                 <div className="text-center pb-4 border-b border-dashed border-stone-300 space-y-1">
                   <div className="font-black text-xl text-blue-900 tracking-tight">
-                    {resolvedReceipt.headerBrand || 'NUSA MART EXPRESS'}
+                    {resolvedReceipt.headerBrand || resolvedReceipt.storeName || ''}
                   </div>
                   {resolvedReceipt.subHeader && (
                     <p className="text-[10px] text-stone-500 font-medium italic">
                       {resolvedReceipt.subHeader}
                     </p>
                   )}
-                  <p className="text-xs text-stone-700 font-bold">
-                    {resolvedReceipt.storeName || order.store.name}
-                  </p>
-                  <p className="text-[10px] text-stone-500 leading-relaxed">
-                    {cleanReceiptText(resolvedReceipt.address || order.store.address)}
-                    {cleanReceiptText(resolvedReceipt.city) ? `, ${cleanReceiptText(resolvedReceipt.city)}` : ''}
-                    {resolvedReceipt.phone ? ` • Telp: ${resolvedReceipt.phone}` : (order.store.phone ? ` • Telp: ${order.store.phone}` : '')}
-                  </p>
+                  {resolvedReceipt.storeName && (!resolvedReceipt.headerBrand || resolvedReceipt.storeName.toUpperCase() !== resolvedReceipt.headerBrand.toUpperCase()) && (
+                    <p className="text-xs text-stone-700 font-bold">
+                      {resolvedReceipt.storeName}
+                    </p>
+                  )}
+                  {formatReceiptAddress(resolvedReceipt) && (
+                    <p className="text-[10px] text-stone-500 leading-relaxed">
+                      {formatReceiptAddress(resolvedReceipt)}
+                      {resolvedReceipt.phone ? ` • Telp: ${resolvedReceipt.phone}` : ''}
+                    </p>
+                  )}
+                  {!formatReceiptAddress(resolvedReceipt) && resolvedReceipt.phone && (
+                    <p className="text-[10px] text-stone-500 leading-relaxed">
+                      Telp: {resolvedReceipt.phone}
+                    </p>
+                  )}
 
                   {(resolvedReceipt.taxIdOrNpwp || resolvedReceipt.websiteOrSocial) && (
                     <p className="text-[9px] text-stone-400 font-mono pt-0.5">
@@ -821,9 +837,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                     </div>
                   )}
 
-                  <p className="text-[10px] text-stone-500 font-medium max-w-xs text-center leading-relaxed">
-                    {resolvedReceipt.footerMessage1 || 'Struk ini adalah bukti pembayaran sah dari NusaMart Express.'}
-                  </p>
+                  {resolvedReceipt.footerMessage1 && (
+                    <p className="text-[10px] text-stone-500 font-medium max-w-xs text-center leading-relaxed">
+                      {resolvedReceipt.footerMessage1}
+                    </p>
+                  )}
 
                   {resolvedReceipt.footerMessage2 && (
                     <p className="text-[9px] text-stone-400 max-w-xs text-center leading-tight">
@@ -834,6 +852,12 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   {resolvedReceipt.csHotline && (
                     <p className="text-[9px] text-stone-400 font-semibold pt-0.5">
                       Layanan Pelanggan: <strong className="text-stone-600">{resolvedReceipt.csHotline}</strong>
+                    </p>
+                  )}
+
+                  {resolvedReceipt.websiteOrSocial && (
+                    <p className="text-[9px] text-stone-400 max-w-xs text-center pt-0.5">
+                      {resolvedReceipt.websiteOrSocial}
                     </p>
                   )}
                 </div>

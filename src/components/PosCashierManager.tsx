@@ -183,24 +183,36 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     }
   }, [receiptConfigs]);
 
-  // Active Receipt Config (prioritizing Epson TM-U220 Dot Matrix 70mm)
+  // Active Receipt Config (prioritizing user default configuration)
   const activeReceiptConfig = useMemo<ReceiptInfo>(() => {
     const list = localReceiptConfigs.length > 0 ? localReceiptConfigs : (receiptConfigs || []);
+    
+    // 1. Prioritaskan profil struk yang ditandai aktif/default oleh user di modul struk
+    const userDefault = list.find(r => r.isDefault);
+    if (userDefault) return userDefault;
+
+    // 2. Cocokkan cabang aktif jika ada
+    if (currentStore?.id) {
+      const storeMatch = list.find(r => r.storeId && r.storeId !== 'all' && r.storeId === currentStore.id);
+      if (storeMatch) return storeMatch;
+    }
+
+    // 3. Profil printer dot matrix atau thermal yang tersedia
     const tmu220 = list.find(r => r.printerType === 'dot_matrix_tmu220' || r.paperWidth === '70mm_dotmatrix');
-    if (tmu220 && tmu220.isDefault) return tmu220;
-    const def = list.find(r => r.isDefault);
-    if (def) return def;
     if (tmu220) return tmu220;
     if (list.length > 0) return list[0];
+
+    // 4. Fallback bersih berbasis cabang aktif tanpa data dummy
     return {
-      id: 'rcp_tmu220_default',
-      profileName: 'Struk Dot Matrix Epson TM-U220 (70mm)',
-      headerBrand: 'NUSA MART EXPRESS',
-      subHeader: 'MINIMARKET & KASIR POINT OF SALE',
-      storeName: currentStore?.name || 'toko-online.online',
-      address: currentStore?.address || 'Jl. Jendral Sudirman No. 18, Menteng',
-      phone: currentStore?.phone || '021-5551234',
-      taxIdOrNpwp: 'NPWP: 01.345.678.9-012.000',
+      id: 'rcp_default',
+      profileName: 'Struk Toko',
+      headerBrand: currentStore?.name || 'STRUK PENJUALAN',
+      subHeader: '',
+      storeName: currentStore?.name || '',
+      address: currentStore?.address || '',
+      city: currentStore?.city || '',
+      phone: currentStore?.phone || '',
+      taxIdOrNpwp: '',
       paperWidth: '70mm_dotmatrix',
       printerType: 'dot_matrix_tmu220',
       charactersPerLine: 40,
@@ -212,10 +224,10 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
       showPaymentDetail: true,
       showMemberPoints: true,
       showBarcode: true,
-      footerMessage1: 'TERIMA KASIH TELAH BERBELANJA',
-      footerMessage2: 'BARANG YANG SUDAH DIBELI DAPAT DITUKAR MAKS 1X24 JAM DENGAN STRUK ASLI.',
-      csHotline: 'CALL CENTER: 1500-888',
-      websiteOrSocial: 'www.nusamart.id • WA: 0812-3456-7890',
+      footerMessage1: 'Terima kasih telah berbelanja.',
+      footerMessage2: '',
+      csHotline: '',
+      websiteOrSocial: '',
       isDefault: true,
     };
   }, [localReceiptConfigs, receiptConfigs, currentStore]);

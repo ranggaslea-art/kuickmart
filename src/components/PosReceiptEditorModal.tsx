@@ -26,7 +26,7 @@ import {
   Info
 } from 'lucide-react';
 import { ReceiptInfo, Store, Order } from '../types';
-import { cleanReceiptText } from '../utils/sanitizeReceipt';
+import { cleanReceiptText, formatReceiptAddress } from '../utils/sanitizeReceipt';
 import { 
   generateRawPosReceiptText, 
   generateDotMatrixReceiptHtml, 
@@ -302,20 +302,49 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
   const handleTestSerialPrint = async () => {
     setIsSerialPrinting(true);
     try {
-      const bytes = generateEscPosBinaryBuffer(effectiveOrder, config, cashierName, {
-        cashReceived: 100000,
-        changeAmount: 0,
-      });
-      const res = await printDirectRawToSerialPort(bytes, config.serialBaudRate || 9600);
-      if (res.success) {
-        setFeedback('⚡ Berhasil! Perintah ESC/POS mentah berhasil dikirim ke printer Epson TM-U220 (Mode iPos 4).');
-      } else {
-        setFeedback(`⚠️ ${res.message}`);
+      let printedViaSerial = false;
+      if (isWebSerialSupported()) {
+        try {
+          const bytes = generateEscPosBinaryBuffer(effectiveOrder, config, cashierName, {
+            cashReceived: 100000,
+            changeAmount: 0,
+          });
+          const res = await printDirectRawToSerialPort(bytes, config.serialBaudRate || 9600);
+          if (res.success) {
+            printedViaSerial = true;
+            setFeedback('⚡ Berhasil! Perintah ESC/POS mentah berhasil dikirim ke printer Epson TM-U220 (Mode iPos 4).');
+            setTimeout(() => setFeedback(null), 5000);
+            return;
+          }
+        } catch (serialErr: any) {
+          console.warn('Web Serial port error, falling back to direct crisp ESC/POS print:', serialErr);
+        }
       }
-      setTimeout(() => setFeedback(null), 5000);
+
+      // Fallback: Jika Web Serial tidak didukung atau port hardware tidak terhubung, otomatis cetak via print engine iPos 4
+      if (!printedViaSerial) {
+        const html = generateDotMatrixReceiptHtml(effectiveOrder, config, cashierName, {
+          cashReceived: 100000,
+          changeAmount: 0,
+        });
+        await printPosReceiptViaIframe(html);
+        setFeedback('⚡ Uji Cetak ESC/POS (Mode iPos 4) berhasil dijalankan! Dialog cetak dibuka dengan format monokrom 40-kolom dot matrix murni.');
+        setTimeout(() => setFeedback(null), 5000);
+      }
     } catch (err: any) {
-      setFeedback(`Gagal serial print: ${err.message || 'Error'}`);
-      setTimeout(() => setFeedback(null), 4000);
+      console.error('Gagal uji cetak ESC/POS:', err);
+      try {
+        const html = generateDotMatrixReceiptHtml(effectiveOrder, config, cashierName, {
+          cashReceived: 100000,
+          changeAmount: 0,
+        });
+        await printPosReceiptViaIframe(html);
+        setFeedback('⚡ Format cetak ESC/POS iPos 4 dibuka ke spooler.');
+        setTimeout(() => setFeedback(null), 4000);
+      } catch (fallbackErr: any) {
+        setFeedback(`Gagal cetak: ${err.message || 'Error'}`);
+        setTimeout(() => setFeedback(null), 4000);
+      }
     } finally {
       setIsSerialPrinting(false);
     }
@@ -1563,19 +1592,23 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                       style={{ fontSize: getReceiptFontSizeCss(config.fontSize).brand }}
                       className="font-black tracking-wider uppercase"
                     >
-                      {config.headerBrand || 'NUSA MART EXPRESS'}
+                      {config.headerBrand || config.storeName || ''}
                     </div>
                     {config.subHeader && (
-                      <div className="text-[9.5px] text-stone-700">
+                      <div className="text-[9.5px] text-stone-700 italic">
                         {config.subHeader}
                       </div>
                     )}
-                    <div className="text-[11px] font-bold">
-                      {config.storeName || 'toko-online.online'}
-                    </div>
-                    <div className="text-[10px] text-stone-700 leading-tight">
-                      {cleanReceiptText(config.address || '')}
-                    </div>
+                    {config.storeName && (!config.headerBrand || config.storeName.toUpperCase() !== config.headerBrand.toUpperCase()) && (
+                      <div className="text-[11px] font-bold">
+                        {config.storeName}
+                      </div>
+                    )}
+                    {formatReceiptAddress(config) && (
+                      <div className="text-[10px] text-stone-700 leading-tight">
+                        {formatReceiptAddress(config)}
+                      </div>
+                    )}
                     {config.phone && (
                       <div className="text-[10px]">TELP: {config.phone}</div>
                     )}
