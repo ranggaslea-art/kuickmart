@@ -18,7 +18,7 @@ import {
 
 dotenv.config();
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const DOKU_CLIENT_ID = process.env.DOKU_CLIENT_ID || 'BRN-0241-1788726490929';
 const DOKU_SECRET_KEY = process.env.DOKU_SECRET_KEY || '';
 const IS_PRODUCTION = process.env.DOKU_IS_PRODUCTION === 'true';
@@ -3174,7 +3174,7 @@ async function startServer() {
     }
   }
 
-  const isDevMode = process.env.NODE_ENV === 'development';
+  const isDevMode = process.env.NODE_ENV !== 'production';
 
   if (!isDevMode && hasBuiltDist) {
     console.log(`[Static] Serving optimized production build from: ${distPath}`);
@@ -3208,8 +3208,8 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, () => {
-    console.log(`toko-online.online Full-Stack Server running on port ${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`toko-online.online Full-Stack Server running on http://0.0.0.0:${PORT}`);
     console.log(`DOKU Client ID configured: ${DOKU_CLIENT_ID}`);
   });
 }
