@@ -19,13 +19,16 @@ import {
   Activity,
   ScanBarcode,
   Globe,
-  RotateCcw
+  RotateCcw,
+  Lock,
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
+import { isSubdomainModuleEnabled, SUBDOMAIN_MODULE_POLICY_EVENT } from '../utils/subdomainModuleControl';
+import { getStoreSlugFromUrl, isDefaultStore, isRootDomain } from '../utils/tenantHelper';
 
 interface HeaderProps {
   currentStore: Store;
@@ -90,6 +93,21 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const currentSlug = getStoreSlugFromUrl();
+  const isMainStore = isDefaultStore(currentSlug) && isRootDomain();
+  const [, setPolicyVersion] = useState(0);
+
+  useEffect(() => {
+    const handlePolicyChange = () => setPolicyVersion(v => v + 1);
+    window.addEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+    window.addEventListener('storage', handlePolicyChange);
+    return () => {
+      window.removeEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+      window.removeEventListener('storage', handlePolicyChange);
+    };
+  }, []);
+
+  const isPosCashierEnabled = isMainStore || isSubdomainModuleEnabled('pos_cashier', currentSlug);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -314,14 +332,26 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Kasir POS Minimarket Button */}
             {onOpenPosCashier && (
-              <button
-                onClick={onOpenPosCashier}
-                title="Buka Modul Penjualan Kasir Minimarket (POS Display)"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-emerald-500/50"
-              >
-                <ScanBarcode className="w-3.5 h-3.5 text-emerald-200" />
-                <span className="hidden md:inline">Kasir POS</span>
-              </button>
+              isPosCashierEnabled ? (
+                <button
+                  onClick={onOpenPosCashier}
+                  title="Buka Modul Penjualan Kasir Minimarket (POS Display)"
+                  className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-emerald-500/50"
+                >
+                  <ScanBarcode className="w-3.5 h-3.5 text-emerald-200" />
+                  <span className="hidden md:inline">Kasir POS</span>
+                </button>
+              ) : (
+                <button
+                  onClick={onOpenPosCashier}
+                  title={`Modul Penjualan Kasir (POS) dinonaktifkan di subdomain ${currentSlug} oleh Domain Utama`}
+                  className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-600 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 border border-stone-300/80"
+                >
+                  <Lock className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="hidden md:inline line-through opacity-70">Kasir POS</span>
+                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1 py-0.2 rounded font-mono font-bold">Kunci</span>
+                </button>
+              )
             )}
 
             {/* Admin Panel Button */}

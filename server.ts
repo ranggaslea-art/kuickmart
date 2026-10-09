@@ -125,6 +125,41 @@ function saveTenantProductsToFile() {
 // Muat data produk tenant saat server start
 loadTenantProductsFromFile();
 
+// File penyimpanan kontrol modul subdomain (aktif/nonaktif per subdomain & global)
+const SUBDOMAIN_MODULES_FILE = path.join(process.cwd(), 'data', 'subdomain_modules.json');
+let subdomainModulesData: {
+  globalPolicy: Record<string, boolean>;
+  overrides: Record<string, Record<string, boolean>>;
+} = {
+  globalPolicy: {},
+  overrides: {},
+};
+
+function loadSubdomainModulesFromFile() {
+  try {
+    if (fs.existsSync(SUBDOMAIN_MODULES_FILE)) {
+      const raw = fs.readFileSync(SUBDOMAIN_MODULES_FILE, 'utf-8');
+      subdomainModulesData = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('[SubdomainModules] Could not load subdomain_modules.json:', e);
+  }
+}
+
+function saveSubdomainModulesToFile() {
+  try {
+    const dir = path.dirname(SUBDOMAIN_MODULES_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(SUBDOMAIN_MODULES_FILE, JSON.stringify(subdomainModulesData, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[SubdomainModules] Could not write subdomain_modules.json:', e);
+  }
+}
+
+loadSubdomainModulesFromFile();
+
 // Bank endpoint mapping in Jokul DOKU
 const DOKU_BANK_PATHS: Record<string, { path: string; prefix: string; name: string }> = {
   bca: { path: '/bca-virtual-account/v2/payment-code', prefix: '80777', name: 'BCA Virtual Account' },
@@ -560,6 +595,79 @@ async function startServer() {
       rootDomain: 'toko-online.online',
       message: 'Otoritas domain terverifikasi: Diizinkan menambahkan subdomain baru.',
     });
+  });
+
+  // 1b-3. Kontrol Modul Subdomain API (GET & POST) - Sinkronisasi status modul aktif/terkunci
+  app.get('/api/tenant/subdomain-modules', (_req, res) => {
+    res.json({
+      success: true,
+      globalPolicy: subdomainModulesData.globalPolicy || {},
+      overrides: subdomainModulesData.overrides || {},
+    });
+  });
+
+  app.post('/api/tenant/subdomain-modules', (req, res) => {
+    try {
+      const { type, globalPolicy, storeSlug, moduleId, isEnabled, bulkEnabled, modules } = req.body;
+
+      if (type === 'global' && globalPolicy) {
+        subdomainModulesData.globalPolicy = globalPolicy;
+        saveSubdomainModulesToFile();
+        console.log('[SubdomainModules] Kebijakan global diperbarui');
+        return res.json({ success: true, message: 'Kebijakan modul subdomain global berhasil diperbarui.' });
+      }
+
+      if (type === 'subdomain_override' && storeSlug && moduleId !== undefined) {
+        const cleanSlug = storeSlug.toLowerCase().trim();
+        if (!subdomainModulesData.overrides) subdomainModulesData.overrides = {};
+        if (!subdomainModulesData.overrides[cleanSlug]) subdomainModulesData.overrides[cleanSlug] = {};
+        subdomainModulesData.overrides[cleanSlug][moduleId] = Boolean(isEnabled);
+        saveSubdomainModulesToFile();
+        console.log(`[SubdomainModules] Override subdomain '${cleanSlug}' modul '${moduleId}' diubah ke: ${isEnabled ? 'AKTIF' : 'NONAKTIF'}`);
+        return res.json({ success: true, message: `Modul '${moduleId}' untuk subdomain '${cleanSlug}' berhasil diatur ke ${isEnabled ? 'AKTIF' : 'NONAKTIF'}.` });
+      }
+
+      if (type === 'remove_override' && storeSlug && moduleId) {
+        const cleanSlug = storeSlug.toLowerCase().trim();
+        if (subdomainModulesData.overrides && subdomainModulesData.overrides[cleanSlug]) {
+          delete subdomainModulesData.overrides[cleanSlug][moduleId];
+          if (Object.keys(subdomainModulesData.overrides[cleanSlug]).length === 0) {
+            delete subdomainModulesData.overrides[cleanSlug];
+          }
+          saveSubdomainModulesToFile();
+        }
+        return res.json({ success: true, message: `Override modul '${moduleId}' di subdomain '${cleanSlug}' telah dihapus.` });
+      }
+
+      if (type === 'bulk_subdomain' && storeSlug && bulkEnabled !== undefined) {
+        const cleanSlug = storeSlug.toLowerCase().trim();
+        if (!subdomainModulesData.overrides) subdomainModulesData.overrides = {};
+        const storeMap: Record<string, boolean> = {};
+        if (Array.isArray(modules)) {
+          modules.forEach((mId: string) => {
+            storeMap[mId] = Boolean(bulkEnabled);
+          });
+        }
+        subdomainModulesData.overrides[cleanSlug] = storeMap;
+        saveSubdomainModulesToFile();
+        console.log(`[SubdomainModules] Bulk set subdomain '${cleanSlug}' modul ke: ${bulkEnabled ? 'AKTIF' : 'NONAKTIF'}`);
+        return res.json({ success: true, message: `Seluruh modul untuk subdomain '${cleanSlug}' berhasil diatur ke ${bulkEnabled ? 'AKTIF' : 'NONAKTIF'}.` });
+      }
+
+      if (type === 'reset_subdomain' && storeSlug) {
+        const cleanSlug = storeSlug.toLowerCase().trim();
+        if (subdomainModulesData.overrides && subdomainModulesData.overrides[cleanSlug]) {
+          delete subdomainModulesData.overrides[cleanSlug];
+          saveSubdomainModulesToFile();
+        }
+        return res.json({ success: true, message: `Subdomain '${cleanSlug}' berhasil di-reset mengikuti kebijakan global.` });
+      }
+
+      return res.status(400).json({ success: false, error: 'Tipe aksi tidak dikenali' });
+    } catch (err: any) {
+      console.error('[SubdomainModules Error]:', err);
+      return res.status(500).json({ success: false, error: 'Gagal memperbarui kontrol modul subdomain', details: err.message });
+    }
   });
 
   app.post('/api/tenant/config', (req, res) => {

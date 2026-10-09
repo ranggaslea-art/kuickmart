@@ -3,6 +3,37 @@ import { isRootDomain, getStoreSlugFromUrl, isDefaultStore } from './tenantHelpe
 export const STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY = 'toko_online_subdomain_module_policy';
 export const STORAGE_SUBDOMAIN_OVERRIDES_KEY = 'toko_online_subdomain_module_overrides';
 export const SUBDOMAIN_MODULE_POLICY_EVENT = 'subdomain_module_policy_changed';
+export const SUBDOMAIN_POLICY_BROADCAST_CHANNEL = 'toko_online_subdomain_policy_channel';
+
+// Helper to broadcast changes across windows and tabs
+function broadcastPolicyChange(detail: any): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, { detail }));
+    if ('BroadcastChannel' in window) {
+      const bc = new BroadcastChannel(SUBDOMAIN_POLICY_BROADCAST_CHANNEL);
+      bc.postMessage(detail);
+      bc.close();
+    }
+  } catch {}
+}
+
+// Inisialisasi listener tab sinkronisasi otomatis
+if (typeof window !== 'undefined') {
+  try {
+    if ('BroadcastChannel' in window) {
+      const bcListener = new BroadcastChannel(SUBDOMAIN_POLICY_BROADCAST_CHANNEL);
+      bcListener.onmessage = (event) => {
+        window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, { detail: event.data }));
+      };
+    }
+    window.addEventListener('storage', (e) => {
+      if (e.key === STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY || e.key === STORAGE_SUBDOMAIN_OVERRIDES_KEY) {
+        window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, { detail: { type: 'storage_sync', key: e.key } }));
+      }
+    });
+  } catch {}
+}
 
 export type SubdomainModuleCategory = 'pos' | 'master' | 'inventory' | 'marketing' | 'settings' | 'system';
 
@@ -292,9 +323,13 @@ export function saveGlobalSubdomainModulePolicy(policy: Record<string, boolean>)
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, JSON.stringify(policy));
-    window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, {
-      detail: { type: 'global', policy }
-    }));
+    broadcastPolicyChange({ type: 'global', policy });
+
+    fetch('/api/tenant/subdomain-modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'global', globalPolicy: policy }),
+    }).catch(err => console.warn('[SubdomainPolicy Sync Warning]:', err));
   } catch (e) {
     console.error('Gagal menyimpan global subdomain module policy:', e);
   }
@@ -329,9 +364,13 @@ export function saveSubdomainModuleOverride(storeSlug: string, moduleId: string,
     currentOverrides[cleanSlug] = storeMap;
 
     localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
-    window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, {
-      detail: { type: 'subdomain_override', storeSlug: cleanSlug, moduleId, isEnabled }
-    }));
+    broadcastPolicyChange({ type: 'subdomain_override', storeSlug: cleanSlug, moduleId, isEnabled });
+
+    fetch('/api/tenant/subdomain-modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'subdomain_override', storeSlug: cleanSlug, moduleId, isEnabled }),
+    }).catch(err => console.warn('[SubdomainPolicy Sync Warning]:', err));
   } catch (e) {
     console.error('Gagal menyimpan subdomain module override:', e);
   }
@@ -351,9 +390,13 @@ export function removeSubdomainModuleOverride(storeSlug: string, moduleId: strin
         delete currentOverrides[cleanSlug];
       }
       localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
-      window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, {
-        detail: { type: 'remove_override', storeSlug: cleanSlug, moduleId }
-      }));
+      broadcastPolicyChange({ type: 'remove_override', storeSlug: cleanSlug, moduleId });
+
+      fetch('/api/tenant/subdomain-modules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'remove_override', storeSlug: cleanSlug, moduleId }),
+      }).catch(err => console.warn('[SubdomainPolicy Sync Warning]:', err));
     }
   } catch (e) {
     console.error('Gagal menghapus subdomain module override:', e);
@@ -375,9 +418,18 @@ export function bulkSetSubdomainModules(storeSlug: string, isEnabled: boolean): 
     currentOverrides[cleanSlug] = storeMap;
 
     localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
-    window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, {
-      detail: { type: 'bulk_subdomain', storeSlug: cleanSlug, isEnabled }
-    }));
+    broadcastPolicyChange({ type: 'bulk_subdomain', storeSlug: cleanSlug, isEnabled });
+
+    fetch('/api/tenant/subdomain-modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'bulk_subdomain',
+        storeSlug: cleanSlug,
+        bulkEnabled: isEnabled,
+        modules: CONTROLLABLE_SUBDOMAIN_MODULES.map(m => m.id),
+      }),
+    }).catch(err => console.warn('[SubdomainPolicy Sync Warning]:', err));
   } catch (e) {
     console.error('Gagal bulk set subdomain modules:', e);
   }
@@ -394,13 +446,46 @@ export function resetSubdomainToGlobal(storeSlug: string): void {
     if (currentOverrides[cleanSlug]) {
       delete currentOverrides[cleanSlug];
       localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
-      window.dispatchEvent(new CustomEvent(SUBDOMAIN_MODULE_POLICY_EVENT, {
-        detail: { type: 'reset_subdomain', storeSlug: cleanSlug }
-      }));
+      broadcastPolicyChange({ type: 'reset_subdomain', storeSlug: cleanSlug });
+
+      fetch('/api/tenant/subdomain-modules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'reset_subdomain', storeSlug: cleanSlug }),
+      }).catch(err => console.warn('[SubdomainPolicy Sync Warning]:', err));
     }
   } catch (e) {
     console.error('Gagal reset subdomain ke global:', e);
   }
+}
+
+/**
+ * Sinkronisasi kebijakan kontrol modul subdomain dari server saat aplikasi start
+ */
+export async function syncSubdomainModulePolicyFromServer(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const res = await fetch('/api/tenant/subdomain-modules');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) {
+        if (data.globalPolicy && Object.keys(data.globalPolicy).length > 0) {
+          localStorage.setItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, JSON.stringify(data.globalPolicy));
+        }
+        if (data.overrides && Object.keys(data.overrides).length > 0) {
+          localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(data.overrides));
+        }
+        broadcastPolicyChange({ type: 'synced_from_server' });
+      }
+    }
+  } catch (err) {
+    console.warn('[SubdomainModules] Offline fallback to localStorage:', err);
+  }
+}
+
+// Otomatis sinkronisasi dari server saat awal dimuat
+if (typeof window !== 'undefined') {
+  syncSubdomainModulePolicyFromServer();
 }
 
 /**

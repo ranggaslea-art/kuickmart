@@ -127,8 +127,10 @@ export const SubdomainModuleControlManager: React.FC = () => {
     };
 
     window.addEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+    window.addEventListener('storage', handlePolicyChange);
     return () => {
       window.removeEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+      window.removeEventListener('storage', handlePolicyChange);
     };
   }, []);
 

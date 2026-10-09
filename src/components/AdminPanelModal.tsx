@@ -172,7 +172,7 @@ import {
   saveBrandsToMySql,
   saveOrderToMySql 
 } from '../lib/mysqlClientApi';
-import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig, canAccessSubdomainModule } from '../utils/tenantHelper';
+import { getStoreSlugFromUrl, isDefaultStore, isRootDomain, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig, canAccessSubdomainModule } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
 interface AdminPanelModalProps {
@@ -293,10 +293,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     return loadStoreTenantConfig(currentSlug);
   }, [currentSlug]);
 
-  // Otoritas Domain Utama: Kontrol modul subdomain HANYA ada di domain utama (toko-online.online)
+  // Otoritas Domain Utama: Tab 'Kontrol Modul Subdomain' & 'Subdomain Terdaftar' HANYA dapat dikelola melalui domain utama (toko-online.online)
   const hasSubdomainAuthority = useMemo(() => {
     return canAccessSubdomainModule().allowed;
-  }, []);
+  }, [currentSlug]);
 
   const [subdomainPolicyVersion, setSubdomainPolicyVersion] = useState(0);
   useEffect(() => {
@@ -304,14 +304,34 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       setSubdomainPolicyVersion((v) => v + 1);
     };
     window.addEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+    window.addEventListener('storage', handlePolicyChange);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if ('BroadcastChannel' in window) {
+        bc = new BroadcastChannel('toko_online_subdomain_policy_channel');
+        bc.onmessage = handlePolicyChange;
+      }
+    } catch {}
+
     return () => {
       window.removeEventListener(SUBDOMAIN_MODULE_POLICY_EVENT, handlePolicyChange);
+      window.removeEventListener('storage', handlePolicyChange);
+      if (bc) bc.close();
     };
   }, []);
 
   const isModuleDisabledBySubdomain = (moduleId: string): boolean => {
-    // Domain utama tidak pernah dibatasi oleh kebijakan subdomain
-    if (hasSubdomainAuthority) return false;
+    // 1. Tab kontrol modul subdomain khusus otoritas domain utama
+    if (moduleId === 'subdomain_modules') {
+      return !hasSubdomainAuthority;
+    }
+    // 2. Jika saat ini sedang di domain utama / toko default (bukan subdomain), semua modul selalu aktif
+    if (isDefaultStore(currentSlug) && isRootDomain()) {
+      return false;
+    }
+    // 3. Jika sedang berada di subdomain (seperti tokoalda, kuickmart, dll.), patuhi kunci status modul:
+    // Cek apakah modul dinonaktifkan secara spesifik untuk subdomain ini atau via kebijakan global subdomain
     return !isSubdomainModuleEnabled(moduleId, currentSlug);
   };
 

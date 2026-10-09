@@ -63,6 +63,18 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
   }
 
   const hostname = (customHost || window.location.hostname || '').toLowerCase().trim();
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const paramStore = urlParams.get('store');
+
+  // Jika sedang aktif di parameter store subdomain (misal: ?store=mrberkah)
+  if (paramStore && !isDefaultStore(paramStore)) {
+    return {
+      allowed: false,
+      currentDomain: `${paramStore}.${ROOT_AUTHORITY_DOMAIN}`,
+      allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
+      reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${paramStore}'. Modul info subdomain hanya bisa diakses oleh domain utama ${ROOT_AUTHORITY_DOMAIN}.`,
+    };
+  }
 
   // 1. Cek kecocokan langsung dengan domain yang berhak
   if (
