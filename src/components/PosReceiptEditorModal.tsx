@@ -39,7 +39,8 @@ import {
   copyPosReceiptText,
   getReceiptFontFamilyCss,
   getReceiptFontWeightCss,
-  getReceiptFontSizeCss
+  getReceiptFontSizeCss,
+  resolveReceiptColumns
 } from '../utils/posPrinterHelper';
 import { OsPrinterSearchModal } from './OsPrinterSearchModal';
 import { DiscoveredOsPrinter } from '../types/osPrinter';
@@ -731,13 +732,24 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                     </label>
                     <select
                       value={config.paperWidth || '70mm_dotmatrix'}
-                      onChange={e => setConfig({ ...config, paperWidth: e.target.value as any })}
+                      onChange={e => {
+                        const newWidth = e.target.value as any;
+                        setConfig(prev => ({
+                          ...prev,
+                          paperWidth: newWidth,
+                          charactersPerLine: newWidth === '58mm' ? 32 : prev.charactersPerLine || 40
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-stone-50 font-bold text-stone-900 focus:bg-white"
                     >
                       <option value="70mm_dotmatrix">70mm / 76mm Roll (Epson TM-U220)</option>
                       <option value="58mm">58mm (Thermal Kecil)</option>
                       <option value="80mm">80mm (Thermal Desktop)</option>
                     </select>
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                      <span>Batas Aman Kiri & Kanan Aktif (100% Anti-Cutoff)</span>
+                    </div>
                   </div>
 
                   {/* Jumlah Karakter Kolom per Baris */}
@@ -746,23 +758,25 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                       Jumlah Kolom Karakter:
                     </label>
                     <div className="flex gap-2">
-                      {[40, 33, 42].map(cols => (
+                      {(config.paperWidth === '58mm' ? [32, 30] : [40, 33, 42]).map(cols => (
                         <button
                           key={cols}
                           type="button"
                           onClick={() => setConfig({ ...config, charactersPerLine: cols as any })}
                           className={`flex-1 py-2 rounded-xl text-xs font-black border transition-all ${
-                            (config.charactersPerLine || 40) === cols
+                            (config.charactersPerLine || (config.paperWidth === '58mm' ? 32 : 40)) === cols
                               ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
                               : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
                           }`}
                         >
-                          {cols} Kolom {cols === 40 ? '(Font A)' : cols === 33 ? '(Font B)' : ''}
+                          {cols} Kolom {cols === 40 ? '(Font A)' : cols === 33 ? '(Font B)' : cols === 32 ? '(58mm)' : ''}
                         </button>
                       ))}
                     </div>
                     <span className="text-[10px] text-stone-400 mt-1 block">
-                      *40 Kolom (Font A 9×9) adalah standar pabrik paling umum untuk Epson TM-U220
+                      {config.paperWidth === '58mm' 
+                        ? '*32 Kolom adalah standar aman untuk printer thermal 58mm agar teks tidak terpotong tepi.'
+                        : '*40 Kolom (Font A 9×9) adalah standar pabrik paling presisi untuk Epson TM-U220.'}
                     </span>
                   </div>
 
@@ -1562,25 +1576,25 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
               </div>
             </div>
 
-            {/* Column Ruler (Penggaris Kolom Monospace 1-40) */}
+            {/* Column Ruler (Penggaris Kolom Monospace) */}
             <div className="bg-stone-800 text-amber-300 font-mono text-[9px] px-3 py-1.5 rounded-xl tracking-wider text-center border border-stone-700 overflow-x-auto select-none">
-              <div className="text-stone-400 text-[8px] mb-0.5">LEBAR {config.charactersPerLine || 40} KOLOM KARAKTER (TM-U220 FONT A)</div>
+              <div className="text-stone-400 text-[8px] mb-0.5">LEBAR {resolveReceiptColumns(config)} KOLOM KARAKTER • BATAS AMAN KIRI & KANAN AKTIF</div>
               <div>|....5...10...15...20...25...30...35...40|</div>
             </div>
 
-            {/* RECEIPT PAPER CONTAINER (SIMULASI KERTAS STRUK ROLL 70MM) */}
+            {/* RECEIPT PAPER CONTAINER (SIMULASI KERTAS STRUK ROLL) */}
             <div className="flex-1 bg-stone-200/80 rounded-3xl p-3 sm:p-5 flex justify-center items-start overflow-y-auto border border-stone-300 shadow-inner max-h-[620px]">
               
               {previewMode === 'dotmatrix_visual' ? (
-                /* MODE VISUAL MONOCHROME DOT MATRIX */
+                /* MODE VISUAL MONOCHROME DOT MATRIX DENGAN SAFE MARGINS */
                 <div 
                   style={{
                     fontFamily: getReceiptFontFamilyCss(config.fontFamily),
                     fontWeight: getReceiptFontWeightCss(config.fontBoldness),
-                    fontSize: getReceiptFontSizeCss(config.fontSize).base,
+                    fontSize: getReceiptFontSizeCss(config.fontSize, config.paperWidth).base,
                     lineHeight: config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12'
                   }}
-                  className="w-[280px] bg-white text-black p-4 rounded-xs shadow-md border-x border-stone-300 relative leading-tight select-text transition-all"
+                  className={`${config.paperWidth === '58mm' ? 'w-[230px]' : config.paperWidth === '80mm' ? 'w-[310px]' : 'w-[275px]'} bg-white text-black px-4 py-3 rounded-xs shadow-md border-x border-stone-300 relative leading-tight select-text transition-all`}
                 >
                   
                   {/* Efek gerigi sobekan kertas atas */}
@@ -1589,8 +1603,8 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   {/* Header */}
                   <div className="text-center space-y-0.5 pb-2">
                     <div 
-                      style={{ fontSize: getReceiptFontSizeCss(config.fontSize).brand }}
-                      className="font-black tracking-wider uppercase"
+                      style={{ fontSize: getReceiptFontSizeCss(config.fontSize, config.paperWidth).brand }}
+                      className="font-black tracking-wider uppercase break-words"
                     >
                       {config.headerBrand || config.storeName || ''}
                     </div>
@@ -1623,9 +1637,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   </div>
 
                   {/* Divider */}
-                  <div className="text-stone-900 tracking-tighter text-center my-1 select-none overflow-hidden">
-                    {(config.dividerChar || '=').repeat(config.charactersPerLine || 40)}
-                  </div>
+                  <div className="border-b-2 border-stone-900 my-1.5" />
 
                   {/* Metadata */}
                   <div className="text-[10.5px] space-y-0.5">
@@ -1647,9 +1659,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   </div>
 
                   {/* Thin Divider */}
-                  <div className="text-stone-900 tracking-tighter text-center my-1 select-none overflow-hidden">
-                    {'-'.repeat(config.charactersPerLine || 40)}
-                  </div>
+                  <div className="border-b border-dashed border-stone-900 my-1.5" />
 
                   {/* Items */}
                   <div className="space-y-1.5 text-[11px]">
@@ -1685,9 +1695,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   </div>
 
                   {/* Thin Divider */}
-                  <div className="text-stone-900 tracking-tighter text-center my-1 select-none overflow-hidden">
-                    {'-'.repeat(config.charactersPerLine || 40)}
-                  </div>
+                  <div className="border-b border-dashed border-stone-900 my-1.5" />
 
                   {/* Totals */}
                   <div className="space-y-0.5 text-[11px]">
@@ -1714,9 +1722,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   </div>
 
                   {/* Double Divider */}
-                  <div className="text-stone-900 tracking-tighter text-center my-1 select-none overflow-hidden">
-                    {(config.dividerChar || '=').repeat(config.charactersPerLine || 40)}
-                  </div>
+                  <div className="border-b-2 border-stone-900 my-1.5" />
 
                   {/* TOTAL AKHIR */}
                   <div className="flex justify-between font-black text-xs py-0.5">
@@ -1776,9 +1782,7 @@ export const PosReceiptEditorModal: React.FC<PosReceiptEditorModalProps> = ({
                   )}
 
                   {/* Divider */}
-                  <div className="text-stone-900 tracking-tighter text-center my-1 select-none overflow-hidden">
-                    {(config.dividerChar || '=').repeat(config.charactersPerLine || 40)}
-                  </div>
+                  <div className="border-b-2 border-stone-900 my-1.5" />
 
                   {/* Footer Messages */}
                   <div className="text-center text-[9.5px] space-y-1 pt-1 leading-tight text-stone-800">

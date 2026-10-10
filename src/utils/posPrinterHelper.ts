@@ -55,6 +55,19 @@ export function padBetween(left: string, right: string, width: number = 40): str
 }
 
 /**
+ * Helper untuk menentukan jumlah kolom karakter aman berdasarkan konfigurasi & jenis kertas
+ */
+export function resolveReceiptColumns(config: ReceiptInfo): number {
+  if (config.charactersPerLine) {
+    if (config.paperWidth === '58mm' && config.charactersPerLine > 34) return 32;
+    return config.charactersPerLine;
+  }
+  if (config.paperWidth === '58mm') return 32;
+  if (config.paperWidth === '80mm') return 44;
+  return 40; // Default 40 kolom untuk Epson TM-U220
+}
+
+/**
  * Menghasilkan teks struk format RAW ASCII Monospace 40 kolom
  * Cocok langsung untuk printer Dot Matrix Epson TM-U220 (Font A 9x9 / 40 kolom per baris)
  */
@@ -64,7 +77,7 @@ export function generateRawPosReceiptText(
   cashierName?: string,
   paymentDetails?: { cashReceived?: number; changeAmount?: number }
 ): string {
-  const cols = config.charactersPerLine || 40;
+  const cols = resolveReceiptColumns(config);
   const divChar = config.dividerChar || '=';
   const divider = divChar.repeat(cols);
   const thinDivider = '-'.repeat(cols);
@@ -271,25 +284,32 @@ export function generateDotMatrixReceiptHtml(
 
   const fontCss = getReceiptFontFamilyCss(config.fontFamily);
   const weightCss = getReceiptFontWeightCss(config.fontBoldness);
-  const fontSizes = getReceiptFontSizeCss(config.fontSize);
+  const paperWidthChoice = config.paperWidth || '70mm_dotmatrix';
+  const fontSizes = getReceiptFontSizeCss(config.fontSize, paperWidthChoice);
   const lineSpacingVal = config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12';
 
-  const paperWidthChoice = config.paperWidth || '70mm_dotmatrix';
   let rollWidthMm = 76;
-  let printWidthMm = 70;
+  let safePrintWidthMm = 64; // Area cetak aman TM-U220
+  let safePaddingLeftMm = 4;
+  let safePaddingRightMm = 4;
+
   if (paperWidthChoice === '58mm') {
     rollWidthMm = 58;
-    printWidthMm = 52;
+    safePrintWidthMm = 48; // Area cetak aman thermal 58mm
+    safePaddingLeftMm = 2.5;
+    safePaddingRightMm = 2.5;
   } else if (paperWidthChoice === '80mm') {
     rollWidthMm = 80;
-    printWidthMm = 74;
+    safePrintWidthMm = 72; // Area cetak aman thermal 80mm
+    safePaddingLeftMm = 4;
+    safePaddingRightMm = 4;
   }
 
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Struk POS - ${order.orderNumber}</title>
+  <title>Faktur POS - ${order.orderNumber}</title>
   <!-- Font Monospace Tajam & Pekat -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -299,19 +319,17 @@ export function generateDotMatrixReceiptHtml(
       size: ${rollWidthMm}mm auto;
       margin: 0mm;
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    *, *::before, *::after {
+      box-sizing: border-box !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
     }
     html, body {
-      margin: 0;
-      padding: 0;
-      width: ${rollWidthMm}mm;
-      max-width: ${rollWidthMm}mm;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      max-width: ${rollWidthMm}mm !important;
       background: #ffffff !important;
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
@@ -325,67 +343,112 @@ export function generateDotMatrixReceiptHtml(
       image-rendering: pixelated;
     }
     .receipt-container {
-      width: ${printWidthMm}mm;
-      max-width: ${printWidthMm}mm;
-      padding: 1mm 2mm 1mm 3.5mm;
-      margin: 0 auto;
-      background: #ffffff;
+      width: 100% !important;
+      max-width: ${safePrintWidthMm}mm !important;
+      margin: 0 auto !important;
+      padding: 1.5mm ${safePaddingRightMm}mm 2mm ${safePaddingLeftMm}mm !important;
+      background: #ffffff !important;
       white-space: normal;
       word-break: break-word;
       line-height: ${lineSpacingVal};
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
       font-weight: ${weightCss};
+      overflow: hidden !important;
+      box-sizing: border-box !important;
     }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    .text-left { text-align: left; }
-    .font-bold { font-weight: 900; }
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .font-bold { font-weight: 900 !important; }
     .header-brand {
       font-size: ${fontSizes.brand};
       font-weight: 900;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.2px;
       margin-bottom: 1px;
       text-transform: uppercase;
       line-height: 1.15;
+      word-break: break-word;
     }
     .header-sub {
-      font-size: 10px;
+      font-size: 9.5px;
       margin-bottom: 1px;
       line-height: 1.15;
+      font-style: italic;
     }
     .divider {
-      border-top: 1px dashed #000000;
-      margin: 2px 0;
+      width: 100% !important;
+      border-bottom: 1px dashed #000000 !important;
+      margin: 2px 0 !important;
+      height: 0 !important;
+      line-height: 0 !important;
+      box-sizing: border-box !important;
     }
     .divider-double {
-      border-top: 2px solid #000000;
-      margin: 2px 0;
+      width: 100% !important;
+      border-bottom: 2px solid #000000 !important;
+      margin: 2px 0 !important;
+      height: 0 !important;
+      line-height: 0 !important;
+      box-sizing: border-box !important;
     }
     .meta-table, .item-table, .summary-table {
-      width: 100%;
-      border-collapse: collapse;
-      border-spacing: 0;
+      width: 100% !important;
+      table-layout: fixed !important;
+      border-collapse: collapse !important;
+      border-spacing: 0 !important;
       font-size: ${fontSizes.meta};
       line-height: ${lineSpacingVal};
-      margin: 0;
-      padding: 0;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
     }
     .meta-table td, .summary-table td {
-      padding: 0.5px 0;
+      padding: 0.5px 0 !important;
       line-height: ${lineSpacingVal};
+      vertical-align: top;
+      box-sizing: border-box !important;
+    }
+    .col-meta-l {
+      width: 58% !important;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding-right: 2px !important;
+    }
+    .col-meta-r {
+      width: 42% !important;
+      text-align: right !important;
+      white-space: nowrap;
+      padding-left: 2px !important;
     }
     .item-row-title {
-      font-weight: 800;
+      font-weight: 900;
       word-break: break-word;
       padding-top: 1px;
-      line-height: ${lineSpacingVal};
+      line-height: 1.15;
     }
     .item-row-detail {
-      display: flex;
-      justify-content: space-between;
+      display: table !important;
+      width: 100% !important;
+      table-layout: fixed !important;
       padding-bottom: 1px;
       line-height: ${lineSpacingVal};
+      box-sizing: border-box !important;
+    }
+    .item-calc-col {
+      display: table-cell !important;
+      width: 60% !important;
+      word-break: break-all;
+      padding-right: 2px !important;
+    }
+    .item-subtotal-col {
+      display: table-cell !important;
+      width: 40% !important;
+      text-align: right !important;
+      white-space: nowrap;
+      font-weight: 900;
+      padding-left: 2px !important;
     }
     .total-row {
       font-size: ${fontSizes.brand};
@@ -398,14 +461,14 @@ export function generateDotMatrixReceiptHtml(
       margin-top: 4px;
       margin-bottom: 2px;
       line-height: 1;
+      overflow: hidden;
     }
     .barcode-lines {
       display: inline-block;
-      height: 22px;
-      letter-spacing: 2px;
+      letter-spacing: 1.5px;
       font-family: monospace;
       font-weight: 900;
-      font-size: 11px;
+      font-size: 10px;
     }
     .feed-lines {
       height: ${Math.max(1, config.feedLinesBeforeCut || 3) * 6}px;
@@ -421,6 +484,16 @@ export function generateDotMatrixReceiptHtml(
       .receipt-container {
         box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         border: 1px solid #cbd5e1;
+      }
+    }
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+      }
+      .receipt-container {
+        box-shadow: none !important;
+        border: none !important;
       }
     }
   </style>
@@ -441,16 +514,16 @@ export function generateDotMatrixReceiptHtml(
 
     <table class="meta-table">
       <tr>
-        <td>NO: <strong>${order.orderNumber}</strong></td>
-        <td class="text-right">${new Date(order.createdAt).toLocaleDateString('id-ID')}</td>
+        <td class="col-meta-l">NO: <strong>${order.orderNumber}</strong></td>
+        <td class="col-meta-r">${new Date(order.createdAt).toLocaleDateString('id-ID')}</td>
       </tr>
       <tr>
-        <td>KASIR: ${cashierName || config.cashierName || 'KASIR 01'}</td>
-        <td class="text-right">${new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
+        <td class="col-meta-l">KASIR: ${cashierName || config.cashierName || 'KASIR 01'}</td>
+        <td class="col-meta-r">${new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
       </tr>
       ${order.customerName ? `
       <tr>
-        <td colspan="2">PLG: <strong>${order.customerName}</strong></td>
+        <td colspan="2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PLG: <strong>${order.customerName}</strong></td>
       </tr>` : ''}
     </table>
 
@@ -469,8 +542,8 @@ export function generateDotMatrixReceiptHtml(
         <div style="margin-bottom: 1.5px;">
           <div class="item-row-title">${num}. ${pName}</div>
           <div class="item-row-detail">
-            <span>&nbsp;&nbsp;&nbsp;${qty} ${unit} × ${formatRupiah(price).replace('Rp ', '')}</span>
-            <span class="font-bold">${formatRupiah(subtotal).replace('Rp ', '')}</span>
+            <span class="item-calc-col">&nbsp;&nbsp;&nbsp;${qty} ${unit} × ${formatRupiah(price).replace('Rp ', '')}</span>
+            <span class="item-subtotal-col font-bold">${formatRupiah(subtotal).replace('Rp ', '')}</span>
           </div>
         </div>`;
       }).join('')}
@@ -480,22 +553,22 @@ export function generateDotMatrixReceiptHtml(
 
     <table class="summary-table">
       <tr>
-        <td>TOTAL ITEM</td>
-        <td class="text-right">${order.items.length} ITEM (${order.items.reduce((acc, i) => acc + i.quantity, 0)} QTY)</td>
+        <td style="width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">TOTAL ITEM</td>
+        <td style="width: 45%; text-align: right; white-space: nowrap;">${order.items.length} ITEM (${order.items.reduce((acc, i) => acc + i.quantity, 0)} QTY)</td>
       </tr>
       <tr>
-        <td>SUBTOTAL</td>
-        <td class="text-right">${formatRupiah(order.subtotal)}</td>
+        <td style="width: 55%;">SUBTOTAL</td>
+        <td style="width: 45%; text-align: right; white-space: nowrap;">${formatRupiah(order.subtotal)}</td>
       </tr>
       ${order.discountAmount > 0 ? `
       <tr>
-        <td>DISKON</td>
-        <td class="text-right">-${formatRupiah(order.discountAmount)}</td>
+        <td style="width: 55%;">DISKON</td>
+        <td style="width: 45%; text-align: right; white-space: nowrap;">-${formatRupiah(order.discountAmount)}</td>
       </tr>` : ''}
       ${config.showTaxSummary && (config.taxRatePercent || 0) > 0 ? `
       <tr>
-        <td>PPN (${config.taxRatePercent}%)</td>
-        <td class="text-right">${formatRupiah(Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)))}</td>
+        <td style="width: 55%;">PPN (${config.taxRatePercent}%)</td>
+        <td style="width: 45%; text-align: right; white-space: nowrap;">${formatRupiah(Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)))}</td>
       </tr>` : ''}
     </table>
 
@@ -503,21 +576,21 @@ export function generateDotMatrixReceiptHtml(
 
     <table class="summary-table">
       <tr class="total-row">
-        <td>TOTAL BAYAR</td>
-        <td class="text-right font-bold">${formatRupiah(order.total)}</td>
+        <td style="width: 55%;">TOTAL BAYAR</td>
+        <td style="width: 45%; text-align: right; font-bold; white-space: nowrap;">${formatRupiah(order.total)}</td>
       </tr>
       <tr>
-        <td>CARA BAYAR</td>
-        <td class="text-right font-bold">${(order.paymentMethod || 'TUNAI').toUpperCase()}</td>
+        <td style="width: 55%;">CARA BAYAR</td>
+        <td style="width: 45%; text-align: right; font-bold; white-space: nowrap;">${(order.paymentMethod || 'TUNAI').toUpperCase()}</td>
       </tr>
       ${paymentDetails && paymentDetails.cashReceived !== undefined && paymentDetails.cashReceived > 0 ? `
       <tr>
-        <td>TUNAI DITERIMA</td>
-        <td class="text-right">${formatRupiah(paymentDetails.cashReceived)}</td>
+        <td style="width: 55%;">TUNAI DITERIMA</td>
+        <td style="width: 45%; text-align: right; white-space: nowrap;">${formatRupiah(paymentDetails.cashReceived)}</td>
       </tr>
       <tr>
-        <td>KEMBALIAN</td>
-        <td class="text-right font-bold">${formatRupiah(paymentDetails.changeAmount || 0)}</td>
+        <td style="width: 55%;">KEMBALIAN</td>
+        <td style="width: 45%; text-align: right; font-bold; white-space: nowrap;">${formatRupiah(paymentDetails.changeAmount || 0)}</td>
       </tr>` : ''}
     </table>
 
@@ -530,19 +603,22 @@ export function generateDotMatrixReceiptHtml(
     <div class="divider-double"></div>
 
     ${config.showSignatures !== false ? `
-    <!-- Komponen Penandatanganan Struk (Flexbox justify-between & Grid 2-kolom horizontal) -->
-    <div class="receipt-signatures" style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin: 6px 0 4px 0; font-size: 10px; text-align: center; box-sizing: border-box;">
-      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
-        <div>Kasir,</div>
-        <div style="height: 26px;"></div>
-        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierName || config.cashierName || 'Kasir 01'} )</div>
-      </div>
-      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
-        <div>Pelanggan,</div>
-        <div style="height: 26px;"></div>
-        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${order.customerName || 'Pelanggan'} )</div>
-      </div>
-    </div>
+    <!-- Komponen Penandatanganan Struk (Tabel Presisi Anti-Cutoff) -->
+    <table class="summary-table" style="margin: 6px 0 4px 0;">
+      <tr>
+        <td style="width: 46%; text-align: center; vertical-align: top;">
+          <div style="font-weight: 700; font-size: ${fontSizes.meta};">Kasir,</div>
+          <div style="height: 22px;"></div>
+          <div style="border-top: 1px dashed #000000; width: 90%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierName || config.cashierName || 'Kasir 01'} )</div>
+        </td>
+        <td style="width: 8%;"></td>
+        <td style="width: 46%; text-align: center; vertical-align: top;">
+          <div style="font-weight: 700; font-size: ${fontSizes.meta};">Pelanggan,</div>
+          <div style="height: 22px;"></div>
+          <div style="border-top: 1px dashed #000000; width: 90%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${order.customerName || 'Pelanggan'} )</div>
+        </td>
+      </tr>
+    </table>
     <div class="divider"></div>
     ` : ''}
 
@@ -567,7 +643,7 @@ export function generateDotMatrixReceiptHtml(
 
 /**
  * Mencetak struk secara instan ke printer dot matrix Epson TM-U220 via isolated iframe
- * Tidak mengganggu viewport aplikasi dan mengisolasi ukuran halaman 70mm secara presisi.
+ * Tidak mengganggu viewport aplikasi dan mengisolasi ukuran halaman secara presisi.
  */
 export function printPosReceiptViaIframe(htmlContent: string): Promise<boolean> {
   return new Promise((resolve) => {
@@ -588,8 +664,8 @@ export function printPosReceiptViaIframe(htmlContent: string): Promise<boolean> 
       iframe.style.position = 'fixed';
       iframe.style.right = '0';
       iframe.style.bottom = '0';
-      iframe.style.width = '10px';
-      iframe.style.height = '10px';
+      iframe.style.width = '80mm';
+      iframe.style.height = '200mm';
       iframe.style.opacity = '0.01';
       iframe.style.border = 'none';
       iframe.style.pointerEvents = 'none';

@@ -805,7 +805,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                   </div>
                   {paperWidth === '70mm_dotmatrix' && (
                     <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-center justify-between gap-2">
-                      <span>Dioptimalkan untuk Epson TM-U220 (Pita impact, 40 kolom, font Courier).</span>
+                      <span>Dioptimalkan untuk Epson TM-U220 (Pita impact, 40 kolom, font Courier, batas aman anti-potong kiri & kanan).</span>
                       <button
                         type="button"
                         onClick={() => {

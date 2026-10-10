@@ -50,7 +50,15 @@ export function generateEscPosBinaryBuffer(
     addBytes(0x0a); // LF
   };
 
-  const cols = config.charactersPerLine || 40;
+  const cols = (() => {
+    if (config.charactersPerLine) {
+      if (config.paperWidth === '58mm' && config.charactersPerLine > 34) return 32;
+      return config.charactersPerLine;
+    }
+    if (config.paperWidth === '58mm') return 32;
+    if (config.paperWidth === '80mm') return 44;
+    return 40;
+  })();
   const divider = (config.dividerChar || '=').repeat(cols);
   const thinDivider = '-'.repeat(cols);
 
@@ -406,27 +414,40 @@ export function getReceiptFontWeightCss(boldness?: string): number {
 /**
  * Helper untuk mendapatkan ukuran font base struk
  */
-export function getReceiptFontSizeCss(size?: string): { base: string; brand: string; meta: string; footer: string } {
+export function getReceiptFontSizeCss(size?: string, paperWidth?: string): { base: string; brand: string; meta: string; footer: string } {
+  const is58mm = paperWidth === '58mm';
+  if (is58mm) {
+    switch (size) {
+      case 'compact':
+        return { base: '9.5px', brand: '11.5px', meta: '9px', footer: '8.5px' };
+      case 'large':
+        return { base: '11px', brand: '13px', meta: '10px', footer: '9.5px' };
+      case 'normal':
+      default:
+        return { base: '10px', brand: '12px', meta: '9.5px', footer: '9px' };
+    }
+  }
   switch (size) {
     case 'compact':
-      return { base: '11px', brand: '13px', meta: '10.5px', footer: '10px' };
+      return { base: '10.5px', brand: '12.5px', meta: '9.5px', footer: '9px' };
     case 'large':
-      return { base: '13px', brand: '15px', meta: '12px', footer: '11.5px' };
+      return { base: '12.5px', brand: '14.5px', meta: '11px', footer: '10.5px' };
     case 'normal':
     default:
-      return { base: '12px', brand: '14px', meta: '11px', footer: '10.5px' };
+      return { base: '11.5px', brand: '13.5px', meta: '10px', footer: '9.5px' };
   }
 }
 
 /**
  * Menghasilkan Dokumen HTML Super Tajam & Rapat (Format Kasir POS / iPos 4)
  * Didesain khusus untuk printer Dot Matrix (Epson TM-U220) dan Thermal POS:
- * 1. Mode Huruf Pekat Maksimal (Double-Strike Simulation via text-stroke & text-shadow):
- *    Mencegah hasil print kabur/samar pada pita ribbon ERC-38
- * 2. Menggunakan margin/padding 0 dengan line-height rapat dan konsisten
- * 3. Safe left padding 3.5mm agar teks tepi kiri tidak terpotong pisau
- * 4. Mendukung penyesuaian lebar kertas (58mm, 70mm TM-U220, 80mm)
- * 5. Tinta monokrom kontras tinggi 100% #000000 murni (CMYK 100% K)
+ * 1. Area Cetak Aman (Safe Printable Area):
+ *    - 70mm / TM-U220 (Roll 76mm): Lebar aman 64mm (sesuai head fisik TM-U220 63.5mm), margin kiri & kanan aman 4mm
+ *    - 58mm Thermal: Lebar aman 48mm, margin kiri & kanan aman 2.5mm
+ *    - 80mm Thermal: Lebar aman 72mm, margin kiri & kanan aman 4mm
+ * 2. Table Layout Fixed: Menjamin kolom kanan (harga/total/subtotal) tidak pernah terdorong keluar batas fisik kertas
+ * 3. Garis pembatas CSS 100% lebar (tidak menyebabkan overflow horizontal teks monospaced)
+ * 4. Tinta monokrom kontras tinggi 100% #000000 murni (CMYK 100% K)
  */
 export function generateCrispDotMatrixReceiptHtml(
   order: Order,
@@ -434,7 +455,6 @@ export function generateCrispDotMatrixReceiptHtml(
   cashierName?: string,
   paymentDetails?: { cashReceived?: number; changeAmount?: number }
 ): string {
-  const cols = config.charactersPerLine || 40;
   const brand = (config.headerBrand || config.storeName || order.pickupStoreName || order.store?.name || '').trim().toUpperCase();
   const subHeader = (config.subHeader || '').trim();
   const storeName = (config.storeName || '').trim();
@@ -449,27 +469,30 @@ export function generateCrispDotMatrixReceiptHtml(
   const cashRec = paymentDetails?.cashReceived || order.total;
   const change = paymentDetails?.changeAmount !== undefined ? paymentDetails.changeAmount : Math.max(0, cashRec - order.total);
 
-  const dividerChar = config.dividerChar || '=';
-  const divider = dividerChar.repeat(cols);
-  const thinDivider = '-'.repeat(cols);
-
-  // Parameter typografi dinamis sesuai konfigurasi
-  const fontCss = getReceiptFontFamilyCss(config.fontFamily);
-  const weightCss = getReceiptFontWeightCss(config.fontBoldness);
-  const fontSizes = getReceiptFontSizeCss(config.fontSize);
-  const lineSpacingVal = config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12';
-
-  // Penyesuaian lebar kertas (76mm roll / 70mm print untuk TM-U220, 58mm, atau 80mm)
+  // Penyesuaian Lebar Kertas & Batas Cetak Aman (Mencegah terpotong pada batas kiri & kanan)
   const paperWidthChoice = config.paperWidth || '70mm_dotmatrix';
   let rollWidthMm = 76;
-  let printWidthMm = 70;
+  let safePrintWidthMm = 64; // Area cetak aman Epson TM-U220 (Head fisik: 63.5mm)
+  let safePaddingLeftMm = 4; // Batas kiri aman dari pisau/tepi
+  let safePaddingRightMm = 4; // Batas kanan aman agar nominal tidak terpotong
+
   if (paperWidthChoice === '58mm') {
     rollWidthMm = 58;
-    printWidthMm = 52;
+    safePrintWidthMm = 48; // Head fisik thermal 58mm (48mm / 384 dots)
+    safePaddingLeftMm = 2.5;
+    safePaddingRightMm = 2.5;
   } else if (paperWidthChoice === '80mm') {
     rollWidthMm = 80;
-    printWidthMm = 74;
+    safePrintWidthMm = 72; // Head fisik thermal 80mm (72mm / 576 dots)
+    safePaddingLeftMm = 4;
+    safePaddingRightMm = 4;
   }
+
+  // Parameter typografi dinamis sesuai konfigurasi & ukuran kertas
+  const fontCss = getReceiptFontFamilyCss(config.fontFamily);
+  const weightCss = getReceiptFontWeightCss(config.fontBoldness);
+  const fontSizes = getReceiptFontSizeCss(config.fontSize, paperWidthChoice);
+  const lineSpacingVal = config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12';
 
   // Jarak gulung akhir sebelum potong kertas (dalam pixel terkendali)
   const feedHeightPx = Math.max(1, config.feedLinesBeforeCut || 3) * 6;
@@ -478,7 +501,7 @@ export function generateCrispDotMatrixReceiptHtml(
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Struk POS - ${order.orderNumber}</title>
+  <title>Faktur POS - ${order.orderNumber}</title>
   <!-- Font Monospace Tajam & Pekat -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -488,19 +511,17 @@ export function generateCrispDotMatrixReceiptHtml(
       size: ${rollWidthMm}mm auto;
       margin: 0mm;
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    *, *::before, *::after {
+      box-sizing: border-box !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
     }
     html, body {
-      margin: 0;
-      padding: 0;
-      width: ${rollWidthMm}mm;
-      max-width: ${rollWidthMm}mm;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      max-width: ${rollWidthMm}mm !important;
       background: #ffffff !important;
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
@@ -514,30 +535,36 @@ export function generateCrispDotMatrixReceiptHtml(
       image-rendering: pixelated;
     }
     .tmu220-receipt {
-      width: ${printWidthMm}mm;
-      max-width: ${printWidthMm}mm;
-      padding: 1mm 2mm 1mm 3.5mm;
-      margin: 0 auto;
-      background: #ffffff;
+      width: 100% !important;
+      max-width: ${safePrintWidthMm}mm !important;
+      margin: 0 auto !important;
+      padding: 1.5mm ${safePaddingRightMm}mm 2mm ${safePaddingLeftMm}mm !important;
+      background: #ffffff !important;
       white-space: normal;
       word-break: break-word;
       line-height: ${lineSpacingVal};
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
       font-weight: ${weightCss};
+      overflow: hidden !important;
+      box-sizing: border-box !important;
     }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    .text-left { text-align: left; }
-    .bold { font-weight: 900; }
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .bold { font-weight: 900 !important; }
+    
+    /* Tabel Berstruktur Kolom Tetap Anti-Cutoff */
     table.receipt-table {
-      width: 100%;
-      border-collapse: collapse;
-      border-spacing: 0;
-      margin: 0;
-      padding: 0;
-      border: none;
+      width: 100% !important;
+      table-layout: fixed !important;
+      border-collapse: collapse !important;
+      border-spacing: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
       line-height: ${lineSpacingVal};
+      box-sizing: border-box !important;
     }
     table.receipt-table td {
       padding: 0.5px 0;
@@ -549,28 +576,78 @@ export function generateCrispDotMatrixReceiptHtml(
       font-weight: inherit;
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
+      box-sizing: border-box !important;
     }
-    .divider {
+    .col-meta-left {
+      width: 58% !important;
+      text-align: left !important;
       overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
-      margin: 1px 0;
-      line-height: 1;
-      font-size: ${fontSizes.base};
-      letter-spacing: -0.2px;
+      padding-right: 2px !important;
+    }
+    .col-meta-right {
+      width: 42% !important;
+      text-align: right !important;
+      white-space: nowrap;
+      padding-left: 2px !important;
+    }
+    .col-calc-left {
+      width: 58% !important;
+      text-align: left !important;
+      padding-right: 2px !important;
+      word-break: break-all;
+    }
+    .col-calc-right {
+      width: 42% !important;
+      text-align: right !important;
+      white-space: nowrap;
+      padding-left: 2px !important;
       font-weight: 900;
-      color: #000000 !important;
-      -webkit-text-fill-color: #000000 !important;
+    }
+    .col-sum-left {
+      width: 54% !important;
+      text-align: left !important;
+      padding-right: 2px !important;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .col-sum-right {
+      width: 46% !important;
+      text-align: right !important;
+      white-space: nowrap;
+      padding-left: 2px !important;
+    }
+
+    /* Garis Pembatas Presisi 100% Lebar Fleksibel Tanpa Terpotong */
+    .divider-line {
+      width: 100% !important;
+      border-bottom: 1px dashed #000000 !important;
+      margin: 2px 0 !important;
+      height: 0 !important;
+      line-height: 0 !important;
+      box-sizing: border-box !important;
+    }
+    .divider-double {
+      width: 100% !important;
+      border-bottom: 2px solid #000000 !important;
+      margin: 2px 0 !important;
+      height: 0 !important;
+      line-height: 0 !important;
+      box-sizing: border-box !important;
     }
     .double-title {
       font-size: ${fontSizes.brand};
       font-weight: 900;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.2px;
       margin: 0 0 1px 0;
       text-align: center;
       line-height: 1.15;
       text-transform: uppercase;
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
+      word-break: break-word;
     }
     .item-block {
       margin: 0 0 1.5px 0;
@@ -593,100 +670,114 @@ export function generateCrispDotMatrixReceiptHtml(
         border: 1px solid #cbd5e1;
       }
     }
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+      }
+      .tmu220-receipt {
+        box-shadow: none !important;
+        border: none !important;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="tmu220-receipt">
     ${brand ? `<div class="double-title">${brand}</div>` : ''}
-    ${subHeader ? `<div class="text-center" style="font-size: 10px; margin: 0 0 1px 0; font-style: italic;">${subHeader}</div>` : ''}
+    ${subHeader ? `<div class="text-center" style="font-size: 9.5px; margin: 0 0 1px 0; font-style: italic;">${subHeader}</div>` : ''}
     ${storeName && (!brand || storeName.toUpperCase() !== brand.toUpperCase()) ? `<div class="text-center bold" style="font-size: ${fontSizes.base}; margin: 0 0 1px 0;">${storeName}</div>` : ''}
     ${address ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">${address}</div>` : ''}
     ${phone ? `<div class="text-center" style="font-size: ${fontSizes.meta}; margin: 0; padding: 0;">TELP: ${phone}</div>` : ''}
     ${config.taxIdOrNpwp ? `<div class="text-center" style="font-size: ${fontSizes.footer}; margin: 0; padding: 0;">${config.taxIdOrNpwp}</div>` : ''}
-    ${config.headerCustomNote ? `<div class="text-center" style="font-size: ${fontSizes.footer}; font-weight: 900; margin: 0; padding: 0;">${config.headerCustomNote}</div>` : ''}
-    <div class="divider">${divider}</div>
+    ${config.headerCustomNote ? `<div class="text-center bold" style="font-size: ${fontSizes.footer}; margin: 0; padding: 0;">${config.headerCustomNote}</div>` : ''}
+    <div class="divider-double"></div>
     <table class="receipt-table">
       <tr>
-        <td class="text-left">No. : ${order.orderNumber}</td>
-        <td class="text-right">${dateStr}</td>
+        <td class="col-meta-left">No. : ${order.orderNumber}</td>
+        <td class="col-meta-right">${dateStr}</td>
       </tr>
       <tr>
-        <td class="text-left">Kasir: ${cashierDisp}</td>
-        <td class="text-right">${timeStr}</td>
+        <td class="col-meta-left">Kasir: ${cashierDisp}</td>
+        <td class="col-meta-right">${timeStr}</td>
       </tr>
       ${config.showCustomerName !== false ? `<tr>
-        <td class="text-left" colspan="2">Pel. : ${customerDisp}</td>
+        <td class="text-left" colspan="2" style="padding-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Pel. : ${customerDisp}</td>
       </tr>` : ''}
     </table>
-    <div class="divider">${thinDivider}</div>
-    <div>${order.items.map((it) => {
+    <div class="divider-line"></div>
+    <div>${order.items.map((it, idx) => {
       const pName = it.product.name.toUpperCase();
       const qty = it.quantity;
       const unit = (it.selectedUnit || 'PCS').toUpperCase();
       const price = it.unitPrice || it.product.price;
       const subtotal = price * qty;
+      const numIdx = String(idx + 1).padStart(2, '0');
       return `<div class="item-block">
-        <div style="font-weight: 900;">${pName}</div>
+        <div style="font-weight: 900; word-break: break-word; line-height: 1.15;">${numIdx}. ${pName}</div>
         <table class="receipt-table">
           <tr>
-            <td class="text-left" style="padding-left: 2px;">${price.toLocaleString('id-ID')} × ${qty} ${unit} =</td>
-            <td class="text-right bold">${subtotal.toLocaleString('id-ID')}</td>
+            <td class="col-calc-left" style="padding-left: 4px;">${price.toLocaleString('id-ID')} × ${qty} ${unit} =</td>
+            <td class="col-calc-right">${subtotal.toLocaleString('id-ID')}</td>
           </tr>
         </table>
       </div>`;
     }).join('')}</div>
-    <div class="divider">${thinDivider}</div>
+    <div class="divider-line"></div>
     <table class="receipt-table">
       <tr>
-        <td class="text-left">BARIS=${order.items.length}  ,QTY ${totalQty}</td>
-        <td class="text-right bold">${order.subtotal.toLocaleString('id-ID')}</td>
+        <td class="col-sum-left">BARIS=${order.items.length}  ,QTY ${totalQty}</td>
+        <td class="col-sum-right bold">${order.subtotal.toLocaleString('id-ID')}</td>
       </tr>
       ${order.discountAmount > 0 ? `<tr>
-        <td class="text-left">Diskon</td>
-        <td class="text-right">-${order.discountAmount.toLocaleString('id-ID')}</td>
+        <td class="col-sum-left">Diskon</td>
+        <td class="col-sum-right">-${order.discountAmount.toLocaleString('id-ID')}</td>
       </tr>` : ''}
       ${config.showTaxSummary && (config.taxRatePercent || 0) > 0 ? `<tr>
-        <td class="text-left">PPN (${config.taxRatePercent}%)</td>
-        <td class="text-right">${Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)).toLocaleString('id-ID')}</td>
+        <td class="col-sum-left">PPN (${config.taxRatePercent}%)</td>
+        <td class="col-sum-right">${Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)).toLocaleString('id-ID')}</td>
       </tr>` : ''}
       <tr style="font-weight: 900; font-size: ${fontSizes.brand};">
-        <td class="text-left" style="padding: 1px 0;">TOTAL</td>
-        <td class="text-right bold" style="padding: 1px 0;">${order.total.toLocaleString('id-ID')}</td>
+        <td class="col-sum-left" style="padding: 1px 0;">TOTAL</td>
+        <td class="col-sum-right bold" style="padding: 1px 0;">${order.total.toLocaleString('id-ID')}</td>
       </tr>
       <tr>
-        <td class="text-left">Tunai</td>
-        <td class="text-right">${cashRec.toLocaleString('id-ID')}</td>
+        <td class="col-sum-left">Tunai</td>
+        <td class="col-sum-right">${cashRec.toLocaleString('id-ID')}</td>
       </tr>
       <tr>
-        <td class="text-left">Kembali</td>
-        <td class="text-right bold">${change.toLocaleString('id-ID')}</td>
+        <td class="col-sum-left">Kembali</td>
+        <td class="col-sum-right bold">${change.toLocaleString('id-ID')}</td>
       </tr>
     </table>
     ${config.showSignatures !== false ? `
-    <div class="divider">${thinDivider}</div>
-    <!-- Komponen Penandatanganan Struk (Flexbox justify-between & Grid 2-kolom horizontal) -->
-    <div class="receipt-signatures" style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin: 6px 0 4px 0; font-size: ${fontSizes.meta}; text-align: center; box-sizing: border-box;">
-      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
-        <div style="font-weight: 700;">Kasir,</div>
-        <div style="height: 26px;"></div>
-        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierDisp} )</div>
-      </div>
-      <div style="width: 46%; flex: 1; text-align: center; padding: 0 4px; box-sizing: border-box;">
-        <div style="font-weight: 700;">Pelanggan,</div>
-        <div style="height: 26px;"></div>
-        <div style="border-top: 1px dashed #000000; padding-top: 2px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${customerDisp} )</div>
-      </div>
-    </div>
+    <div class="divider-line"></div>
+    <!-- Komponen Penandatanganan Struk (Tabel Presisi Anti-Cutoff) -->
+    <table class="receipt-table" style="margin: 6px 0 3px 0;">
+      <tr>
+        <td style="width: 46%; text-align: center; vertical-align: top;">
+          <div style="font-weight: 700; font-size: ${fontSizes.meta};">Kasir,</div>
+          <div style="height: 22px;"></div>
+          <div style="border-top: 1px dashed #000000; width: 90%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierDisp} )</div>
+        </td>
+        <td style="width: 8%;"></td>
+        <td style="width: 46%; text-align: center; vertical-align: top;">
+          <div style="font-weight: 700; font-size: ${fontSizes.meta};">Pelanggan,</div>
+          <div style="height: 22px;"></div>
+          <div style="border-top: 1px dashed #000000; width: 90%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${customerDisp} )</div>
+        </td>
+      </tr>
+    </table>
     ` : ''}
-    <div class="divider">${divider}</div>
+    <div class="divider-double"></div>
     <div class="text-center" style="font-size: ${fontSizes.footer}; margin-top: 1px; line-height: 1.15; font-weight: 700;">
       ${config.footerMessage1 ? `<div>${config.footerMessage1}</div>` : ''}
       ${config.footerMessage2 ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.footerMessage2}</div>` : ''}
       ${config.csHotline ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.csHotline.startsWith('CS') || config.csHotline.startsWith('Call') || config.csHotline.startsWith('Layanan') ? config.csHotline : `CS: ${config.csHotline}`}</div>` : ''}
       ${config.websiteOrSocial ? `<div style="font-size: ${fontSizes.footer}; margin-top: 0.5px;">${config.websiteOrSocial}</div>` : ''}
     </div>
-    ${config.showBarcode !== false ? `<div class="text-center" style="margin-top: 3px; line-height: 1;">
-      <div style="font-family: monospace; letter-spacing: 2px; font-weight: 900; font-size: 11px;">||||| | |||| ||| || ||||| | ||||</div>
+    ${config.showBarcode !== false ? `<div class="text-center" style="margin-top: 3px; line-height: 1; overflow: hidden;">
+      <div style="font-family: monospace; letter-spacing: 1.5px; font-weight: 900; font-size: 10px; max-width: 100%; overflow: hidden;">||||| | |||| ||| || ||||| | ||||</div>
       <div style="font-size: ${fontSizes.footer}; font-weight: 900; margin-top: 1px;">*${order.orderNumber}*</div>
     </div>` : ''}
     <div class="feed-lines"></div>

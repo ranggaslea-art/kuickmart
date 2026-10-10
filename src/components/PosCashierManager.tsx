@@ -2257,11 +2257,16 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                   <Printer className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base text-stone-900">
-                    Cetak Ulang Faktur Penjualan (Epson TM-U220)
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm sm:text-base text-stone-900">
+                      Cetak Ulang Faktur Penjualan (Epson TM-U220 & Thermal)
+                    </h3>
+                    <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      ✓ Batas Aman Kiri-Kanan Aktif
+                    </span>
+                  </div>
                   <p className="text-[11px] text-stone-500">
-                    Cari nomor faktur atau scan barcode nota untuk cetak ulang ke printer 70mm Dot Matrix
+                    Cari nomor faktur atau scan barcode nota untuk cetak ulang presisi ke printer 70mm Dot Matrix / Thermal tanpa terpotong
                   </p>
                 </div>
               </div>
