@@ -610,6 +610,15 @@ async function startServer() {
     try {
       const { type, globalPolicy, storeSlug, moduleId, isEnabled, bulkEnabled, modules } = req.body;
 
+      const normalizeSubdomainSlug = (raw: string) => {
+        if (!raw) return '';
+        let s = raw.toLowerCase().trim();
+        s = s.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+        s = s.replace(/\.toko-online\.online$/, '').replace(/\.ranggaslea\.workers\.dev$/, '');
+        s = s.replace(/^store-/, '');
+        return s.split('/')[0].split('?')[0].trim();
+      };
+
       if (type === 'global' && globalPolicy) {
         subdomainModulesData.globalPolicy = globalPolicy;
         saveSubdomainModulesToFile();
@@ -618,7 +627,7 @@ async function startServer() {
       }
 
       if (type === 'subdomain_override' && storeSlug && moduleId !== undefined) {
-        const cleanSlug = storeSlug.toLowerCase().trim();
+        const cleanSlug = normalizeSubdomainSlug(storeSlug);
         if (!subdomainModulesData.overrides) subdomainModulesData.overrides = {};
         if (!subdomainModulesData.overrides[cleanSlug]) subdomainModulesData.overrides[cleanSlug] = {};
         subdomainModulesData.overrides[cleanSlug][moduleId] = Boolean(isEnabled);
@@ -628,7 +637,7 @@ async function startServer() {
       }
 
       if (type === 'remove_override' && storeSlug && moduleId) {
-        const cleanSlug = storeSlug.toLowerCase().trim();
+        const cleanSlug = normalizeSubdomainSlug(storeSlug);
         if (subdomainModulesData.overrides && subdomainModulesData.overrides[cleanSlug]) {
           delete subdomainModulesData.overrides[cleanSlug][moduleId];
           if (Object.keys(subdomainModulesData.overrides[cleanSlug]).length === 0) {
@@ -640,7 +649,7 @@ async function startServer() {
       }
 
       if (type === 'bulk_subdomain' && storeSlug && bulkEnabled !== undefined) {
-        const cleanSlug = storeSlug.toLowerCase().trim();
+        const cleanSlug = normalizeSubdomainSlug(storeSlug);
         if (!subdomainModulesData.overrides) subdomainModulesData.overrides = {};
         const storeMap: Record<string, boolean> = {};
         if (Array.isArray(modules)) {
@@ -655,12 +664,12 @@ async function startServer() {
       }
 
       if (type === 'reset_subdomain' && storeSlug) {
-        const cleanSlug = storeSlug.toLowerCase().trim();
+        const cleanSlug = normalizeSubdomainSlug(storeSlug);
         if (subdomainModulesData.overrides && subdomainModulesData.overrides[cleanSlug]) {
           delete subdomainModulesData.overrides[cleanSlug];
           saveSubdomainModulesToFile();
         }
-        return res.json({ success: true, message: `Subdomain '${cleanSlug}' berhasil di-reset mengikuti kebijakan global.` });
+        return res.json({ success: true, message: `Seluruh override di subdomain '${cleanSlug}' telah direset.` });
       }
 
       return res.status(400).json({ success: false, error: 'Tipe aksi tidak dikenali' });

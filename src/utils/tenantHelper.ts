@@ -104,19 +104,22 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
     hostname.includes('localhost') ||
     hostname.includes('127.0.0.1') ||
     hostname.includes('run.app') ||
-    hostname.includes('webcontainer');
+    hostname.includes('webcontainer') ||
+    hostname.includes('googleusercontent.com') ||
+    hostname.includes('workers.dev');
 
   if (isDevOrPreview) {
     const urlParams = new URLSearchParams(window.location.search);
     const paramStore = urlParams.get('store');
 
     // Jika sedang mengakses ?store=nama-toko (bukan root), simulasikan pembatasan subdomain
-    if (paramStore && paramStore !== 'default' && paramStore !== 'toko-online' && paramStore !== 'toko-online.online') {
+    if (paramStore && normalizeTenantSlug(paramStore) !== 'default') {
+      const cleanSlug = normalizeTenantSlug(paramStore);
       return {
         allowed: false,
-        currentDomain: `${paramStore}.${ROOT_AUTHORITY_DOMAIN}`,
+        currentDomain: `${cleanSlug}.${ROOT_AUTHORITY_DOMAIN}`,
         allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
-        reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${paramStore}'. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+        reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${cleanSlug}'. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
       };
     }
 
@@ -146,10 +149,56 @@ export interface SubdomainPolicyResult {
 }
 
 /**
+ * Normalisasi format slug subdomain toko agar selalu bersih, konsisten dan akurat.
+ * Menghilangkan protokol, port, domain toko-online.online, prefix store-, dll.
+ * Contoh:
+ * - "berkah-jaya.toko-online.online" -> "berkah-jaya"
+ * - "store-berkah-jaya" -> "berkah-jaya"
+ * - "https://tokoalda.toko-online.online" -> "tokoalda"
+ * - "toko-online.online" / "default" / "pusat" -> "default"
+ */
+export function normalizeTenantSlug(slug?: string | null): string {
+  if (!slug) return 'default';
+  let clean = slug.toLowerCase().trim();
+  clean = clean.replace(/^https?:\/\//, '');
+  clean = clean.replace(/:\d+$/, '');
+  clean = clean.replace(/\.toko-online\.online$/, '');
+  clean = clean.replace(/\.ranggaslea\.workers\.dev$/, '');
+  clean = clean.replace(/^store-/, '');
+  clean = clean.split('/')[0].split('?')[0].trim();
+  if (
+    !clean ||
+    clean === 'default' ||
+    clean === 'toko-online' ||
+    clean === 'toko-online.online' ||
+    clean === 'www.toko-online.online' ||
+    clean === 'pusat' ||
+    clean === 'to-sdm01' ||
+    clean === 'to-snp02' ||
+    clean === 'to-tbt03' ||
+    clean === 'str_01' ||
+    clean === 'str_02' ||
+    clean === 'str_03' ||
+    clean === 'store_1'
+  ) {
+    return 'default';
+  }
+  return clean;
+}
+
+/**
  * Memeriksa apakah akses saat ini berada di domain root resmi toko-online.online
  */
-export function isRootDomain(customHost?: string): boolean {
+export function isRootDomain(customHost?: string, targetSlug?: string): boolean {
   if (typeof window === 'undefined') return true;
+
+  // Jika targetSlug secara spesifik diberikan dan bukan default, ini PASTI subdomain cabang
+  if (targetSlug !== undefined) {
+    const normTarget = normalizeTenantSlug(targetSlug);
+    if (normTarget !== 'default') {
+      return false;
+    }
+  }
 
   // Cek apakah ada simulasi domain luar untuk pengujian
   if (sessionStorage.getItem(SIMULATE_FOREIGN_DOMAIN_KEY) === 'true') {
@@ -163,20 +212,31 @@ export function isRootDomain(customHost?: string): boolean {
     return true;
   }
 
-  // Jika berada di environment dev/preview (localhost, 127.0.0.1, *.run.app, webcontainer)
+  // Jika hostname berakhiran .toko-online.online (cth: berkah-jaya.toko-online.online) dan bukan www
+  if (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) {
+    return false;
+  }
+
+  // Jika berada di environment dev/preview/sandbox
   const isDevOrPreview =
     hostname.includes('localhost') ||
     hostname.includes('127.0.0.1') ||
     hostname.includes('run.app') ||
-    hostname.includes('webcontainer');
+    hostname.includes('webcontainer') ||
+    hostname.includes('googleusercontent.com') ||
+    hostname.includes('workers.dev');
 
   if (isDevOrPreview) {
     const urlParams = new URLSearchParams(window.location.search);
     const paramStore = urlParams.get('store');
-    // Jika tidak ada ?store atau ?store mengarah ke root, anggap root di dev
-    if (!paramStore || paramStore === 'default' || paramStore === 'toko-online' || paramStore === 'toko-online.online') {
-      return true;
+    if (paramStore) {
+      const norm = normalizeTenantSlug(paramStore);
+      if (norm !== 'default') {
+        return false;
+      }
     }
+    // Jika tidak ada ?store dan tidak ada targetSlug khusus, anggap root di dev
+    return true;
   }
 
   return false;
@@ -328,7 +388,9 @@ export function getStoreSlugFromUrl(): string {
     hostname.includes('localhost') ||
     hostname.includes('127.0.0.1') ||
     hostname.includes('run.app') ||
-    hostname.includes('webcontainer');
+    hostname.includes('webcontainer') ||
+    hostname.includes('googleusercontent.com') ||
+    hostname.includes('workers.dev');
 
   if (!isLocalOrPreview) {
     // Root domain resmi toko-online.online atau worker dev root
@@ -357,8 +419,8 @@ export function getStoreSlugFromUrl(): string {
  * Memeriksa apakah toko saat ini adalah toko default/utama (toko-online.online)
  */
 export function isDefaultStore(slug?: string): boolean {
-  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
-  return effectiveSlug === 'default' || effectiveSlug === 'toko-online' || effectiveSlug === 'toko-online.online' || effectiveSlug === '';
+  const effectiveSlug = normalizeTenantSlug(slug || getStoreSlugFromUrl());
+  return effectiveSlug === 'default';
 }
 
 /**

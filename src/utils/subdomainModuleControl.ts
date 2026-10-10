@@ -1,4 +1,4 @@
-import { isRootDomain, getStoreSlugFromUrl, isDefaultStore } from './tenantHelper';
+import { isRootDomain, getStoreSlugFromUrl, isDefaultStore, normalizeTenantSlug } from './tenantHelper';
 
 export const STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY = 'toko_online_subdomain_module_policy';
 export const STORAGE_SUBDOMAIN_OVERRIDES_KEY = 'toko_online_subdomain_module_overrides';
@@ -287,6 +287,29 @@ export const CONTROLLABLE_SUBDOMAIN_MODULES: SubdomainControllableModule[] = [
   },
 ];
 
+// Shared in-memory cache
+let inMemoryGlobalPolicy: Record<string, boolean> | null = null;
+let inMemoryOverrides: Record<string, Record<string, boolean>> | null = null;
+
+function readSharedCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSharedCookie(name: string, val: string): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const isTokoOnline = typeof window !== 'undefined' && window.location.hostname.endsWith('toko-online.online');
+    const domainPart = isTokoOnline ? '; domain=.toko-online.online' : '';
+    document.cookie = `${name}=${encodeURIComponent(val)}; path=/${domainPart}; max-age=31536000; SameSite=Lax`;
+  } catch {}
+}
+
 /**
  * Nilai default modul aktif untuk subdomain saat awal mula
  */
@@ -299,20 +322,38 @@ export function getDefaultGlobalSubdomainPolicy(): Record<string, boolean> {
 }
 
 /**
- * Mengambil kebijakan modul subdomain global dari memori / localStorage
+ * Mengambil kebijakan modul subdomain global dari memori / localStorage / cookie
  */
 export function getGlobalSubdomainModulePolicy(): Record<string, boolean> {
+  if (inMemoryGlobalPolicy && Object.keys(inMemoryGlobalPolicy).length > 0) {
+    const defaults = getDefaultGlobalSubdomainPolicy();
+    return { ...defaults, ...inMemoryGlobalPolicy };
+  }
+
   if (typeof window === 'undefined') return getDefaultGlobalSubdomainPolicy();
+
   try {
     const raw = localStorage.getItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      inMemoryGlobalPolicy = parsed;
       const defaults = getDefaultGlobalSubdomainPolicy();
       return { ...defaults, ...parsed };
     }
   } catch (e) {
     console.warn('Gagal membaca global subdomain module policy:', e);
   }
+
+  try {
+    const fromCookie = readSharedCookie(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY);
+    if (fromCookie) {
+      const parsed = JSON.parse(fromCookie);
+      inMemoryGlobalPolicy = parsed;
+      const defaults = getDefaultGlobalSubdomainPolicy();
+      return { ...defaults, ...parsed };
+    }
+  } catch {}
+
   return getDefaultGlobalSubdomainPolicy();
 }
 
@@ -320,9 +361,12 @@ export function getGlobalSubdomainModulePolicy(): Record<string, boolean> {
  * Menyimpan kebijakan modul subdomain global
  */
 export function saveGlobalSubdomainModulePolicy(policy: Record<string, boolean>): void {
+  inMemoryGlobalPolicy = { ...policy };
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, JSON.stringify(policy));
+    const jsonStr = JSON.stringify(policy);
+    localStorage.setItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, jsonStr);
+    writeSharedCookie(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, jsonStr);
     broadcastPolicyChange({ type: 'global', policy });
 
     fetch('/api/tenant/subdomain-modules', {
@@ -339,15 +383,32 @@ export function saveGlobalSubdomainModulePolicy(policy: Record<string, boolean>)
  * Mengambil override modul per-subdomain
  */
 export function getSubdomainModuleOverrides(): Record<string, Record<string, boolean>> {
+  if (inMemoryOverrides && Object.keys(inMemoryOverrides).length > 0) {
+    return inMemoryOverrides;
+  }
+
   if (typeof window === 'undefined') return {};
+
   try {
     const raw = localStorage.getItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      inMemoryOverrides = parsed;
+      return parsed;
     }
   } catch (e) {
     console.warn('Gagal membaca subdomain module overrides:', e);
   }
+
+  try {
+    const fromCookie = readSharedCookie(STORAGE_SUBDOMAIN_OVERRIDES_KEY);
+    if (fromCookie) {
+      const parsed = JSON.parse(fromCookie);
+      inMemoryOverrides = parsed;
+      return parsed;
+    }
+  } catch {}
+
   return {};
 }
 
@@ -357,13 +418,16 @@ export function getSubdomainModuleOverrides(): Record<string, Record<string, boo
 export function saveSubdomainModuleOverride(storeSlug: string, moduleId: string, isEnabled: boolean): void {
   if (typeof window === 'undefined' || !storeSlug) return;
   try {
-    const cleanSlug = storeSlug.toLowerCase().trim();
+    const cleanSlug = normalizeTenantSlug(storeSlug);
     const currentOverrides = getSubdomainModuleOverrides();
     const storeMap = { ...(currentOverrides[cleanSlug] || {}) };
     storeMap[moduleId] = isEnabled;
     currentOverrides[cleanSlug] = storeMap;
 
-    localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
+    inMemoryOverrides = { ...currentOverrides };
+    const jsonStr = JSON.stringify(currentOverrides);
+    localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
+    writeSharedCookie(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
     broadcastPolicyChange({ type: 'subdomain_override', storeSlug: cleanSlug, moduleId, isEnabled });
 
     fetch('/api/tenant/subdomain-modules', {
@@ -382,14 +446,17 @@ export function saveSubdomainModuleOverride(storeSlug: string, moduleId: string,
 export function removeSubdomainModuleOverride(storeSlug: string, moduleId: string): void {
   if (typeof window === 'undefined' || !storeSlug) return;
   try {
-    const cleanSlug = storeSlug.toLowerCase().trim();
+    const cleanSlug = normalizeTenantSlug(storeSlug);
     const currentOverrides = getSubdomainModuleOverrides();
     if (currentOverrides[cleanSlug] && currentOverrides[cleanSlug][moduleId] !== undefined) {
       delete currentOverrides[cleanSlug][moduleId];
       if (Object.keys(currentOverrides[cleanSlug]).length === 0) {
         delete currentOverrides[cleanSlug];
       }
-      localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
+      inMemoryOverrides = { ...currentOverrides };
+      const jsonStr = JSON.stringify(currentOverrides);
+      localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
+      writeSharedCookie(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
       broadcastPolicyChange({ type: 'remove_override', storeSlug: cleanSlug, moduleId });
 
       fetch('/api/tenant/subdomain-modules', {
@@ -409,7 +476,7 @@ export function removeSubdomainModuleOverride(storeSlug: string, moduleId: strin
 export function bulkSetSubdomainModules(storeSlug: string, isEnabled: boolean): void {
   if (typeof window === 'undefined' || !storeSlug) return;
   try {
-    const cleanSlug = storeSlug.toLowerCase().trim();
+    const cleanSlug = normalizeTenantSlug(storeSlug);
     const currentOverrides = getSubdomainModuleOverrides();
     const storeMap: Record<string, boolean> = {};
     CONTROLLABLE_SUBDOMAIN_MODULES.forEach(m => {
@@ -417,7 +484,10 @@ export function bulkSetSubdomainModules(storeSlug: string, isEnabled: boolean): 
     });
     currentOverrides[cleanSlug] = storeMap;
 
-    localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
+    inMemoryOverrides = { ...currentOverrides };
+    const jsonStr = JSON.stringify(currentOverrides);
+    localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
+    writeSharedCookie(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
     broadcastPolicyChange({ type: 'bulk_subdomain', storeSlug: cleanSlug, isEnabled });
 
     fetch('/api/tenant/subdomain-modules', {
@@ -441,11 +511,14 @@ export function bulkSetSubdomainModules(storeSlug: string, isEnabled: boolean): 
 export function resetSubdomainToGlobal(storeSlug: string): void {
   if (typeof window === 'undefined' || !storeSlug) return;
   try {
-    const cleanSlug = storeSlug.toLowerCase().trim();
+    const cleanSlug = normalizeTenantSlug(storeSlug);
     const currentOverrides = getSubdomainModuleOverrides();
     if (currentOverrides[cleanSlug]) {
       delete currentOverrides[cleanSlug];
-      localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(currentOverrides));
+      inMemoryOverrides = { ...currentOverrides };
+      const jsonStr = JSON.stringify(currentOverrides);
+      localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
+      writeSharedCookie(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
       broadcastPolicyChange({ type: 'reset_subdomain', storeSlug: cleanSlug });
 
       fetch('/api/tenant/subdomain-modules', {
@@ -470,10 +543,16 @@ export async function syncSubdomainModulePolicyFromServer(): Promise<void> {
       const data = await res.json();
       if (data && data.success) {
         if (data.globalPolicy && Object.keys(data.globalPolicy).length > 0) {
-          localStorage.setItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, JSON.stringify(data.globalPolicy));
+          inMemoryGlobalPolicy = { ...(inMemoryGlobalPolicy || {}), ...data.globalPolicy };
+          const jsonStr = JSON.stringify(inMemoryGlobalPolicy);
+          localStorage.setItem(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, jsonStr);
+          writeSharedCookie(STORAGE_GLOBAL_SUBDOMAIN_POLICY_KEY, jsonStr);
         }
         if (data.overrides && Object.keys(data.overrides).length > 0) {
-          localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, JSON.stringify(data.overrides));
+          inMemoryOverrides = { ...(inMemoryOverrides || {}), ...data.overrides };
+          const jsonStr = JSON.stringify(inMemoryOverrides);
+          localStorage.setItem(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
+          writeSharedCookie(STORAGE_SUBDOMAIN_OVERRIDES_KEY, jsonStr);
         }
         broadcastPolicyChange({ type: 'synced_from_server' });
       }
@@ -499,11 +578,27 @@ if (typeof window !== 'undefined') {
 export function isSubdomainModuleEnabled(moduleId: string, targetSlug?: string): boolean {
   if (typeof window === 'undefined') return true;
 
-  // Jika tidak menyebutkan targetSlug, gunakan slug URL saat ini
-  const effectiveSlug = (targetSlug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
+  // Normalisasi slug target agar konsisten dengan key overrides dan root policy
+  let effectiveSlug = normalizeTenantSlug(targetSlug);
+  if (!targetSlug || effectiveSlug === 'default') {
+    const fromUrl = normalizeTenantSlug(getStoreSlugFromUrl());
+    if (fromUrl !== 'default') {
+      effectiveSlug = fromUrl;
+    } else {
+      try {
+        const fromActiveTenant = localStorage.getItem('active_store_tenant_slug');
+        if (fromActiveTenant) {
+          const normTenant = normalizeTenantSlug(fromActiveTenant);
+          if (normTenant !== 'default') {
+            effectiveSlug = normTenant;
+          }
+        }
+      } catch {}
+    }
+  }
 
   // Jika ini adalah store utama / root domain, semua modul SELALU AKTIF
-  if (isDefaultStore(effectiveSlug) && isRootDomain()) {
+  if (isDefaultStore(effectiveSlug) && isRootDomain(undefined, effectiveSlug)) {
     return true;
   }
 
@@ -528,7 +623,7 @@ export function isSubdomainModuleEnabled(moduleId: string, targetSlug?: string):
  * Mengambil status lengkap seluruh modul untuk satu subdomain (apakah dari override atau global)
  */
 export function getSubdomainEffectiveModuleStatus(storeSlug: string): Record<string, { enabled: boolean; isOverride: boolean }> {
-  const cleanSlug = storeSlug.toLowerCase().trim();
+  const cleanSlug = normalizeTenantSlug(storeSlug);
   const globalPolicy = getGlobalSubdomainModulePolicy();
   const overrides = getSubdomainModuleOverrides();
   const storeOverrides = overrides[cleanSlug] || {};

@@ -28,7 +28,7 @@ import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFoo
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 import { isSubdomainModuleEnabled, SUBDOMAIN_MODULE_POLICY_EVENT } from '../utils/subdomainModuleControl';
-import { getStoreSlugFromUrl, isDefaultStore, isRootDomain } from '../utils/tenantHelper';
+import { getStoreSlugFromUrl, isDefaultStore, isRootDomain, normalizeTenantSlug, BUILTIN_REGISTERED_SUBDOMAINS } from '../utils/tenantHelper';
 
 interface HeaderProps {
   currentStore: Store;
@@ -93,8 +93,25 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const currentSlug = getStoreSlugFromUrl();
-  const isMainStore = isDefaultStore(currentSlug) && isRootDomain();
+  const effectiveStoreSlug = React.useMemo(() => {
+    const fromUrl = normalizeTenantSlug(getStoreSlugFromUrl());
+    if (fromUrl !== 'default') return fromUrl;
+    if (currentStore) {
+      const match = BUILTIN_REGISTERED_SUBDOMAINS.find(
+        s => s.storeName.toLowerCase().trim() === currentStore.name.toLowerCase().trim() ||
+             s.storeSlug.toLowerCase().trim() === currentStore.name.toLowerCase().trim() ||
+             s.storeId.toLowerCase().trim() === currentStore.id?.toLowerCase().trim()
+      );
+      if (match && match.storeSlug !== 'default') return normalizeTenantSlug(match.storeSlug);
+      if (currentStore.id && !currentStore.id.startsWith('str_')) {
+        const fromId = normalizeTenantSlug(currentStore.id);
+        if (fromId !== 'default') return fromId;
+      }
+    }
+    return 'default';
+  }, [currentStore]);
+
+  const isMainStore = isDefaultStore(effectiveStoreSlug) && isRootDomain(undefined, effectiveStoreSlug);
   const [, setPolicyVersion] = useState(0);
 
   useEffect(() => {
@@ -107,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
-  const isPosCashierEnabled = isMainStore || isSubdomainModuleEnabled('pos_cashier', currentSlug);
+  const isPosCashierEnabled = isMainStore || isSubdomainModuleEnabled('pos_cashier', effectiveStoreSlug);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -343,9 +360,12 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               ) : (
                 <button
-                  onClick={onOpenPosCashier}
-                  title={`Modul Penjualan Kasir (POS) dinonaktifkan di subdomain ${currentSlug} oleh Domain Utama`}
-                  className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-600 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer shrink-0 border border-stone-300/80"
+                  type="button"
+                  onClick={() => {
+                    alert(`Modul Penjualan Kasir (POS) saat ini dinonaktifkan / dikunci untuk cabang ${currentStore.name} oleh Administrator Domain Utama (${isDefaultStore(effectiveStoreSlug) ? 'toko-online.online' : effectiveStoreSlug}).`);
+                  }}
+                  title={`Modul Penjualan Kasir (POS) dinonaktifkan di subdomain ${effectiveStoreSlug} oleh Domain Utama`}
+                  className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-500 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-not-allowed shrink-0 border border-stone-300/80 opacity-75"
                 >
                   <Lock className="w-3.5 h-3.5 text-rose-500" />
                   <span className="hidden md:inline line-through opacity-70">Kasir POS</span>

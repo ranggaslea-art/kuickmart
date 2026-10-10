@@ -1168,8 +1168,6 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
           setIsHeldModalOpen(false);
         } else if (isReceiptEditorModalOpen) {
           setIsReceiptEditorModalOpen(false);
-        } else if (onClose) {
-          onClose();
         }
       }
     };

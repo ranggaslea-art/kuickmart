@@ -158,7 +158,7 @@ import { StockMutationManager } from './StockMutationManager';
 import { StockCardManager } from './StockCardManager';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
 import { SubdomainModuleControlManager } from './SubdomainModuleControlManager';
-import { isSubdomainModuleEnabled, SUBDOMAIN_MODULE_POLICY_EVENT, CONTROLLABLE_SUBDOMAIN_MODULES } from '../utils/subdomainModuleControl';
+import { isSubdomainModuleEnabled, SUBDOMAIN_MODULE_POLICY_EVENT, CONTROLLABLE_SUBDOMAIN_MODULES, syncSubdomainModulePolicyFromServer } from '../utils/subdomainModuleControl';
 import { CategoryBrandManager } from './CategoryBrandManager';
 import { VpsDeployManager } from './VpsDeployManager';
 import { SeoGoogleManager } from './SeoGoogleManager';
@@ -172,7 +172,19 @@ import {
   saveBrandsToMySql,
   saveOrderToMySql 
 } from '../lib/mysqlClientApi';
-import { getStoreSlugFromUrl, isDefaultStore, isRootDomain, getTenantStorageKey, canAddSubdomain, ROOT_AUTHORITY_DOMAIN, loadStoreTenantConfig, canAccessSubdomainModule } from '../utils/tenantHelper';
+import { 
+  getStoreSlugFromUrl, 
+  isDefaultStore, 
+  isRootDomain, 
+  getTenantStorageKey, 
+  canAddSubdomain, 
+  ROOT_AUTHORITY_DOMAIN, 
+  loadStoreTenantConfig, 
+  canAccessSubdomainModule,
+  normalizeTenantSlug,
+  BUILTIN_REGISTERED_SUBDOMAINS,
+  STORAGE_ACTIVE_TENANT_KEY
+} from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 
 interface AdminPanelModalProps {
@@ -286,7 +298,45 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateBrands,
   initialTab,
 }) => {
-  const currentSlug = getStoreSlugFromUrl();
+  // Tentukan slug subdomain yang aktif dikelola dengan presisi tinggi:
+  // Memeriksa URL (?store=), currentStore prop, dan active tenant storage
+  const currentSlug = useMemo(() => {
+    // 1. Cek parameter URL / hostname subdomain terlebih dahulu
+    const fromUrl = normalizeTenantSlug(getStoreSlugFromUrl());
+    if (fromUrl !== 'default') {
+      return fromUrl;
+    }
+
+    // 2. Cek currentStore prop jika sedang memilih cabang toko / tenant
+    if (currentStore) {
+      const cleanStoreName = currentStore.name.toLowerCase().trim();
+      const match = BUILTIN_REGISTERED_SUBDOMAINS.find(
+        s => s.storeName.toLowerCase().trim() === cleanStoreName ||
+             s.storeSlug.toLowerCase().trim() === cleanStoreName ||
+             s.storeId.toLowerCase().trim() === currentStore.id?.toLowerCase().trim()
+      );
+      if (match && match.storeSlug !== 'default') {
+        return normalizeTenantSlug(match.storeSlug);
+      }
+
+      if (currentStore.id && !currentStore.id.startsWith('str_')) {
+        const fromId = normalizeTenantSlug(currentStore.id);
+        if (fromId !== 'default') return fromId;
+      }
+    }
+
+    // 3. Cek penyimpanan active tenant di browser
+    try {
+      const saved = localStorage.getItem(STORAGE_ACTIVE_TENANT_KEY);
+      if (saved) {
+        const norm = normalizeTenantSlug(saved);
+        if (norm !== 'default') return norm;
+      }
+    } catch {}
+
+    return 'default';
+  }, [currentStore]);
+
   const isNewStore = !isDefaultStore(currentSlug);
 
   const activeTenantIdentity = useMemo(() => {
@@ -295,6 +345,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   // Otoritas Domain Utama: Tab 'Kontrol Modul Subdomain' & 'Subdomain Terdaftar' HANYA dapat dikelola melalui domain utama (toko-online.online)
   const hasSubdomainAuthority = useMemo(() => {
+    if (!isDefaultStore(currentSlug)) {
+      return false;
+    }
     return canAccessSubdomainModule().allowed;
   }, [currentSlug]);
 
@@ -321,19 +374,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     };
   }, []);
 
-  const isModuleDisabledBySubdomain = (moduleId: string): boolean => {
+  const isModuleDisabledBySubdomain = useCallback((moduleId: string): boolean => {
     // 1. Tab kontrol modul subdomain khusus otoritas domain utama
     if (moduleId === 'subdomain_modules') {
       return !hasSubdomainAuthority;
     }
     // 2. Jika saat ini sedang di domain utama / toko default (bukan subdomain), semua modul selalu aktif
-    if (isDefaultStore(currentSlug) && isRootDomain()) {
+    if (isDefaultStore(currentSlug) && isRootDomain(undefined, currentSlug)) {
       return false;
     }
-    // 3. Jika sedang berada di subdomain (seperti tokoalda, kuickmart, dll.), patuhi kunci status modul:
+    // 3. Jika sedang berada di subdomain (seperti tokoalda, berkah-jaya, dll.), patuhi kunci status modul:
     // Cek apakah modul dinonaktifkan secara spesifik untuk subdomain ini atau via kebijakan global subdomain
     return !isSubdomainModuleEnabled(moduleId, currentSlug);
-  };
+  }, [currentSlug, hasSubdomainAuthority, subdomainPolicyVersion]);
 
   // Helper to ensure all staff users have permissions and default accounts exist
   const ensureStaffPermissions = (users: StaffUser[]): StaffUser[] => {
@@ -759,22 +812,47 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [isOpen, currentSlug]);
 
-  // Login Authentication State - Wajib login setiap kali membuka panel admin demi keamanan
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  // Login Authentication State - Sesi login tersimpan di sessionStorage & localStorage agar user tidak tiba-tiba terlempar keluar saat menggunakan modul
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = sessionStorage.getItem('toko_online_admin_active_user') || localStorage.getItem('toko_online_admin_active_user');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
+  });
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Wajibkan login setiap kali modal admin dibuka
+  // Dialog konfirmasi keluar / tutup panel admin
+  const [confirmExitAction, setConfirmExitAction] = useState<'logout' | 'close' | null>(null);
+
+  // Pertahankan sesi login saat panel dibuka & sync kontrol modul
   useEffect(() => {
     if (isOpen) {
-      // Selalu munculkan form login saat membuka panel admin
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
       setLoginError(null);
+      syncSubdomainModulePolicyFromServer().catch(() => {});
+      
+      // Ambil user dari storage jika state currentUser kosong
+      if (!currentUser) {
+        try {
+          const saved = sessionStorage.getItem('toko_online_admin_active_user') || localStorage.getItem('toko_online_admin_active_user');
+          if (saved) {
+            setCurrentUser(JSON.parse(saved));
+          } else {
+            setInputUsername('');
+            setInputPin('');
+          }
+        } catch {
+          setInputUsername('');
+          setInputPin('');
+        }
+      }
 
       if (initialTab) {
         setActiveTab(initialTab);
@@ -794,20 +872,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         else if (systemTabs.includes(initialTab)) setSelectedGroup('system');
         else setSelectedGroup('all');
       }
-    } else {
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
-      setLoginError(null);
     }
   }, [isOpen, initialTab]);
 
   const handleClose = () => {
+    setConfirmExitAction(null);
+    onClose();
+  };
+
+  const handleLogout = () => {
+    try {
+      sessionStorage.removeItem('toko_online_admin_active_user');
+      localStorage.removeItem('toko_online_admin_active_user');
+    } catch {}
     setCurrentUser(null);
     setInputUsername('');
     setInputPin('');
-    setLoginError(null);
-    onClose();
+    setConfirmExitAction(null);
   };
 
   // Tab State
@@ -1118,7 +1199,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setSelectedUserForPermissions(null);
   };
 
-  // Keyboard Escape shortcut: tutup form aktif terlebih dahulu, atau tutup panel admin jika tidak ada form terbuka
+  // Keyboard Escape shortcut: tutup form/dialog aktif tanpa pernah menutup panel admin utama secara tiba-tiba
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1135,16 +1216,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           return;
         }
 
+        if (confirmExitAction) {
+          setConfirmExitAction(null);
+          return;
+        }
+
         if (isAnySubFormOpen) {
           handleCloseSubForm();
-        } else {
-          handleClose();
         }
+        // Catatan: Escape TIDAK memanggil handleClose() agar user yang sedang menginput data tidak tiba-tiba terlempar ke halaman index
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isAnySubFormOpen]);
+  }, [isOpen, isAnySubFormOpen, confirmExitAction]);
 
   if (!isOpen) return null;
 
@@ -1217,6 +1302,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
+      try {
+        sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+        localStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+      } catch {}
       setLoginError(null);
       setInputPin('');
 
@@ -1278,6 +1367,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
+      try {
+        sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+        localStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+      } catch {}
       setLoginError(null);
       setInputUsername('');
       setInputPin('');
@@ -1307,12 +1400,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       setInputPin('admin123');
       setUserFeedback('Data akun staff berhasil direset ke pengaturan default.');
       setTimeout(() => setUserFeedback(null), 3500);
-    }
-  };
-
-  const handleLogout = () => {
-    if (window.confirm(`Yakin ingin keluar dari sesi Admin ${activeTenantIdentity.storeName} dan kembali ke beranda toko belanja?`)) {
-      handleClose();
     }
   };
 
@@ -2085,12 +2172,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   if (!currentUser) {
     return (
       <div 
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            handleClose();
-          }
-        }}
-        className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+        className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
       >
         <div 
           onClick={(e) => e.stopPropagation()}
@@ -2403,6 +2485,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             Pengaturan aktivasi modul subdomain dikontrol secara sentral dan eksklusif dari domain utama platform.
           </div>
         </div>
+        <div className="pt-2 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const fallback = CONTROLLABLE_SUBDOMAIN_MODULES.find(m => !isModuleDisabledBySubdomain(m.id))?.id || 'products';
+              setActiveTab(fallback as any);
+            }}
+            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+          >
+            <span>Buka Modul Aktif Lainnya</span>
+          </button>
+        </div>
       </div>
     );
   };
@@ -2425,15 +2519,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   // ==========================================
   return (
     <div 
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          handleClose();
-        }
-      }}
-      className="fixed inset-0 z-50 overflow-hidden bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-1 sm:p-3 cursor-pointer"
+      className="fixed inset-0 z-50 overflow-hidden bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-1 sm:p-3"
     >
       <div 
-        onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-3xl w-full max-w-[1550px] h-[97vh] max-h-[97vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 cursor-default"
       >
         
@@ -2534,7 +2622,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => setConfirmExitAction('logout')}
               className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
               title="Keluar Sesi & Kembali ke Toko"
             >
@@ -2544,7 +2632,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
             <button
               type="button"
-              onClick={handleClose}
+              onClick={() => setConfirmExitAction('close')}
               title="Tutup Panel Admin & Kembali ke Toko"
               className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
@@ -5672,7 +5760,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => setConfirmExitAction('logout')}
               className="px-4 py-2 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
               title="Keluar dari sesi akun dan tutup modul admin"
             >
@@ -5685,7 +5773,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                handleClose();
+                setConfirmExitAction('close');
               }}
               className="px-5 py-2 rounded-xl bg-stone-900 text-white font-bold hover:bg-black transition-all cursor-pointer flex items-center gap-2 shadow-sm active:scale-95"
               title="Tutup modul admin dan kembali ke halaman toko belanja"
@@ -5697,6 +5785,71 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         </div>
 
       </div>
+
+      {/* MODAL KONFIRMASI KELUAR SESI / KEMBALI KE TOKO */}
+      {confirmExitAction && (
+        <div className="fixed inset-0 z-70 bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                confirmExitAction === 'logout' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700'
+              }`}>
+                {confirmExitAction === 'logout' ? <LogOut className="w-6 h-6" /> : <StoreIcon className="w-6 h-6" />}
+              </div>
+              <div>
+                <h4 className="font-extrabold text-base text-stone-900">
+                  {confirmExitAction === 'logout' ? 'Konfirmasi Keluar Sesi' : 'Kembali ke Beranda Toko?'}
+                </h4>
+                <p className="text-xs text-stone-500">
+                  {confirmExitAction === 'logout' 
+                    ? `Apakah Anda yakin ingin keluar dari akun ${currentUser?.name || 'Admin'}?` 
+                    : 'Tutup panel admin dan kembali ke tampilan etalase toko.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-stone-50 rounded-2xl p-3 border border-stone-200 text-xs text-stone-600">
+              {confirmExitAction === 'logout' ? (
+                <span>Sesi aktif Anda akan diakhiri. Anda perlu memasukkan ID & PIN saat membuka kembali panel admin.</span>
+              ) : (
+                <span>Sesi login dan data modul Anda tetap aman tersimpan selama tab browser aktif.</span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmExitAction(null)}
+                className="px-4 py-2 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              {confirmExitAction === 'logout' ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Ya, Keluar Sesi</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <StoreIcon className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Ya, Kembali ke Toko</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* INTERACTIVE CONVERSION CALCULATOR MODAL */}
       {showConversionCalculator && (
