@@ -3334,7 +3334,10 @@ async function startServer() {
   } else {
     console.log(`[Vite] Mounting Vite on-the-fly middleware (hasBuiltDist=${hasBuiltDist}, NODE_ENV=${process.env.NODE_ENV})...`);
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

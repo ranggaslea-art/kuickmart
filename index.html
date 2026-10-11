@@ -22,6 +22,31 @@
         }
       })();
     </script>
+
+    <!-- Suppress Vite HMR WebSocket connection errors in AI Studio proxy environment -->
+    <script>
+      (function() {
+        window.addEventListener('error', function(event) {
+          if (event && (
+            (event.message && (event.message.indexOf('WebSocket') !== -1 || event.message.indexOf('createWebSocketModuleRunnerTransport') !== -1 || event.message.indexOf('@vite/client') !== -1)) ||
+            (event.filename && event.filename.indexOf('@vite/client') !== -1)
+          )) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event && event.reason) {
+            var reasonStr = String(event.reason);
+            if (reasonStr.indexOf('WebSocket') !== -1 || reasonStr.indexOf('createWebSocketModuleRunnerTransport') !== -1 || reasonStr.indexOf('@vite/client') !== -1) {
+              event.stopImmediatePropagation();
+              event.preventDefault();
+            }
+          }
+        }, true);
+      })();
+    </script>
     
     <!-- Google Fonts for POS Receipt Printing (Crisp & High-Contrast) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

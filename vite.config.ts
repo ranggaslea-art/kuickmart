@@ -16,8 +16,8 @@ export default defineConfig(() => {
       host: '0.0.0.0',
       allowedHosts: true as const,
       strictPort: true,
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      hmr: false,
+      watch: null,
     },
     build: {
       reportCompressedSize: false,
