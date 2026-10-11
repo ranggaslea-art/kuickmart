@@ -37,8 +37,8 @@ body {
 
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 12mm 10mm;
+    size: auto;
+    margin: 8mm 10mm;
   }
   
   * {
@@ -60,8 +60,41 @@ body {
     print-color-adjust: exact !important;
   }
 
+  /* ============================================================ */
+  /* ISOLASI MUTLAK CETAK DOKUMEN: SEMBUNYIKAN 100% ROOT & INDEX */
+  /* ============================================================ */
+  body.printing-report-active #root,
+  body.is-printing-report #root {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    top: -99999px !important;
+    left: -99999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+  }
+
+  /* TAMPILKAN HANYA DOKUMEN PADA PRINT-MOUNT-STAGE */
+  body.printing-report-active #print-mount-stage,
+  body.is-printing-report #print-mount-stage {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    z-index: 999999 !important;
+  }
+
   /* Sembunyikan elemen navigasi dan tombol saat print */
-  button, select, input, textarea, .no-print, nav, aside {
+  button, select, input, textarea, .no-print, nav, aside, header, footer,
+  [class*="fixed bottom"], [class*="z-20 sm:hidden"], [class*="z-40"] {
     display: none !important;
   }
 
@@ -105,40 +138,6 @@ body {
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
-    background: #ffffff !important;
-  }
-
-  /* Khusus Jika Modal Laporan & Dokumen Terbuka: Sembunyikan Semua Elemen Aplikasi & Toolbar di Luar Dokumen */
-  body.financial-report-open #root > div > *:not([class*="z-[9999]"]),
-  body.document-print-modal-open #root > div > *:not([class*="z-50"]):not([class*="z-[9999]"]),
-  body.document-print-modal-open .no-print,
-  body.document-print-modal-open header,
-  body.document-print-modal-open footer,
-  body.document-print-modal-open nav,
-  body.document-print-modal-open aside,
-  body.financial-report-open [class*="bg-stone-900"],
-  body.financial-report-open [class*="border-b border-stone-800"],
-  body.financial-report-open [class*="border-b border-stone-200"],
-  body.financial-report-open .no-print,
-  body.financial-report-open header,
-  body.financial-report-open footer,
-  body.financial-report-open nav,
-  body.financial-report-open aside {
-    display: none !important;
-  }
-
-  body.financial-report-open #printable-financial-report-content,
-  body.document-print-modal-open #printable-stock-card-content,
-  body.document-print-modal-open #printable-stock-opname-content,
-  body.document-print-modal-open #printable-stock-mutation-content {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
     background: #ffffff !important;
   }
 
@@ -189,3 +188,14 @@ body {
     break-inside: avoid !important;
   }
 }
+
+/* Di layar biasa, #print-mount-stage selalu disembunyikan sepenuhnya */
+@media screen {
+  #print-mount-stage {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+

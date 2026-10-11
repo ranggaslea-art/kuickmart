@@ -436,7 +436,7 @@ export const PurchaseOrderSalesmanReportModal: React.FC<PurchaseOrderSalesmanRep
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
-                <span>Cetak Laporan / PDF</span>
+                <span>Cetak Sekarang (Laporan / PDF)</span>
               </button>
 
               <button

@@ -95,7 +95,7 @@ export const PurchaseOrderPrintModal: React.FC<PurchaseOrderPrintModalProps> = (
               }`}
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak Dokumen Satuan / PDF</span>
+              <span>Cetak Sekarang (Dokumen / PDF)</span>
             </button>
 
             <button

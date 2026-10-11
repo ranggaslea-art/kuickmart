@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
+import { setupGlobalPrintInterceptor } from './utils/printDocumentHelper';
+
+// Inisialisasi interceptor cetak agar tombol print browser / shortcut otomatis mencetak dokumen laporan
+setupGlobalPrintInterceptor();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

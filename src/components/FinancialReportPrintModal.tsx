@@ -504,10 +504,10 @@ export const FinancialReportPrintModal: React.FC<FinancialReportPrintModalProps>
               type="button"
               onClick={handleExecutePrint}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-2 cursor-pointer transition-all border border-emerald-400/30"
-              title="Cetak langsung ke Printer fisik atau simpan sebagai file PDF bersih"
+              title="Cetak Sekarang ke Printer fisik atau simpan sebagai file PDF bersih"
             >
               <Printer className="w-4 h-4 text-white" />
-              <span>Cetak ke Printer / PDF</span>
+              <span>Cetak Sekarang (Printer / PDF)</span>
             </button>
 
             {/* Tombol Tutup */}

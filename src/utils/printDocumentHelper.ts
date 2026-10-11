@@ -317,48 +317,11 @@ export function generateSinglePurchaseInvoiceHtml(
   `;
 }
 
-export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOptions = {}): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const { title = 'Dokumen Laporan & Keuangan', landscape = false } = options;
-
-      // Cari atau buat hidden iframe khusus print
-      let iframe = document.getElementById('isolated-print-iframe') as HTMLIFrameElement;
-      if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.id = 'isolated-print-iframe';
-        document.body.appendChild(iframe);
-      }
-
-      // Pastikan iframe memiliki dimensi nyata untuk kalkulasi layout printer
-      iframe.style.position = 'fixed';
-      iframe.style.left = '0';
-      iframe.style.top = '0';
-      iframe.style.width = landscape ? '297mm' : '210mm';
-      iframe.style.height = landscape ? '210mm' : '297mm';
-      iframe.style.border = '0';
-      iframe.style.opacity = '0';
-      iframe.style.pointerEvents = 'none';
-      iframe.style.zIndex = '-9999';
-
-      const doc = iframe.contentWindow?.document || iframe.contentDocument;
-      if (!doc) {
-        // Fallback jika iframe diblokir
-        window.print();
-        resolve(false);
-        return;
-      }
-
-      const fullHtml = `
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="utf-8">
-  <title>${title}</title>
-  <style>
+export function getPrintDocumentCss(landscape: boolean = false): string {
+  return `
     @page {
       size: ${landscape ? 'A4 landscape' : 'A4 portrait'};
-      margin: ${landscape ? '10mm 12mm 12mm 12mm' : '12mm 10mm 14mm 10mm'};
+      margin: ${landscape ? '8mm 10mm 10mm 10mm' : '10mm 8mm 12mm 8mm'};
     }
     * {
       box-sizing: border-box !important;
@@ -367,7 +330,7 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    html, body {
+    html, body, .print-isolated-body, .print-document-container {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
       color: #111827 !important;
       background-color: #ffffff !important;
@@ -747,38 +710,129 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
-  </style>
-</head>
-<body>
-  ${htmlContent}
-</body>
-</html>
+  `;
+}
+
+export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOptions = {}): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const { title = 'Dokumen Laporan & Keuangan', landscape = false } = options;
+      const originalTitle = document.title;
+      document.title = title;
+
+      // 1. Dapatkan atau buat mount stage khusus cetak di luar #root (pada document.body)
+      let printStage = document.getElementById('print-mount-stage');
+      if (!printStage) {
+        printStage = document.createElement('div');
+        printStage.id = 'print-mount-stage';
+        document.body.appendChild(printStage);
+      }
+
+      const css = getPrintDocumentCss(landscape);
+
+      // Masukkan CSS lengkap dan markup dokumen ke print-mount-stage
+      printStage.innerHTML = `
+        <style id="injected-report-print-css">
+          ${css}
+        </style>
+        <div class="print-document-container ${landscape ? 'landscape-mode' : 'portrait-mode'}">
+          ${htmlContent}
+        </div>
       `;
 
-      doc.open();
-      doc.write(fullHtml);
-      doc.close();
+      // Tambahkan class aktif ke body & html agar @media print langsung menyembunyikan #root 100%
+      document.body.classList.add('printing-report-active');
+      document.documentElement.classList.add('printing-report-active');
 
-      const runPrint = () => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-          resolve(true);
-        } catch (err) {
-          console.error('Error saat print iframe:', err);
-          window.print();
-          resolve(false);
+      // 2. Pembersihan aman setelah proses dialog cetak selesai
+      let isCleanedUp = false;
+      const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+        document.body.classList.remove('printing-report-active', 'financial-report-open', 'document-print-modal-open');
+        document.documentElement.classList.remove('printing-report-active');
+        document.title = originalTitle;
+        if (printStage) {
+          printStage.innerHTML = '';
         }
+        window.removeEventListener('afterprint', cleanup);
+        resolve(true);
       };
 
-      const docObj = iframe.contentDocument;
-      if (docObj && 'fonts' in docObj) {
-        docObj.fonts.ready
-          .then(() => setTimeout(runPrint, 120))
-          .catch(() => setTimeout(runPrint, 250));
-      } else {
-        setTimeout(runPrint, 250);
+      window.addEventListener('afterprint', cleanup);
+
+      // 3. Juga siapkan hidden iframe jika browser mengizinkan iframe print
+      let iframe = document.getElementById('isolated-print-iframe') as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'isolated-print-iframe';
+        document.body.appendChild(iframe);
       }
+
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-99999px';
+      iframe.style.left = '-99999px';
+      iframe.style.width = landscape ? '297mm' : '210mm';
+      iframe.style.height = landscape ? '210mm' : '297mm';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+
+      const fullIframeHtml = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <style>
+    ${css}
+  </style>
+</head>
+<body class="print-isolated-body">
+  ${htmlContent}
+</body>
+</html>`;
+
+      try {
+        const doc = iframe.contentWindow?.document || iframe.contentDocument;
+        if (doc) {
+          doc.open();
+          doc.write(fullIframeHtml);
+          doc.close();
+        }
+      } catch {
+        // Abaikan jika sandbox browser membatasi iframe doc.write
+      }
+
+      // 4. Picu cetak secara aman
+      const runPrint = () => {
+        try {
+          let printedViaIframe = false;
+          if (iframe && iframe.contentWindow) {
+            try {
+              iframe.contentWindow.focus();
+              iframe.contentWindow.print();
+              printedViaIframe = true;
+            } catch {
+              printedViaIframe = false;
+            }
+          }
+
+          if (!printedViaIframe) {
+            // Karena body.printing-report-active aktif, window.print() akan menyembunyikan #root
+            // dan HANYA mencetak #print-mount-stage (100% bebas halaman index!)
+            window.focus();
+            window.print();
+          }
+        } catch (err) {
+          console.error('Error saat mencetak:', err);
+          window.print();
+        }
+
+        // Timer pengaman jika browser tidak mengirim event afterprint
+        setTimeout(cleanup, 4000);
+      };
+
+      setTimeout(runPrint, 80);
+
     } catch (err) {
       console.error('Exception di printHtmlDirectly:', err);
       window.print();
@@ -786,3 +840,62 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
     }
   });
 }
+
+/**
+ * Global interceptor agar penekanan Ctrl+P / Command+P saat modal laporan terbuka
+ * otomatis mengarahkan ke dokumen laporan dan bukan ke halaman index.
+ */
+export function setupGlobalPrintInterceptor(): void {
+  if (typeof window === 'undefined') return;
+
+  window.addEventListener('beforeprint', () => {
+    if (document.body.classList.contains('printing-report-active')) return;
+
+    // Cek elemen dokumen laporan yang sedang terbuka di layar
+    const candidates = [
+      { id: 'printable-financial-report-content', title: 'Laporan_Keuangan_Resmi' },
+      { id: 'printable-purchase-report', title: 'Laporan_Pembelian_Resmi' },
+      { id: 'printable-stock-card-content', title: 'Laporan_Kartu_Stok_Resmi' },
+      { id: 'printable-stock-opname-content', title: 'Laporan_Stock_Opname_Resmi' },
+      { id: 'printable-stock-mutation-content', title: 'Laporan_Mutasi_Stok_Resmi' },
+      { id: 'printable-po-salesman-report', title: 'Laporan_PO_Salesman_Resmi' },
+    ];
+
+    for (const c of candidates) {
+      const el = document.getElementById(c.id);
+      if (el && el.offsetParent !== null) {
+        let printStage = document.getElementById('print-mount-stage');
+        if (!printStage) {
+          printStage = document.createElement('div');
+          printStage.id = 'print-mount-stage';
+          document.body.appendChild(printStage);
+        }
+
+        const isLandscape = el.classList.contains('landscape') || el.closest('.landscape') !== null;
+        const css = getPrintDocumentCss(isLandscape);
+
+        printStage.innerHTML = `
+          <style id="injected-interceptor-print-css">
+            ${css}
+          </style>
+          <div class="print-document-container">
+            ${el.innerHTML}
+          </div>
+        `;
+
+        document.body.classList.add('printing-report-active');
+        document.documentElement.classList.add('printing-report-active');
+
+        const cleanup = () => {
+          document.body.classList.remove('printing-report-active', 'financial-report-open', 'document-print-modal-open');
+          document.documentElement.classList.remove('printing-report-active');
+          if (printStage) printStage.innerHTML = '';
+          window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup, { once: true });
+        break;
+      }
+    }
+  });
+}
+

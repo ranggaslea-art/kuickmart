@@ -1737,7 +1737,7 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md cursor-pointer transition-all"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Dokumen Resmi</span>
+                  <span>Cetak Sekarang (Dokumen Resmi)</span>
                 </button>
 
                 <button

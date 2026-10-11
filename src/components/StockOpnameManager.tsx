@@ -1271,7 +1271,7 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
                   className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Berita Acara</span>
+                  <span>Cetak Sekarang (Berita Acara)</span>
                 </button>
 
                 <button

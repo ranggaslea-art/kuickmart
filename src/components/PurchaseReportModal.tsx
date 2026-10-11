@@ -593,13 +593,13 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                     ? (activeMode === 'po_order' ? 'bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300' : 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-300')
                     : 'bg-stone-800 hover:bg-stone-900'
                 }`}
-                title={reportType === 'single_document' ? 'Cetak 1 Lembar Dokumen Ini Sahaja' : 'Cetak Rekapitulasi Tabel Laporan'}
+                title={reportType === 'single_document' ? 'Cetak Sekarang 1 Lembar Dokumen Ini' : 'Cetak Sekarang Rekapitulasi Tabel Laporan'}
               >
                 <Printer className="w-4 h-4" />
                 <span>
                   {reportType === 'single_document' 
-                    ? `Cetak 1 ${activeMode === 'po_order' ? 'Surat PO' : 'Faktur'} (${selectedSingleDoc?.purchaseNumber || 'Satuan'})` 
-                    : `Cetak Rekap Laporan (${filteredPurchases.length} Dokumen)`}
+                    ? `Cetak Sekarang 1 ${activeMode === 'po_order' ? 'Surat PO' : 'Faktur'} (${selectedSingleDoc?.purchaseNumber || 'Satuan'})` 
+                    : `Cetak Sekarang Rekap Laporan (${filteredPurchases.length} Dokumen)`}
                 </span>
               </button>
 
@@ -895,7 +895,7 @@ export const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Cetak Dokumen Ini</span>
+                  <span>Cetak Sekarang Dokumen Ini</span>
                 </button>
               </div>
             </div>

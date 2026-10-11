@@ -883,7 +883,7 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>Cetak Surat Jalan</span>
+                    <span>Cetak Sekarang (Surat Jalan)</span>
                   </button>
 
                   <button
