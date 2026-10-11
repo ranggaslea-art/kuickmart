@@ -27,7 +27,16 @@ import { Order, OrderStatus, ReceiptInfo, CourierInfo } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
 import { cleanReceiptText, formatReceiptAddress } from '../utils/sanitizeReceipt';
 import { generateDotMatrixReceiptHtml, printPosReceiptViaIframe } from '../utils/posPrinterHelper';
-import { cleanPhoneNumber, generateOrderWhatsAppMessage, getWhatsAppChatUrl, openWhatsAppDirect } from '../utils/whatsappHelper';
+import { 
+  cleanPhoneNumber, 
+  generateOrderWhatsAppMessage, 
+  getWhatsAppChatUrl, 
+  openWhatsAppDirect,
+  extractWhatsAppNumber,
+  openStoreOrderWhatsApp,
+  generateStoreOrderWhatsAppMessage,
+  getStoreWhatsAppUrl
+} from '../utils/whatsappHelper';
 
 interface OrderTrackerModalProps {
   order: Order | null;
@@ -58,6 +67,21 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
+  const [copiedStorePhone, setCopiedStorePhone] = useState(false);
+
+  // WhatsApp Toko Cabang handlers (baik pesanan diambil maupun diantar kurir)
+  const handleOpenStoreWhatsApp = () => {
+    if (!order) return;
+    openStoreOrderWhatsApp(order);
+  };
+
+  const handleCopyStorePhone = () => {
+    if (!order) return;
+    const phone = order.store.phone || order.store.whatsapp || '';
+    navigator.clipboard.writeText(phone);
+    setCopiedStorePhone(true);
+    setTimeout(() => setCopiedStorePhone(false), 2000);
+  };
 
   if (!order) return null;
 
@@ -313,6 +337,82 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                           : '100%',
                     }}
                   />
+                </div>
+              </div>
+
+              {/* KARTU RESMI NOMOR TELEPON & WHATSAPP TOKO (MODUL CABANG TOKO) */}
+              {/* Berlaku untuk setiap pesanan: baik yang diambil maupun diantar kurir */}
+              <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 rounded-2xl p-4 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                      <StoreIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white px-2 py-0.5 rounded-full">
+                          Cabang Toko Pemroses
+                        </span>
+                        <span className="text-[11px] font-bold text-emerald-800">
+                          {order.deliveryType === 'delivery' ? '🛵 Pesanan Diantar Kurir' : '🛍️ Pesanan Ambil di Toko'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-stone-900 mt-1">{order.store.name}</h4>
+                      <p className="text-xs text-stone-600">{order.store.address}</p>
+                      
+                      <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
+                        <span className="text-stone-500 font-semibold">Nomor WhatsApp Toko:</span>
+                        <span className="font-mono font-bold text-emerald-900 bg-white border border-emerald-200 px-2 py-0.5 rounded-md shadow-2xs">
+                          {order.store.phone || order.store.whatsapp || '0812-3456-7890'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyStorePhone}
+                          className="text-[11px] text-stone-500 hover:text-stone-800 font-medium flex items-center gap-1 cursor-pointer"
+                          title="Salin Nomor WhatsApp Toko"
+                        >
+                          {copiedStorePhone ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedStorePhone ? 'Tersalin' : 'Salin'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto justify-end pt-1 sm:pt-0">
+                    {/* Tombol Utama: Kirim / Buka Percakapan WhatsApp Toko */}
+                    <button
+                      type="button"
+                      onClick={handleOpenStoreWhatsApp}
+                      className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center gap-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                      title="Kirim / Teruskan Rincian Pesanan Lengkap ke WhatsApp Toko Cabang Ini"
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-100" />
+                      <span>Kirim ke WA Toko</span>
+                    </button>
+
+                    {/* Tombol Telepon Seluler Toko */}
+                    <a
+                      href={`tel:${(order.store.phone || order.store.whatsapp || '').replace(/[^0-9+]/g, '')}`}
+                      className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 flex items-center justify-center gap-1.5 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                      title="Panggilan Telepon ke Cabang Toko"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-stone-600" />
+                      <span>Telepon</span>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Info Status Pengiriman WA */}
+                <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between text-[11px] text-emerald-900 flex-wrap gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <span>
+                      Rincian pesanan #{order.orderNumber} ({order.deliveryType === 'delivery' ? 'Antar Kurir' : 'Ambil di Kasir'}) otomatis diteruskan ke WhatsApp cabang toko.
+                    </span>
+                  </div>
+                  <span className="font-bold text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
+                    Modul Cabang Toko Aktif
+                  </span>
                 </div>
               </div>
 

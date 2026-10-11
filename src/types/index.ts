@@ -81,6 +81,7 @@ export interface Store {
   isOpen: boolean;
   openHours: string;
   phone: string;
+  whatsapp?: string; // Nomor WhatsApp Toko / Cabang
   readyForPickup: boolean;
   readyForDelivery: boolean;
   deliveryFee: number;

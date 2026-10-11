@@ -78,6 +78,7 @@ import {
   Rocket,
   Download,
   Sliders,
+  MessageSquare,
 } from 'lucide-react';
 import { 
   Product, 
@@ -143,6 +144,7 @@ import { UserAccessManager } from './UserAccessManager';
 import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
+import { openStoreOrderWhatsApp, extractWhatsAppNumber } from '../utils/whatsappHelper';
 import { BrandInfoManager } from './BrandInfoManager';
 import { StoreDokuSettingsManager } from './StoreDokuSettingsManager';
 import { PushNotificationManager } from './PushNotificationManager';
@@ -1781,6 +1783,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         address: storeAddress.trim(),
         city: storeCity.trim(),
         phone: storePhone.trim(),
+        whatsapp: storePhone.trim(),
         openHours: storeIs24Hours ? 'Buka 24 Jam Non-Stop' : storeOpenHours.trim(),
         distanceKm: Number(storeDistanceKm) || 1.0,
         deliveryFee: Number(storeDeliveryFee) || 0,
@@ -1813,7 +1816,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         code: storeCode.trim() || `KM-${Math.floor(100 + Math.random() * 900)}`,
         address: storeAddress.trim(),
         city: storeCity.trim() || 'Jakarta',
-        phone: storePhone.trim() || '021-12345678',
+        phone: storePhone.trim() || '0812-3456-7890',
+        whatsapp: storePhone.trim() || '0812-3456-7890',
         openHours: storeIs24Hours ? 'Buka 24 Jam Non-Stop' : storeOpenHours.trim(),
         distanceKm: Number(storeDistanceKm) || 1.0,
         deliveryFee: Number(storeDeliveryFee) || 8000,
@@ -3977,9 +3981,26 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <div className="text-[11px] text-stone-600 bg-stone-50 p-2.5 rounded-xl space-y-1">
                           <div><strong>Metode:</strong> {order.paymentMethod.toUpperCase()} ({order.paymentStatus})</div>
                           <div><strong>Tipe:</strong> {order.deliveryType === 'delivery' ? 'Antar ke Rumah' : 'Ambil di Toko'}</div>
+                          <div>
+                            <strong>Cabang Toko:</strong> <span className="font-semibold text-emerald-800">{order.store.name}</span>
+                          </div>
+                          <div>
+                            <strong>No. Telepon / WA Toko:</strong> <span className="font-mono font-bold text-stone-900 bg-white border border-stone-200 px-1.5 py-0.5 rounded text-[10px]">{order.store.phone || order.store.whatsapp || '-'}</span>
+                          </div>
                           {order.address && (
                             <div><strong>Alamat:</strong> {order.address.fullAddress}</div>
                           )}
+                          <div className="pt-1.5 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openStoreOrderWhatsApp(order)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                              title="Kirim / Teruskan Rincian Pesanan ke WhatsApp Toko Cabang"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              <span>Kirim ke WA Cabang</span>
+                            </button>
+                          </div>
                           {(order.customerLocation || order.address?.latitude) && (
                             <div className="mt-2 pt-2 border-t border-stone-200">
                               <div className="flex items-center justify-between">
@@ -4120,16 +4141,22 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                       <div>
-                        <label className="block font-bold text-stone-700 mb-1">
-                          Nomor Telepon / WhatsApp Toko:
+                        <label className="block font-bold text-stone-700 mb-1 flex items-center justify-between">
+                          <span>Nomor Telepon / WhatsApp Toko:</span>
+                          <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            Pesanan Masuk ke WA Ini
+                          </span>
                         </label>
                         <input
                           type="text"
                           value={storePhone}
                           onChange={e => setStorePhone(e.target.value)}
-                          placeholder="021-3901234 / 0812-3456-7890"
+                          placeholder="0812-3456-7890 / 0857-1122-3344"
                           className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl bg-white font-medium text-stone-900 focus:ring-2 focus:ring-purple-200"
                         />
+                        <p className="text-[10px] text-stone-500 mt-1">
+                          Setiap pesanan baru (baik pesanan diambil di kasir maupun diantar kurir) otomatis masuk ke nomor WhatsApp cabang ini.
+                        </p>
                       </div>
 
                       <div>
@@ -4419,9 +4446,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
                           {/* Detail Pills */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-2 border-t border-stone-100">
-                            <div className="bg-stone-50 p-2 rounded-xl text-stone-700 flex items-center gap-1.5">
-                              <Phone className="w-3 h-3 text-stone-400 shrink-0" />
-                              <span className="truncate">{store.phone || '-'}</span>
+                            <div className="bg-emerald-50/70 border border-emerald-200/60 p-2 rounded-xl text-stone-700 flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span className="truncate font-semibold">{store.phone || store.whatsapp || '-'}</span>
+                              </div>
+                              <a
+                                href={`https://wa.me/${extractWhatsAppNumber(store.phone || store.whatsapp)}?text=${encodeURIComponent(`Halo ${store.name}, tes koneksi WhatsApp Toko Cabang.`)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[9px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-1.5 py-0.5 rounded shadow-2xs shrink-0 flex items-center gap-0.5 cursor-pointer"
+                                title="Tes Kirim Pesan ke WhatsApp Toko Cabang"
+                              >
+                                <MessageSquare className="w-2.5 h-2.5" />
+                                <span>Tes WA</span>
+                              </a>
                             </div>
 
                             <div className="bg-stone-50 p-2 rounded-xl text-stone-700 flex items-center gap-1.5">

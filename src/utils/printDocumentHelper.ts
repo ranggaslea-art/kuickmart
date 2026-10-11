@@ -802,36 +802,22 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
         // Abaikan jika sandbox browser membatasi iframe doc.write
       }
 
-      // 4. Picu cetak secara aman
+      // 4. Picu cetak secara aman langsung melalui #print-mount-stage
+      // Karena body.printing-report-active aktif, window.print() menyembunyikan #root 100%
+      // dan HANYA mencetak dokumen laporan pada #print-mount-stage (bebas total dari halaman index!)
       const runPrint = () => {
         try {
-          let printedViaIframe = false;
-          if (iframe && iframe.contentWindow) {
-            try {
-              iframe.contentWindow.focus();
-              iframe.contentWindow.print();
-              printedViaIframe = true;
-            } catch {
-              printedViaIframe = false;
-            }
-          }
-
-          if (!printedViaIframe) {
-            // Karena body.printing-report-active aktif, window.print() akan menyembunyikan #root
-            // dan HANYA mencetak #print-mount-stage (100% bebas halaman index!)
-            window.focus();
-            window.print();
-          }
+          window.focus();
+          window.print();
         } catch (err) {
           console.error('Error saat mencetak:', err);
-          window.print();
         }
 
         // Timer pengaman jika browser tidak mengirim event afterprint
         setTimeout(cleanup, 4000);
       };
 
-      setTimeout(runPrint, 80);
+      setTimeout(runPrint, 120);
 
     } catch (err) {
       console.error('Exception di printHtmlDirectly:', err);

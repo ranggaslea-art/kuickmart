@@ -10,11 +10,13 @@ import {
   XCircle,
   Truck,
   ArrowLeft,
-  Navigation
+  Navigation,
+  MessageSquare
 } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
+import { openStoreOrderWhatsApp } from '../utils/whatsappHelper';
 
 interface OrderHistoryViewProps {
   orders: Order[];
@@ -259,13 +261,25 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                   <span>Beli Lagi</span>
                 </button>
 
-                <button
-                  onClick={() => onTrackOrder(order)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-xl flex items-center gap-1 shadow-2xs transition-transform active:scale-95"
-                >
-                  <span>Lacak & Lihat Struk</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <button
+                    type="button"
+                    onClick={() => openStoreOrderWhatsApp(order)}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all cursor-pointer"
+                    title={`Kirim / Teruskan Rincian Pesanan ke WhatsApp Toko Cabang: ${order.store.name}`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>WA Toko Cabang</span>
+                  </button>
+
+                  <button
+                    onClick={() => onTrackOrder(order)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-xl flex items-center gap-1 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <span>Lacak & Lihat Struk</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

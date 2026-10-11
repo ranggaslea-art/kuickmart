@@ -39,6 +39,7 @@ import {
 } from '../types';
 import { formatRupiah, generateOrderNumber } from '../utils/formatters';
 import { loadStoreTenantConfig } from '../utils/tenantHelper';
+import { openStoreOrderWhatsApp, extractWhatsAppNumber } from '../utils/whatsappHelper';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -524,6 +525,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       setIsProcessing(false);
       onOrderCreated(newOrder);
+
+      // Teruskan pesanan otomatis ke Nomor Telepon / WhatsApp Toko (Modul Cabang Toko)
+      // Berlaku untuk pesanan yang diambil di toko (pickup) maupun diantar oleh kurir (delivery)
+      try {
+        openStoreOrderWhatsApp(newOrder);
+      } catch (waErr) {
+        console.warn('Otomatisasi WhatsApp Cabang Toko:', waErr);
+      }
+
       onClose();
     }, 800);
   };
@@ -1283,6 +1293,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
               </div>
               <span className="text-xl font-black text-blue-900">{formatRupiah(total)}</span>
+            </div>
+
+            {/* Notifikasi Otomatis Masuk ke WhatsApp Toko Cabang */}
+            <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 text-xs text-emerald-800">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                <span>
+                  Pesanan ({effectiveDeliveryType === 'delivery' ? 'Antar Kurir' : 'Ambil di Toko'}) otomatis masuk ke WhatsApp: <strong>{store.name}</strong> ({store.phone || store.whatsapp || 'Cabang Toko'})
+                </span>
+              </div>
+              <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full shrink-0">
+                WA Toko Aktif
+              </span>
             </div>
           </div>
         </div>
