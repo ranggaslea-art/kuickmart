@@ -1853,18 +1853,33 @@ async function startServer() {
       // 1. Cek repositori Git & cabang aktif
       addDeployLog('🔍 Memeriksa cabang dan status Git...');
       const branchRes = await runShell('git rev-parse --abbrev-ref HEAD');
-      const branchName = branchRes.stdout || 'main';
+      const branchName = branchRes.stdout?.trim() || 'main';
       addDeployLog(`📌 Cabang Git aktif: ${branchName}`);
 
-      // 2. Tarik kode terbaru dari remote git
-      addDeployLog(`⬇️ Menjalankan git pull origin ${branchName}...`);
-      const pullRes = await runShell(`git pull origin ${branchName} || git pull`);
+      // 1.5 Amankan dan backup file runtime data lokal (subdomain, tenant, produk, dll)
+      addDeployLog('💾 Mengamankan data runtime (folder data/)...');
+      await runShell('mkdir -p /tmp/kuickmart_runtime_backup && cp -rf data/* /tmp/kuickmart_runtime_backup/ 2>/dev/null || true');
+
+      // Bersihkan modifikasi lokal di file yang dilacak git agar git pull tidak pernah abort karena konflik data/*.json
+      addDeployLog('🧹 Menangani perubahan lokal di git (checkout data & stash)...');
+      await runShell('git checkout -- data/ 2>/dev/null || true');
+      await runShell('git stash --include-untracked 2>/dev/null || git stash 2>/dev/null || true');
+
+      // 2. Tarik kode terbaru dari remote git (fetch & reset --hard ke origin/branch)
+      addDeployLog(`⬇️ Menjalankan git pull & sinkronisasi dari origin/${branchName}...`);
+      await runShell(`git fetch origin ${branchName} || git fetch --all || true`);
+      const pullRes = await runShell(`git reset --hard origin/${branchName} || git pull origin ${branchName}`);
       if (pullRes.stdout) {
-        addDeployLog(`[git pull]: ${pullRes.stdout}`);
+        addDeployLog(`[git sync]: ${pullRes.stdout.trim()}`);
       }
       if (pullRes.stderr && pullRes.code !== 0) {
-        addDeployLog(`⚠️ [git notice]: ${pullRes.stderr}`);
+        addDeployLog(`⚠️ [git notice]: ${pullRes.stderr.trim()}`);
       }
+
+      // 2.1 Pulihkan data runtime lokal yang sudah di-backup agar data toko/subdomain user tetap utuh
+      addDeployLog('🔄 Memulihkan data runtime lokal ke folder data/...');
+      await runShell('if [ -d /tmp/kuickmart_runtime_backup ]; then cp -rf /tmp/kuickmart_runtime_backup/* data/ 2>/dev/null || true; fi');
+      await runShell('git update-index --assume-unchanged data/subdomain_modules.json data/store_tenants.json data/tenant_products.json 2>/dev/null || true');
 
       // 2.5 Instal dependensi baru jika ada penambahan paket di package.json
       addDeployLog('📦 Memeriksa dan memperbarui paket dependensi (npm install)...');

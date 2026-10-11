@@ -1,8 +1,0 @@
-{
-  "globalPolicy": {},
-  "overrides": {
-    "berkah-jaya": {
-      "pos_cashier": false
-    }
-  }
-}

@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { getStoreSlugFromUrl, getTenantStorageKey } from '../utils/tenantHelper';
+import { printHtmlDirectly } from '../utils/printDocumentHelper';
 import { 
   ClipboardCheck, 
   Search, 
@@ -178,6 +179,45 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
   // Printable Audit Sheet Modal
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printRecordData, setPrintRecordData] = useState<StockOpnameRecord | null>(null);
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  useEffect(() => {
+    if (isPrintModalOpen) {
+      document.body.classList.add('document-print-modal-open');
+    } else {
+      document.body.classList.remove('document-print-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('document-print-modal-open');
+    };
+  }, [isPrintModalOpen]);
+
+  // Akumulasi Total Cetak Berita Acara
+  const opnameTotals = useMemo(() => {
+    if (!printRecordData?.items) return { systemStock: 0, physicalStock: 0, diffQty: 0, diffAmount: 0 };
+    return printRecordData.items.reduce(
+      (acc, it) => {
+        acc.systemStock += it.systemStock || 0;
+        acc.physicalStock += it.physicalStock || 0;
+        acc.diffQty += it.differenceQty || 0;
+        acc.diffAmount += it.differenceAmount || 0;
+        return acc;
+      },
+      { systemStock: 0, physicalStock: 0, diffQty: 0, diffAmount: 0 }
+    );
+  }, [printRecordData]);
+
+  const handleExecutePrint = () => {
+    const el = document.getElementById('printable-stock-opname-content');
+    if (!el) {
+      window.print();
+      return;
+    }
+    printHtmlDirectly(el.innerHTML, {
+      title: `Berita_Acara_Opname_${printRecordData?.opnameNumber || 'Audit'}_${printRecordData?.date || ''}`,
+      landscape: printOrientation === 'landscape',
+    });
+  };
 
   // Categories list
   const categories = useMemo(() => {
@@ -1179,116 +1219,250 @@ export const StockOpnameManager: React.FC<StockOpnameManagerProps> = ({
       {/* MODAL CETAK BERITA ACARA STOCK OPNAME                         */}
       {/* ============================================================ */}
       {isPrintModalOpen && printRecordData && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-white w-full max-w-3xl max-h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-300">
-            <div className="px-5 py-3 bg-stone-100 border-b border-stone-200 flex items-center justify-between no-print">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-teal-700" />
-                <h3 className="font-bold text-stone-900 text-sm">
-                  Pratinjau Berita Acara Stock Opname
-                </h3>
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className={`bg-white w-full ${printOrientation === 'landscape' ? 'max-w-6xl' : 'max-w-4xl'} max-h-[94vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-stone-300 animate-in fade-in zoom-in-95 duration-150`}>
+            {/* Header Toolbar */}
+            <div className="px-4 py-3 bg-stone-900 border-b border-stone-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-white no-print shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-extrabold text-white text-sm sm:text-base">
+                      Pratinjau Cetak: Berita Acara Audit Stock Opname
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-700/60 text-[10px] font-mono font-bold">
+                      Format Cetak A4 Terisolasi
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-300 mt-0.5">
+                    No: {printRecordData.opnameNumber} • Toko: {printRecordData.storeName || activeStore.name}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {/* Orientasi Kertas */}
+                <div className="flex items-center bg-stone-800 rounded-xl p-1 border border-stone-700 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPrintOrientation('portrait')}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      printOrientation === 'portrait' ? 'bg-stone-700 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Portrait (Tegak)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintOrientation('landscape')}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      printOrientation === 'landscape' ? 'bg-stone-700 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Landscape (Melebar)
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => window.print()}
-                  className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                  type="button"
+                  onClick={handleExecutePrint}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Sekarang</span>
+                  <span>Cetak Berita Acara</span>
                 </button>
+
                 <button
+                  type="button"
                   onClick={() => setIsPrintModalOpen(false)}
-                  className="p-1 rounded-lg text-stone-500 hover:bg-stone-200"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* Printable Paper View */}
-            <div className="p-6 overflow-y-auto font-sans text-stone-900 space-y-4">
-              {/* Header */}
-              <div className="text-center border-b-2 border-stone-800 pb-3">
-                <h1 className="text-xl font-black uppercase tracking-wider text-stone-900">
-                  BERITA ACARA AUDIT STOCK OPNAME
-                </h1>
-                <p className="text-xs text-stone-600 font-medium">
-                  {printRecordData.storeName} • No: {printRecordData.opnameNumber} • Tanggal: {printRecordData.date}
-                </p>
-                <p className="text-[11px] text-stone-500">
-                  Petugas Auditor: <span className="font-bold text-stone-800">{printRecordData.auditorName}</span>
-                </p>
-              </div>
+            <div className="p-4 sm:p-6 overflow-y-auto bg-stone-100 flex justify-center">
+              <div
+                id="printable-stock-opname-content"
+                className="w-full bg-white p-6 sm:p-8 rounded-xl shadow-sm border border-stone-200 text-stone-900 font-sans text-xs space-y-5"
+                style={{ maxWidth: printOrientation === 'landscape' ? '280mm' : '210mm' }}
+              >
+                {/* Header Kop Surat Resmi */}
+                <div className="border-b-2 border-stone-900 pb-3 flex justify-between items-start gap-4">
+                  <div>
+                    <h1 className="text-xl font-black uppercase tracking-tight text-stone-900">
+                      {printRecordData.storeName || activeStore.name || currentStore?.name || 'KUICK HEBAT'}
+                    </h1>
+                    <p className="text-[11px] text-stone-600 mt-0.5">
+                      {activeStore.address || currentStore?.address || 'Pusat Operasional Retail'} • Telp/WA: {activeStore.phone || currentStore?.phone || '-'}
+                    </p>
+                    <div className="inline-block mt-2 px-2.5 py-1 bg-stone-900 text-white rounded text-[10px] font-black tracking-wider uppercase">
+                      BERITA ACARA AUDIT STOCK OPNAME FISIK
+                    </div>
+                  </div>
+                  <div className="text-right text-[11px] text-stone-600 font-mono space-y-0.5 shrink-0">
+                    <p>
+                      <strong>No. Audit:</strong> {printRecordData.opnameNumber}
+                    </p>
+                    <p>
+                      <strong>Tanggal:</strong> {printRecordData.date}
+                    </p>
+                    <p>
+                      <strong>Status:</strong>{' '}
+                      <span className={printRecordData.status === 'posted' ? 'text-teal-700 font-bold' : 'text-amber-700 font-bold'}>
+                        {printRecordData.status === 'posted' ? 'SELESAI DIPOSTING' : 'DRAFT AUDIT FISIK'}
+                      </span>
+                    </p>
+                    <p>
+                      <strong>Auditor:</strong> {printRecordData.auditorName}
+                    </p>
+                    <p>
+                      <strong>Waktu Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
 
-              {/* Summary box */}
-              <div className="grid grid-cols-4 gap-2 bg-stone-50 p-3 rounded-xl border border-stone-300 text-xs">
-                <div>
-                  <span className="text-stone-500 block text-[11px]">Total Item:</span>
-                  <span className="font-bold">{printRecordData.totalItemsCounted} Produk</span>
+                {/* Summary Box Metrik */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-stone-50 p-3 rounded-xl border border-stone-300 text-xs text-center">
+                  <div>
+                    <span className="text-stone-500 block text-[10px] uppercase font-bold">TOTAL ITEM:</span>
+                    <span className="font-mono font-bold text-stone-900 text-sm">{printRecordData.totalItemsCounted} Produk</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-500 block text-[10px] uppercase font-bold">FISIK COCOK:</span>
+                    <span className="font-mono font-bold text-teal-700 text-sm">{printRecordData.itemsMatchedCount} Produk</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-500 block text-[10px] uppercase font-bold">FISIK SELISIH:</span>
+                    <span className="font-mono font-bold text-red-700 text-sm">{printRecordData.itemsDiscrepancyCount} Produk</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-500 block text-[10px] uppercase font-bold">NET SELISIH QTY:</span>
+                    <span className={`font-mono font-bold text-sm ${opnameTotals.diffQty > 0 ? 'text-teal-700' : opnameTotals.diffQty < 0 ? 'text-red-700' : 'text-stone-700'}`}>
+                      {opnameTotals.diffQty > 0 ? `+${opnameTotals.diffQty}` : opnameTotals.diffQty} Unit
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-stone-500 block text-[10px] uppercase font-bold">NET NILAI SELISIH:</span>
+                    <span className={`font-mono font-black text-sm ${printRecordData.netDifferenceAmount < 0 ? 'text-red-700' : printRecordData.netDifferenceAmount > 0 ? 'text-teal-700' : 'text-stone-800'}`}>
+                      {formatRupiah(printRecordData.netDifferenceAmount)}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-stone-500 block text-[11px]">Fisik Cocok:</span>
-                  <span className="font-bold text-emerald-700">{printRecordData.itemsMatchedCount} Produk</span>
-                </div>
-                <div>
-                  <span className="text-stone-500 block text-[11px]">Selisih:</span>
-                  <span className="font-bold text-red-700">{printRecordData.itemsDiscrepancyCount} Produk</span>
-                </div>
-                <div>
-                  <span className="text-stone-500 block text-[11px]">Net Selisih:</span>
-                  <span className="font-mono font-black">{formatRupiah(printRecordData.netDifferenceAmount)}</span>
-                </div>
-              </div>
 
-              {/* Items Table */}
-              <table className="w-full text-left text-xs border border-stone-300">
-                <thead className="bg-stone-100 border-b border-stone-300 font-bold uppercase text-[10px]">
-                  <tr>
-                    <th className="p-2 border-r border-stone-300 w-8 text-center">No</th>
-                    <th className="p-2 border-r border-stone-300 w-28">Barcode</th>
-                    <th className="p-2 border-r border-stone-300">Nama Barang</th>
-                    <th className="p-2 border-r border-stone-300 w-16 text-center">Satuan</th>
-                    <th className="p-2 border-r border-stone-300 w-20 text-right">Buku</th>
-                    <th className="p-2 border-r border-stone-300 w-20 text-right">Fisik</th>
-                    <th className="p-2 border-r border-stone-300 w-20 text-center">Selisih</th>
-                    <th className="p-2 text-right w-24">Selisih (Rp)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-300 font-medium text-xs">
-                  {printRecordData.items.map((it, idx) => (
-                    <tr key={it.id}>
-                      <td className="p-2 border-r border-stone-300 text-center">{idx + 1}</td>
-                      <td className="p-2 border-r border-stone-300 font-mono">{it.barcode}</td>
-                      <td className="p-2 border-r border-stone-300 font-bold">{it.productName}</td>
-                      <td className="p-2 border-r border-stone-300 text-center">{it.unit}</td>
-                      <td className="p-2 border-r border-stone-300 text-right font-mono">{it.systemStock}</td>
-                      <td className="p-2 border-r border-stone-300 text-right font-mono font-bold">{it.physicalStock}</td>
-                      <td className="p-2 border-r border-stone-300 text-center font-mono font-bold">
-                        {it.differenceQty === 0 ? '0' : it.differenceQty}
+                {/* Tabel Barang Hasil Audit */}
+                <table className="w-full text-left text-xs border border-stone-300 border-collapse">
+                  <thead className="bg-stone-100 border-b border-stone-300 font-bold uppercase text-[9.5px]">
+                    <tr>
+                      <th className="p-2 border border-stone-300 w-8 text-center">No</th>
+                      <th className="p-2 border border-stone-300 w-28">Barcode</th>
+                      <th className="p-2 border border-stone-300">Nama Barang / Produk</th>
+                      <th className="p-2 border border-stone-300 w-14 text-center">Sat</th>
+                      <th className="p-2 border border-stone-300 w-18 text-right">Stok Buku</th>
+                      <th className="p-2 border border-stone-300 w-18 text-right">Stok Fisik</th>
+                      <th className="p-2 border border-stone-300 w-18 text-center">Selisih</th>
+                      <th className="p-2 border border-stone-300 w-24 text-right">HPP (Rp)</th>
+                      <th className="p-2 border border-stone-300 w-28 text-right">Selisih (Rp)</th>
+                      <th className="p-2 border border-stone-300 w-32">Keterangan / Alasan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-200 font-medium text-[11px]">
+                    {printRecordData.items.map((it, idx) => (
+                      <tr key={it.id} className={idx % 2 === 1 ? 'bg-stone-50/50' : ''}>
+                        <td className="p-2 border border-stone-300 text-center font-mono">{idx + 1}</td>
+                        <td className="p-2 border border-stone-300 font-mono text-[10px]">{it.barcode || '-'}</td>
+                        <td className="p-2 border border-stone-300 font-bold text-stone-900">{it.productName}</td>
+                        <td className="p-2 border border-stone-300 text-center">{it.unit}</td>
+                        <td className="p-2 border border-stone-300 text-right font-mono">{it.systemStock}</td>
+                        <td className="p-2 border border-stone-300 text-right font-mono font-bold text-stone-900">{it.physicalStock}</td>
+                        <td className="p-2 border border-stone-300 text-center font-mono font-bold">
+                          {it.differenceQty === 0 ? (
+                            <span className="text-stone-400">0</span>
+                          ) : it.differenceQty > 0 ? (
+                            <span className="text-teal-700">+{it.differenceQty}</span>
+                          ) : (
+                            <span className="text-red-700">{it.differenceQty}</span>
+                          )}
+                        </td>
+                        <td className="p-2 border border-stone-300 text-right font-mono text-stone-600">
+                          {formatRupiah(it.costPrice || 0)}
+                        </td>
+                        <td className={`p-2 border border-stone-300 text-right font-mono font-bold ${
+                          it.differenceAmount < 0 ? 'text-red-700' : it.differenceAmount > 0 ? 'text-teal-700' : 'text-stone-400'
+                        }`}>
+                          {it.differenceAmount === 0 ? '-' : formatRupiah(it.differenceAmount)}
+                        </td>
+                        <td className="p-2 border border-stone-300 text-stone-600 text-[10.5px]">
+                          {it.notes || (it.differenceQty !== 0 ? 'Selisih fisik' : '-')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-stone-100 font-bold border-t-2 border-stone-800">
+                      <td colSpan={4} className="p-2 border border-stone-300 text-right uppercase text-[9.5px]">
+                        TOTAL AUDIT ({printRecordData.items.length} PRODUK):
                       </td>
-                      <td className="p-2 text-right font-mono font-bold">
-                        {formatRupiah(it.differenceAmount)}
+                      <td className="p-2 border border-stone-300 text-right font-mono">
+                        {opnameTotals.systemStock}
+                      </td>
+                      <td className="p-2 border border-stone-300 text-right font-mono font-bold">
+                        {opnameTotals.physicalStock}
+                      </td>
+                      <td className="p-2 border border-stone-300 text-center font-mono font-bold">
+                        {opnameTotals.diffQty > 0 ? `+${opnameTotals.diffQty}` : opnameTotals.diffQty}
+                      </td>
+                      <td className="p-2 border border-stone-300 text-center text-stone-400 font-mono">-</td>
+                      <td className={`p-2 border border-stone-300 text-right font-mono font-black ${
+                        printRecordData.netDifferenceAmount < 0 ? 'text-red-700' : 'text-teal-700'
+                      }`}>
+                        {formatRupiah(printRecordData.netDifferenceAmount)}
+                      </td>
+                      <td className="p-2 border border-stone-300 text-stone-500 font-normal italic text-[10px]">
+                        Net Balance
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </tfoot>
+                </table>
 
-              {/* Signatures */}
-              <div className="pt-6 grid grid-cols-3 gap-4 text-center text-xs">
-                <div>
-                  <p className="text-stone-500 mb-14">Petugas Auditor / Gudang,</p>
-                  <p className="font-bold border-t border-stone-400 pt-1">
-                    ( {printRecordData.auditorName} )
+                {/* Catatan Auditor & Pernyataan Resmi */}
+                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-xs space-y-1">
+                  <p className="font-bold text-stone-800">Catatan & Keterangan Audit:</p>
+                  <p className="text-stone-600">
+                    {printRecordData.notes || 'Pemeriksaan fisik persediaan telah dilaksanakan sesuai prosedur audit operasional toko.'}
+                  </p>
+                  <p className="text-[10px] text-stone-400 italic pt-1 border-t border-stone-200 mt-1">
+                    Demikian Berita Acara Pemeriksaan Fisik Persediaan ini dibuat dengan sebenar-benarnya melalui pencacahan fisik di lokasi. Seluruh pihak telah memverifikasi dan menyetujui hasil audit ini.
                   </p>
                 </div>
-                <div>
-                  <p className="text-stone-500 mb-14">Supervisor Shift Toko,</p>
-                  <p className="font-bold border-t border-stone-400 pt-1">( ................................ )</p>
-                </div>
-                <div>
-                  <p className="text-stone-500 mb-14">Store Manager,</p>
-                  <p className="font-bold border-t border-stone-400 pt-1">( ................................ )</p>
+
+                {/* Tanda Tangan 3 Pihak */}
+                <div className="pt-6 grid grid-cols-3 gap-4 text-center text-xs border-t border-stone-200">
+                  <div>
+                    <p className="text-stone-500 mb-14 font-medium">Petugas Auditor / Pelaksana,</p>
+                    <p className="font-bold border-b border-stone-400 inline-block px-6 pb-1">
+                      ( {printRecordData.auditorName} )
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1">Pemeriksa Fisik</p>
+                  </div>
+                  <div>
+                    <p className="text-stone-500 mb-14 font-medium">Supervisor Shift / Gudang,</p>
+                    <p className="font-bold border-b border-stone-400 inline-block px-6 pb-1">
+                      ( ................................ )
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1">Verifikasi Operasional</p>
+                  </div>
+                  <div>
+                    <p className="text-stone-500 mb-14 font-medium">Store Manager / Pemilik,</p>
+                    <p className="font-bold border-b border-stone-400 inline-block px-6 pb-1">
+                      ( ................................ )
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1">Penanggung Jawab Toko</p>
+                  </div>
                 </div>
               </div>
             </div>

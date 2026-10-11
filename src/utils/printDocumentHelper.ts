@@ -697,9 +697,18 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
     .text-emerald-800 { color: #065f46 !important; }
     .text-emerald-900 { color: #064e3b !important; }
     .text-emerald-950 { color: #022c22 !important; }
+    .text-teal-700 { color: #0f766e !important; }
+    .text-teal-800 { color: #115e59 !important; }
+    .text-teal-900 { color: #134e4a !important; }
+    .text-purple-700 { color: #7e22ce !important; }
+    .text-purple-800 { color: #6b21a8 !important; }
+    .text-purple-900 { color: #581c87 !important; }
+    .text-red-700 { color: #b91c1c !important; }
+    .text-red-800 { color: #991b1b !important; }
     .text-blue-600 { color: #2563eb !important; }
     .text-blue-700 { color: #1d4ed8 !important; }
     .text-blue-800 { color: #1e40af !important; }
+    .text-blue-900 { color: #1e3a8a !important; }
     .text-rose-600 { color: #e11d48 !important; }
     .text-rose-700 { color: #be123c !important; }
     .text-rose-800 { color: #9f1239 !important; }
@@ -718,10 +727,21 @@ export function printHtmlDirectly(htmlContent: string, options: PrintDocumentOpt
     .bg-stone-100 { background-color: #f5f5f4 !important; }
     .bg-emerald-50 { background-color: #ecfdf5 !important; }
     .bg-emerald-100 { background-color: #d1fae5 !important; }
+    .bg-teal-50 { background-color: #f0fdfa !important; }
+    .bg-purple-50 { background-color: #faf5ff !important; }
+    .bg-purple-100 { background-color: #f3e8ff !important; }
     .bg-blue-50 { background-color: #eff6ff !important; }
     .bg-rose-50 { background-color: #fff1f2 !important; }
     .bg-rose-100 { background-color: #ffe4e6 !important; }
     .bg-amber-50 { background-color: #fffbeb !important; }
+    .bg-red-50 { background-color: #fef2f2 !important; }
+
+    /* GRID KOLOM PRINT RESMI */
+    .grid { display: grid !important; }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+    .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    .grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
 
     .break-inside-avoid, [class*="break-inside-avoid"] {
       page-break-inside: avoid !important;

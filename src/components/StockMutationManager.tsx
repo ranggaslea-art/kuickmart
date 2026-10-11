@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Product, 
   Store, 
@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey } from '../utils/tenantHelper';
+import { printHtmlDirectly } from '../utils/printDocumentHelper';
 import { 
   ArrowLeftRight, 
   Plus, 
@@ -237,6 +238,39 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
   // View Detail & Print Modal
   const [viewingMutation, setViewingMutation] = useState<StockMutation | null>(null);
   const [printData, setPrintData] = useState<StockMutation | null>(null);
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  useEffect(() => {
+    if (printData) {
+      document.body.classList.add('document-print-modal-open');
+    } else {
+      document.body.classList.remove('document-print-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('document-print-modal-open');
+    };
+  }, [printData]);
+
+  // Akumulasi Total Cetak Surat Jalan Mutasi
+  const printTotals = useMemo(() => {
+    if (!printData?.items) return { totalKinds: 0, totalQty: 0 };
+    return {
+      totalKinds: printData.items.length,
+      totalQty: printData.items.reduce((s, it) => s + (it.quantity || 0), 0),
+    };
+  }, [printData]);
+
+  const handleExecutePrint = () => {
+    const el = document.getElementById('printable-stock-mutation-content');
+    if (!el) {
+      window.print();
+      return;
+    }
+    printHtmlDirectly(el.innerHTML, {
+      title: `Surat_Jalan_Mutasi_${printData?.mutationNumber || 'Transfer'}_${printData?.date || ''}`,
+      landscape: printOrientation === 'landscape',
+    });
+  };
 
   // Filtered Mutations
   const filteredMutations = useMemo(() => {
@@ -792,105 +826,238 @@ export const StockMutationManager: React.FC<StockMutationManagerProps> = ({
       {/* ============================================================ */}
       {/* MODAL: CETAK SURAT JALAN MUTASI                              */}
       {/* ============================================================ */}
-      {printData && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-white w-full max-w-2xl max-h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-300">
-            <div className="px-5 py-3 bg-stone-100 border-b border-stone-200 flex items-center justify-between no-print">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-purple-700" />
-                <h3 className="font-bold text-stone-900 text-sm">
-                  Pratinjau Surat Jalan Transfer Mutasi
-                </h3>
+      {printData && (() => {
+        const sourceStore = stores.find((s) => s.id === printData.sourceStoreId) || currentStore;
+        const destStore = stores.find((s) => s.id === printData.destStoreId);
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+            <div className={`bg-white w-full ${printOrientation === 'landscape' ? 'max-w-6xl' : 'max-w-4xl'} max-h-[94vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-stone-300 animate-in fade-in zoom-in-95 duration-150`}>
+              {/* Header Toolbar */}
+              <div className="px-4 py-3 bg-stone-900 border-b border-stone-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-white no-print shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                    <Printer className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-extrabold text-white text-sm sm:text-base">
+                        Pratinjau Cetak: Surat Jalan Transfer Mutasi Cabang
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-700/60 text-[10px] font-mono font-bold">
+                        Format Cetak A4 Terisolasi
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-300 mt-0.5">
+                      No: {printData.mutationNumber} • {printData.sourceStoreName} ➔ {printData.destStoreName}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* Orientasi Kertas */}
+                  <div className="flex items-center bg-stone-800 rounded-xl p-1 border border-stone-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setPrintOrientation('portrait')}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        printOrientation === 'portrait' ? 'bg-stone-700 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+                      }`}
+                    >
+                      Portrait (Tegak)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrintOrientation('landscape')}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        printOrientation === 'landscape' ? 'bg-stone-700 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+                      }`}
+                    >
+                      Landscape (Melebar)
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleExecutePrint}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak Surat Jalan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintData(null)}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs"
+
+              {/* Printable Paper View */}
+              <div className="p-4 sm:p-6 overflow-y-auto bg-stone-100 flex justify-center">
+                <div
+                  id="printable-stock-mutation-content"
+                  className="w-full bg-white p-6 sm:p-8 rounded-xl shadow-sm border border-stone-200 text-stone-900 font-sans text-xs space-y-5"
+                  style={{ maxWidth: printOrientation === 'landscape' ? '280mm' : '210mm' }}
                 >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Surat Jalan</span>
-                </button>
-                <button
-                  onClick={() => setPrintData(null)}
-                  className="p-1 rounded-lg text-stone-500 hover:bg-stone-200"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+                  {/* Header Kop Surat Resmi */}
+                  <div className="border-b-2 border-stone-900 pb-3 flex justify-between items-start gap-4">
+                    <div>
+                      <h1 className="text-xl font-black uppercase tracking-tight text-stone-900">
+                        {sourceStore?.name || printData.sourceStoreName || 'KUICK HEBAT'}
+                      </h1>
+                      <p className="text-[11px] text-stone-600 mt-0.5">
+                        {sourceStore?.address || 'Pusat Distribusi Retail'} • Telp/WA: {sourceStore?.phone || '-'}
+                      </p>
+                      <div className="inline-block mt-2 px-2.5 py-1 bg-stone-900 text-white rounded text-[10px] font-black tracking-wider uppercase">
+                        SURAT JALAN MUTASI & TRANSFER BARANG ANTAR CABANG
+                      </div>
+                    </div>
+                    <div className="text-right text-[11px] text-stone-600 font-mono space-y-0.5 shrink-0">
+                      <p>
+                        <strong>No. Surat Jalan:</strong> {printData.mutationNumber}
+                      </p>
+                      <p>
+                        <strong>Tanggal Mutasi:</strong> {printData.date}
+                      </p>
+                      <p>
+                        <strong>Status:</strong>{' '}
+                        <span className={
+                          printData.status === 'completed' 
+                            ? 'text-emerald-700 font-bold' 
+                            : printData.status === 'in_transit' 
+                            ? 'text-purple-700 font-bold' 
+                            : printData.status === 'cancelled'
+                            ? 'text-red-700 font-bold'
+                            : 'text-amber-700 font-bold'
+                        }>
+                          {printData.status === 'completed'
+                            ? 'SELESAI DITERIMA'
+                            : printData.status === 'in_transit'
+                            ? 'DALAM PERJALANAN (IN TRANSIT)'
+                            : printData.status === 'cancelled'
+                            ? 'DIBATALKAN'
+                            : 'MENUNGGU PENGIRIMAN'}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Tgl Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
 
-            <div className="p-6 overflow-y-auto font-sans text-stone-900 space-y-4">
-              <div className="text-center border-b-2 border-stone-800 pb-3">
-                <h1 className="text-xl font-black uppercase tracking-wider text-stone-900">
-                  SURAT JALAN MUTASI BARANG
-                </h1>
-                <p className="text-xs text-stone-600 font-medium">
-                  Nomor: {printData.mutationNumber} • Tanggal: {printData.date}
-                </p>
-              </div>
+                  {/* 2 Kolom Info Cabang Pengirim & Penerima */}
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-300 space-y-1">
+                      <span className="text-[10px] text-stone-500 block font-bold uppercase tracking-wider">
+                        CABANG PENGIRIM (ASAL):
+                      </span>
+                      <p className="font-black text-stone-900 text-sm">{printData.sourceStoreName}</p>
+                      <p className="text-stone-600 text-[11px]">{sourceStore?.address || '-'}</p>
+                      <p className="text-stone-700 text-[11px] pt-1 border-t border-stone-200">
+                        Petugas Penyerah: <strong className="text-stone-900">{printData.transferredBy}</strong>
+                      </p>
+                    </div>
 
-              <div className="grid grid-cols-2 gap-4 text-xs bg-stone-50 p-3 rounded-xl border border-stone-300">
-                <div>
-                  <span className="text-stone-500 block font-bold">CABANG ASAL (PENGIRIM):</span>
-                  <p className="font-black text-stone-900">{printData.sourceStoreName}</p>
-                  <p className="text-stone-500">Petugas: {printData.transferredBy}</p>
-                </div>
-                <div>
-                  <span className="text-stone-500 block font-bold">CABANG TUJUAN (PENERIMA):</span>
-                  <p className="font-black text-purple-900">{printData.destStoreName}</p>
-                  <p className="text-stone-500">Pengiriman: {printData.shippingNotes || '-'}</p>
-                </div>
-              </div>
+                    <div className="bg-purple-50/50 p-3.5 rounded-xl border border-purple-200 space-y-1">
+                      <span className="text-[10px] text-purple-700 block font-bold uppercase tracking-wider">
+                        CABANG PENERIMA (TUJUAN):
+                      </span>
+                      <p className="font-black text-purple-950 text-sm">{printData.destStoreName}</p>
+                      <p className="text-stone-600 text-[11px]">{destStore?.address || '-'}</p>
+                      <p className="text-stone-700 text-[11px] pt-1 border-t border-purple-200">
+                        Penerima: <strong className="text-purple-900">{printData.receivedBy || '(Menunggu Serah Terima)'}</strong>
+                      </p>
+                      <p className="text-[10.5px] text-stone-500">
+                        Ekspedisi / Armada: <strong>{printData.shippingNotes || 'Armada Internal Toko'}</strong>
+                      </p>
+                    </div>
+                  </div>
 
-              <table className="w-full text-left text-xs border border-stone-300">
-                <thead className="bg-stone-100 border-b border-stone-300 font-bold uppercase text-[10px]">
-                  <tr>
-                    <th className="p-2 border-r border-stone-300 w-8 text-center">No</th>
-                    <th className="p-2 border-r border-stone-300 w-28">Barcode</th>
-                    <th className="p-2 border-r border-stone-300">Nama Barang</th>
-                    <th className="p-2 border-r border-stone-300 w-20 text-center">Satuan</th>
-                    <th className="p-2 border-r border-stone-300 w-20 text-center">Qty Mutasi</th>
-                    <th className="p-2">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-300 font-medium text-xs">
-                  {printData.items.map((it, idx) => (
-                    <tr key={it.id}>
-                      <td className="p-2 border-r border-stone-300 text-center">{idx + 1}</td>
-                      <td className="p-2 border-r border-stone-300 font-mono">{it.barcode || '-'}</td>
-                      <td className="p-2 border-r border-stone-300 font-bold">{it.productName}</td>
-                      <td className="p-2 border-r border-stone-300 text-center">{it.unit}</td>
-                      <td className="p-2 border-r border-stone-300 text-center font-mono font-bold text-purple-900">
-                        {it.quantity}
-                      </td>
-                      <td className="p-2 text-stone-500">{it.notes || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  {/* Tabel Daftar Barang Mutasi */}
+                  <table className="w-full text-left text-xs border border-stone-300 border-collapse">
+                    <thead className="bg-stone-100 border-b border-stone-300 font-bold uppercase text-[9.5px]">
+                      <tr>
+                        <th className="p-2 border border-stone-300 w-8 text-center">No</th>
+                        <th className="p-2 border border-stone-300 w-28">Barcode</th>
+                        <th className="p-2 border border-stone-300">Nama Barang / Produk</th>
+                        <th className="p-2 border border-stone-300 w-16 text-center">Satuan</th>
+                        <th className="p-2 border border-stone-300 w-24 text-center">Qty Mutasi</th>
+                        <th className="p-2 border border-stone-300">Keterangan / Kondisi Fisik</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 font-medium text-[11px]">
+                      {printData.items.map((it, idx) => (
+                        <tr key={it.id} className={idx % 2 === 1 ? 'bg-stone-50/50' : ''}>
+                          <td className="p-2 border border-stone-300 text-center font-mono">{idx + 1}</td>
+                          <td className="p-2 border border-stone-300 font-mono text-[10px]">{it.barcode || '-'}</td>
+                          <td className="p-2 border border-stone-300 font-bold text-stone-900">{it.productName}</td>
+                          <td className="p-2 border border-stone-300 text-center">{it.unit}</td>
+                          <td className="p-2 border border-stone-300 text-center font-mono font-black text-purple-900 text-xs">
+                            {it.quantity}
+                          </td>
+                          <td className="p-2 border border-stone-300 text-stone-600">{it.notes || 'Kondisi Baik & Utuh'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-stone-100 font-bold border-t-2 border-stone-800">
+                        <td colSpan={4} className="p-2 border border-stone-300 text-right uppercase text-[9.5px]">
+                          TOTAL MUTASI ({printData.items.length} MACAM PRODUK):
+                        </td>
+                        <td className="p-2 border border-stone-300 text-center font-mono font-black text-purple-900 text-xs">
+                          {printTotals.totalQty} Unit
+                        </td>
+                        <td className="p-2 border border-stone-300 text-stone-500 font-normal italic text-[10.5px]">
+                          Barang telah diverifikasi
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
 
-              <div className="pt-6 grid grid-cols-3 gap-4 text-center text-xs">
-                <div>
-                  <p className="text-stone-500 mb-14">Yang Menyerahkan (Asal),</p>
-                  <p className="font-bold border-t border-stone-400 pt-1">
-                    ( {printData.transferredBy} )
-                  </p>
-                </div>
-                <div>
-                  <p className="text-stone-500 mb-14">Pengemudi / Kurir,</p>
-                  <p className="font-bold border-t border-stone-400 pt-1">( ................................ )</p>
-                </div>
-                <div>
-                  <p className="text-stone-500 mb-14">Yang Menerima (Tujuan),</p>
-                  <p className="font-bold border-t border-stone-400 pt-1">
-                    ( {printData.receivedBy || '................................'} )
-                  </p>
+                  {/* Ketentuan Serah Terima */}
+                  <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-xs space-y-1">
+                    <p className="font-bold text-stone-800">Ketentuan & Prosedur Serah Terima:</p>
+                    <ul className="text-stone-600 list-disc list-inside space-y-0.5 text-[10.5px]">
+                      <li>Seluruh barang di atas telah diverifikasi kondisi fisik dan kuantitasnya sebelum diserahkan.</li>
+                      <li>Pihak penerima wajib mencocokkan kondisi fisik dan kuantitas saat barang tiba sebelum menandatangani bukti terima.</li>
+                      <li>Klaim ketidaksesuaian atau cacat kirim wajib dilaporkan dalam waktu maksimal 1x24 jam sejak barang diterima.</li>
+                    </ul>
+                  </div>
+
+                  {/* Tanda Tangan 3 Pihak */}
+                  <div className="pt-6 grid grid-cols-3 gap-4 text-center text-xs border-t border-stone-200">
+                    <div>
+                      <p className="text-stone-500 mb-14 font-medium">Yang Menyerahkan (Asal),</p>
+                      <p className="font-bold border-b border-stone-400 inline-block px-6 pb-1">
+                        ( {printData.transferredBy} )
+                      </p>
+                      <p className="text-[10px] text-stone-400 mt-1">Petugas Cabang Pengirim</p>
+                    </div>
+                    <div>
+                      <p className="text-stone-500 mb-14 font-medium">Pengemudi / Kurir Ekspedisi,</p>
+                      <p className="font-bold border-b border-stone-400 inline-block px-6 pb-1">
+                        ( ................................ )
+                      </p>
+                      <p className="text-[10px] text-stone-400 mt-1">Pengantar / Driver</p>
+                    </div>
+                    <div>
+                      <p className="text-stone-500 mb-14 font-medium">Yang Menerima (Tujuan),</p>
+                      <p className="font-bold border-b border-stone-400 inline-block px-6 pb-1">
+                        ( {printData.receivedBy || '................................'} )
+                      </p>
+                      <p className="text-[10px] text-stone-400 mt-1">Petugas Cabang Penerima</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

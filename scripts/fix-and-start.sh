@@ -27,8 +27,13 @@ fi
 # 2. Tarik kode terbaru dari Git
 echo ""
 echo "🚀 [1/3] Menarik update repository terbaru..."
-git fetch --all 2>/dev/null || true
+mkdir -p /tmp/kuickmart_runtime_backup && cp -rf data/* /tmp/kuickmart_runtime_backup/ 2>/dev/null || true
+git checkout -- data/ 2>/dev/null || true
+git stash --include-untracked 2>/dev/null || git stash 2>/dev/null || true
+git fetch origin main || git fetch --all 2>/dev/null || true
 git reset --hard origin/main 2>/dev/null || git pull origin main || git pull || true
+if [ -d /tmp/kuickmart_runtime_backup ]; then cp -rf /tmp/kuickmart_runtime_backup/* data/ 2>/dev/null || true; fi
+git update-index --assume-unchanged data/subdomain_modules.json data/store_tenants.json data/tenant_products.json 2>/dev/null || true
 
 # 3. Cek dependensi: JIKA SUDAH ADA, JANGAN INSTALL ULANG (Bikin lama/stuck di PuTTY)
 echo ""

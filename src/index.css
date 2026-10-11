@@ -91,7 +91,13 @@ body {
   /* Pastikan modal cetak tampil penuh dan bersih */
   .print-area-wrapper,
   .print-document,
-  .print-report-container {
+  .print-report-container,
+  #printable-stock-card-content,
+  #printable-stock-opname-content,
+  #printable-stock-mutation-content,
+  #printable-financial-report-content,
+  #printable-po-salesman-report,
+  #printable-purchase-report {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -102,8 +108,14 @@ body {
     background: #ffffff !important;
   }
 
-  /* Khusus Jika Modal Laporan Keuangan Terbuka: Sembunyikan Semua Elemen Aplikasi & Toolbar di Luar Dokumen */
+  /* Khusus Jika Modal Laporan & Dokumen Terbuka: Sembunyikan Semua Elemen Aplikasi & Toolbar di Luar Dokumen */
   body.financial-report-open #root > div > *:not([class*="z-[9999]"]),
+  body.document-print-modal-open #root > div > *:not([class*="z-50"]):not([class*="z-[9999]"]),
+  body.document-print-modal-open .no-print,
+  body.document-print-modal-open header,
+  body.document-print-modal-open footer,
+  body.document-print-modal-open nav,
+  body.document-print-modal-open aside,
   body.financial-report-open [class*="bg-stone-900"],
   body.financial-report-open [class*="border-b border-stone-800"],
   body.financial-report-open [class*="border-b border-stone-200"],
@@ -115,7 +127,10 @@ body {
     display: none !important;
   }
 
-  body.financial-report-open #printable-financial-report-content {
+  body.financial-report-open #printable-financial-report-content,
+  body.document-print-modal-open #printable-stock-card-content,
+  body.document-print-modal-open #printable-stock-opname-content,
+  body.document-print-modal-open #printable-stock-mutation-content {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;

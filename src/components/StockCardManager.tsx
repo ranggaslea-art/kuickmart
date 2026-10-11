@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Product,
   Order,
@@ -34,6 +34,7 @@ import {
   exportStockSummaryToCSV,
   formatStockMovementTypeLabel,
 } from '../utils/stockCardHelper';
+import { printHtmlDirectly } from '../utils/printDocumentHelper';
 import {
   Package,
   Layers,
@@ -142,6 +143,34 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printDocType, setPrintDocType] = useState<'individual' | 'summary'>('individual');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  useEffect(() => {
+    if (isPrintModalOpen) {
+      document.body.classList.add('document-print-modal-open');
+    } else {
+      document.body.classList.remove('document-print-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('document-print-modal-open');
+    };
+  }, [isPrintModalOpen]);
+
+  const handleExecutePrint = () => {
+    const el = document.getElementById('printable-stock-card-content');
+    if (!el) {
+      window.print();
+      return;
+    }
+    const cleanTitle = printDocType === 'individual'
+      ? `Kartu_Stok_${(selectedProduct?.name || 'Produk').replace(/[^a-zA-Z0-9]/g, '_')}_${startDate}_sd_${endDate}`
+      : `Rekap_Mutasi_Persediaan_${startDate}_sd_${endDate}`;
+
+    printHtmlDirectly(el.innerHTML, {
+      title: cleanTitle,
+      landscape: printOrientation === 'landscape',
+    });
+  };
 
   // Handler Ganti Preset Tanggal
   const handleDatePresetChange = (preset: 'today' | '7days' | 'month' | '30days' | 'custom') => {
@@ -322,6 +351,27 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
     );
   }, [stockSummaryItems]);
 
+  // Akumulasi Khusus Item Terfilter untuk Laporan Cetak Rekapitulasi
+  const printSummaryTotals = useMemo(() => {
+    return filteredSummaryItems.reduce(
+      (acc, item) => {
+        acc.totalInitial += item.initialStock;
+        acc.totalIn += item.totalIn;
+        acc.totalOut += item.totalOut;
+        acc.totalFinal += item.finalStock;
+        acc.totalValuation += item.finalValuation;
+        return acc;
+      },
+      {
+        totalInitial: 0,
+        totalIn: 0,
+        totalOut: 0,
+        totalFinal: 0,
+        totalValuation: 0,
+      }
+    );
+  }, [filteredSummaryItems]);
+
   // Daftar Kategori Unik
   const uniqueCategories = useMemo(() => {
     const set = new Set<string>();
@@ -461,7 +511,9 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
           <button
             type="button"
             onClick={() => {
-              setPrintDocType(activeTab === 'individual' ? 'individual' : 'summary');
+              const type = activeTab === 'individual' ? 'individual' : 'summary';
+              setPrintDocType(type);
+              setPrintOrientation(type === 'summary' ? 'landscape' : 'portrait');
               setIsPrintModalOpen(true);
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition-all border border-stone-200 cursor-pointer"
@@ -1605,32 +1657,93 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
       {/* MODAL PRINT PREVIEW DOKUMEN CETAK RESMI */}
       {/* ========================================================================= */}
       {isPrintModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-stone-950/70 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col border border-stone-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Header Modal Print Preview */}
-            <div className="p-4 bg-stone-900 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-blue-400" />
-                <h3 className="text-sm font-bold">
-                  Pratinjau Dokumen Cetak -{' '}
-                  {printDocType === 'individual'
-                    ? `Kartu Stok (${selectedProduct?.name})`
-                    : 'Laporan Rekapitulasi Persediaan'}
-                </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-stone-950/80 backdrop-blur-xs overflow-y-auto">
+          <div className={`bg-white rounded-3xl ${printOrientation === 'landscape' ? 'max-w-6xl' : 'max-w-4xl'} w-full max-h-[94vh] flex flex-col border border-stone-300 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
+            {/* Header Modal Print Preview (Toolbar) */}
+            <div className="p-3 sm:p-4 bg-stone-900 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-3 shrink-0 border-b border-stone-800 no-print">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm sm:text-base font-extrabold text-white">
+                      Pratinjau Cetak: {printDocType === 'individual' ? `Kartu Stok (${selectedProduct?.name || 'Produk'})` : 'Laporan Rekapitulasi Persediaan'}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-700/60 text-[10px] font-mono font-bold">
+                      Format Cetak A4 Terisolasi
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-300 mt-0.5">
+                    Dokumen dicetak 100% bersih tanpa background panel admin atau tombol navigasi web.
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {/* Switcher Tipe Dokumen jika ada produk terpilih */}
+                {selectedProduct && (
+                  <div className="flex items-center bg-stone-800 rounded-xl p-1 border border-stone-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setPrintDocType('individual')}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        printDocType === 'individual' ? 'bg-blue-600 text-white shadow-xs' : 'text-stone-300 hover:text-white'
+                      }`}
+                    >
+                      Kartu Produk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrintDocType('summary');
+                        setPrintOrientation('landscape');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                        printDocType === 'summary' ? 'bg-blue-600 text-white shadow-xs' : 'text-stone-300 hover:text-white'
+                      }`}
+                    >
+                      Rekap Semua
+                    </button>
+                  </div>
+                )}
+
+                {/* Orientasi Kertas */}
+                <div className="flex items-center bg-stone-800 rounded-xl p-1 border border-stone-700 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPrintOrientation('portrait')}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      printOrientation === 'portrait' ? 'bg-stone-700 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Portrait (Tegak)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintOrientation('landscape')}
+                    className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      printOrientation === 'landscape' ? 'bg-stone-700 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Landscape (Melebar)
+                  </button>
+                </div>
+
+                {/* Tombol Eksekusi Cetak */}
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                  onClick={handleExecutePrint}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md cursor-pointer transition-all"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Sekarang</span>
+                  <span>Cetak Dokumen Resmi</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setIsPrintModalOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1638,185 +1751,294 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
             </div>
 
             {/* Print Body (Formatted for Standard A4 Paper) */}
-            <div className="p-6 overflow-y-auto space-y-6 text-stone-900 font-sans text-xs bg-white print:p-0">
-              {/* Header Dokumen Resmi */}
-              <div className="border-b-2 border-stone-800 pb-3 flex justify-between items-start">
-                <div>
-                  <h1 className="text-lg font-black tracking-tight text-stone-900 uppercase">
-                    {currentStore?.name || 'toko-online.online'}
-                  </h1>
-                  <p className="text-[11px] text-stone-600 mt-0.5">
-                    {currentStore?.address || 'Pusat Distribusi & Operasional Retail'} • Telp: {currentStore?.phone || '-'}
-                  </p>
-                  <p className="text-[11px] font-bold text-blue-700 mt-0.5 uppercase tracking-wider">
-                    {printDocType === 'individual'
-                      ? 'KARTU STOK PERSSEDIAN BARANG (STOCK LEDGER CARD)'
-                      : 'LAPORAN REKAPITULASI MUTASI PERSSEDIAAN TOKO'}
-                  </p>
-                </div>
-                <div className="text-right text-[11px] text-stone-500 font-mono">
-                  <p>Tanggal Cetak: {new Date().toLocaleDateString('id-ID')}</p>
-                  <p>Jam: {new Date().toLocaleTimeString('id-ID')}</p>
-                  <p>Periode: {startDate} s/d {endDate}</p>
-                </div>
-              </div>
-
-              {printDocType === 'individual' && currentLedger && selectedProduct ? (
-                <>
-                  {/* Metadata Barang */}
-                  <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                    <div>
-                      <span className="text-stone-500 text-[10px] block font-bold">NAMA BARANG:</span>
-                      <span className="font-bold text-stone-900">{selectedProduct.name}</span>
-                    </div>
-                    <div>
-                      <span className="text-stone-500 text-[10px] block font-bold">BARCODE / KODE:</span>
-                      <span className="font-mono font-bold text-stone-800">{selectedProduct.barcode || '-'}</span>
-                    </div>
-                    <div>
-                      <span className="text-stone-500 text-[10px] block font-bold">KATEGORI & MERK:</span>
-                      <span>
-                        {selectedProduct.category} • {selectedProduct.brand || '-'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-stone-500 text-[10px] block font-bold">SATUAN & HPP:</span>
-                      <span className="font-bold">
-                        {selectedProduct.unit} @ {formatRupiah(selectedProduct.costPrice || Math.round(selectedProduct.price * 0.75))}
-                      </span>
+            <div className="p-4 sm:p-6 overflow-y-auto bg-stone-100 flex justify-center">
+              <div
+                id="printable-stock-card-content"
+                className="w-full bg-white p-6 sm:p-8 rounded-xl shadow-sm border border-stone-200 text-stone-900 font-sans text-xs space-y-5"
+                style={{ maxWidth: printOrientation === 'landscape' ? '280mm' : '210mm' }}
+              >
+                {/* Kop Surat Dokumen Resmi */}
+                <div className="border-b-2 border-stone-900 pb-3 flex justify-between items-start gap-4">
+                  <div>
+                    <h1 className="text-xl font-black tracking-tight text-stone-900 uppercase">
+                      {currentStore?.name || 'KUICK HEBAT'}
+                    </h1>
+                    <p className="text-[11px] text-stone-600 mt-0.5">
+                      {currentStore?.address || 'Pusat Distribusi & Operasional Retail'} • Telp/WA: {currentStore?.phone || '-'}
+                    </p>
+                    <div className="inline-block mt-2 px-2.5 py-1 bg-stone-900 text-white rounded text-[10px] font-black tracking-wider uppercase">
+                      {printDocType === 'individual'
+                        ? 'KARTU STOK PERSEDIAAN BARANG (STOCK LEDGER CARD)'
+                        : 'LAPORAN REKAPITULASI MUTASI PERSEDIAAN (STOCK SUMMARY)'}
                     </div>
                   </div>
-
-                  {/* Summary Metric Box Print */}
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs border border-stone-200 rounded-xl p-2.5 bg-stone-50/50">
-                    <div>
-                      <span className="text-[10px] text-stone-500 block">SALDO AWAL</span>
-                      <span className="font-bold text-stone-800">{currentLedger.initialStock} {selectedProduct.unit}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-emerald-700 block font-bold">TOTAL MASUK (+)</span>
-                      <span className="font-bold text-emerald-700">+{currentLedger.totalIn} {selectedProduct.unit}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-rose-700 block font-bold">TOTAL KELUAR (-)</span>
-                      <span className="font-bold text-rose-700">-{currentLedger.totalOut} {selectedProduct.unit}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-blue-800 block font-bold">SALDO AKHIR (=)</span>
-                      <span className="font-black text-blue-900">{currentLedger.finalStock} {selectedProduct.unit}</span>
-                    </div>
+                  <div className="text-right text-[11px] text-stone-600 font-mono space-y-0.5 shrink-0">
+                    <p>
+                      <strong>No. Dok:</strong> {printDocType === 'individual' ? `KS-${selectedProduct?.barcode || selectedProduct?.id || 'PROD'}` : `REKAP-STOK-${startDate}`}
+                    </p>
+                    <p>
+                      <strong>Periode:</strong> {startDate} s/d {endDate}
+                    </p>
+                    <p>
+                      <strong>Tgl Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                    <p>
+                      <strong>Cabang:</strong> {selectedStoreFilter === 'all' ? 'Seluruh Cabang (Konsolidasi)' : (stores.find(s => s.id === selectedStoreFilter)?.name || currentStore?.name || 'Cabang Aktif')}
+                    </p>
                   </div>
+                </div>
 
-                  {/* Tabel Print */}
-                  <table className="w-full text-left border-collapse border border-stone-300 text-[11px]">
-                    <thead>
-                      <tr className="bg-stone-100 text-stone-800 font-bold border-b border-stone-300">
-                        <th className="p-1.5 border border-stone-300 w-8 text-center">No</th>
-                        <th className="p-1.5 border border-stone-300">Tanggal & Jam</th>
-                        <th className="p-1.5 border border-stone-300">No. Dokumen</th>
-                        <th className="p-1.5 border border-stone-300">Jenis Mutasi</th>
-                        <th className="p-1.5 border border-stone-300">Rekanan / Keterangan</th>
-                        <th className="p-1.5 border border-stone-300 text-right">Masuk</th>
-                        <th className="p-1.5 border border-stone-300 text-right">Keluar</th>
-                        <th className="p-1.5 border border-stone-300 text-right">Saldo</th>
-                        <th className="p-1.5 border border-stone-300">PIC</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="bg-stone-50 font-semibold">
-                        <td className="p-1.5 border border-stone-300 text-center text-stone-400">0</td>
-                        <td className="p-1.5 border border-stone-300 font-mono">{currentLedger.startDate}</td>
-                        <td className="p-1.5 border border-stone-300 font-mono">SALDO-AWAL</td>
-                        <td className="p-1.5 border border-stone-300">Saldo Awal Buku</td>
-                        <td className="p-1.5 border border-stone-300 italic text-stone-500">Saldo sebelum periode</td>
-                        <td className="p-1.5 border border-stone-300 text-right text-stone-400">-</td>
-                        <td className="p-1.5 border border-stone-300 text-right text-stone-400">-</td>
-                        <td className="p-1.5 border border-stone-300 text-right font-bold">
-                          {currentLedger.initialStock}
-                        </td>
-                        <td className="p-1.5 border border-stone-300 text-stone-400">Sistem</td>
-                      </tr>
-                      {filteredLedgerEntries.map((e, idx) => (
-                        <tr key={e.id}>
-                          <td className="p-1.5 border border-stone-300 text-center font-mono">{idx + 1}</td>
-                          <td className="p-1.5 border border-stone-300 font-mono whitespace-nowrap">
-                            {e.date} {e.time}
-                          </td>
-                          <td className="p-1.5 border border-stone-300 font-mono font-bold whitespace-nowrap">
-                            {e.referenceNumber}
-                          </td>
-                          <td className="p-1.5 border border-stone-300">{e.typeLabel}</td>
-                          <td className="p-1.5 border border-stone-300">{e.partnerName || e.notes || '-'}</td>
-                          <td className="p-1.5 border border-stone-300 text-right font-mono font-bold text-emerald-700">
-                            {e.qtyIn > 0 ? `+${e.qtyIn}` : '-'}
-                          </td>
-                          <td className="p-1.5 border border-stone-300 text-right font-mono font-bold text-rose-700">
-                            {e.qtyOut > 0 ? `-${e.qtyOut}` : '-'}
-                          </td>
-                          <td className="p-1.5 border border-stone-300 text-right font-mono font-bold text-blue-900">
-                            {e.runningBalance}
-                          </td>
-                          <td className="p-1.5 border border-stone-300">{e.operatorName || '-'}</td>
+                {printDocType === 'individual' && currentLedger && selectedProduct ? (
+                  <>
+                    {/* Metadata Detail Barang */}
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-300 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <span className="text-stone-500 text-[10px] block font-bold uppercase">NAMA BARANG:</span>
+                        <span className="font-black text-stone-900 text-sm">{selectedProduct.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-stone-500 text-[10px] block font-bold uppercase">BARCODE / SKU:</span>
+                        <span className="font-mono font-bold text-stone-800 text-xs">{selectedProduct.barcode || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-stone-500 text-[10px] block font-bold uppercase">KATEGORI & MERK:</span>
+                        <span className="font-semibold text-stone-700">
+                          {selectedProduct.category} • {selectedProduct.brand || '-'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-stone-500 text-[10px] block font-bold uppercase">SATUAN & HPP / JUAL:</span>
+                        <span className="font-bold text-stone-800">
+                          {selectedProduct.unit} @ {formatRupiah(selectedProduct.costPrice || Math.round(selectedProduct.price * 0.75))}
+                        </span>
+                        <span className="text-[10px] text-stone-500 block">
+                          Jual: {formatRupiah(selectedProduct.price)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Summary Metric Box Print */}
+                    <div className="grid grid-cols-4 gap-2 text-center text-xs border border-stone-300 rounded-xl p-3 bg-stone-50">
+                      <div>
+                        <span className="text-[10px] text-stone-500 block uppercase font-bold">SALDO AWAL</span>
+                        <span className="font-mono font-bold text-stone-900 text-sm">{currentLedger.initialStock} {selectedProduct.unit}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-700 block uppercase font-bold">TOTAL MASUK (+)</span>
+                        <span className="font-mono font-bold text-emerald-700 text-sm">+{currentLedger.totalIn} {selectedProduct.unit}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-rose-700 block uppercase font-bold">TOTAL KELUAR (-)</span>
+                        <span className="font-mono font-bold text-rose-700 text-sm">-{currentLedger.totalOut} {selectedProduct.unit}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-blue-900 block uppercase font-bold">SALDO AKHIR (=)</span>
+                        <span className="font-mono font-black text-blue-900 text-sm">{currentLedger.finalStock} {selectedProduct.unit}</span>
+                      </div>
+                    </div>
+
+                    {/* Tabel Kronologis Pergerakan Stok */}
+                    <table className="w-full text-left border-collapse border border-stone-300 text-[11px]">
+                      <thead>
+                        <tr className="bg-stone-100 text-stone-900 font-bold border-b border-stone-300">
+                          <th className="p-2 border border-stone-300 w-8 text-center uppercase text-[10px]">No</th>
+                          <th className="p-2 border border-stone-300 w-32 uppercase text-[10px]">Tanggal & Jam</th>
+                          <th className="p-2 border border-stone-300 w-28 uppercase text-[10px]">No. Bukti / Ref</th>
+                          <th className="p-2 border border-stone-300 uppercase text-[10px]">Jenis Mutasi</th>
+                          <th className="p-2 border border-stone-300 uppercase text-[10px]">Rekanan / Keterangan</th>
+                          <th className="p-2 border border-stone-300 w-16 text-right uppercase text-[10px]">Masuk (+)</th>
+                          <th className="p-2 border border-stone-300 w-16 text-right uppercase text-[10px]">Keluar (-)</th>
+                          <th className="p-2 border border-stone-300 w-20 text-right uppercase text-[10px]">Saldo</th>
+                          <th className="p-2 border border-stone-300 w-20 uppercase text-[10px]">Operator</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              ) : (
-                /* Print Laporan Rekapitulasi */
-                <table className="w-full text-left border-collapse border border-stone-300 text-[11px]">
-                  <thead>
-                    <tr className="bg-stone-100 text-stone-800 font-bold border-b border-stone-300">
-                      <th className="p-1.5 border border-stone-300 w-8 text-center">No</th>
-                      <th className="p-1.5 border border-stone-300">Barcode</th>
-                      <th className="p-1.5 border border-stone-300">Nama Barang</th>
-                      <th className="p-1.5 border border-stone-300">Satuan</th>
-                      <th className="p-1.5 border border-stone-300 text-right">Saldo Awal</th>
-                      <th className="p-1.5 border border-stone-300 text-right">Masuk (+)</th>
-                      <th className="p-1.5 border border-stone-300 text-right">Keluar (-)</th>
-                      <th className="p-1.5 border border-stone-300 text-right">Saldo Akhir</th>
-                      <th className="p-1.5 border border-stone-300 text-right">Valuasi (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSummaryItems.map((item, idx) => (
-                      <tr key={item.productId}>
-                        <td className="p-1.5 border border-stone-300 text-center font-mono">{idx + 1}</td>
-                        <td className="p-1.5 border border-stone-300 font-mono">{item.barcode}</td>
-                        <td className="p-1.5 border border-stone-300 font-bold">{item.productName}</td>
-                        <td className="p-1.5 border border-stone-300">{item.unit}</td>
-                        <td className="p-1.5 border border-stone-300 text-right font-mono">{item.initialStock}</td>
-                        <td className="p-1.5 border border-stone-300 text-right font-mono text-emerald-700 font-bold">
-                          +{item.totalIn}
-                        </td>
-                        <td className="p-1.5 border border-stone-300 text-right font-mono text-rose-700 font-bold">
-                          -{item.totalOut}
-                        </td>
-                        <td className="p-1.5 border border-stone-300 text-right font-mono text-blue-900 font-bold">
-                          {item.finalStock}
-                        </td>
-                        <td className="p-1.5 border border-stone-300 text-right font-mono">
-                          {formatRupiah(item.finalValuation)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                      </thead>
+                      <tbody>
+                        <tr className="bg-stone-50 font-semibold">
+                          <td className="p-2 border border-stone-300 text-center text-stone-400 font-mono">0</td>
+                          <td className="p-2 border border-stone-300 font-mono">{currentLedger.startDate} 00:00</td>
+                          <td className="p-2 border border-stone-300 font-mono font-bold">SALDO-AWAL</td>
+                          <td className="p-2 border border-stone-300">Saldo Awal Buku</td>
+                          <td className="p-2 border border-stone-300 italic text-stone-500">Saldo fisik sebelum periode ini</td>
+                          <td className="p-2 border border-stone-300 text-right text-stone-400 font-mono">-</td>
+                          <td className="p-2 border border-stone-300 text-right text-stone-400 font-mono">-</td>
+                          <td className="p-2 border border-stone-300 text-right font-mono font-bold text-stone-900">
+                            {currentLedger.initialStock}
+                          </td>
+                          <td className="p-2 border border-stone-300 text-stone-400">Sistem</td>
+                        </tr>
+                        {filteredLedgerEntries.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="p-4 text-center text-stone-500 italic">
+                              Tidak ada pergerakan stok selama rentang tanggal ini.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredLedgerEntries.map((e, idx) => (
+                            <tr key={e.id} className={idx % 2 === 1 ? 'bg-stone-50/50' : ''}>
+                              <td className="p-2 border border-stone-300 text-center font-mono">{idx + 1}</td>
+                              <td className="p-2 border border-stone-300 font-mono whitespace-nowrap">
+                                {e.date} {e.time}
+                              </td>
+                              <td className="p-2 border border-stone-300 font-mono font-bold whitespace-nowrap text-stone-800">
+                                {e.referenceNumber}
+                              </td>
+                              <td className="p-2 border border-stone-300 font-semibold">{e.typeLabel}</td>
+                              <td className="p-2 border border-stone-300">{e.partnerName || e.notes || '-'}</td>
+                              <td className="p-2 border border-stone-300 text-right font-mono font-bold text-emerald-700">
+                                {e.qtyIn > 0 ? `+${e.qtyIn}` : '-'}
+                              </td>
+                              <td className="p-2 border border-stone-300 text-right font-mono font-bold text-rose-700">
+                                {e.qtyOut > 0 ? `-${e.qtyOut}` : '-'}
+                              </td>
+                              <td className="p-2 border border-stone-300 text-right font-mono font-black text-blue-900">
+                                {e.runningBalance}
+                              </td>
+                              <td className="p-2 border border-stone-300 text-stone-600">{e.operatorName || '-'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-stone-100 font-bold border-t-2 border-stone-800">
+                          <td colSpan={5} className="p-2.5 border border-stone-300 text-right uppercase text-[10px]">
+                            TOTAL MUTASI PERIODE INI ({filteredLedgerEntries.length} TRANSAKSI):
+                          </td>
+                          <td className="p-2.5 border border-stone-300 text-right font-mono text-emerald-700 font-black">
+                            +{currentLedger.totalIn}
+                          </td>
+                          <td className="p-2.5 border border-stone-300 text-right font-mono text-rose-700 font-black">
+                            -{currentLedger.totalOut}
+                          </td>
+                          <td className="p-2.5 border border-stone-300 text-right font-mono text-blue-900 font-black">
+                            {currentLedger.finalStock} {selectedProduct.unit}
+                          </td>
+                          <td className="p-2.5 border border-stone-300 text-right font-mono text-stone-800 font-bold text-[10px]">
+                            Val: {formatRupiah(currentLedger.finalValuation || (currentLedger.finalStock * (selectedProduct.costPrice || 0)))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </>
+                ) : (
+                  /* Print Laporan Rekapitulasi Seluruh Barang */
+                  <>
+                    {/* Ringkasan Akumulasi Toko */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs border border-stone-300 rounded-xl p-3 bg-stone-50">
+                      <div>
+                        <span className="text-[10px] text-stone-500 block uppercase font-bold">TOTAL PRODUK</span>
+                        <span className="font-mono font-bold text-stone-900">{filteredSummaryItems.length} Macam</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-stone-500 block uppercase font-bold">SALDO AWAL</span>
+                        <span className="font-mono font-bold text-stone-800">{formatNumber(printSummaryTotals.totalInitial)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-700 block uppercase font-bold">TOTAL MASUK (+)</span>
+                        <span className="font-mono font-bold text-emerald-700">+{formatNumber(printSummaryTotals.totalIn)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-rose-700 block uppercase font-bold">TOTAL KELUAR (-)</span>
+                        <span className="font-mono font-bold text-rose-700">-{formatNumber(printSummaryTotals.totalOut)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-blue-900 block uppercase font-bold">SALDO AKHIR (=)</span>
+                        <span className="font-mono font-black text-blue-900">{formatNumber(printSummaryTotals.totalFinal)}</span>
+                      </div>
+                    </div>
 
-              {/* Tanda Tangan Pertanggungjawaban Gudang & Supervisor */}
-              <div className="pt-6 grid grid-cols-2 text-center text-xs">
-                <div>
-                  <p className="text-stone-500 mb-12">Petugas Gudang / PIC,</p>
-                  <p className="font-bold border-b border-stone-400 inline-block px-8 pb-1">
-                    ( ........................................ )
-                  </p>
-                </div>
-                <div>
-                  <p className="text-stone-500 mb-12">Penanggung Jawab / Store Manager,</p>
-                  <p className="font-bold border-b border-stone-400 inline-block px-8 pb-1">
-                    ( ........................................ )
-                  </p>
+                    <table className="w-full text-left border-collapse border border-stone-300 text-[10.5px]">
+                      <thead>
+                        <tr className="bg-stone-100 text-stone-900 font-bold border-b border-stone-300 uppercase text-[9.5px]">
+                          <th className="p-1.5 border border-stone-300 w-7 text-center">No</th>
+                          <th className="p-1.5 border border-stone-300 w-24">Barcode</th>
+                          <th className="p-1.5 border border-stone-300">Nama Barang</th>
+                          <th className="p-1.5 border border-stone-300 w-20">Kategori</th>
+                          <th className="p-1.5 border border-stone-300 w-12 text-center">Sat</th>
+                          <th className="p-1.5 border border-stone-300 w-16 text-right">Saldo Awal</th>
+                          <th className="p-1.5 border border-stone-300 w-16 text-right">Masuk (+)</th>
+                          <th className="p-1.5 border border-stone-300 w-16 text-right">Keluar (-)</th>
+                          <th className="p-1.5 border border-stone-300 w-16 text-right">Saldo Akhir</th>
+                          <th className="p-1.5 border border-stone-300 w-20 text-right">HPP (Rp)</th>
+                          <th className="p-1.5 border border-stone-300 w-24 text-right">Valuasi (Rp)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSummaryItems.map((item, idx) => (
+                          <tr key={item.productId} className={idx % 2 === 1 ? 'bg-stone-50/50' : ''}>
+                            <td className="p-1.5 border border-stone-300 text-center font-mono">{idx + 1}</td>
+                            <td className="p-1.5 border border-stone-300 font-mono text-[10px]">{item.barcode}</td>
+                            <td className="p-1.5 border border-stone-300 font-bold text-stone-900">{item.productName}</td>
+                            <td className="p-1.5 border border-stone-300 text-stone-600">{item.category}</td>
+                            <td className="p-1.5 border border-stone-300 text-center">{item.unit}</td>
+                            <td className="p-1.5 border border-stone-300 text-right font-mono">{item.initialStock}</td>
+                            <td className="p-1.5 border border-stone-300 text-right font-mono text-emerald-700 font-bold">
+                              {item.totalIn > 0 ? `+${item.totalIn}` : '-'}
+                            </td>
+                            <td className="p-1.5 border border-stone-300 text-right font-mono text-rose-700 font-bold">
+                              {item.totalOut > 0 ? `-${item.totalOut}` : '-'}
+                            </td>
+                            <td className="p-1.5 border border-stone-300 text-right font-mono text-blue-900 font-black">
+                              {item.finalStock}
+                            </td>
+                            <td className="p-1.5 border border-stone-300 text-right font-mono text-stone-600">
+                              {formatRupiah(item.costPrice)}
+                            </td>
+                            <td className="p-1.5 border border-stone-300 text-right font-mono font-bold text-stone-900">
+                              {formatRupiah(item.finalValuation)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-stone-100 font-bold border-t-2 border-stone-800">
+                          <td colSpan={5} className="p-2 border border-stone-300 text-right uppercase text-[9.5px]">
+                            TOTAL REKAPITULASI ({filteredSummaryItems.length} PRODUK):
+                          </td>
+                          <td className="p-2 border border-stone-300 text-right font-mono">
+                            {formatNumber(printSummaryTotals.totalInitial)}
+                          </td>
+                          <td className="p-2 border border-stone-300 text-right font-mono text-emerald-700 font-black">
+                            +{formatNumber(printSummaryTotals.totalIn)}
+                          </td>
+                          <td className="p-2 border border-stone-300 text-right font-mono text-rose-700 font-black">
+                            -{formatNumber(printSummaryTotals.totalOut)}
+                          </td>
+                          <td className="p-2 border border-stone-300 text-right font-mono text-blue-900 font-black">
+                            {formatNumber(printSummaryTotals.totalFinal)}
+                          </td>
+                          <td className="p-2 border border-stone-300 text-center text-stone-400 font-mono">-</td>
+                          <td className="p-2 border border-stone-300 text-right font-mono font-black text-emerald-800">
+                            {formatRupiah(printSummaryTotals.totalValuation)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </>
+                )}
+
+                {/* Tanda Tangan Pertanggungjawaban Resmi (3 Pihak) */}
+                <div className="pt-6 grid grid-cols-3 text-center text-xs gap-4 border-t border-stone-200">
+                  <div>
+                    <p className="text-stone-500 mb-14 font-medium">Petugas Gudang / PIC,</p>
+                    <p className="font-bold border-b border-stone-400 inline-block px-8 pb-1">
+                      ( ........................................ )
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1">Pelaksana Mutasi Fisik</p>
+                  </div>
+                  <div>
+                    <p className="text-stone-500 mb-14 font-medium">Supervisor Persediaan,</p>
+                    <p className="font-bold border-b border-stone-400 inline-block px-8 pb-1">
+                      ( ........................................ )
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1">Verifikasi & Pengawasan</p>
+                  </div>
+                  <div>
+                    <p className="text-stone-500 mb-14 font-medium">Kepala Toko / Store Manager,</p>
+                    <p className="font-bold border-b border-stone-400 inline-block px-8 pb-1">
+                      ( ........................................ )
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1">Otorisasi Resmi</p>
+                  </div>
                 </div>
               </div>
             </div>

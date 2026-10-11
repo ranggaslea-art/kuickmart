@@ -163,7 +163,7 @@ export const VpsDeployManager: React.FC = () => {
     }
   };
 
-  const manualCommand = `cd /var/www/kuickmart && git pull && npm run build && pm2 restart kuickmart`;
+  const manualCommand = `cd /var/www/kuickmart && git checkout -- data/ 2>/dev/null || true; git stash 2>/dev/null || true; git fetch origin main && git reset --hard origin/main && npm run build && pm2 restart kuickmart`;
   const webhookUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/api/system/deploy?token=kuickmart_deploy_token_2026`
     : `https://www.toko-online.online/api/system/deploy?token=kuickmart_deploy_token_2026`;
