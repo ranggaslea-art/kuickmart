@@ -4,7 +4,6 @@ import {
   WifiOff,
   RefreshCw,
   Database,
-  Cloud,
   CheckCircle2,
   AlertTriangle,
   Clock,
@@ -173,9 +172,9 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
           </>
         ) : pendingCount > 0 ? (
           <>
-            <Cloud className="w-3.5 h-3.5 text-amber-600" />
+            <Database className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
             <span className="font-medium whitespace-nowrap">
-              Sync ({pendingCount})
+              MySQL Antrean ({pendingCount})
             </span>
           </>
         ) : !isDbConnected ? (

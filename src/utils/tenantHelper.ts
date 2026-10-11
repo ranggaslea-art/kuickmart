@@ -670,7 +670,7 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
       console.warn('[TenantHelper] Gagal sync ke server backend:', apiErr);
     });
 
-    // 5. Sync ke Supabase Cloud tabel brand_configs agar langsung terbaca di hardware online lain
+    // 5. Sync ke Database MySQL agar langsung terbaca di hardware online lain
     import('./tenantCloudSync').then(({ saveTenantDataToCloud }) => {
       saveTenantDataToCloud('identity', updatedConfig, slug);
       const brand = syncBrandConfigFromTenant(updatedConfig, INITIAL_BRAND_CONFIG);
@@ -728,7 +728,7 @@ export async function autoProvisionStoreTenant(slug?: string): Promise<StoreTena
     return localConfig;
   }
 
-  // 2. Hubungi Supabase Cloud (tabel brand_configs) DAHULU karena Cloud adalah sumber kebenaran lintas-perangkat online!
+  // 2. Hubungi Cloud Database MySQL DAHULU karena Cloud adalah sumber kebenaran lintas-perangkat online!
   try {
     const { fetchTenantDataFromCloud } = await import('./tenantCloudSync');
     const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', effectiveSlug);
@@ -1061,7 +1061,7 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
     }
   }
 
-  // 4. Ambil seluruh data tenant identity dari Supabase Cloud (tabel brand_configs)
+  // 4. Ambil seluruh data tenant identity dari Cloud Database MySQL
   // Ini memastikan hardware online lain langsung melihat subdomain dan status aktif/nonaktif terbaru!
   try {
     const { fetchAllTenantIdentitiesFromCloud } = await import('./tenantCloudSync');
@@ -1225,7 +1225,7 @@ export async function toggleSubdomainStatus(
       );
     }
 
-    // 4. Sync ke Supabase Cloud agar semua hardware online langsung terupdate secara real-time
+    // 4. Sync ke Cloud Database MySQL agar semua hardware online langsung terupdate secara real-time
     try {
       const { saveTenantDataToCloud } = await import('./tenantCloudSync');
       let tenantToSync = data.tenant;

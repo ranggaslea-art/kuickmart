@@ -165,7 +165,7 @@ export function isBrowserOnline(): boolean {
   return navigator.onLine;
 }
 
-// Detect network error signatures from Supabase/fetch
+// Detect network error signatures from server fetch
 export function isNetworkError(err: any): boolean {
   if (!err) return false;
   if (!isBrowserOnline()) return true;

@@ -424,7 +424,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     });
   };
 
-  // Staff Users State (Persistent in localStorage & Supabase sync)
+  // Staff Users State (Persistent in localStorage & MySQL database sync)
   const [internalStaffUsers, setInternalStaffUsers] = useState<StaffUser[]>(() => {
     try {
       const key = getTenantStorageKey('toko_online_staff_users', currentSlug);

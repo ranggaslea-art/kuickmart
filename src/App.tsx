@@ -34,9 +34,6 @@ import {
   StoreSelectorModal 
 } from './components/StoreSelectorModal';
 import { 
-  SupabaseModal 
-} from './components/SupabaseModal';
-import { 
   AdminPanelModal 
 } from './components/AdminPanelModal';
 import { 
@@ -90,36 +87,17 @@ import {
 } from './data/mockData';
 import { INITIAL_SAMPLE_ORDERS } from './data/mockOrders';
 import { 
-  getSupabase, 
-  testSupabaseConnection, 
-  syncOrderToSupabase, 
-  fetchProductsFromSupabase,
-  fetchStoresFromSupabase,
-  fetchCategoriesFromSupabase,
-  fetchVouchersFromSupabase,
-  fetchOrdersFromSupabase,
-  saveProductToSupabase,
-  deleteProductFromSupabase,
-  saveStoreToSupabase,
-  saveVoucherToSupabase,
-  deleteVoucherFromSupabase,
-  updateProductSalesAndStockInSupabase,
-  fetchBrandConfigFromSupabase,
-  saveBrandConfigToSupabase,
-  fetchReceiptConfigsFromSupabase,
-  saveReceiptConfigToSupabase,
-  deleteReceiptConfigFromSupabase,
-  fetchStorePromosFromSupabase,
-  saveStorePromoToSupabase,
-  deleteStorePromoFromSupabase,
-  fetchCouriersFromSupabase,
-  saveCourierToSupabase,
-  deleteCourierFromSupabase,
-  fetchStaffUsersFromSupabase,
-  saveStaffUserToSupabase,
-  deleteStaffUserFromSupabase,
-  subscribeToSupabaseChanges
-} from './lib/supabase';
+  fetchMySqlStatus,
+  fetchProductsFromMySql,
+  fetchCategoriesFromMySql,
+  fetchBrandsFromMySql,
+  fetchOrdersFromMySql,
+  saveOrderToMySql,
+  saveProductToMySql,
+  deleteProductFromMySql,
+  saveCategoriesToMySql,
+  saveBrandsToMySql
+} from './lib/mysqlClientApi';
 import { 
   Zap, 
   Sparkles, 
@@ -389,7 +367,6 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
@@ -425,9 +402,7 @@ export default function App() {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (isSupabaseModalOpen) {
-          setIsSupabaseModalOpen(false);
-        } else if (isLiveTrafficModalOpen) {
+        if (isLiveTrafficModalOpen) {
           setIsLiveTrafficModalOpen(false);
         } else if (isStoreSelectorOpen) {
           setIsStoreSelectorOpen(false);
@@ -447,7 +422,6 @@ export default function App() {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [
-    isSupabaseModalOpen,
     isLiveTrafficModalOpen,
     isStoreSelectorOpen,
     isMemberModalOpen,
@@ -710,109 +684,39 @@ export default function App() {
 
   // MySQL Database Connection State
   const [isDatabaseConnected, setIsDatabaseConnected] = useState(true);
-
-  // Supabase State
-  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false);
 
-  useEffect(() => {
-    import('./lib/mysqlClientApi').then(({ fetchMySqlStatus }) => {
-      fetchMySqlStatus().then((res) => {
-        setIsDatabaseConnected(Boolean(res.connected));
-      }).catch(() => {
-        setIsDatabaseConnected(false);
-      });
-    }).catch(() => {});
-  }, []);
-
-  // Load all live catalog & system data from Supabase
-  const loadAllFromSupabase = async () => {
+  // Load all live catalog & system data from MySQL Database Server
+  const loadAllFromMySql = async () => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
     setIsSyncing(true);
     try {
-      const [
-        dbProducts, 
-        dbStores, 
-        dbCategories, 
-        dbVouchers, 
-        dbOrders,
-        dbBrandConfig,
-        dbReceiptConfigs,
-        dbStorePromos,
-        dbCouriers,
-        dbStaffUsers
-      ] = await Promise.all([
-        fetchProductsFromSupabase(currentSlug),
-        fetchStoresFromSupabase(),
-        fetchCategoriesFromSupabase(),
-        fetchVouchersFromSupabase(currentSlug),
-        fetchOrdersFromSupabase(currentSlug),
-        fetchBrandConfigFromSupabase(currentSlug),
-        fetchReceiptConfigsFromSupabase(currentSlug),
-        fetchStorePromosFromSupabase(currentSlug),
-        fetchCouriersFromSupabase(currentSlug),
-        fetchStaffUsersFromSupabase(currentSlug)
+      const statusRes = await fetchMySqlStatus();
+      setIsDatabaseConnected(Boolean(statusRes.connected));
+
+      const [dbProducts, dbCategories, dbBrands, dbOrders] = await Promise.all([
+        fetchProductsFromMySql(currentSlug).catch(() => null),
+        fetchCategoriesFromMySql(currentSlug).catch(() => null),
+        fetchBrandsFromMySql(currentSlug).catch(() => null),
+        fetchOrdersFromMySql(currentSlug).catch(() => null),
       ]);
 
-      if (dbProducts !== null) {
-        setIsSupabaseConnected(true);
-      }
-
-      if (dbProducts !== null) {
-        // Multi-tenant: Toko baru hanya memuat produk miliknya sendiri dari Supabase
-        const relevantProducts = isNewStore 
-          ? dbProducts.filter((p: any) => !p.storeId || p.storeId === currentSlug || (Array.isArray(p.tags) && p.tags.includes(`store:${currentSlug}`)))
-          : dbProducts;
-
-        if (relevantProducts.length > 0) {
-          const formattedDb = relevantProducts.map((p) => ({
-            ...p,
-            image: formatImageUrl(p.image),
-          }));
-          setProducts((prev) => {
-            const dbIds = new Set(formattedDb.map(p => p.id));
-            const localCustom = prev.filter(p => !dbIds.has(p.id) && (p.id.startsWith('prod_') || p.id.startsWith('custom_')));
-            return [...localCustom, ...formattedDb];
-          });
-          try {
-            const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
-            localStorage.setItem(key, JSON.stringify(formattedDb));
-          } catch (e) {
-            console.warn('Gagal cache produk Supabase ke localStorage:', e);
-          }
-        } else if (isNewStore) {
-          // Periksa juga cadangan dari Cloud Tenant Sync
-          const cloudProds = await fetchTenantDataFromCloud<Product[]>('products', currentSlug);
-          if (cloudProds && cloudProds.length > 0) {
-            const formatted = cloudProds.map(p => ({ ...p, image: formatImageUrl(p.image) }));
-            setProducts(formatted);
-            try {
-              localStorage.setItem(getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug), JSON.stringify(formatted));
-            } catch {}
-          } else {
-            const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
-            const cached = localStorage.getItem(key);
-            if (cached) {
-              try {
-                setProducts(JSON.parse(cached));
-              } catch {}
-            } else {
-              setProducts([]);
-            }
-          }
+      if (dbProducts && dbProducts.length > 0) {
+        const formattedDb = dbProducts.map((p) => ({
+          ...p,
+          image: formatImageUrl(p.image),
+        }));
+        setProducts(formattedDb);
+        try {
+          const key = getTenantStorageKey(STORAGE_PRODUCTS_KEY, currentSlug);
+          localStorage.setItem(key, JSON.stringify(formattedDb));
+        } catch (e) {
+          console.warn('Gagal cache produk MySQL ke localStorage:', e);
         }
       }
-      if (dbStores && dbStores.length > 0) {
-        if (!isNewStore) {
-          setStores(dbStores);
-          try {
-            localStorage.setItem(getTenantStorageKey(STORAGE_STORES_KEY, currentSlug), JSON.stringify(dbStores));
-          } catch {}
-          setCurrentStore((prev) => dbStores.find((s) => s.id === prev.id) || dbStores[0]);
-        }
-      }
+
       if (dbCategories && dbCategories.length > 0) {
         setCategories((prevCategories) => {
           const map = new Map<string, Category>();
@@ -825,26 +729,19 @@ export default function App() {
           return Array.from(map.values());
         });
       }
-      if (dbVouchers && dbVouchers.length > 0) {
-        const relevantVouchers = isNewStore
-          ? dbVouchers.filter((v: any) => !v.storeId || v.storeId === currentSlug)
-          : dbVouchers;
-        setVouchers(relevantVouchers);
-        try {
-          localStorage.setItem(getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug), JSON.stringify(relevantVouchers));
-        } catch {}
+
+      if (dbBrands && dbBrands.length > 0) {
+        setBrands(dbBrands);
       }
+
       if (dbOrders && dbOrders.length > 0) {
-        // Multi-tenant: Toko baru HANYA melihat pesanan toko miliknya sendiri
-        const relevantOrders = isNewStore
-          ? dbOrders.filter((o) => o.store?.id === currentSlug || (o as any).storeId === currentSlug)
-          : dbOrders;
-        setOrders(relevantOrders);
+        setOrders(dbOrders);
         try {
-          localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(relevantOrders));
+          localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(dbOrders));
         } catch {}
       }
-      // 0. Sinkronisasi Identitas Tenant & Subdomain dari Supabase Cloud
+
+      // Sinkronisasi Identitas Tenant
       const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', currentSlug);
       if (cloudTenant && cloudTenant.storeSlug) {
         setCurrentTenant(cloudTenant);
@@ -862,88 +759,24 @@ export default function App() {
           localStorage.setItem(`${STORAGE_TENANT_PREFIX}${currentSlug}`, JSON.stringify(cloudTenant));
         } catch {}
       }
-
-      // 1. Pengaturan Brand & Struk
-      if (dbBrandConfig) {
-        setBrandConfig(dbBrandConfig);
-        try {
-          localStorage.setItem(getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug), JSON.stringify(dbBrandConfig));
-        } catch {}
-      } else {
-        const cloudBrand = await fetchTenantDataFromCloud<BrandHeaderFooterConfig>('brand', currentSlug);
-        if (cloudBrand) {
-          setBrandConfig(cloudBrand);
-          try {
-            localStorage.setItem(getTenantStorageKey(STORAGE_BRAND_CONFIG_KEY, currentSlug), JSON.stringify(cloudBrand));
-          } catch {}
-        } else if (cloudTenant) {
-          setBrandConfig((prev) => syncBrandConfigFromTenant(cloudTenant, prev));
-        }
-      }
-      if (dbReceiptConfigs && dbReceiptConfigs.length > 0) {
-        const relevantReceipts = isNewStore
-          ? dbReceiptConfigs.filter((r) => !r.storeId || r.storeId === currentSlug)
-          : dbReceiptConfigs;
-        if (relevantReceipts.length > 0) {
-          setReceiptConfigs(relevantReceipts);
-          try {
-            localStorage.setItem(getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug), JSON.stringify(relevantReceipts));
-          } catch {}
-        }
-      }
-      // 2. Info Promo & Flash Sale
-      if (dbStorePromos && dbStorePromos.length > 0) {
-        const relevantPromos = isNewStore
-          ? dbStorePromos.filter((p: any) => !p.storeId || p.storeId === currentSlug)
-          : dbStorePromos;
-        setStorePromos(relevantPromos);
-        try {
-          localStorage.setItem(getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug), JSON.stringify(relevantPromos));
-        } catch {}
-      }
-      // 3. Kurir & Armada
-      if (dbCouriers && dbCouriers.length > 0) {
-        const relevantCouriers = isNewStore
-          ? dbCouriers.filter((c: any) => !c.storeId || c.storeId === currentSlug)
-          : dbCouriers;
-        setCouriers(relevantCouriers);
-        try {
-          localStorage.setItem(getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug), JSON.stringify(relevantCouriers));
-        } catch {}
-      }
-      // 4. Manajemen User / Staff
-      if (dbStaffUsers && dbStaffUsers.length > 0) {
-        const relevantUsers = isNewStore
-          ? dbStaffUsers.filter((u) => !u.storeId || u.storeId === currentSlug)
-          : dbStaffUsers;
-        if (relevantUsers.length > 0) {
-          setStaffUsers(relevantUsers);
-          try {
-            localStorage.setItem(getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug), JSON.stringify(relevantUsers));
-          } catch {}
-        }
-      }
     } catch (e) {
-      console.warn('Gagal memuat data dari Supabase:', e);
+      console.warn('Gagal memuat data dari MySQL:', e);
     } finally {
       setIsSyncing(false);
       isSyncingRef.current = false;
     }
   };
 
-  // Immediate multi-device sync on load, focus, real-time events, and polling
+  // Inisialisasi data dan koneksi MySQL pada mount
   useEffect(() => {
-    // 1. Load instantly on mount
-    loadAllFromSupabase();
+    // 1. Muat data live seketika dari MySQL
+    loadAllFromMySql();
 
-    // 2. Test connectivity
-    testSupabaseConnection().then((res) => {
-      setIsSupabaseConnected(res.success);
-    });
-
-    // 3. Subscribe to Supabase real-time changes
-    const unsubscribe = subscribeToSupabaseChanges(() => {
-      loadAllFromSupabase();
+    // 2. Ping status kesehatan koneksi MySQL
+    fetchMySqlStatus().then((res) => {
+      setIsDatabaseConnected(Boolean(res.connected));
+    }).catch(() => {
+      setIsDatabaseConnected(false);
     });
 
     // 3b. Subscribe to Real-time Tenant Cloud changes (brand_configs) across devices
@@ -984,17 +817,17 @@ export default function App() {
       } else if (moduleKey === 'staff' && Array.isArray(data)) {
         setStaffUsers(data);
       }
-      loadAllFromSupabase();
+      loadAllFromMySql();
     });
 
     // 4. Auto sync when tab is focused / phone screen unlocked
     const handleFocus = () => {
-      loadAllFromSupabase();
+      loadAllFromMySql();
     };
     window.addEventListener('focus', handleFocus);
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        loadAllFromSupabase();
+        loadAllFromMySql();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1002,12 +835,11 @@ export default function App() {
     // 5. Lightweight background polling (45s, active tab only) to keep memory & CPU smooth
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        loadAllFromSupabase();
+        loadAllFromMySql();
       }
     }, 45000);
 
     return () => {
-      unsubscribe();
       unsubscribeTenant();
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -1106,7 +938,7 @@ export default function App() {
       console.warn('Gagal simpan salinan sample produk:', e);
     }
     sample.forEach((p) => {
-      saveProductToSupabase(p).catch(() => {});
+      saveProductToMySql(p, currentSlug).catch(() => {});
     });
   };
 
@@ -1142,11 +974,6 @@ export default function App() {
       saveProductToMySql(prodWithStore, currentSlug).catch(console.error);
     });
 
-    // 4. Cadangkan ke Supabase jika tersedia
-    try {
-      await saveProductToSupabase(prodWithStore);
-    } catch (_) {}
-
     return { success: true };
   };
 
@@ -1179,10 +1006,6 @@ export default function App() {
       saveProductToMySql(prodWithStore, currentSlug).catch(console.error);
     });
 
-    try {
-      await saveProductToSupabase(prodWithStore);
-    } catch (_) {}
-
     return { success: true };
   };
 
@@ -1210,10 +1033,6 @@ export default function App() {
       deleteProductFromMySql(productId, currentSlug).catch(console.error);
     });
 
-    try {
-      await deleteProductFromSupabase(productId);
-    } catch (_) {}
-
     return { success: true };
   };
 
@@ -1234,10 +1053,6 @@ export default function App() {
     import('./lib/mysqlClientApi').then(({ saveProductToMySql }) => {
       newProducts.forEach((p) => saveProductToMySql(p, currentSlug).catch(() => {}));
     });
-
-    newProducts.forEach((p) => {
-      saveProductToSupabase(p).catch(() => {});
-    });
   };
 
   const handleUpdateCategories = (newCategories: Category[]) => {
@@ -1246,12 +1061,7 @@ export default function App() {
       const key = getTenantStorageKey('toko_online_categories', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCategories));
       saveTenantDataToCloud('categories', newCategories, currentSlug);
-      import('./lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
-        saveCategoriesToMySql(newCategories, currentSlug).catch(() => {});
-      });
-      import('./lib/supabase').then(({ saveCategoriesToSupabase }) => {
-        saveCategoriesToSupabase(newCategories, currentSlug).catch(() => {});
-      });
+      saveCategoriesToMySql(newCategories, currentSlug).catch(() => {});
     } catch {}
   };
 
@@ -1261,12 +1071,7 @@ export default function App() {
       const key = getTenantStorageKey('toko_online_brands', currentSlug);
       localStorage.setItem(key, JSON.stringify(newBrands));
       saveTenantDataToCloud('brands', newBrands, currentSlug);
-      import('./lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
-        saveBrandsToMySql(newBrands, currentSlug).catch(() => {});
-      });
-      import('./lib/supabase').then(({ saveBrandsToSupabase }) => {
-        saveBrandsToSupabase(newBrands, currentSlug).catch(() => {});
-      });
+      saveBrandsToMySql(newBrands, currentSlug).catch(() => {});
     } catch {}
   };
 
@@ -1276,21 +1081,9 @@ export default function App() {
       const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newStores));
     } catch {}
-    newStores.forEach((s) => {
-      saveStoreToSupabase(s).catch(() => {});
-    });
   };
 
   const handleUpdateVouchers = (newVouchers: Voucher[]) => {
-    const newIds = new Set(newVouchers.map(v => v.id));
-    vouchers.forEach(v => {
-      if (!newIds.has(v.id)) {
-        deleteVoucherFromSupabase(v.id).catch(() => {});
-      }
-    });
-    newVouchers.forEach((v) => {
-      saveVoucherToSupabase(v).catch(() => {});
-    });
     setVouchers(newVouchers);
     try {
       const key = getTenantStorageKey(STORAGE_VOUCHERS_KEY, currentSlug);
@@ -1302,22 +1095,12 @@ export default function App() {
   const handleUpdateBrandConfig = (newConfig: BrandHeaderFooterConfig | ((prev: BrandHeaderFooterConfig) => BrandHeaderFooterConfig)) => {
     setBrandConfig((prev) => {
       const next = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
-      saveBrandConfigToSupabase(next, currentSlug).catch(() => {});
       saveTenantDataToCloud('brand', next, currentSlug);
       return next;
     });
   };
 
   const handleUpdateReceiptConfigs = (newConfigs: ReceiptInfo[]) => {
-    const newIds = new Set(newConfigs.map(r => r.id));
-    receiptConfigs.forEach(r => {
-      if (!newIds.has(r.id)) {
-        deleteReceiptConfigFromSupabase(r.id).catch(() => {});
-      }
-    });
-    newConfigs.forEach((r) => {
-      saveReceiptConfigToSupabase(r).catch(() => {});
-    });
     setReceiptConfigs(newConfigs);
     try {
       const key = getTenantStorageKey(STORAGE_RECEIPT_CONFIGS_KEY, currentSlug);
@@ -1327,15 +1110,6 @@ export default function App() {
   };
 
   const handleUpdateStorePromos = (newPromos: StorePromoInfo[]) => {
-    const newIds = new Set(newPromos.map(p => p.id));
-    storePromos.forEach(p => {
-      if (!newIds.has(p.id)) {
-        deleteStorePromoFromSupabase(p.id).catch(() => {});
-      }
-    });
-    newPromos.forEach((p) => {
-      saveStorePromoToSupabase(p).catch(() => {});
-    });
     setStorePromos(newPromos);
     try {
       const key = getTenantStorageKey(STORAGE_STORE_PROMOS_KEY, currentSlug);
@@ -1345,15 +1119,6 @@ export default function App() {
   };
 
   const handleUpdateCouriers = (newCouriers: CourierInfo[]) => {
-    const newIds = new Set(newCouriers.map(c => c.id));
-    couriers.forEach(c => {
-      if (!newIds.has(c.id)) {
-        deleteCourierFromSupabase(c.id).catch(() => {});
-      }
-    });
-    newCouriers.forEach((c) => {
-      saveCourierToSupabase(c).catch(() => {});
-    });
     setCouriers(newCouriers);
     try {
       const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
@@ -1363,25 +1128,11 @@ export default function App() {
   };
 
   const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
-    // 1. Immediately persist synchronously to localStorage with tenant key
     try {
       const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newUsers));
       saveTenantDataToCloud('staff', newUsers, currentSlug);
     } catch {}
-
-    // 2. Sync to Supabase in background
-    const newIds = new Set(newUsers.map(u => u.id));
-    staffUsers.forEach(u => {
-      if (!newIds.has(u.id)) {
-        deleteStaffUserFromSupabase(u.id).catch(() => {});
-      }
-    });
-    newUsers.forEach((u) => {
-      saveStaffUserToSupabase(u).catch(() => {});
-    });
-
-    // 3. Update React state
     setStaffUsers(newUsers);
   };
 
@@ -1666,8 +1417,10 @@ export default function App() {
           if (trackedOrder?.id === orderId) {
             setTrackedOrder(updated);
           }
-          // Sync update
-          syncOrderToSupabase(updated);
+          // Sync update ke MySQL
+          saveOrderToMySql(updated, currentSlug).catch((err) => {
+            console.warn('Gagal sinkronisasi status pesanan ke MySQL:', err);
+          });
           return updated;
         }
         return ord;
@@ -1731,7 +1484,6 @@ export default function App() {
     setIsAdminPanelOpen(false);
     setIsMemberModalOpen(false);
     setIsStoreSelectorOpen(false);
-    setIsSupabaseModalOpen(false);
     setIsLiveTrafficModalOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1876,7 +1628,7 @@ export default function App() {
         storePromos={storePromos}
         brandConfig={brandConfig}
         isSyncing={isSyncing}
-        onRefreshData={loadAllFromSupabase}
+        onRefreshData={loadAllFromMySql}
         onGoHome={handleGoHome}
         onNavigatePromo={handleNavigatePromo}
       />
@@ -2468,31 +2220,6 @@ export default function App() {
         stores={stores}
         currentStore={currentStore}
         onSelectStore={setCurrentStore}
-      />
-
-      {/* 7. Supabase Cloud Setup & SQL Schema Modal */}
-      <SupabaseModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => setIsSupabaseModalOpen(false)}
-        isSupabaseConnected={isSupabaseConnected}
-        onConnectionChange={(connected) => {
-          setIsSupabaseConnected(connected);
-          if (connected) {
-            loadAllFromSupabase();
-          }
-        }}
-        onRefreshData={loadAllFromSupabase}
-        currentData={{ 
-          products, 
-          stores, 
-          categories, 
-          vouchers,
-          brandConfig,
-          receiptConfigs,
-          storePromos,
-          couriers,
-          staffUsers
-        }}
       />
 
       {/* 8. Admin & POS Store Management Panel Modal */}

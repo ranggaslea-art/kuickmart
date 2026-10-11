@@ -163,6 +163,20 @@ export async function saveProductToMySql(product: Product, tenantSlug: string = 
 }
 
 /**
+ * Simpan daftar produk sekaligus ke MySQL
+ */
+export async function saveProductsToMySql(products: Product[], tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    for (const prod of products) {
+      await saveProductToMySql(prod, tenantSlug);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Hapus produk dari MySQL
  */
 export async function deleteProductFromMySql(productId: string, tenantSlug: string = 'default'): Promise<boolean> {

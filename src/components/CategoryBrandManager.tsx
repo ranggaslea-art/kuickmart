@@ -10,12 +10,6 @@ import {
   saveBrandsToMySql, 
   deleteBrandFromMySql 
 } from '../lib/mysqlClientApi';
-import {
-  saveCategoriesToSupabase,
-  deleteCategoryFromSupabase,
-  saveBrandsToSupabase,
-  deleteBrandFromSupabase
-} from '../lib/supabase';
 import { getTenantStorageKey } from '../utils/tenantHelper';
 import { saveTenantDataToCloud } from '../utils/tenantCloudSync';
 import { 
@@ -264,7 +258,6 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         saveTenantDataToCloud('categories', newCategories, tenantSlug);
       } catch {}
       saveCategoriesToMySql(newCategories, tenantSlug).catch(console.error);
-      saveCategoriesToSupabase(newCategories, tenantSlug).catch(console.error);
 
       // If slug changed and sync requested, update products
       if (oldSlug !== cleanSlug && catSyncProducts && onUpdateProducts) {
@@ -298,7 +291,6 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         saveTenantDataToCloud('categories', updatedList, tenantSlug);
       } catch {}
       saveCategoriesToMySql(updatedList, tenantSlug).catch(console.error);
-      saveCategoriesToSupabase(updatedList, tenantSlug).catch(console.error);
 
       triggerFeedback('success', `Kategori "${newCat.name}" berhasil ditambahkan dan tersimpan ke Database.`);
     }
@@ -328,7 +320,6 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
       saveTenantDataToCloud('categories', remainingCategories, tenantSlug);
     } catch {}
     deleteCategoryFromMySql(targetId, tenantSlug).catch(console.error);
-    deleteCategoryFromSupabase(targetId, tenantSlug).catch(console.error);
 
     // Reassign products with this category to fallback ('sembako' or 'all')
     if (onUpdateProducts) {
@@ -436,7 +427,6 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         saveTenantDataToCloud('brands', newBrands, tenantSlug);
       } catch {}
       saveBrandsToMySql(newBrands, tenantSlug).catch(console.error);
-      saveBrandsToSupabase(newBrands, tenantSlug).catch(console.error);
 
       // If name changed and sync requested, update products in catalog
       if (oldName.toLowerCase() !== trimmedName.toLowerCase() && brandSyncProducts && onUpdateProducts) {
@@ -469,7 +459,6 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
         saveTenantDataToCloud('brands', updatedList, tenantSlug);
       } catch {}
       saveBrandsToMySql(updatedList, tenantSlug).catch(console.error);
-      saveBrandsToSupabase(updatedList, tenantSlug).catch(console.error);
       triggerFeedback('success', `Merk "${newBrand.name}" berhasil ditambahkan dan tersimpan ke Database.`);
     }
 
@@ -489,7 +478,6 @@ export const CategoryBrandManager: React.FC<CategoryBrandManagerProps> = ({
       saveTenantDataToCloud('brands', remainingBrands, tenantSlug);
     } catch {}
     deleteBrandFromMySql(targetId, tenantSlug).catch(console.error);
-    deleteBrandFromSupabase(targetId, tenantSlug).catch(console.error);
 
     triggerFeedback('success', `Merk "${targetName}" berhasil dihapus dari Database.`);
     setBrandDeleteTarget(null);

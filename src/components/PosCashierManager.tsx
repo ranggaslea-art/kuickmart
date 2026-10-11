@@ -329,6 +329,12 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
   const quickBarcodeInputRef = useRef<HTMLInputElement | null>(null);
   const cashInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Table Column Refs for Enter-as-Tab
+  const unitSelectRefs = useRef<(HTMLSelectElement | null)[]>([]);
+  const qtyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const priceInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const discountInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cashReceived, setCashReceived] = useState<number>(0);
@@ -554,20 +560,108 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
     setSelectedSearchIndex(0);
   };
 
-  // Keyboard navigation for search dropdown
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (!isSearchDropdownOpen || searchResults.length === 0) return;
+  // Keyboard navigation for search dropdown & barcode input
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isSearchDropdownOpen && searchResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSearchIndex((prev) => (prev + 1) % searchResults.length);
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSearchIndex(
+          (prev) => (prev - 1 + searchResults.length) % searchResults.length
+        );
+        return;
+      } else if (e.key === 'Escape') {
+        setIsSearchDropdownOpen(false);
+        return;
+      }
+    }
 
-    if (e.key === 'ArrowDown') {
+    // Jika input barcode kosong dan tekan Enter: fungsinya sama dengan Tab yaitu pindah ke kolom berikutnya di keranjang kasir
+    if (e.key === 'Enter' && !quickBarcodeInput.trim()) {
       e.preventDefault();
-      setSelectedSearchIndex((prev) => (prev + 1) % searchResults.length);
-    } else if (e.key === 'ArrowUp') {
+      const firstValidIdx = rows.findIndex((r) => r.productId);
+      if (firstValidIdx >= 0) {
+        if (unitSelectRefs.current[firstValidIdx]) {
+          unitSelectRefs.current[firstValidIdx]?.focus();
+        } else {
+          qtyInputRefs.current[firstValidIdx]?.focus();
+          qtyInputRefs.current[firstValidIdx]?.select();
+        }
+      }
+    }
+  };
+
+  // Navigasi Kolom Tabel dengan Tombol Enter (Sama seperti tombol Tab)
+  const handlePosTableKeyDown = (
+    e: React.KeyboardEvent<HTMLElement>,
+    rowIndex: number,
+    field: 'unit' | 'qty' | 'price' | 'discount'
+  ) => {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      setSelectedSearchIndex(
-        (prev) => (prev - 1 + searchResults.length) % searchResults.length
-      );
-    } else if (e.key === 'Escape') {
-      setIsSearchDropdownOpen(false);
+      if (e.shiftKey) {
+        // Shift+Enter: pindah ke kolom sebelumnya (seperti Shift+Tab)
+        if (field === 'discount') {
+          priceInputRefs.current[rowIndex]?.focus();
+          priceInputRefs.current[rowIndex]?.select();
+        } else if (field === 'price') {
+          qtyInputRefs.current[rowIndex]?.focus();
+          qtyInputRefs.current[rowIndex]?.select();
+        } else if (field === 'qty') {
+          if (unitSelectRefs.current[rowIndex]) {
+            unitSelectRefs.current[rowIndex]?.focus();
+          } else if (rowIndex > 0) {
+            discountInputRefs.current[rowIndex - 1]?.focus();
+            discountInputRefs.current[rowIndex - 1]?.select();
+          } else {
+            quickBarcodeInputRef.current?.focus();
+            quickBarcodeInputRef.current?.select();
+          }
+        } else if (field === 'unit') {
+          if (rowIndex > 0) {
+            discountInputRefs.current[rowIndex - 1]?.focus();
+            discountInputRefs.current[rowIndex - 1]?.select();
+          } else {
+            quickBarcodeInputRef.current?.focus();
+            quickBarcodeInputRef.current?.select();
+          }
+        }
+        return;
+      }
+
+      // Enter: pindah ke kolom berikutnya (sama persis dengan fungsi tombol Tab)
+      if (field === 'unit') {
+        qtyInputRefs.current[rowIndex]?.focus();
+        qtyInputRefs.current[rowIndex]?.select();
+      } else if (field === 'qty') {
+        priceInputRefs.current[rowIndex]?.focus();
+        priceInputRefs.current[rowIndex]?.select();
+      } else if (field === 'price') {
+        discountInputRefs.current[rowIndex]?.focus();
+        discountInputRefs.current[rowIndex]?.select();
+      } else if (field === 'discount') {
+        if (rowIndex < rows.length - 1) {
+          // Pindah ke kolom pertama pada baris berikutnya
+          if (unitSelectRefs.current[rowIndex + 1]) {
+            unitSelectRefs.current[rowIndex + 1]?.focus();
+          } else {
+            qtyInputRefs.current[rowIndex + 1]?.focus();
+            qtyInputRefs.current[rowIndex + 1]?.select();
+          }
+        } else {
+          // Baris terakhir selesai: pindah ke input pembayaran (uang tunai) atau kembali ke barcode scan
+          if (paymentMethod === 'cash' && cashInputRef.current) {
+            cashInputRef.current.focus();
+            cashInputRef.current.select();
+          } else {
+            quickBarcodeInputRef.current?.focus();
+            quickBarcodeInputRef.current?.select();
+          }
+        }
+      }
     }
   };
 
@@ -1673,8 +1767,10 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                         <td className="px-2 py-2">
                           {unitOpts.length > 1 ? (
                             <select
+                              ref={(el) => { unitSelectRefs.current[index] = el; }}
                               value={row.unit}
                               onChange={(e) => handleRowUnitChange(index, e.target.value)}
+                              onKeyDown={(e) => handlePosTableKeyDown(e, index, 'unit')}
                               className="w-full px-1.5 py-1 bg-stone-50 border border-stone-200 rounded-md text-[11px] font-bold"
                             >
                               {unitOpts.map((opt) => (
@@ -1700,10 +1796,12 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                               <Minus className="w-3 h-3" />
                             </button>
                             <input
+                              ref={(el) => { qtyInputRefs.current[index] = el; }}
                               type="number"
                               min="1"
                               value={row.quantity}
                               onChange={(e) => handleRowQtyChange(index, parseInt(e.target.value) || 1, true)}
+                              onKeyDown={(e) => handlePosTableKeyDown(e, index, 'qty')}
                               className="w-10 text-center font-mono font-black text-xs bg-white py-0.5 border-x border-stone-200 focus:outline-hidden"
                             />
                             <button
@@ -1718,20 +1816,24 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                         </td>
                         <td className="px-2 py-2 text-right font-mono">
                           <input
+                            ref={(el) => { priceInputRefs.current[index] = el; }}
                             type="number"
                             min="0"
                             value={row.sellingPrice}
                             onChange={(e) => handleRowPriceChange(index, parseInt(e.target.value) || 0)}
+                            onKeyDown={(e) => handlePosTableKeyDown(e, index, 'price')}
                             className="w-20 text-right font-mono text-xs px-1 py-0.5 border border-stone-200 rounded focus:bg-white focus:outline-hidden"
                           />
                         </td>
                         <td className="px-2 py-2 text-right font-mono">
                           <input
+                            ref={(el) => { discountInputRefs.current[index] = el; }}
                             type="number"
                             min="0"
                             value={row.discountAmount || ''}
                             placeholder="0"
                             onChange={(e) => handleRowDiscountChange(index, parseInt(e.target.value) || 0)}
+                            onKeyDown={(e) => handlePosTableKeyDown(e, index, 'discount')}
                             className="w-16 text-right font-mono text-xs px-1 py-0.5 border border-stone-200 rounded focus:bg-white focus:outline-hidden"
                           />
                         </td>
@@ -1926,6 +2028,19 @@ export const PosCashierManager: React.FC<PosCashierManagerProps> = ({
                       min="0"
                       value={cashReceived || ''}
                       onChange={(e) => setCashReceived(parseInt(e.target.value) || 0)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (grandTotal > 0) {
+                            if (!cashReceived || cashReceived === 0) {
+                              setCashReceived(grandTotal);
+                              setTimeout(() => handleFinalizeSale(), 60);
+                            } else {
+                              handleFinalizeSale();
+                            }
+                          }
+                        }
+                      }}
                       placeholder="0"
                       className="w-full pl-8 pr-2 py-1.5 bg-stone-50 border-2 border-emerald-300 rounded-xl text-base font-mono font-bold text-stone-900 focus:bg-white focus:outline-hidden focus:border-emerald-600"
                     />

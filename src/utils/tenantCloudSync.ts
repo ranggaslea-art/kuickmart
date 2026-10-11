@@ -1,9 +1,19 @@
-import { getSupabase } from '../lib/supabase';
-import { getStoreSlugFromUrl, isDefaultStore, getTenantStorageKey, STORAGE_TENANT_PREFIX } from './tenantHelper';
-import { Product, StoreTenantIdentity, BrandHeaderFooterConfig, Voucher, ReceiptInfo, StorePromoInfo, CourierInfo, StaffUser } from '../types';
+import { getStoreSlugFromUrl, getTenantStorageKey, STORAGE_TENANT_PREFIX } from './tenantHelper';
+import {
+  saveCategoriesToMySql,
+  saveBrandsToMySql,
+  savePurchasesToMySql,
+  saveSuppliersToMySql,
+  saveProductsToMySql,
+  fetchCategoriesFromMySql,
+  fetchBrandsFromMySql,
+  fetchPurchasesFromMySql,
+  fetchSuppliersFromMySql,
+  fetchProductsFromMySql,
+} from '../lib/mysqlClientApi';
 
 /**
- * Mapping nama key sinkronisasi cloud dengan storage key localStorage
+ * Mapping nama key sinkronisasi dengan storage key localStorage
  */
 const STORAGE_KEY_MAPPING: Record<string, string> = {
   products: 'toko_online_products',
@@ -30,8 +40,7 @@ const STORAGE_KEY_MAPPING: Record<string, string> = {
 };
 
 /**
- * Simpan data modul tenant ke Supabase Cloud (tabel brand_configs)
- * agar langsung dapat dilihat dan disinkronkan oleh perangkat/hardware online lainnya.
+ * Simpan data modul tenant ke MySQL Server & Local Storage
  */
 export async function saveTenantDataToCloud<T = any>(
   moduleKey: string,
@@ -39,7 +48,6 @@ export async function saveTenantDataToCloud<T = any>(
   storeSlug?: string
 ): Promise<boolean> {
   const effectiveSlug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
-  const cloudDocId = `tenant_${moduleKey}_${effectiveSlug}`;
   const now = new Date().toISOString();
 
   // 1. Simpan segera ke localStorage lokal untuk responsivitas instan
@@ -55,109 +63,67 @@ export async function saveTenantDataToCloud<T = any>(
     }
   }
 
-  // 2. Simpan ke Supabase Cloud tabel brand_configs
-  const supabase = getSupabase();
-  if (!supabase) {
-    return false;
+  // 2. Broadcast event lokal untuk sinkronisasi komponen di window saat ini
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('tenant_cloud_synced', {
+        detail: { moduleKey, slug: effectiveSlug, data, timestamp: now },
+      })
+    );
   }
 
+  // 3. Sinkronisasikan otomatis ke MySQL (MariaDB) Server
   try {
-    const payload = {
-      id: cloudDocId,
-      config_json: {
-        moduleKey,
-        slug: effectiveSlug,
-        data,
-        updatedAt: now,
-      },
-      updated_at: now,
-    };
-
-    const { error } = await supabase.from('brand_configs').upsert(payload, { onConflict: 'id' });
-    if (error) {
-      console.warn(`[CloudSync] Error upsert Supabase untuk ${cloudDocId}:`, error.message);
-      return false;
+    if (moduleKey === 'categories' && Array.isArray(data)) {
+      await saveCategoriesToMySql(data as any, effectiveSlug);
+    } else if (moduleKey === 'brands' && Array.isArray(data)) {
+      await saveBrandsToMySql(data as any, effectiveSlug);
+    } else if (moduleKey === 'purchases' && Array.isArray(data)) {
+      await savePurchasesToMySql(data as any, effectiveSlug);
+    } else if (moduleKey === 'suppliers' && Array.isArray(data)) {
+      await saveSuppliersToMySql(data as any, effectiveSlug);
+    } else if (moduleKey === 'products' && Array.isArray(data)) {
+      await saveProductsToMySql(data as any, effectiveSlug);
     }
-
-    // 3. Broadcast event lokal untuk sinkronisasi komponen di window saat ini
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('tenant_cloud_synced', {
-          detail: { moduleKey, slug: effectiveSlug, data, timestamp: now },
-        })
-      );
-    }
-
-    // 4. Sinkronisasikan otomatis ke MySQL (MariaDB)
-    try {
-      if (moduleKey === 'categories' && Array.isArray(data)) {
-        import('../lib/mysqlClientApi').then(({ saveCategoriesToMySql }) => {
-          saveCategoriesToMySql(data as any, effectiveSlug).catch(() => {});
-        });
-      } else if (moduleKey === 'brands' && Array.isArray(data)) {
-        import('../lib/mysqlClientApi').then(({ saveBrandsToMySql }) => {
-          saveBrandsToMySql(data as any, effectiveSlug).catch(() => {});
-        });
-      } else if (moduleKey === 'purchases' && Array.isArray(data)) {
-        import('../lib/mysqlClientApi').then(({ savePurchasesToMySql }) => {
-          savePurchasesToMySql(data as any, effectiveSlug).catch(() => {});
-        });
-      } else if (moduleKey === 'suppliers' && Array.isArray(data)) {
-        import('../lib/mysqlClientApi').then(({ saveSuppliersToMySql }) => {
-          saveSuppliersToMySql(data as any, effectiveSlug).catch(() => {});
-        });
-      }
-    } catch (_) {}
-
-    return true;
-  } catch (err) {
-    console.warn(`[CloudSync] Exception saat saveTenantDataToCloud (${cloudDocId}):`, err);
-    return false;
+  } catch (mysqlErr) {
+    console.warn(`[CloudSync] Sinkronisasi MySQL untuk ${moduleKey}:`, mysqlErr);
   }
+
+  return true;
 }
 
 /**
- * Ambil data modul tenant dari Supabase Cloud.
- * Jika ditemukan, otomatis memperbarui cache localStorage lokal.
+ * Ambil data modul tenant dari MySQL Database Server atau LocalStorage.
  */
 export async function fetchTenantDataFromCloud<T = any>(
   moduleKey: string,
   storeSlug?: string
 ): Promise<T | null> {
   const effectiveSlug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
-  const cloudDocId = `tenant_${moduleKey}_${effectiveSlug}`;
 
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('brand_configs')
-        .select('*')
-        .eq('id', cloudDocId)
-        .maybeSingle();
-
-      if (!error && data && data.config_json && data.config_json.data !== undefined) {
-        const cloudData = data.config_json.data as T;
-
-        // Perbarui cache localStorage lokal
-        if (typeof window !== 'undefined') {
-          try {
-            const baseKey = STORAGE_KEY_MAPPING[moduleKey] || `toko_online_${moduleKey}`;
-            const localKey = moduleKey === 'identity' 
-              ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
-              : getTenantStorageKey(baseKey, effectiveSlug);
-            localStorage.setItem(localKey, JSON.stringify(cloudData));
-          } catch {}
-        }
-
-        return cloudData;
-      }
-    } catch (err) {
-      console.warn(`[CloudSync] Exception saat fetchTenantDataFromCloud (${cloudDocId}):`, err);
+  // 1. Coba ambil dari MySQL Database Server terlebih dahulu
+  try {
+    if (moduleKey === 'categories') {
+      const dbCategories = await fetchCategoriesFromMySql(effectiveSlug);
+      if (dbCategories && dbCategories.length > 0) return dbCategories as any;
+    } else if (moduleKey === 'brands') {
+      const dbBrands = await fetchBrandsFromMySql(effectiveSlug);
+      if (dbBrands && dbBrands.length > 0) return dbBrands as any;
+    } else if (moduleKey === 'purchases') {
+      const dbPurchases = await fetchPurchasesFromMySql(effectiveSlug);
+      if (dbPurchases && dbPurchases.length > 0) return dbPurchases as any;
+    } else if (moduleKey === 'suppliers') {
+      const dbSuppliers = await fetchSuppliersFromMySql(effectiveSlug);
+      if (dbSuppliers && dbSuppliers.length > 0) return dbSuppliers as any;
+    } else if (moduleKey === 'products') {
+      const dbProducts = await fetchProductsFromMySql(effectiveSlug);
+      if (dbProducts && dbProducts.length > 0) return dbProducts as any;
     }
+  } catch (err) {
+    console.warn(`[CloudSync] Fallback ke cache lokal untuk ${moduleKey}:`, err);
   }
 
-  // Fallback membaca dari localStorage lokal
+  // 2. Fallback membaca dari localStorage lokal
   if (typeof window !== 'undefined') {
     try {
       const baseKey = STORAGE_KEY_MAPPING[moduleKey] || `toko_online_${moduleKey}`;
@@ -175,104 +141,51 @@ export async function fetchTenantDataFromCloud<T = any>(
 }
 
 /**
- * Ambil seluruh data identitas tenant (semua subdomain terdaftar) dari Supabase Cloud.
- * Membantu hardware lain yang baru online langsung mendapatkan list subdomain termutakhir.
+ * Ambil seluruh data identitas tenant dari LocalStorage & registrasi toko
  */
 export async function fetchAllTenantIdentitiesFromCloud(): Promise<any[]> {
-  const supabase = getSupabase();
-  if (!supabase) return [];
+  if (typeof window === 'undefined') return [];
   try {
-    const { data, error } = await supabase
-      .from('brand_configs')
-      .select('id, config_json, updated_at')
-      .like('id', 'tenant_identity_%');
-
-    if (error || !data) return [];
-
     const list: any[] = [];
-    for (const row of data) {
-      if (row.config_json && row.config_json.data && row.config_json.data.storeSlug) {
-        list.push(row.config_json.data);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(STORAGE_TENANT_PREFIX)) {
+        try {
+          const item = JSON.parse(localStorage.getItem(key) || '{}');
+          if (item && item.storeSlug) {
+            list.push(item);
+          }
+        } catch {}
       }
     }
     return list;
   } catch (err) {
-    console.warn('[CloudSync] Exception saat fetchAllTenantIdentitiesFromCloud:', err);
+    console.warn('[CloudSync] Gagal membaca list identitas tenant:', err);
     return [];
   }
 }
 
 /**
- * Listener Real-time Supabase untuk perubahan data tenant di semua hardware/perangkat.
+ * Listener sinkronisasi perubahan data tenant di window/tab browser
  */
 export function subscribeToTenantCloudChanges(
   storeSlug: string,
   onTenantUpdate: (moduleKey: string, data: any) => void
 ): () => void {
-  const supabase = getSupabase();
-  if (!supabase) return () => {};
+  if (typeof window === 'undefined') return () => {};
 
-  const effectiveSlug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
-  const channelName = `tenant-sync-${effectiveSlug}-${Math.random().toString(36).substring(2, 7)}`;
+  const effectiveSlug = (storeSlug || getStoreSlugFromUrl() || 'default').toLowerCase();
 
-  try {
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'brand_configs',
-        },
-        (payload: any) => {
-          const row = payload.new || payload.old;
-          if (row && typeof row.id === 'string' && row.id.startsWith('tenant_')) {
-            const match = row.id.match(/^tenant_([a-zA-Z0-9_-]+)_(.+)$/);
-            if (match) {
-              const [, modKey, rowSlug] = match;
-              if (payload.new?.config_json) {
-                const updatedData = payload.new.config_json.data;
-                // Jika perubahan terjadi pada tenant yang sedang aktif di layar ini
-                if (rowSlug.toLowerCase() === effectiveSlug) {
-                  // Update local storage
-                  if (typeof window !== 'undefined') {
-                    try {
-                      const baseKey = STORAGE_KEY_MAPPING[modKey] || `toko_online_${modKey}`;
-                      const localKey = modKey === 'identity' 
-                        ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
-                        : getTenantStorageKey(baseKey, effectiveSlug);
-                      localStorage.setItem(localKey, JSON.stringify(updatedData));
-                    } catch {}
-                  }
-                  onTenantUpdate(modKey, updatedData);
-                } else if (modKey === 'identity') {
-                  // Jika perubahan identitas / status aktif terjadi pada subdomain lain,
-                  // simpan juga ke cache lokal agar list subdomain selalu up-to-date
-                  if (typeof window !== 'undefined') {
-                    try {
-                      localStorage.setItem(`${STORAGE_TENANT_PREFIX}${rowSlug.toLowerCase()}`, JSON.stringify(updatedData));
-                      window.dispatchEvent(new CustomEvent('subdomain_status_changed', {
-                        detail: { storeSlug: rowSlug.toLowerCase(), isActive: updatedData.isActive }
-                      }));
-                      window.dispatchEvent(new CustomEvent('store_tenant_updated', {
-                        detail: updatedData
-                      }));
-                    } catch {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      )
-      .subscribe();
+  const handleSyncEvent = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    if (customEvent.detail && customEvent.detail.slug === effectiveSlug) {
+      onTenantUpdate(customEvent.detail.moduleKey, customEvent.detail.data);
+    }
+  };
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  } catch (err) {
-    console.warn('[CloudSync] Realtime subscription error:', err);
-    return () => {};
-  }
+  window.addEventListener('tenant_cloud_synced', handleSyncEvent);
+
+  return () => {
+    window.removeEventListener('tenant_cloud_synced', handleSyncEvent);
+  };
 }

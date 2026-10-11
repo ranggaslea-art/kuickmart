@@ -192,6 +192,9 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyTargetRowIndex, setHistoryTargetRowIndex] = useState<number | null>(null);
 
+  // Active mode helper
+  const isPoMode = activeSubModule === 'po';
+
   // Form states for creating Purchase / PO
   const [supplierId, setSupplierId] = useState('');
   const [salesmanName, setSalesmanName] = useState('');
@@ -239,11 +242,27 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
-  // Input refs for seamless keyboard navigation across rows
+  // Input refs for seamless keyboard navigation across rows (Enter key behaves like Tab)
   const barcodeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const productSelectRefs = useRef<(HTMLSelectElement | null)[]>([]);
+  const unitSelectRefs = useRef<(HTMLSelectElement | null)[]>([]);
+  const multiplierInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const qtyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const priceInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Header and action refs for Enter-to-Tab navigation
+  const supplierSelectRef = useRef<HTMLSelectElement | null>(null);
+  const salesmanNameInputRef = useRef<HTMLInputElement | null>(null);
+  const salesmanPhoneInputRef = useRef<HTMLInputElement | null>(null);
+  const storeSelectRef = useRef<HTMLSelectElement | null>(null);
+  const invoiceInputRef = useRef<HTMLInputElement | null>(null);
+  const orderDateInputRef = useRef<HTMLInputElement | null>(null);
+  const receivedDateInputRef = useRef<HTMLInputElement | null>(null);
+  const paymentMethodRef = useRef<HTMLSelectElement | null>(null);
+  const paymentStatusRef = useRef<HTMLSelectElement | null>(null);
   const quickSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const notesInputRef = useRef<HTMLInputElement | null>(null);
+  const submitBtnRef = useRef<HTMLButtonElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -659,6 +678,81 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
       updated[rowIndex] = row;
       return updated;
     });
+  };
+
+  // Navigasi Kolom Tabel Pembelian / PO dengan Tombol Enter (Sama persis seperti tombol Tab)
+  const handlePurchaseTableKeyDown = (
+    e: React.KeyboardEvent<HTMLElement>,
+    rowIndex: number,
+    column: 'barcode' | 'product' | 'unit' | 'multiplier' | 'qty' | 'price'
+  ) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      if (e.shiftKey) {
+        // Shift+Enter: Pindah ke kolom sebelumnya (seperti Shift+Tab)
+        if (column === 'price') {
+          qtyInputRefs.current[rowIndex]?.focus();
+          qtyInputRefs.current[rowIndex]?.select();
+        } else if (column === 'qty') {
+          if (multiplierInputRefs.current[rowIndex]) {
+            multiplierInputRefs.current[rowIndex]?.focus();
+            multiplierInputRefs.current[rowIndex]?.select();
+          } else if (unitSelectRefs.current[rowIndex]) {
+            unitSelectRefs.current[rowIndex]?.focus();
+          } else {
+            productSelectRefs.current[rowIndex]?.focus();
+          }
+        } else if (column === 'multiplier') {
+          unitSelectRefs.current[rowIndex]?.focus();
+        } else if (column === 'unit') {
+          productSelectRefs.current[rowIndex]?.focus();
+        } else if (column === 'product') {
+          barcodeInputRefs.current[rowIndex]?.focus();
+          barcodeInputRefs.current[rowIndex]?.select();
+        } else if (column === 'barcode') {
+          if (rowIndex > 0) {
+            priceInputRefs.current[rowIndex - 1]?.focus();
+            priceInputRefs.current[rowIndex - 1]?.select();
+          } else {
+            quickSearchInputRef.current?.focus();
+            quickSearchInputRef.current?.select();
+          }
+        }
+        return;
+      }
+
+      // Enter: Pindah ke kolom berikutnya (sama persis dengan tombol Tab)
+      if (column === 'barcode') {
+        const item = formItems[rowIndex];
+        if (item?.barcode && !item.productId) {
+          handleRowBarcodeLookup(rowIndex);
+        } else {
+          productSelectRefs.current[rowIndex]?.focus();
+        }
+      } else if (column === 'product') {
+        unitSelectRefs.current[rowIndex]?.focus();
+      } else if (column === 'unit') {
+        const item = formItems[rowIndex];
+        const prod = products.find((p) => p.id === item?.productId);
+        const unitOpts = prod ? getProductUnitOptions(prod) : [];
+        if (unitOpts.length > 1 && multiplierInputRefs.current[rowIndex]) {
+          multiplierInputRefs.current[rowIndex]?.focus();
+          multiplierInputRefs.current[rowIndex]?.select();
+        } else {
+          qtyInputRefs.current[rowIndex]?.focus();
+          qtyInputRefs.current[rowIndex]?.select();
+        }
+      } else if (column === 'multiplier') {
+        qtyInputRefs.current[rowIndex]?.focus();
+        qtyInputRefs.current[rowIndex]?.select();
+      } else if (column === 'qty') {
+        priceInputRefs.current[rowIndex]?.focus();
+        priceInputRefs.current[rowIndex]?.select();
+      } else if (column === 'price') {
+        advanceToNextRow(rowIndex);
+      }
+    }
   };
 
   // Advance to next row
@@ -1663,14 +1757,26 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
 
             <form onSubmit={handleSavePurchaseOrder} className="space-y-4 text-xs">
               {/* Supplier & Store Header */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
+              <div className={`grid grid-cols-1 ${isPoMode ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3 bg-stone-50 p-3.5 rounded-2xl border border-stone-200`}>
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Pilih Supplier Pemasok *</label>
                   <select
+                    ref={supplierSelectRef}
                     value={supplierId}
                     onChange={(e) => setSupplierId(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (isPoMode) {
+                          salesmanNameInputRef.current?.focus();
+                          salesmanNameInputRef.current?.select();
+                        } else {
+                          storeSelectRef.current?.focus();
+                        }
+                      }
+                    }}
                     required
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-semibold"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   >
                     {suppliers.map(s => (
                       <option key={s.id} value={s.id}>
@@ -1680,13 +1786,62 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   </select>
                 </div>
 
+                {isPoMode && (
+                  <>
+                    <div>
+                      <label className="block font-semibold text-stone-700 mb-1">Nama Salesman Supplier</label>
+                      <input
+                        ref={salesmanNameInputRef}
+                        type="text"
+                        value={salesmanName}
+                        onChange={(e) => setSalesmanName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            salesmanPhoneInputRef.current?.focus();
+                            salesmanPhoneInputRef.current?.select();
+                          }
+                        }}
+                        placeholder="Nama salesman supplier..."
+                        className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-stone-700 mb-1">No. WhatsApp / HP Salesman</label>
+                      <input
+                        ref={salesmanPhoneInputRef}
+                        type="text"
+                        value={salesmanPhone}
+                        onChange={(e) => setSalesmanPhone(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            storeSelectRef.current?.focus();
+                          }
+                        }}
+                        placeholder="0812-xxxx-xxxx"
+                        className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Cabang Toko Tujuan *</label>
                   <select
+                    ref={storeSelectRef}
                     value={storeId}
                     onChange={(e) => setStoreId(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        invoiceInputRef.current?.focus();
+                        invoiceInputRef.current?.select();
+                      }
+                    }}
                     required
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-semibold"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   >
                     {stores.map(st => (
                       <option key={st.id} value={st.id}>{st.name}</option>
@@ -1695,13 +1850,22 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-stone-700 mb-1">No. Faktur Supplier (Opsional)</label>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    {isPoMode ? 'No. Referensi / PO' : 'No. Faktur Supplier (Opsional)'}
+                  </label>
                   <input
+                    ref={invoiceInputRef}
                     type="text"
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
-                    placeholder="Contoh: INV-IND/26/09"
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-mono"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        orderDateInputRef.current?.focus();
+                      }
+                    }}
+                    placeholder={isPoMode ? 'PO-SALES/01' : 'Contoh: INV-IND/26/09'}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   />
                 </div>
               </div>
@@ -1711,31 +1875,54 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Tanggal Pesan</label>
                   <input
+                    ref={orderDateInputRef}
                     type="date"
                     value={orderDate}
                     onChange={(e) => setOrderDate(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        receivedDateInputRef.current?.focus();
+                      }
+                    }}
                     required
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Tanggal Barang Masuk</label>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    {isPoMode ? 'Target Kirim Barang' : 'Tanggal Barang Masuk'}
+                  </label>
                   <input
+                    ref={receivedDateInputRef}
                     type="date"
                     value={receivedDate}
                     onChange={(e) => setReceivedDate(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        paymentMethodRef.current?.focus();
+                      }
+                    }}
                     required
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   />
                 </div>
 
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Metode Bayar</label>
                   <select
+                    ref={paymentMethodRef}
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        paymentStatusRef.current?.focus();
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   >
                     <option value="tempo">Tempo Kredit (Hutang)</option>
                     <option value="cash">Tunai / Cash</option>
@@ -1746,9 +1933,17 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Status Pembayaran</label>
                   <select
+                    ref={paymentStatusRef}
                     value={paymentStatus}
                     onChange={(e) => setPaymentStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        quickSearchInputRef.current?.focus();
+                        quickSearchInputRef.current?.select();
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   >
                     <option value="unpaid">Belum Lunas (Tempo)</option>
                     <option value="paid">Sudah Lunas</option>
@@ -1795,7 +1990,15 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                         onFocus={() => setIsQuickSearchFocused(true)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            handleQuickSearchSubmit(e);
+                            if (quickSearchQuery.trim()) {
+                              handleQuickSearchSubmit(e);
+                            } else {
+                              e.preventDefault();
+                              if (barcodeInputRefs.current[0]) {
+                                barcodeInputRefs.current[0]?.focus();
+                                barcodeInputRefs.current[0]?.select();
+                              }
+                            }
                           }
                         }}
                         placeholder="Ketik nama barang (contoh: Indomie, Aqua, Minyak) ATAU scan barcode pcs / dusan lalu tekan Enter..."
@@ -1979,12 +2182,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                     type="text"
                                     value={item.barcode || ''}
                                     onChange={(e) => handleRowBarcodeChange(idx, e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleRowBarcodeLookup(idx);
-                                      }
-                                    }}
+                                    onKeyDown={(e) => handlePurchaseTableKeyDown(e, idx, 'barcode')}
                                     onBlur={() => {
                                       if (item.barcode && !item.productId) {
                                         handleRowBarcodeLookup(idx);
@@ -2000,8 +2198,10 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                               <td className="px-3 py-2">
                                 <div className="flex items-center gap-1.5">
                                   <select
+                                    ref={(el) => { productSelectRefs.current[idx] = el; }}
                                     value={item.productId || ''}
                                     onChange={(e) => handleRowProductSelect(idx, e.target.value)}
+                                    onKeyDown={(e) => handlePurchaseTableKeyDown(e, idx, 'product')}
                                     className="flex-1 px-2.5 py-1.5 border border-stone-200 rounded-lg text-xs font-semibold text-stone-900 bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 truncate"
                                   >
                                     <option value="">-- Pilih / Ketik Produk --</option>
@@ -2035,8 +2235,10 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                               {/* 4. Satuan Barang (Pcs, Dus, Karton, dll) */}
                               <td className="px-3 py-2 text-center">
                                 <select
+                                  ref={(el) => { unitSelectRefs.current[idx] = el; }}
                                   value={item.unit || 'Pcs'}
                                   onChange={(e) => handleRowUnitChange(idx, e.target.value)}
+                                  onKeyDown={(e) => handlePurchaseTableKeyDown(e, idx, 'unit')}
                                   className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-xs font-bold text-indigo-700 bg-white focus:ring-1 focus:ring-emerald-500 text-center"
                                 >
                                   {unitOpts.length > 0 && (
@@ -2061,10 +2263,12 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                 <div className="flex items-center justify-center gap-1">
                                   <span className="text-[10px] text-stone-400 font-medium">1 {item.unit} =</span>
                                   <input
+                                    ref={(el) => { multiplierInputRefs.current[idx] = el; }}
                                     type="number"
                                     min="1"
                                     value={item.conversionMultiplier || 1}
                                     onChange={(e) => handleRowMultiplierChange(idx, parseInt(e.target.value) || 1)}
+                                    onKeyDown={(e) => handlePurchaseTableKeyDown(e, idx, 'multiplier')}
                                     className="w-11 px-1 py-1 border border-stone-200 rounded-md text-center font-bold text-xs text-emerald-700 bg-white"
                                   />
                                   <span className="text-[10px] text-stone-600 font-semibold">{item.baseUnit || 'Pcs'}</span>
@@ -2082,13 +2286,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                   min="1"
                                   value={item.quantity}
                                   onChange={(e) => handleRowQtyChange(idx, parseInt(e.target.value) || 1)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      priceInputRefs.current[idx]?.focus();
-                                      priceInputRefs.current[idx]?.select();
-                                    }
-                                  }}
+                                  onKeyDown={(e) => handlePurchaseTableKeyDown(e, idx, 'qty')}
                                   className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-center font-bold text-xs text-stone-900 bg-white focus:ring-1 focus:ring-emerald-500"
                                 />
                               </td>
@@ -2102,12 +2300,7 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                                   step="100"
                                   value={item.costPrice}
                                   onChange={(e) => handleRowPriceChange(idx, parseInt(e.target.value) || 0)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      advanceToNextRow(idx);
-                                    }
-                                  }}
+                                  onKeyDown={(e) => handlePurchaseTableKeyDown(e, idx, 'price')}
                                   className="w-full px-2 py-1.5 border border-stone-200 rounded-lg text-right font-bold text-xs text-emerald-700 bg-white focus:ring-1 focus:ring-emerald-500"
                                 />
                               </td>
@@ -2225,13 +2418,22 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-stone-700 mb-1">Catatan Tambahan Penerimaan</label>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  {isPoMode ? 'Catatan Pesanan PO ke Salesman' : 'Catatan Tambahan Penerimaan'}
+                </label>
                 <input
+                  ref={notesInputRef}
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Contoh: Kondisi karton segel utuh, pengiriman menggunakan truk ekspedisi..."
-                  className="w-full px-3 py-2 border border-stone-200 rounded-xl"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      submitBtnRef.current?.focus();
+                    }
+                  }}
+                  placeholder={isPoMode ? 'Contoh: Mohon dikirim besok pagi, sertakan faktur asli...' : 'Contoh: Kondisi karton segel utuh, pengiriman menggunakan truk ekspedisi...'}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
               </div>
 
@@ -2244,11 +2446,14 @@ export const PurchaseManager: React.FC<PurchaseManagerProps> = ({
                   Batal
                 </button>
                 <button
+                  ref={submitBtnRef}
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  className={`px-6 py-2.5 rounded-xl text-white font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    isPoMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Simpan Faktur & Tambah Stok</span>
+                  <span>{isPoMode ? 'Simpan Pesanan ke Salesman (PO)' : 'Simpan Faktur & Tambah Stok'}</span>
                 </button>
               </div>
             </form>
