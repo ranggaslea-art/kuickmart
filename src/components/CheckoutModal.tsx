@@ -796,7 +796,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <div className="text-[10px] text-stone-600 bg-emerald-50/70 border border-emerald-200/80 p-2 rounded-xl flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 text-emerald-900 font-medium">
                         <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Lokasi ini otomatis tersimpan di tabel pesanan & Supabase untuk rute kurir pengantar.</span>
+                        <span>Lokasi ini otomatis tersimpan di tabel pesanan & database MySQL untuk rute kurir pengantar.</span>
                       </div>
                       <span className="text-stone-400 font-mono text-[9px] shrink-0">{recordedLocation.recordedAt}</span>
                     </div>

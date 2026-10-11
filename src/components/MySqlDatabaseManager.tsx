@@ -328,7 +328,7 @@ export const MySqlDatabaseManager: React.FC<MySqlDatabaseManagerProps> = ({
               <div>
                 <h3 className="text-base font-black text-stone-800">1-Klik Migrasikan Seluruh Data ke MySQL</h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Salin seluruh data dari memori browser/Supabase ke database MariaDB lokal di VPS.
+                  Salin seluruh data dari memori lokal/katalog toko ke database MySQL/MariaDB server di VPS.
                 </p>
               </div>
               <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">

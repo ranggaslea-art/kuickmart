@@ -419,22 +419,34 @@ export function getReceiptFontSizeCss(size?: string, paperWidth?: string): { bas
   if (is58mm) {
     switch (size) {
       case 'compact':
-        return { base: '9.5px', brand: '11.5px', meta: '9px', footer: '8.5px' };
+        return { base: '9px', brand: '10.5px', meta: '8.5px', footer: '8px' };
       case 'large':
-        return { base: '11px', brand: '13px', meta: '10px', footer: '9.5px' };
+        return { base: '10.5px', brand: '12px', meta: '9.5px', footer: '9px' };
       case 'normal':
       default:
-        return { base: '10px', brand: '12px', meta: '9.5px', footer: '9px' };
+        return { base: '9.5px', brand: '11px', meta: '9px', footer: '8.5px' };
     }
   }
+  if (paperWidth === '80mm') {
+    switch (size) {
+      case 'compact':
+        return { base: '10.5px', brand: '12.5px', meta: '9.5px', footer: '9px' };
+      case 'large':
+        return { base: '12px', brand: '14px', meta: '11px', footer: '10px' };
+      case 'normal':
+      default:
+        return { base: '11px', brand: '13px', meta: '10px', footer: '9.5px' };
+    }
+  }
+  // Default: 70mm / TM-U220 Dot Matrix (Roll 76mm, safe 58mm)
   switch (size) {
     case 'compact':
-      return { base: '10.5px', brand: '12.5px', meta: '9.5px', footer: '9px' };
+      return { base: '9.5px', brand: '11.5px', meta: '9px', footer: '8.5px' };
     case 'large':
-      return { base: '12.5px', brand: '14.5px', meta: '11px', footer: '10.5px' };
+      return { base: '11.5px', brand: '13.5px', meta: '10.5px', footer: '9.5px' };
     case 'normal':
     default:
-      return { base: '11.5px', brand: '13.5px', meta: '10px', footer: '9.5px' };
+      return { base: '10.5px', brand: '12px', meta: '9.5px', footer: '9px' };
   }
 }
 
@@ -472,20 +484,20 @@ export function generateCrispDotMatrixReceiptHtml(
   // Penyesuaian Lebar Kertas & Batas Cetak Aman (Mencegah terpotong pada batas kiri & kanan)
   const paperWidthChoice = config.paperWidth || '70mm_dotmatrix';
   let rollWidthMm = 76;
-  let safePrintWidthMm = 64; // Area cetak aman Epson TM-U220 (Head fisik: 63.5mm)
-  let safePaddingLeftMm = 4; // Batas kiri aman dari pisau/tepi
-  let safePaddingRightMm = 4; // Batas kanan aman agar nominal tidak terpotong
+  let safePrintWidthMm = 58; // Area cetak aman Epson TM-U220 (Head fisik: 63.5mm, aman dari margin kiri 4mm & kanan 8.5mm)
+  let safePaddingLeftMm = 2; // Batas kiri aman dari pisau/tepi
+  let safePaddingRightMm = 2; // Batas kanan aman agar nominal tidak terpotong
 
   if (paperWidthChoice === '58mm') {
     rollWidthMm = 58;
-    safePrintWidthMm = 48; // Head fisik thermal 58mm (48mm / 384 dots)
-    safePaddingLeftMm = 2.5;
-    safePaddingRightMm = 2.5;
+    safePrintWidthMm = 44; // Head fisik thermal 58mm (area cetak aman tanpa terpotong tepi)
+    safePaddingLeftMm = 1.5;
+    safePaddingRightMm = 1.5;
   } else if (paperWidthChoice === '80mm') {
     rollWidthMm = 80;
-    safePrintWidthMm = 72; // Head fisik thermal 80mm (72mm / 576 dots)
-    safePaddingLeftMm = 4;
-    safePaddingRightMm = 4;
+    safePrintWidthMm = 66; // Head fisik thermal 80mm (area cetak aman)
+    safePaddingLeftMm = 3;
+    safePaddingRightMm = 3;
   }
 
   // Parameter typografi dinamis sesuai konfigurasi & ukuran kertas
@@ -546,7 +558,7 @@ export function generateCrispDotMatrixReceiptHtml(
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
       font-weight: ${weightCss};
-      overflow: hidden !important;
+      overflow: visible !important;
       box-sizing: border-box !important;
     }
     .text-center { text-align: center !important; }
@@ -579,45 +591,45 @@ export function generateCrispDotMatrixReceiptHtml(
       box-sizing: border-box !important;
     }
     .col-meta-left {
-      width: 58% !important;
+      width: 52% !important;
       text-align: left !important;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      padding-right: 2px !important;
+      padding-right: 1px !important;
     }
     .col-meta-right {
-      width: 42% !important;
+      width: 48% !important;
       text-align: right !important;
       white-space: nowrap;
-      padding-left: 2px !important;
+      padding-left: 1px !important;
     }
     .col-calc-left {
-      width: 58% !important;
+      width: 54% !important;
       text-align: left !important;
-      padding-right: 2px !important;
+      padding-right: 1px !important;
       word-break: break-all;
     }
     .col-calc-right {
-      width: 42% !important;
+      width: 46% !important;
       text-align: right !important;
       white-space: nowrap;
-      padding-left: 2px !important;
+      padding-left: 1px !important;
       font-weight: 900;
     }
     .col-sum-left {
-      width: 54% !important;
+      width: 50% !important;
       text-align: left !important;
-      padding-right: 2px !important;
+      padding-right: 1px !important;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .col-sum-right {
-      width: 46% !important;
+      width: 50% !important;
       text-align: right !important;
       white-space: nowrap;
-      padding-left: 2px !important;
+      padding-left: 1px !important;
     }
 
     /* Garis Pembatas Presisi 100% Lebar Fleksibel Tanpa Terpotong */

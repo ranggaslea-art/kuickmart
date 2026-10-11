@@ -289,20 +289,20 @@ export function generateDotMatrixReceiptHtml(
   const lineSpacingVal = config.lineSpacing === 'compact' ? '1.05' : config.lineSpacing === 'relaxed' ? '1.20' : '1.12';
 
   let rollWidthMm = 76;
-  let safePrintWidthMm = 64; // Area cetak aman TM-U220
-  let safePaddingLeftMm = 4;
-  let safePaddingRightMm = 4;
+  let safePrintWidthMm = 58; // Area cetak aman TM-U220
+  let safePaddingLeftMm = 2;
+  let safePaddingRightMm = 2;
 
   if (paperWidthChoice === '58mm') {
     rollWidthMm = 58;
-    safePrintWidthMm = 48; // Area cetak aman thermal 58mm
-    safePaddingLeftMm = 2.5;
-    safePaddingRightMm = 2.5;
+    safePrintWidthMm = 44; // Area cetak aman thermal 58mm
+    safePaddingLeftMm = 1.5;
+    safePaddingRightMm = 1.5;
   } else if (paperWidthChoice === '80mm') {
     rollWidthMm = 80;
-    safePrintWidthMm = 72; // Area cetak aman thermal 80mm
-    safePaddingLeftMm = 4;
-    safePaddingRightMm = 4;
+    safePrintWidthMm = 66; // Area cetak aman thermal 80mm
+    safePaddingLeftMm = 3;
+    safePaddingRightMm = 3;
   }
 
   return `<!DOCTYPE html>
@@ -354,7 +354,7 @@ export function generateDotMatrixReceiptHtml(
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
       font-weight: ${weightCss};
-      overflow: hidden !important;
+      overflow: visible !important;
       box-sizing: border-box !important;
     }
     .text-center { text-align: center !important; }
@@ -410,17 +410,17 @@ export function generateDotMatrixReceiptHtml(
       box-sizing: border-box !important;
     }
     .col-meta-l {
-      width: 58% !important;
+      width: 52% !important;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      padding-right: 2px !important;
+      padding-right: 1px !important;
     }
     .col-meta-r {
-      width: 42% !important;
+      width: 48% !important;
       text-align: right !important;
       white-space: nowrap;
-      padding-left: 2px !important;
+      padding-left: 1px !important;
     }
     .item-row-title {
       font-weight: 900;
@@ -438,17 +438,17 @@ export function generateDotMatrixReceiptHtml(
     }
     .item-calc-col {
       display: table-cell !important;
-      width: 60% !important;
+      width: 54% !important;
       word-break: break-all;
-      padding-right: 2px !important;
+      padding-right: 1px !important;
     }
     .item-subtotal-col {
       display: table-cell !important;
-      width: 40% !important;
+      width: 46% !important;
       text-align: right !important;
       white-space: nowrap;
       font-weight: 900;
-      padding-left: 2px !important;
+      padding-left: 1px !important;
     }
     .total-row {
       font-size: ${fontSizes.brand};
@@ -553,22 +553,22 @@ export function generateDotMatrixReceiptHtml(
 
     <table class="summary-table">
       <tr>
-        <td style="width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">TOTAL ITEM</td>
-        <td style="width: 45%; text-align: right; white-space: nowrap;">${order.items.length} ITEM (${order.items.reduce((acc, i) => acc + i.quantity, 0)} QTY)</td>
+        <td style="width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">TOTAL ITEM</td>
+        <td style="width: 50%; text-align: right; white-space: nowrap;">${order.items.length} ITEM (${order.items.reduce((acc, i) => acc + i.quantity, 0)} QTY)</td>
       </tr>
       <tr>
-        <td style="width: 55%;">SUBTOTAL</td>
-        <td style="width: 45%; text-align: right; white-space: nowrap;">${formatRupiah(order.subtotal)}</td>
+        <td style="width: 50%;">SUBTOTAL</td>
+        <td style="width: 50%; text-align: right; white-space: nowrap;">${formatRupiah(order.subtotal)}</td>
       </tr>
       ${order.discountAmount > 0 ? `
       <tr>
-        <td style="width: 55%;">DISKON</td>
-        <td style="width: 45%; text-align: right; white-space: nowrap;">-${formatRupiah(order.discountAmount)}</td>
+        <td style="width: 50%;">DISKON</td>
+        <td style="width: 50%; text-align: right; white-space: nowrap;">-${formatRupiah(order.discountAmount)}</td>
       </tr>` : ''}
       ${config.showTaxSummary && (config.taxRatePercent || 0) > 0 ? `
       <tr>
-        <td style="width: 55%;">PPN (${config.taxRatePercent}%)</td>
-        <td style="width: 45%; text-align: right; white-space: nowrap;">${formatRupiah(Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)))}</td>
+        <td style="width: 50%;">PPN (${config.taxRatePercent}%)</td>
+        <td style="width: 50%; text-align: right; white-space: nowrap;">${formatRupiah(Math.round(order.subtotal * ((config.taxRatePercent || 11) / 100)))}</td>
       </tr>` : ''}
     </table>
 
@@ -576,21 +576,21 @@ export function generateDotMatrixReceiptHtml(
 
     <table class="summary-table">
       <tr class="total-row">
-        <td style="width: 55%;">TOTAL BAYAR</td>
-        <td style="width: 45%; text-align: right; font-bold; white-space: nowrap;">${formatRupiah(order.total)}</td>
+        <td style="width: 50%;">TOTAL BAYAR</td>
+        <td style="width: 50%; text-align: right; font-bold; white-space: nowrap;">${formatRupiah(order.total)}</td>
       </tr>
       <tr>
-        <td style="width: 55%;">CARA BAYAR</td>
-        <td style="width: 45%; text-align: right; font-bold; white-space: nowrap;">${(order.paymentMethod || 'TUNAI').toUpperCase()}</td>
+        <td style="width: 50%;">CARA BAYAR</td>
+        <td style="width: 50%; text-align: right; font-bold; white-space: nowrap;">${(order.paymentMethod || 'TUNAI').toUpperCase()}</td>
       </tr>
       ${paymentDetails && paymentDetails.cashReceived !== undefined && paymentDetails.cashReceived > 0 ? `
       <tr>
-        <td style="width: 55%;">TUNAI DITERIMA</td>
-        <td style="width: 45%; text-align: right; white-space: nowrap;">${formatRupiah(paymentDetails.cashReceived)}</td>
+        <td style="width: 50%;">TUNAI DITERIMA</td>
+        <td style="width: 50%; text-align: right; white-space: nowrap;">${formatRupiah(paymentDetails.cashReceived)}</td>
       </tr>
       <tr>
-        <td style="width: 55%;">KEMBALIAN</td>
-        <td style="width: 45%; text-align: right; font-bold; white-space: nowrap;">${formatRupiah(paymentDetails.changeAmount || 0)}</td>
+        <td style="width: 50%;">KEMBALIAN</td>
+        <td style="width: 50%; text-align: right; font-bold; white-space: nowrap;">${formatRupiah(paymentDetails.changeAmount || 0)}</td>
       </tr>` : ''}
     </table>
 
@@ -609,13 +609,13 @@ export function generateDotMatrixReceiptHtml(
         <td style="width: 46%; text-align: center; vertical-align: top;">
           <div style="font-weight: 700; font-size: ${fontSizes.meta};">Kasir,</div>
           <div style="height: 22px;"></div>
-          <div style="border-top: 1px dashed #000000; width: 90%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierName || config.cashierName || 'Kasir 01'} )</div>
+          <div style="border-top: 1px dashed #000000; width: 85%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${cashierName || config.cashierName || 'Kasir 01'} )</div>
         </td>
         <td style="width: 8%;"></td>
         <td style="width: 46%; text-align: center; vertical-align: top;">
           <div style="font-weight: 700; font-size: ${fontSizes.meta};">Pelanggan,</div>
           <div style="height: 22px;"></div>
-          <div style="border-top: 1px dashed #000000; width: 90%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${order.customerName || 'Pelanggan'} )</div>
+          <div style="border-top: 1px dashed #000000; width: 85%; margin: 0 auto; padding-top: 2px; font-weight: 900; font-size: ${fontSizes.meta}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">( ${order.customerName || 'Pelanggan'} )</div>
         </td>
       </tr>
     </table>
@@ -664,8 +664,8 @@ export function printPosReceiptViaIframe(htmlContent: string): Promise<boolean> 
       iframe.style.position = 'fixed';
       iframe.style.right = '0';
       iframe.style.bottom = '0';
-      iframe.style.width = '80mm';
-      iframe.style.height = '200mm';
+      iframe.style.width = '85mm';
+      iframe.style.height = '260mm';
       iframe.style.opacity = '0.01';
       iframe.style.border = 'none';
       iframe.style.pointerEvents = 'none';

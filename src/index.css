@@ -150,15 +150,17 @@ body {
   /* Khusus Struk Kasir POS Thermal / Dot Matrix (jika diaktifkan) */
   body.printing-receipt,
   .dotmatrix-receipt-area {
-    width: 72mm !important;
-    max-width: 72mm !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
     margin: 0 auto !important;
-    padding: 2mm 1mm !important;
+    padding: 1.5mm 2mm !important;
     font-family: 'Courier New', Courier, 'Lucida Console', Monaco, monospace !important;
     color: #000000 !important;
-    font-size: 11px !important;
+    font-size: 10.5px !important;
     line-height: 1.15 !important;
     font-weight: bold !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
   }
 
   /* Komponen Penandatanganan Struk Horizontal (Kasir & Pelanggan Sejajar) */

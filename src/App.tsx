@@ -708,10 +708,23 @@ export default function App() {
     localStorage.setItem(key, JSON.stringify(staffUsers));
   }, [staffUsers, currentSlug]);
 
+  // MySQL Database Connection State
+  const [isDatabaseConnected, setIsDatabaseConnected] = useState(true);
+
   // Supabase State
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false);
+
+  useEffect(() => {
+    import('./lib/mysqlClientApi').then(({ fetchMySqlStatus }) => {
+      fetchMySqlStatus().then((res) => {
+        setIsDatabaseConnected(Boolean(res.connected));
+      }).catch(() => {
+        setIsDatabaseConnected(false);
+      });
+    }).catch(() => {});
+  }, []);
 
   // Load all live catalog & system data from Supabase
   const loadAllFromSupabase = async () => {
@@ -1613,19 +1626,23 @@ export default function App() {
       stamps: Math.min(5, prev.stamps + (newOrder.subtotal >= 50000 ? 1 : 0)),
     }));
 
-    // Simpan pengurangan stok & penambahan barang terjual ke database Supabase
+    // Simpan pengurangan stok & penambahan barang terjual ke database MySQL
     if (updatedProducts.length > 0) {
-      updatedProducts.forEach((p) => {
-        saveProductToSupabase(p).catch((err) => {
-          console.warn(`Gagal memperbarui stok/terjual ${p.name} ke database:`, err);
+      import('./lib/mysqlClientApi').then(({ saveProductToMySql }) => {
+        updatedProducts.forEach((p) => {
+          saveProductToMySql(p, currentSlug).catch((err) => {
+            console.warn(`Gagal memperbarui stok/terjual ${p.name} ke database MySQL:`, err);
+          });
         });
-      });
+      }).catch(() => {});
     }
 
-    // Sync order beserta rincian barang terjual ke Supabase
-    syncOrderToSupabase(newOrder).catch((err) => {
-      console.warn('Gagal sinkronisasi transaksi pesanan ke Supabase:', err);
-    });
+    // Sync order beserta rincian barang terjual ke MySQL
+    import('./lib/mysqlClientApi').then(({ saveOrderToMySql }) => {
+      saveOrderToMySql(newOrder, currentSlug).catch((err) => {
+        console.warn('Gagal sinkronisasi transaksi pesanan ke MySQL:', err);
+      });
+    }).catch(() => {});
 
     // Open live tracker immediately
     setTrackedOrder(newOrder);
@@ -1633,9 +1650,12 @@ export default function App() {
 
   const handleAddOrder = (newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
-    syncOrderToSupabase(newOrder).catch((err) => {
-      console.warn('Gagal sinkronisasi transaksi kasir ke Supabase:', err);
-    });
+    // Simpan langsung ke database MySQL Server
+    import('./lib/mysqlClientApi').then(({ saveOrderToMySql }) => {
+      saveOrderToMySql(newOrder, currentSlug).catch((err) => {
+        console.warn('Gagal sinkronisasi transaksi kasir ke MySQL:', err);
+      });
+    }).catch(() => {});
   };
 
   const handleUpdateOrderStatus = (orderId: string, newStatus: OrderStatus) => {
@@ -1832,7 +1852,10 @@ export default function App() {
         onOpenMemberModal={() => setIsMemberModalOpen(true)}
         cartItems={cartItems}
         onOpenCart={() => setIsCartOpen(true)}
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        onOpenDatabaseManager={() => {
+          setAdminPanelInitialTab('mysql_db');
+          setIsAdminPanelOpen(true);
+        }}
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
         onOpenSubdomains={() => {
           setAdminPanelInitialTab('subdomains');
@@ -1843,7 +1866,7 @@ export default function App() {
           setIsAdminPanelOpen(true);
         }}
         onOpenLiveTrafficModal={() => setIsLiveTrafficModalOpen(true)}
-        isSupabaseConnected={isSupabaseConnected}
+        isDatabaseConnected={isDatabaseConnected}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onOpenOrderHistory={() => setIsViewingOrderHistory(true)}
@@ -2223,7 +2246,7 @@ export default function App() {
               </div>
             </div>
             <p className="text-stone-500 leading-relaxed">
-              {brandConfig.footerDescription || 'Platform belanja minimarket online modern seperti Klik Indomaret & Alfagift dengan integrasi Supabase cloud database, pengiriman instan 30 menit, dan promo JSM hemat.'}
+              {brandConfig.footerDescription || 'Platform belanja minimarket online modern seperti Klik Indomaret & Alfagift dengan integrasi MySQL database server, pengiriman instan 30 menit, dan promo JSM hemat.'}
             </p>
           </div>
 
@@ -2491,7 +2514,7 @@ export default function App() {
           onUpdateStores={handleUpdateStores}
           vouchers={vouchers}
           onUpdateVouchers={handleUpdateVouchers}
-          isSupabaseConnected={isSupabaseConnected}
+          isDatabaseConnected={isDatabaseConnected}
           receiptConfigs={receiptConfigs}
           onUpdateReceiptConfigs={handleUpdateReceiptConfigs}
           storePromos={storePromos}
@@ -2507,10 +2530,6 @@ export default function App() {
           brands={brands}
           onUpdateBrands={handleUpdateBrands}
           initialTab={adminPanelInitialTab}
-          onOpenSupabaseModal={() => {
-            setIsAdminPanelOpen(false);
-            setIsSupabaseModalOpen(true);
-          }}
         />
       </ErrorBoundary>
 

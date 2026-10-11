@@ -44,9 +44,7 @@ interface HeaderProps {
   onOpenPosCashier?: () => void;
   onOpenLiveTrafficModal?: () => void;
   onOpenDatabaseManager?: () => void;
-  onOpenSupabaseModal?: () => void;
   isDatabaseConnected?: boolean;
-  isSupabaseConnected?: boolean;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onOpenOrderHistory: () => void;
@@ -71,13 +69,11 @@ export const Header: React.FC<HeaderProps> = ({
   cartItems,
   onOpenCart,
   onOpenDatabaseManager,
-  onOpenSupabaseModal,
   onOpenAdminPanel,
   onOpenSubdomains,
   onOpenPosCashier,
   onOpenLiveTrafficModal,
   isDatabaseConnected,
-  isSupabaseConnected,
   searchQuery,
   onSearchChange,
   onOpenOrderHistory,
@@ -463,8 +459,8 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Tombol Status Database MySQL & Sinkronisasi */}
             <OfflineSyncBadge 
               className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" 
-              isDatabaseConnected={isDatabaseConnected ?? isSupabaseConnected}
-              onOpenDatabaseManager={onOpenDatabaseManager || onOpenSupabaseModal}
+              isDatabaseConnected={isDatabaseConnected}
+              onOpenDatabaseManager={onOpenDatabaseManager}
             />
 
             {/* Tombol Segarkan Data Real-time (Sangat berguna di HP untuk update instan) */}
