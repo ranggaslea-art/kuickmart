@@ -3982,10 +3982,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           <div><strong>Metode:</strong> {order.paymentMethod.toUpperCase()} ({order.paymentStatus})</div>
                           <div><strong>Tipe:</strong> {order.deliveryType === 'delivery' ? 'Antar ke Rumah' : 'Ambil di Toko'}</div>
                           <div>
-                            <strong>Cabang Toko:</strong> <span className="font-semibold text-emerald-800">{order.store.name}</span>
+                            <strong>Cabang Toko:</strong> <span className="font-semibold text-emerald-800">{order.store?.name || 'Cabang Toko'}</span>
                           </div>
                           <div>
-                            <strong>No. Telepon / WA Toko:</strong> <span className="font-mono font-bold text-stone-900 bg-white border border-stone-200 px-1.5 py-0.5 rounded text-[10px]">{order.store.phone || order.store.whatsapp || '-'}</span>
+                            <strong>No. Telepon / WA Toko:</strong> <span className="font-mono font-bold text-stone-900 bg-white border border-stone-200 px-1.5 py-0.5 rounded text-[10px]">{order.store?.phone || order.store?.whatsapp || '-'}</span>
                           </div>
                           {order.address && (
                             <div><strong>Alamat:</strong> {order.address.fullAddress}</div>

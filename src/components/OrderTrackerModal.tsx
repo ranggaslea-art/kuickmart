@@ -77,7 +77,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
   const handleCopyStorePhone = () => {
     if (!order) return;
-    const phone = order.store.phone || order.store.whatsapp || '';
+    const phone = order.store?.phone || order.store?.whatsapp || '';
     navigator.clipboard.writeText(phone);
     setCopiedStorePhone(true);
     setTimeout(() => setCopiedStorePhone(false), 2000);
@@ -93,7 +93,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     const message = generateOrderWhatsAppMessage({
       driverName: order.driver.name,
       orderNumber: order.orderNumber,
-      storeName: order.store.name,
+      storeName: order.store?.name || 'toko-online.online',
       destinationAddress: order.address?.fullAddress,
       customerName: order.address?.recipientName,
       isCallRequest: false
@@ -113,7 +113,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     const message = generateOrderWhatsAppMessage({
       driverName: order.driver.name,
       orderNumber: order.orderNumber,
-      storeName: order.store.name,
+      storeName: order.store?.name || 'toko-online.online',
       destinationAddress: order.address?.fullAddress,
       customerName: order.address?.recipientName,
       isCallRequest: true
@@ -148,8 +148,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
     // 2. Match by store id or store name
     const matchByStore = list?.find(
-      r => (r.storeId && r.storeId !== 'all' && r.storeId === order?.store.id) || 
-           (r.storeName && order?.store.name && r.storeName.toLowerCase() === order?.store.name.toLowerCase())
+      r => (r.storeId && r.storeId !== 'all' && r.storeId === order?.store?.id) || 
+           (r.storeName && order?.store?.name && r.storeName.toLowerCase() === order?.store?.name.toLowerCase())
     );
     if (matchByStore) return matchByStore;
 
@@ -160,11 +160,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     return {
       id: 'default_rcp',
       profileName: 'Struk Standar',
-      headerBrand: order?.store.name || 'STRUK PENJUALAN',
-      storeName: order?.store.name || '',
-      address: order?.store.address || '',
-      city: order?.store.city || '',
-      phone: order?.store.phone || '',
+      headerBrand: order?.store?.name || 'STRUK PENJUALAN',
+      storeName: order?.store?.name || '',
+      address: order?.store?.address || '',
+      city: order?.store?.city || '',
+      phone: order?.store?.phone || '',
       footerMessage1: 'Terima kasih telah berbelanja.',
       showBarcode: true,
     };
@@ -257,7 +257,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-stone-500 mt-0.5">
-              Dipesan pada {formatDateTime(order.createdAt)} • {order.store.name}
+              Dipesan pada {formatDateTime(order.createdAt)} • {order.store?.name || 'Cabang Toko'}
             </p>
           </div>
 
@@ -317,8 +317,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
                   <p className="text-xs text-stone-300">
                     {order.deliveryType === 'delivery'
-                      ? `Dikirim ke: ${order.address?.fullAddress}`
-                      : `Lokasi: ${order.store.address}`}
+                      ? `Dikirim ke: ${order.address?.fullAddress || '-'}`
+                      : `Lokasi: ${order.store?.address || 'Outlet Toko'}`}
                   </p>
                 </div>
 
@@ -357,13 +357,13 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                           {order.deliveryType === 'delivery' ? '🛵 Pesanan Diantar Kurir' : '🛍️ Pesanan Ambil di Toko'}
                         </span>
                       </div>
-                      <h4 className="text-sm font-black text-stone-900 mt-1">{order.store.name}</h4>
-                      <p className="text-xs text-stone-600">{order.store.address}</p>
+                      <h4 className="text-sm font-black text-stone-900 mt-1">{order.store?.name || 'Cabang Toko'}</h4>
+                      <p className="text-xs text-stone-600">{order.store?.address || '-'}</p>
                       
                       <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
                         <span className="text-stone-500 font-semibold">Nomor WhatsApp Toko:</span>
                         <span className="font-mono font-bold text-emerald-900 bg-white border border-emerald-200 px-2 py-0.5 rounded-md shadow-2xs">
-                          {order.store.phone || order.store.whatsapp || '0812-3456-7890'}
+                          {order.store?.phone || order.store?.whatsapp || '0812-3456-7890'}
                         </span>
                         <button
                           type="button"
@@ -392,7 +392,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
                     {/* Tombol Telepon Seluler Toko */}
                     <a
-                      href={`tel:${(order.store.phone || order.store.whatsapp || '').replace(/[^0-9+]/g, '')}`}
+                      href={`tel:${(order.store?.phone || order.store?.whatsapp || '').replace(/[^0-9+]/g, '')}`}
                       className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 flex items-center justify-center gap-1.5 text-xs font-bold transition-all shadow-2xs cursor-pointer"
                       title="Panggilan Telepon ke Cabang Toko"
                     >

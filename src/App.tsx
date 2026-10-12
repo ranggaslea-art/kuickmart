@@ -175,6 +175,43 @@ const sanitizeStores = (list: Store[]): Store[] => {
   }));
 };
 
+const normalizeOrder = (ord: any, fallbackStore?: Store): Order => {
+  if (!ord) return {} as Order;
+  const store: Store = (ord.store && ord.store.name)
+    ? ord.store
+    : (fallbackStore || INITIAL_STORES[0] || {
+        id: ord.storeId || 'str_01',
+        name: 'toko-online.online - Sudirman Thamrin',
+        code: 'TO-SDM01',
+        address: 'Jl. Jendral Sudirman No. 18, Menteng',
+        city: 'Jakarta Pusat',
+        distanceKm: 0.7,
+        is24Hours: true,
+        isOpen: true,
+        openHours: '24 Jam Nonstop',
+        phone: '0812-3456-7890',
+        whatsapp: '0812-3456-7890',
+        readyForPickup: true,
+        readyForDelivery: true,
+        deliveryFee: 6000,
+        minOrder: 15000,
+      });
+
+  return {
+    ...ord,
+    id: ord.id || `ord_${Date.now()}`,
+    orderNumber: ord.orderNumber || ord.id || `KM-${Date.now()}`,
+    createdAt: ord.createdAt || ord.date || new Date().toISOString(),
+    store,
+    deliveryType: ord.deliveryType === 'pickup' ? 'pickup' : 'delivery',
+    status: ord.status || 'processing',
+    subtotal: Number(ord.subtotal) || Number(ord.total) || 0,
+    total: Number(ord.total) || Number(ord.finalTotal) || 0,
+    items: Array.isArray(ord.items) ? ord.items : [],
+    trackingSteps: Array.isArray(ord.trackingSteps) ? ord.trackingSteps : [],
+  };
+};
+
 export default function App() {
   const currentSlug = getStoreSlugFromUrl();
   const isNewStore = !isDefaultStore(currentSlug);
@@ -332,7 +369,7 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return parsed.map((o: any) => normalizeOrder(o));
       } catch (e) {
         console.error('Failed to parse saved orders:', e);
       }
@@ -341,7 +378,7 @@ export default function App() {
     if (isNewStore) {
       return [];
     }
-    return INITIAL_SAMPLE_ORDERS;
+    return INITIAL_SAMPLE_ORDERS.map(o => normalizeOrder(o));
   });
 
   // Filters & Search
@@ -735,9 +772,10 @@ export default function App() {
       }
 
       if (dbOrders && dbOrders.length > 0) {
-        setOrders(dbOrders);
+        const normalized = dbOrders.map((o: any) => normalizeOrder(o, currentStore));
+        setOrders(normalized);
         try {
-          localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(dbOrders));
+          localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(normalized));
         } catch {}
       }
 
@@ -1812,7 +1850,7 @@ export default function App() {
                       </span>
                     </div>
                     <p className="text-[11px] text-blue-100 mt-0.5">
-                      {myActiveOrders[0].store.name} • Klik untuk lihat live status & struk
+                      {myActiveOrders[0]?.store?.name || currentStore?.name || 'Cabang Toko'} • Klik untuk lihat live status & struk
                     </p>
                   </div>
                 </div>
@@ -1851,7 +1889,7 @@ export default function App() {
                   )}
                 </div>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Menampilkan {filteredProducts.length} produk siap antar langsung dari {currentStore.name}
+                  Menampilkan {filteredProducts.length} produk siap antar langsung dari {currentStore?.name || 'Cabang Toko'}
                 </p>
               </div>
 

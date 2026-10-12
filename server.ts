@@ -2526,22 +2526,46 @@ async function startServer() {
         try {
           parsedItems = typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []);
         } catch (_) {}
+
+        const fallbackStore = {
+          id: r.store_id || 'str_01',
+          name: 'toko-online.online - Sudirman Thamrin',
+          code: 'TO-SDM01',
+          address: 'Jl. Jendral Sudirman No. 18, Menteng',
+          city: 'Jakarta Pusat',
+          distanceKm: 0.7,
+          is24Hours: true,
+          isOpen: true,
+          openHours: '24 Jam Nonstop',
+          phone: '0812-3456-7890',
+          whatsapp: '0812-3456-7890',
+          readyForPickup: true,
+          readyForDelivery: true,
+          deliveryFee: 6000,
+          minOrder: 15000,
+        };
+
         return {
           id: r.id,
           orderNumber: r.order_number || r.id,
           date: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
           customerName: r.customer_name || 'Pelanggan Toko',
           customerPhone: r.customer_phone || '',
           customerAddress: r.customer_address || '',
           total: Number(r.total_amount) || 0,
+          subtotal: Number(r.total_amount) || 0,
           discount: Number(r.discount_amount) || 0,
+          discountAmount: Number(r.discount_amount) || 0,
           tax: Number(r.tax_amount) || 0,
           finalTotal: Number(r.final_amount) || Number(r.total_amount) || 0,
           paymentMethod: r.payment_method || 'qris',
-          paymentStatus: r.payment_status || 'COMPLETED',
-          status: r.order_status || 'COMPLETED',
+          paymentStatus: r.payment_status || 'paid',
+          status: r.order_status || 'completed',
           cashierName: r.cashier_name || '',
-          storeId: r.store_id || '',
+          storeId: r.store_id || 'str_01',
+          store: fallbackStore,
+          deliveryType: 'delivery',
           items: parsedItems,
           notes: r.notes || '',
         };

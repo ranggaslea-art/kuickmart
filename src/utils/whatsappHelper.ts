@@ -70,14 +70,17 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
     : '🛍️ *PESANAN DIAMBIL SENDIRI DI TOKO (SELF PICKUP / CLICK & COLLECT)*';
 
   const orderTimeStr = order.createdAt ? formatDateTime(order.createdAt) : new Date().toLocaleString('id-ID');
+  const storeName = order.store?.name || 'toko-online.online';
+  const storeAddress = order.store?.address || '-';
+  const storePhone = order.store?.phone || order.store?.whatsapp || '-';
 
   const lines: string[] = [
     `🔔 *PESANAN BARU MASUK!*`,
-    `🏪 *Cabang Toko:* *${order.store.name}*`,
-    `📍 *Alamat Toko:* ${order.store.address || '-'}`,
-    `📞 *Kontak Toko:* ${order.store.phone || order.store.whatsapp || '-'}`,
+    `🏪 *Cabang Toko:* *${storeName}*`,
+    `📍 *Alamat Toko:* ${storeAddress}`,
+    `📞 *Kontak Toko:* ${storePhone}`,
     `========================================`,
-    `🧾 *No. Pesanan:* *#${order.orderNumber}*`,
+    `🧾 *No. Pesanan:* *#${order.orderNumber || '-'}*`,
     `📅 *Waktu Pesanan:* ${orderTimeStr}`,
     `📦 *Tipe Layanan:* ${typeHeader}`,
     `========================================`,
@@ -107,14 +110,14 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
       lines.push(`🗺️ *Titik Google Maps Rumah:* ${mapsLink}`);
     }
     if (order.driver) {
-      lines.push(`🛵 *Kurir Ditugaskan:* ${order.driver.name} (${order.driver.phone || order.driver.whatsapp || '-'}) [Plat: ${order.driver.vehiclePlate}]`);
+      lines.push(`🛵 *Kurir Ditugaskan:* ${order.driver.name || 'Kurir'} (${order.driver.phone || order.driver.whatsapp || '-'}) [Plat: ${order.driver.vehiclePlate || '-'}]`);
     }
   } else {
     lines.push(`🛍️ *DATA PENGAMBILAN DI TOKO:*`);
     if (order.pickupTime) {
       lines.push(`⏰ *Jadwal Siap Ambil:* ${order.pickupTime}`);
     }
-    lines.push(`👤 *Nama Pelanggan:* ${order.customerName} (${order.customerPhone || '-'})`);
+    lines.push(`👤 *Nama Pelanggan:* ${order.customerName || 'Pelanggan'} (${order.customerPhone || '-'})`);
     lines.push(`ℹ️ *Petunjuk:* Pelanggan akan menunjukkan barcode / nomor #${order.orderNumber} saat tiba di kasir.`);
   }
 
@@ -128,10 +131,11 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
   if (order.items && order.items.length > 0) {
     order.items.forEach((item, idx) => {
       const qty = item.quantity;
-      const unit = item.selectedUnit || item.product.unit || 'pcs';
-      const price = item.unitPrice || item.product.price || 0;
+      const unit = item.selectedUnit || item.product?.unit || 'pcs';
+      const price = item.unitPrice || item.product?.price || 0;
       const subtotal = qty * price;
-      let row = `${idx + 1}. *${item.product.name}*\n   ↳ Qty: *${qty} ${unit}* @ ${formatRupiah(price)} = *${formatRupiah(subtotal)}*`;
+      const prodName = item.product?.name || 'Produk';
+      let row = `${idx + 1}. *${prodName}*\n   ↳ Qty: *${qty} ${unit}* @ ${formatRupiah(price)} = *${formatRupiah(subtotal)}*`;
       if (item.conversionDescription) {
         row += `\n   📦 _(${item.conversionDescription})_`;
       }
@@ -146,7 +150,7 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
 
   lines.push(`========================================`);
   lines.push(`💰 *RINGKASAN PEMBAYARAN:*`);
-  lines.push(`• Subtotal Barang: ${formatRupiah(order.subtotal)}`);
+  lines.push(`• Subtotal Barang: ${formatRupiah(order.subtotal || 0)}`);
   if (order.deliveryFee && order.deliveryFee > 0) {
     lines.push(`• Ongkos Kirim Kurir: ${formatRupiah(order.deliveryFee)}`);
   }
@@ -156,11 +160,11 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
   if (order.pointsUsed && order.pointsUsed > 0) {
     lines.push(`• Potongan Poin Member: -${formatRupiah(order.pointsUsed)}`);
   }
-  lines.push(`• *TOTAL DIBAYAR:* *${formatRupiah(order.total)}*`);
-  lines.push(`• *Metode Bayar:* ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'QRIS'}`);
+  lines.push(`• *TOTAL DIBAYAR:* *${formatRupiah(order.total || 0)}*`);
+  lines.push(`• *Metode Bayar:* ${order.paymentMethod ? String(order.paymentMethod).toUpperCase() : 'QRIS'}`);
   lines.push(`• *Status Bayar:* ${order.paymentStatus === 'paid' ? '✅ LUNAS / TERVERIFIKASI' : '⏳ MENUNGGU / BAYAR DI TEMPAT'}`);
   lines.push(`========================================`);
-  lines.push(`🙏 Mohon tim *${order.store.name}* segera memproses & menyiapkan pesanan ini. Terima kasih! 🛒✨`);
+  lines.push(`🙏 Mohon tim *${storeName}* segera memproses & menyiapkan pesanan ini. Terima kasih! 🛒✨`);
 
   return lines.join('\n');
 }
@@ -169,6 +173,7 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
  * Menghasilkan link WhatsApp lengkap menuju Nomor Telepon / WA Cabang Toko
  */
 export function getStoreWhatsAppUrl(order: Order): string {
+  if (!order) return '';
   const phone = extractWhatsAppNumber(order.store);
   const message = generateStoreOrderWhatsAppMessage(order);
   return getWhatsAppChatUrl(phone, message);
@@ -178,14 +183,19 @@ export function getStoreWhatsAppUrl(order: Order): string {
  * Membuka langsung WhatsApp ke Nomor Telepon / WhatsApp Cabang Toko
  */
 export function openStoreOrderWhatsApp(order: Order): boolean {
+  if (!order) return false;
   const phone = extractWhatsAppNumber(order.store);
   const message = generateStoreOrderWhatsAppMessage(order);
   const url = getWhatsAppChatUrl(phone, message);
   if (!url) {
-    alert('Nomor Telepon / WhatsApp Cabang Toko tidak valid.');
+    console.warn('Nomor Telepon / WhatsApp Cabang Toko tidak valid.');
     return false;
   }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  try {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (err) {
+    console.warn('Gagal membuka WhatsApp:', err);
+  }
   return true;
 }
 
