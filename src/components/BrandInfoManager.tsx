@@ -34,6 +34,7 @@ import { INITIAL_BRAND_CONFIG } from '../data/mockData';
 import { compressImageFile } from '../utils/imageHelper';
 import { updateAddressBarFavicon } from '../utils/faviconHelper';
 import { saveAppSettingsToDatabase } from '../utils/appSettingsDatabase';
+import { getStoreSlugFromUrl, getTenantStorageKey } from '../utils/tenantHelper';
 
 interface BrandInfoManagerProps {
   brandConfig: BrandHeaderFooterConfig;

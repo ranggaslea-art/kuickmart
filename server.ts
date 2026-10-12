@@ -3480,8 +3480,8 @@ async function startServer() {
     }
   });
 
-  // Dynamic Favicon Route - Logo address bar mengikuti database
-  app.get(['/favicon.ico', '/favicon.png'], (req, res, next) => {
+  // Dynamic Favicon Route - Logo address bar mengikuti database & modul Header Toko
+  app.get(['/favicon.ico', '/favicon.png', '/icon.svg', '/apple-touch-icon.png', '/pwa-192x192.png'], (req, res, next) => {
     try {
       const host = (req.headers['host'] || '').split(':')[0].toLowerCase();
       let slug = 'default';
@@ -3494,7 +3494,7 @@ async function startServer() {
 
       const settings = appSettingsMap[slug] || appSettingsMap['default'] || {};
       const tenant = tenantStoreMap[slug] || tenantStoreMap['default'] || {};
-      const logoUrl = settings.brandConfig?.brandLogoImageUrl || tenant.logoUrl;
+      const logoUrl = settings.brandConfig?.brandLogoImageUrl || tenant.logoUrl || '/logo.png';
 
       if (logoUrl && typeof logoUrl === 'string') {
         if (logoUrl.startsWith('data:image/png;base64,')) {
@@ -3516,7 +3516,23 @@ async function startServer() {
           return res.send(svgContent);
         } else if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
           return res.redirect(logoUrl);
+        } else if (logoUrl.startsWith('/')) {
+          const filePath = path.join(process.cwd(), 'public', logoUrl.replace(/^\//, ''));
+          if (fs.existsSync(filePath)) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mime = ext === '.svg' ? 'image/svg+xml' : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg' : 'image/png';
+            res.setHeader('Content-Type', mime);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.sendFile(filePath);
+          }
         }
+      }
+
+      const defaultLogoPath = path.join(process.cwd(), 'public', 'logo.png');
+      if (fs.existsSync(defaultLogoPath)) {
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.sendFile(defaultLogoPath);
       }
     } catch (_) {}
     next();

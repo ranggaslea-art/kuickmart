@@ -59,21 +59,38 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="icon" id="app-favicon" type="image/png" sizes="64x64" href="/favicon.png" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
-    <link rel="apple-touch-icon" id="app-apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" id="app-favicon" href="/logo.png" />
+    <link rel="apple-touch-icon" id="app-apple-touch-icon" href="/logo.png" />
     <script>
       (function() {
         try {
-          var cachedFavicon = localStorage.getItem('app_active_favicon_href');
-          if (cachedFavicon) {
-            var icon = document.getElementById('app-favicon');
-            if (icon) icon.href = cachedFavicon;
-            var appleIcon = document.getElementById('app-apple-touch-icon');
-            if (appleIcon) appleIcon.href = cachedFavicon;
+          var urlParams = new URLSearchParams(window.location.search);
+          var paramStore = urlParams.get('store');
+          var host = window.location.hostname || '';
+          var slug = 'default';
+          if (paramStore && paramStore.trim()) {
+            slug = paramStore.trim().toLowerCase();
+          } else if (host.endsWith('.toko-online.online') && host !== 'www.toko-online.online') {
+            slug = host.replace('.toko-online.online', '').toLowerCase();
           }
-        } catch (e) {}
+
+          var cachedFavicon = localStorage.getItem('app_active_favicon_href_' + slug) ||
+                              localStorage.getItem('app_active_favicon_href') ||
+                              '/logo.png';
+
+          var links = document.querySelectorAll("link[rel*='icon'], link[rel='apple-touch-icon']");
+          links.forEach(function(l) { l.href = cachedFavicon; });
+
+          var cachedBrand = localStorage.getItem('toko_online_brand_config_' + slug) ||
+                            (slug === 'default' ? localStorage.getItem('toko_online_brand_config') : null);
+          if (cachedBrand) {
+            var b = JSON.parse(cachedBrand);
+            if (b && b.brandNamePart1) {
+              var fullTitle = (b.brandNamePart1 + ' ' + (b.brandNamePart2 || '')).trim();
+              document.title = fullTitle + ' - Belanja & Kasir Online';
+            }
+          }
+        } catch(e) {}
       })();
     </script>
 

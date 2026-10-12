@@ -556,6 +556,7 @@ export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
     whatsapp: builtin?.whatsapp || '6281234567890',
     address: builtin?.address || 'Jl. Pemuda No. 88, Pusat Niaga',
     city: builtin?.city || 'Jakarta',
+    logoUrl: builtin?.logoUrl || (isDefault ? '/logo.png' : ''),
     logoText,
     primaryColor: builtin?.primaryColor || '#E51A24',
     isActive: builtin ? builtin.isActive : true,
@@ -703,20 +704,33 @@ export function syncBrandConfigFromTenant(
   prevBrand: BrandHeaderFooterConfig
 ): BrandHeaderFooterConfig {
   const parts = tenant.storeName.trim().split(/\s+/);
-  let namePart1 = tenant.storeName;
-  let namePart2 = '';
+  let namePart1 = prevBrand.brandNamePart1 || tenant.storeName;
+  let namePart2 = prevBrand.brandNamePart2 || '';
 
-  if (parts.length >= 2) {
-    namePart1 = parts[0];
-    namePart2 = parts.slice(1).join(' ');
+  if (!prevBrand.brandNamePart1 || prevBrand.brandNamePart1 === 'KuickMart') {
+    if (parts.length >= 2) {
+      namePart1 = parts[0];
+      namePart2 = parts.slice(1).join(' ');
+    } else {
+      namePart1 = tenant.storeName;
+      namePart2 = '';
+    }
   }
+
+  const effectiveLogoUrl = tenant.logoUrl && tenant.logoUrl.trim().length > 0
+    ? tenant.logoUrl.trim()
+    : (prevBrand.brandLogoImageUrl || '/logo.png');
+
+  const effectiveLogoText = tenant.logoText && tenant.logoText.trim().length > 0
+    ? tenant.logoText.trim()
+    : (prevBrand.brandLogoText || 'TO');
 
   return {
     ...prevBrand,
     brandNamePart1: namePart1,
     brandNamePart2: namePart2,
-    brandLogoText: tenant.logoText || tenant.storeName.slice(0, 2).toUpperCase(),
-    brandLogoImageUrl: tenant.logoUrl || prevBrand.brandLogoImageUrl,
+    brandLogoText: effectiveLogoText,
+    brandLogoImageUrl: effectiveLogoUrl,
     tagline: tenant.tagline || prevBrand.tagline,
     footerBrandName: tenant.storeName.toUpperCase(),
     footerDescription: `Platform belanja & kasir online resmi ${tenant.storeName}. Melayani pengiriman cepat dan pembayaran instan QRIS / Virtual Account DOKU.`,
@@ -839,15 +853,15 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     displaySlug: 'pusat',
     subdomain: 'toko-online.online',
     subdomainUrl: 'https://toko-online.online',
-    storeName: 'KuickMart Express',
-    tagline: 'Minimarket Digital Super Cepat',
+    storeName: 'toko-online.online',
+    tagline: 'Pusat Belanja Online Hemat & Cepat',
     ownerName: 'Administrator',
     phone: '0812-3456-7890',
     whatsapp: '6281234567890',
     address: 'Jl. Pemuda No. 88, Pusat Niaga',
     city: 'Jakarta',
-    logoUrl: '',
-    logoText: 'KE',
+    logoUrl: '/logo.png',
+    logoText: 'TO',
     primaryColor: '#E51A24',
     isActive: true,
     disabledReason: null,

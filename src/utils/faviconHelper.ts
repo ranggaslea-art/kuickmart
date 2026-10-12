@@ -2,6 +2,7 @@
  * Favicon & Address Bar Logo Helper
  * Mengatur logo yang muncul di address bar / tab browser secara dinamis
  * sesuai dengan pengaturan di modul "Header & Identitas Toko" dan "Identitas Toko & Toko Bebas".
+ * Berlaku di domain utama (toko-online.online) dan semua subdomain.
  */
 
 export interface FaviconSyncOptions {
@@ -19,7 +20,7 @@ export function generateDynamicFaviconSvg(
   badgeText: string,
   primaryColor = '#E51A24'
 ): string {
-  const cleanText = (badgeText || 'KM').trim().slice(0, 3).toUpperCase();
+  const cleanText = (badgeText || 'TO').trim().slice(0, 3).toUpperCase();
   const fontSize = cleanText.length > 2 ? '22' : '26';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
@@ -40,7 +41,7 @@ export function generateDynamicFaviconSvg(
 }
 
 /**
- * Perbarui ikon favicon di address bar / tab browser
+ * Perbarui ikon favicon di address bar / tab browser secara komprehensif
  */
 export function updateAddressBarFavicon(options: FaviconSyncOptions): string {
   if (typeof document === 'undefined') return '';
@@ -52,33 +53,45 @@ export function updateAddressBarFavicon(options: FaviconSyncOptions): string {
   // 1. Prioritaskan gambar logo resmi jika ada
   if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
     targetFavicon = imageUrl.trim();
+  } else if (!text && !storeName) {
+    // 2. Default resmi toko-online.online adalah /logo.png
+    targetFavicon = '/logo.png';
   } else {
-    // 2. Generate SVG favicon dinamis dengan inisial dan warna toko
-    const effectiveText = (text || (storeName ? storeName.slice(0, 2) : 'KM')).toUpperCase();
-    const effectiveColor = primaryColor || '#E51A24';
-    targetFavicon = generateDynamicFaviconSvg(effectiveText, effectiveColor);
+    // 3. Generate SVG favicon dinamis dengan inisial dan warna toko
+    const effectiveText = (text || (storeName ? storeName.slice(0, 2) : 'TO')).toUpperCase();
+    if (effectiveText === 'TO' || effectiveText === 'KE') {
+      targetFavicon = '/logo.png';
+    } else {
+      const effectiveColor = primaryColor || '#E51A24';
+      targetFavicon = generateDynamicFaviconSvg(effectiveText, effectiveColor);
+    }
   }
 
-  // 3. Pasang ke semua tag link rel icon yang relevan di document.head
-  const relTypes = ['icon', 'shortcut icon', 'apple-touch-icon'];
-  relTypes.forEach((rel) => {
-    let link = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = rel;
-      document.head.appendChild(link);
-    }
-    link.href = targetFavicon;
-    if (targetFavicon.startsWith('data:image/svg+xml')) {
-      link.type = 'image/svg+xml';
-    } else if (targetFavicon.startsWith('data:image/png') || targetFavicon.endsWith('.png')) {
-      link.type = 'image/png';
-    } else if (targetFavicon.startsWith('data:image/jpeg') || targetFavicon.endsWith('.jpg') || targetFavicon.endsWith('.jpeg')) {
-      link.type = 'image/jpeg';
-    }
-  });
+  // 4. Pasang ke SEMUA tag link icon yang ada di document.head (termasuk svg, png, apple-touch)
+  const allIconLinks = document.querySelectorAll<HTMLLinkElement>(
+    "link[rel*='icon'], link[rel='apple-touch-icon'], link[rel='shortcut icon']"
+  );
 
-  // 4. Simpan ke localStorage agar sebelum React hydrate, script index.html bisa langsung memasangnya
+  if (allIconLinks.length > 0) {
+    allIconLinks.forEach((link) => {
+      link.href = targetFavicon;
+      if (targetFavicon.startsWith('data:image/svg+xml')) {
+        link.type = 'image/svg+xml';
+      } else if (targetFavicon.startsWith('data:image/png') || targetFavicon.endsWith('.png')) {
+        link.type = 'image/png';
+      } else if (targetFavicon.startsWith('data:image/jpeg') || targetFavicon.endsWith('.jpg') || targetFavicon.endsWith('.jpeg')) {
+        link.type = 'image/jpeg';
+      }
+    });
+  } else {
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.id = 'app-favicon';
+    link.href = targetFavicon;
+    document.head.appendChild(link);
+  }
+
+  // 5. Simpan ke localStorage agar sebelum React hydrate, script index.html bisa langsung memasangnya
   try {
     localStorage.setItem('app_active_favicon_href', targetFavicon);
   } catch {}
