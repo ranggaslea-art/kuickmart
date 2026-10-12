@@ -2739,7 +2739,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   label: 'Kontrol Modul Subdomain',
                   icon: <Sliders className="w-4 h-4 text-indigo-600" />
                 }] : []),
-                { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & DOKU', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
+                { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & Toko Bebas', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
                 { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
                 { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
                 { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
@@ -5437,13 +5437,32 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
           {/* TAB: IDENTITAS TOKO BEBAS & DOKU PAYMENT GATEWAY */}
           {activeTab === 'store_doku_settings' && (!currentUserPermissions.brand_info?.canView ? (
-            renderAccessDenied('Identitas Toko & DOKU')
+            renderAccessDenied('Identitas Toko & Toko Bebas')
           ) : (
             <div className="space-y-4">
-              {!currentUserPermissions.brand_info?.canEdit && renderReadOnlyBanner('Identitas Toko & DOKU')}
+              {!currentUserPermissions.brand_info?.canEdit && renderReadOnlyBanner('Identitas Toko & Toko Bebas')}
               <StoreDokuSettingsManager
                 brandConfig={activeBrandConfig}
                 onUpdateBrandConfig={handleUpdateBrandConfig}
+                onUpdateTenantConfig={(updatedTenant) => {
+                  if (onUpdateStores && stores) {
+                    const normSlug = (updatedTenant.storeSlug || '').toLowerCase();
+                    const newStores = stores.map((s) => {
+                      if (s.id === normSlug || s.id === updatedTenant.storeId || normSlug === 'default') {
+                        return {
+                          ...s,
+                          name: updatedTenant.storeName,
+                          phone: updatedTenant.whatsapp || updatedTenant.phone || s.phone,
+                          whatsapp: updatedTenant.whatsapp || updatedTenant.phone || s.whatsapp,
+                          address: updatedTenant.address || s.address,
+                          city: updatedTenant.city || s.city,
+                        };
+                      }
+                      return s;
+                    });
+                    onUpdateStores(newStores);
+                  }
+                }}
               />
             </div>
           ))}

@@ -35,7 +35,8 @@ import {
   extractWhatsAppNumber,
   openStoreOrderWhatsApp,
   generateStoreOrderWhatsAppMessage,
-  getStoreWhatsAppUrl
+  getStoreWhatsAppUrl,
+  getStoreOrderWhatsAppNumber
 } from '../utils/whatsappHelper';
 
 interface OrderTrackerModalProps {
@@ -77,7 +78,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
   const handleCopyStorePhone = () => {
     if (!order) return;
-    const phone = order.store?.phone || order.store?.whatsapp || '';
+    const phone = getStoreOrderWhatsAppNumber(order);
     navigator.clipboard.writeText(phone);
     setCopiedStorePhone(true);
     setTimeout(() => setCopiedStorePhone(false), 2000);
@@ -361,15 +362,15 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                       <p className="text-xs text-stone-600">{order.store?.address || '-'}</p>
                       
                       <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
-                        <span className="text-stone-500 font-semibold">Nomor WhatsApp Toko:</span>
+                        <span className="text-stone-500 font-semibold">Nomor WhatsApp Kasir & CS:</span>
                         <span className="font-mono font-bold text-emerald-900 bg-white border border-emerald-200 px-2 py-0.5 rounded-md shadow-2xs">
-                          {order.store?.phone || order.store?.whatsapp || '0812-3456-7890'}
+                          {getStoreOrderWhatsAppNumber(order)}
                         </span>
                         <button
                           type="button"
                           onClick={handleCopyStorePhone}
                           className="text-[11px] text-stone-500 hover:text-stone-800 font-medium flex items-center gap-1 cursor-pointer"
-                          title="Salin Nomor WhatsApp Toko"
+                          title="Salin Nomor WhatsApp Kasir & CS Toko"
                         >
                           {copiedStorePhone ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                           <span>{copiedStorePhone ? 'Tersalin' : 'Salin'}</span>
@@ -384,10 +385,10 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                       type="button"
                       onClick={handleOpenStoreWhatsApp}
                       className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center gap-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
-                      title="Kirim / Teruskan Rincian Pesanan Lengkap ke WhatsApp Toko Cabang Ini"
+                      title="Kirim / Teruskan Rincian Pesanan ke WhatsApp Kasir & CS Toko Ini"
                     >
                       <MessageSquare className="w-4 h-4 text-emerald-100" />
-                      <span>Kirim ke WA Toko</span>
+                      <span>Kirim ke WA Kasir & CS</span>
                     </button>
 
                     {/* Tombol Telepon Seluler Toko */}

@@ -6,6 +6,7 @@
 
 import { Order, Store } from '../types';
 import { formatRupiah, formatDateTime } from './formatters';
+import { loadStoreTenantConfig, getStoreSlugFromUrl, normalizeTenantSlug } from './tenantHelper';
 
 export function cleanPhoneNumber(rawPhone: string): string {
   if (!rawPhone) return '';
@@ -27,20 +28,77 @@ export function cleanPhoneNumber(rawPhone: string): string {
 }
 
 /**
- * Ekstraksi nomor WhatsApp dari input nomor telepon cabang toko.
- * Mampu menangani format gabungan seperti "021-3901234 / 0812-3456-7890" dengan memprioritaskan nomor seluler/WA (08...).
+ * Mengambil Nomor WhatsApp Kasir & CS resmi dari Modul "Identitas Toko & Toko Bebas".
+ * Sesuai aturan: Pesanan masuk ke nomor yang ada di modul "Identitas Toko & Toko Bebas"
+ * kolom "Nomor WhatsApp Kasir & CS". Ini berlaku di domain utama dan semua subdomain.
  */
-export function extractWhatsAppNumber(rawPhoneOrStore?: string | Store | null): string {
-  if (!rawPhoneOrStore) return '6281234567890'; // Default fallback
+export function getStoreOrderWhatsAppNumber(orderOrStore?: Order | Store | null): string {
+  try {
+    let targetSlug: string | undefined = undefined;
 
-  let rawString = '';
-  if (typeof rawPhoneOrStore === 'object') {
-    rawString = rawPhoneOrStore.whatsapp || rawPhoneOrStore.phone || '';
-  } else {
-    rawString = String(rawPhoneOrStore);
+    if (orderOrStore) {
+      if ('deliveryType' in orderOrStore) {
+        // Objek berupa Order
+        targetSlug = orderOrStore.store?.id || orderOrStore.store?.code;
+      } else {
+        // Objek berupa Store
+        targetSlug = orderOrStore.id || orderOrStore.code;
+      }
+    }
+
+    // 1. Cek konfigurasi tenant sesuai slug toko spesifik (jika ada)
+    if (targetSlug) {
+      const tenantForStore = loadStoreTenantConfig(normalizeTenantSlug(targetSlug));
+      if (tenantForStore?.whatsapp && tenantForStore.whatsapp.trim()) {
+        const cleaned = cleanPhoneNumber(tenantForStore.whatsapp);
+        if (cleaned) return cleaned;
+      }
+    }
+
+    // 2. Cek konfigurasi tenant aktif saat ini di URL / domain utama / subdomain
+    const activeSlug = getStoreSlugFromUrl();
+    const activeTenant = loadStoreTenantConfig(activeSlug);
+    if (activeTenant?.whatsapp && activeTenant.whatsapp.trim()) {
+      const cleaned = cleanPhoneNumber(activeTenant.whatsapp);
+      if (cleaned) return cleaned;
+    }
+
+    // 3. Fallback jika ada whatsapp di objek store langsung
+    if (orderOrStore) {
+      const storeObj = ('deliveryType' in orderOrStore) ? orderOrStore.store : orderOrStore;
+      if (storeObj?.whatsapp && storeObj.whatsapp.trim()) {
+        const cleaned = cleanPhoneNumber(storeObj.whatsapp);
+        if (cleaned) return cleaned;
+      }
+      if (storeObj?.phone && storeObj.phone.trim()) {
+        const cleaned = cleanPhoneNumber(storeObj.phone);
+        if (cleaned) return cleaned;
+      }
+    }
+  } catch (err) {
+    console.warn('[WhatsAppHelper] Gagal mengambil nomor WA dari modul Identitas Toko:', err);
   }
 
-  if (!rawString.trim()) return '6281234567890';
+  return '6281234567890';
+}
+
+/**
+ * Ekstraksi nomor WhatsApp dari input nomor telepon atau objek Store/Order.
+ * Selalu mengutamakan "Nomor WhatsApp Kasir & CS" dari Modul Identitas Toko & Toko Bebas.
+ */
+export function extractWhatsAppNumber(rawPhoneOrStore?: string | Store | Order | null): string {
+  if (!rawPhoneOrStore) {
+    return getStoreOrderWhatsAppNumber(null);
+  }
+
+  if (typeof rawPhoneOrStore === 'object') {
+    return getStoreOrderWhatsAppNumber(rawPhoneOrStore);
+  }
+
+  const rawString = String(rawPhoneOrStore).trim();
+  if (!rawString) {
+    return getStoreOrderWhatsAppNumber(null);
+  }
 
   // Pisahkan jika ada pemisah slash, koma, garis tegak, atau enter
   const segments = rawString.split(/[/|,;\n]/).map(s => s.trim()).filter(Boolean);
@@ -54,7 +112,7 @@ export function extractWhatsAppNumber(rawPhoneOrStore?: string | Store | null): 
   const chosen = mobileSegment || segments[0] || rawString;
   const cleaned = cleanPhoneNumber(chosen);
 
-  return cleaned || '6281234567890';
+  return cleaned || getStoreOrderWhatsAppNumber(null);
 }
 
 /**
@@ -72,13 +130,14 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
   const orderTimeStr = order.createdAt ? formatDateTime(order.createdAt) : new Date().toLocaleString('id-ID');
   const storeName = order.store?.name || 'toko-online.online';
   const storeAddress = order.store?.address || '-';
-  const storePhone = order.store?.phone || order.store?.whatsapp || '-';
+  const targetWhatsApp = getStoreOrderWhatsAppNumber(order);
+  const storePhone = targetWhatsApp || order.store?.whatsapp || order.store?.phone || '-';
 
   const lines: string[] = [
     `🔔 *PESANAN BARU MASUK!*`,
     `🏪 *Cabang Toko:* *${storeName}*`,
     `📍 *Alamat Toko:* ${storeAddress}`,
-    `📞 *Kontak Toko:* ${storePhone}`,
+    `📞 *WhatsApp Kasir & CS:* ${storePhone}`,
     `========================================`,
     `🧾 *No. Pesanan:* *#${order.orderNumber || '-'}*`,
     `📅 *Waktu Pesanan:* ${orderTimeStr}`,
@@ -170,31 +229,39 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
 }
 
 /**
- * Menghasilkan link WhatsApp lengkap menuju Nomor Telepon / WA Cabang Toko
+ * Menghasilkan link WhatsApp lengkap menuju Nomor WhatsApp Kasir & CS (Modul Identitas Toko & Toko Bebas)
  */
 export function getStoreWhatsAppUrl(order: Order): string {
   if (!order) return '';
-  const phone = extractWhatsAppNumber(order.store);
+  const phone = getStoreOrderWhatsAppNumber(order);
   const message = generateStoreOrderWhatsAppMessage(order);
   return getWhatsAppChatUrl(phone, message);
 }
 
 /**
- * Membuka langsung WhatsApp ke Nomor Telepon / WhatsApp Cabang Toko
+ * Membuka langsung WhatsApp ke Nomor WhatsApp Kasir & CS (Modul Identitas Toko & Toko Bebas)
+ * Berlaku di domain utama dan semua subdomain untuk pesanan pickup & delivery.
  */
 export function openStoreOrderWhatsApp(order: Order): boolean {
   if (!order) return false;
-  const phone = extractWhatsAppNumber(order.store);
+  const phone = getStoreOrderWhatsAppNumber(order);
   const message = generateStoreOrderWhatsAppMessage(order);
   const url = getWhatsAppChatUrl(phone, message);
   if (!url) {
-    console.warn('Nomor Telepon / WhatsApp Cabang Toko tidak valid.');
+    console.warn('Nomor WhatsApp Kasir & CS Toko tidak valid.');
     return false;
   }
   try {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!openedWindow && typeof window !== 'undefined') {
+      // Jika browser memblokir popup window.open, gunakan window.location.assign fallback
+      window.location.assign(url);
+    }
   } catch (err) {
     console.warn('Gagal membuka WhatsApp:', err);
+    try {
+      window.location.assign(url);
+    } catch {}
   }
   return true;
 }

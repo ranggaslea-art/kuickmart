@@ -38,8 +38,8 @@ import {
   CourierInfo 
 } from '../types';
 import { formatRupiah, generateOrderNumber } from '../utils/formatters';
-import { loadStoreTenantConfig } from '../utils/tenantHelper';
-import { openStoreOrderWhatsApp, extractWhatsAppNumber } from '../utils/whatsappHelper';
+import { loadStoreTenantConfig, getStoreSlugFromUrl } from '../utils/tenantHelper';
+import { openStoreOrderWhatsApp, extractWhatsAppNumber, getStoreOrderWhatsAppNumber } from '../utils/whatsappHelper';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -403,12 +403,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
 
     setTimeout(() => {
+      const currentSlug = getStoreSlugFromUrl();
+      const tenantConfig = loadStoreTenantConfig(currentSlug);
+      const storeWhatsApp = tenantConfig.whatsapp || store.whatsapp || store.phone || '';
+
+      const orderStore: Store = {
+        ...store,
+        name: tenantConfig.storeName || store.name || 'toko-online.online',
+        whatsapp: storeWhatsApp,
+        phone: storeWhatsApp || store.phone,
+        address: tenantConfig.address || store.address,
+        city: tenantConfig.city || store.city,
+      };
+
       const newOrder: Order = {
         id: 'ord_' + Math.random().toString(36).substring(2, 9),
         orderNumber: generateOrderNumber(),
         createdAt: new Date().toISOString(),
         items: [...cartItems],
-        store: store,
+        store: orderStore,
         deliveryType: effectiveDeliveryType,
         deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
         pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
@@ -526,12 +539,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setIsProcessing(false);
       onOrderCreated(newOrder);
 
-      // Teruskan pesanan otomatis ke Nomor Telepon / WhatsApp Toko (Modul Cabang Toko)
-      // Berlaku untuk pesanan yang diambil di toko (pickup) maupun diantar oleh kurir (delivery)
+      // Teruskan pesanan otomatis ke Nomor WhatsApp Kasir & CS (Modul Identitas Toko & Toko Bebas)
+      // Berlaku untuk pesanan yang diambil di toko (pickup) maupun diantar oleh kurir (delivery) di domain utama & subdomain
       try {
         openStoreOrderWhatsApp(newOrder);
       } catch (waErr) {
-        console.warn('Otomatisasi WhatsApp Cabang Toko:', waErr);
+        console.warn('Otomatisasi WhatsApp Kasir & CS Toko:', waErr);
       }
 
       onClose();

@@ -266,10 +266,10 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                     type="button"
                     onClick={() => openStoreOrderWhatsApp(order)}
                     className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all cursor-pointer"
-                    title={`Kirim / Teruskan Rincian Pesanan ke WhatsApp Toko Cabang: ${order.store?.name || 'Cabang Toko'}`}
+                    title={`Kirim / Teruskan Rincian Pesanan ke WhatsApp Kasir & CS: ${order.store?.name || 'Cabang Toko'}`}
                   >
                     <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>WA Toko Cabang</span>
+                    <span>WA Kasir & CS</span>
                   </button>
 
                   <button

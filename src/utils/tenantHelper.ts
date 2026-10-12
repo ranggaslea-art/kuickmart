@@ -478,29 +478,34 @@ export function setTenantData<T>(baseKey: string, value: T, slug?: string): void
  * Menghasilkan object Store untuk tenant aktif
  */
 export function getTenantStore(slug?: string, tenantConfig?: StoreTenantIdentity): Store {
-  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase().trim();
-  if (isDefaultStore(effectiveSlug)) {
+  const effectiveSlug = normalizeTenantSlug(slug || getStoreSlugFromUrl());
+  const tenant = tenantConfig || loadStoreTenantConfig(effectiveSlug);
+  const isDefault = isDefaultStore(effectiveSlug);
+  const storePhone = tenant.whatsapp || tenant.phone || '0812-3456-7890';
+
+  if (isDefault) {
     return {
       id: 'store_1',
-      name: 'toko-online.online',
+      name: tenant.storeName || 'toko-online.online',
       code: 'TOKO-ONLINE',
-      address: 'Jl. Jendral Sudirman No. 18, Menteng',
-      city: 'Jakarta Pusat',
+      address: tenant.address || 'Jl. Jendral Sudirman No. 18, Menteng',
+      city: tenant.city || 'Jakarta Pusat',
       distanceKm: 0.8,
       is24Hours: true,
       isOpen: true,
       openHours: '24 Jam Nonstop',
-      phone: '021-5551234',
+      phone: storePhone,
+      whatsapp: storePhone,
       readyForPickup: true,
       readyForDelivery: true,
       deliveryFee: 6000,
       minOrder: 15000,
     };
   }
-  const tenant = tenantConfig || loadStoreTenantConfig(effectiveSlug);
+
   return {
     id: effectiveSlug,
-    name: tenant.storeName,
+    name: tenant.storeName || formatSlugToStoreName(effectiveSlug),
     code: effectiveSlug.toUpperCase(),
     address: tenant.address || 'Alamat Toko',
     city: tenant.city || 'Kota',
@@ -508,7 +513,8 @@ export function getTenantStore(slug?: string, tenantConfig?: StoreTenantIdentity
     is24Hours: true,
     isOpen: true,
     openHours: '07:00 - 22:00',
-    phone: tenant.phone || tenant.whatsapp || '08123456789',
+    phone: storePhone,
+    whatsapp: storePhone,
     readyForPickup: true,
     readyForDelivery: true,
     deliveryFee: 6000,
@@ -567,13 +573,18 @@ export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
  * Muat profil toko dan pengaturan DOKU
  */
 export function loadStoreTenantConfig(slug?: string): StoreTenantIdentity {
-  const effectiveSlug = (slug || getStoreSlugFromUrl() || 'default').toLowerCase();
+  const effectiveSlug = normalizeTenantSlug(slug || getStoreSlugFromUrl());
   const defaultTenant = getDefaultStoreTenant(effectiveSlug);
 
   if (typeof window === 'undefined') return defaultTenant;
 
   try {
-    const saved = localStorage.getItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`);
+    let saved = localStorage.getItem(`${STORAGE_TENANT_PREFIX}${effectiveSlug}`);
+    if (!saved && effectiveSlug === 'default') {
+      saved = localStorage.getItem(`${STORAGE_TENANT_PREFIX}default`) ||
+              localStorage.getItem(`${STORAGE_TENANT_PREFIX}toko-online`) ||
+              localStorage.getItem(`${STORAGE_TENANT_PREFIX}toko-online.online`);
+    }
     if (saved) {
       const parsed = JSON.parse(saved);
       return {

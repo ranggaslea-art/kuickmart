@@ -287,11 +287,7 @@ export default function App() {
   });
 
   const [currentStore, setCurrentStore] = useState<Store>(() => {
-    if (isNewStore) {
-      return getTenantStore(currentSlug);
-    }
-    const list = sanitizeStores(INITIAL_STORES);
-    return list[0];
+    return getTenantStore(currentSlug);
   });
 
   const [categories, setCategories] = useState<Category[]>(() => {
@@ -520,6 +516,14 @@ export default function App() {
       if (tenant) {
         setCurrentTenant(tenant);
         setBrandConfig((prev) => syncBrandConfigFromTenant(tenant, prev));
+        setCurrentStore((prev) => ({
+          ...prev,
+          name: tenant.storeName,
+          address: tenant.address || prev.address,
+          city: tenant.city || prev.city,
+          phone: tenant.whatsapp || tenant.phone || prev.phone,
+          whatsapp: tenant.whatsapp || tenant.phone || prev.whatsapp,
+        }));
         if (typeof document !== 'undefined') {
           document.title = `${tenant.storeName} - Belanja & Kasir Online`;
         }
@@ -529,10 +533,19 @@ export default function App() {
     const handleTenantUpdated = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail) {
-        setCurrentTenant(customEvent.detail);
-        setBrandConfig((prev) => syncBrandConfigFromTenant(customEvent.detail, prev));
+        const detailTenant = customEvent.detail;
+        setCurrentTenant(detailTenant);
+        setBrandConfig((prev) => syncBrandConfigFromTenant(detailTenant, prev));
+        setCurrentStore((prev) => ({
+          ...prev,
+          name: detailTenant.storeName,
+          address: detailTenant.address || prev.address,
+          city: detailTenant.city || prev.city,
+          phone: detailTenant.whatsapp || detailTenant.phone || prev.phone,
+          whatsapp: detailTenant.whatsapp || detailTenant.phone || prev.whatsapp,
+        }));
         if (typeof document !== 'undefined') {
-          document.title = `${customEvent.detail.storeName} - Belanja & Kasir Online`;
+          document.title = `${detailTenant.storeName} - Belanja & Kasir Online`;
         }
       }
     };

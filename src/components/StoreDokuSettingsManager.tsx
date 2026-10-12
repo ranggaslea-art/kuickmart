@@ -270,10 +270,10 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
             </div>
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
               <StoreIcon className="w-6 h-6 text-red-400" />
-              Identitas Toko Bebas & Payment Gateway DOKU
+              Identitas Toko & Toko Bebas (DOKU Gateway)
             </h2>
             <p className="text-stone-300 text-xs sm:text-sm mt-1 max-w-2xl">
-              Projek ini mendukung penamaan toko bebas tanpa batasan merk. Atur nama toko, logo, warna tema, serta sambungkan akun DOKU untuk pembayaran QRIS & Virtual Account.
+              Atur identitas nama toko, nomor WhatsApp Kasir & CS (tujuan pesanan masuk), logo, serta payment gateway DOKU. Berlaku untuk domain utama dan semua subdomain.
             </p>
           </div>
 
@@ -621,8 +621,11 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
 
               {/* WhatsApp Kasir */}
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                  Nomor WhatsApp Kasir & CS
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5 flex items-center justify-between">
+                  <span>Nomor WhatsApp Kasir & CS</span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Tujuan Pesanan Masuk
+                  </span>
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
@@ -631,9 +634,12 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
                     value={tenantData.whatsapp}
                     onChange={(e) => setTenantData((prev) => ({ ...prev, whatsapp: e.target.value }))}
                     placeholder="081234567890"
-                    className="w-full text-sm pl-9 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:border-red-500 outline-none transition"
+                    className="w-full text-sm pl-9 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:border-red-500 outline-none transition font-mono font-medium"
                   />
                 </div>
+                <p className="text-[11px] text-stone-500 mt-1">
+                  Nomor ini digunakan sebagai tujuan otomatis penerimaan semua pesanan masuk (Pickup & Delivery) untuk domain utama dan semua subdomain.
+                </p>
               </div>
 
               {/* Kota & Alamat */}
