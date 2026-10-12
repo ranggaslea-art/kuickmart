@@ -72,7 +72,7 @@ export async function saveTenantDataToCloud<T = any>(
     );
   }
 
-  // 3. Sinkronisasikan otomatis ke MySQL (MariaDB) Server
+  // 3. Sinkronisasikan otomatis ke Server Database (MySQL / App Settings Database)
   try {
     if (moduleKey === 'categories' && Array.isArray(data)) {
       await saveCategoriesToMySql(data as any, effectiveSlug);
@@ -84,16 +84,36 @@ export async function saveTenantDataToCloud<T = any>(
       await saveSuppliersToMySql(data as any, effectiveSlug);
     } else if (moduleKey === 'products' && Array.isArray(data)) {
       await saveProductsToMySql(data as any, effectiveSlug);
+    } else if (['brand', 'identity', 'receipts', 'promos', 'couriers'].includes(moduleKey)) {
+      // Sinkronisasi settingan toko ke server database
+      const payloadKey = moduleKey === 'brand' ? 'brandConfig'
+        : moduleKey === 'identity' ? 'tenant'
+        : moduleKey === 'receipts' ? 'receiptConfigs'
+        : moduleKey === 'promos' ? 'storePromos'
+        : 'couriers';
+
+      fetch('/api/app-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-slug': effectiveSlug,
+        },
+        body: JSON.stringify({
+          slug: effectiveSlug,
+          [payloadKey]: data,
+        }),
+      }).catch((err) => console.warn('[CloudSync] App-settings post error:', err));
     }
   } catch (mysqlErr) {
-    console.warn(`[CloudSync] Sinkronisasi MySQL untuk ${moduleKey}:`, mysqlErr);
+    console.warn(`[CloudSync] Sinkronisasi server untuk ${moduleKey}:`, mysqlErr);
   }
 
   return true;
 }
 
 /**
- * Ambil data modul tenant dari MySQL Database Server atau LocalStorage.
+ * Ambil data modul tenant dari Database Server atau LocalStorage.
+ * Database adalah patokan utama aplikasi meload settingan.
  */
 export async function fetchTenantDataFromCloud<T = any>(
   moduleKey: string,
@@ -101,9 +121,25 @@ export async function fetchTenantDataFromCloud<T = any>(
 ): Promise<T | null> {
   const effectiveSlug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
 
-  // 1. Coba ambil dari MySQL Database Server terlebih dahulu
+  // 1. Coba ambil dari Server Database terlebih dahulu sebagai patokan utama
   try {
-    if (moduleKey === 'categories') {
+    if (['brand', 'identity', 'receipts', 'promos', 'couriers'].includes(moduleKey)) {
+      const res = await fetch(`/api/app-settings?slug=${encodeURIComponent(effectiveSlug)}`, {
+        headers: { 'Accept': 'application/json', 'x-tenant-slug': effectiveSlug },
+        cache: 'no-cache',
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const settings = json?.settings;
+        if (settings) {
+          if (moduleKey === 'brand' && settings.brandConfig) return settings.brandConfig as T;
+          if (moduleKey === 'identity' && settings.tenant) return settings.tenant as T;
+          if (moduleKey === 'receipts' && settings.receiptConfigs) return settings.receiptConfigs as T;
+          if (moduleKey === 'promos' && settings.storePromos) return settings.storePromos as T;
+          if (moduleKey === 'couriers' && settings.couriers) return settings.couriers as T;
+        }
+      }
+    } else if (moduleKey === 'categories') {
       const dbCategories = await fetchCategoriesFromMySql(effectiveSlug);
       if (dbCategories && dbCategories.length > 0) return dbCategories as any;
     } else if (moduleKey === 'brands') {
@@ -120,7 +156,7 @@ export async function fetchTenantDataFromCloud<T = any>(
       if (dbProducts && dbProducts.length > 0) return dbProducts as any;
     }
   } catch (err) {
-    console.warn(`[CloudSync] Fallback ke cache lokal untuk ${moduleKey}:`, err);
+    console.warn(`[CloudSync] Server database fetch failed for ${moduleKey}, fallback to local:`, err);
   }
 
   // 2. Fallback membaca dari localStorage lokal

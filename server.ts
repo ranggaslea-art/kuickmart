@@ -160,6 +160,35 @@ function saveSubdomainModulesToFile() {
 
 loadSubdomainModulesFromFile();
 
+// File penyimpanan data seluruh konfigurasi aplikasi (Header & Identitas Toko, brand_config, struk, promo)
+const APP_SETTINGS_DATA_FILE = path.join(process.cwd(), 'data', 'app_settings.json');
+let appSettingsMap: Record<string, Record<string, any>> = {};
+
+function loadAppSettingsFromFile() {
+  try {
+    if (fs.existsSync(APP_SETTINGS_DATA_FILE)) {
+      const raw = fs.readFileSync(APP_SETTINGS_DATA_FILE, 'utf-8');
+      appSettingsMap = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('[AppSettings] Could not load app_settings.json:', e);
+  }
+}
+
+function saveAppSettingsToFile() {
+  try {
+    const dir = path.dirname(APP_SETTINGS_DATA_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(APP_SETTINGS_DATA_FILE, JSON.stringify(appSettingsMap, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[AppSettings] Could not write app_settings.json:', e);
+  }
+}
+
+loadAppSettingsFromFile();
+
 // Bank endpoint mapping in Jokul DOKU
 const DOKU_BANK_PATHS: Record<string, { path: string; prefix: string; name: string }> = {
   bca: { path: '/bca-virtual-account/v2/payment-code', prefix: '80777', name: 'BCA Virtual Account' },
@@ -293,6 +322,7 @@ async function startServer() {
   app.get('/api/tenant/config', (req, res) => {
     const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase();
     const tenant = tenantStoreMap[slug] || null;
+    const settings = appSettingsMap[slug] || appSettingsMap['default'] || null;
 
     if (tenant) {
       const isTenantActive = tenant.isActive !== false;
@@ -311,6 +341,7 @@ async function startServer() {
       return res.json({ 
         success: true, 
         tenant: sanitized,
+        brandConfig: settings?.brandConfig || null,
         isDisabled: !isTenantActive,
         disabledReason: tenant.disabledReason || 'Subdomain ini telah dinonaktifkan oleh administrator toko-online.online.'
       });
@@ -319,8 +350,133 @@ async function startServer() {
     return res.json({
       success: true,
       tenant: null,
+      brandConfig: settings?.brandConfig || null,
       message: `Tenant ${slug} belum terdaftar, silakan simpan pengaturan untuk mendaftarkan nama toko.`,
     });
+  });
+
+  // 1b-0. App Settings API (Database adalah Patokan Utama Load Settingan Aplikasi)
+  app.get('/api/app-settings', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase();
+    const settings = appSettingsMap[slug] || appSettingsMap['default'] || {};
+    const tenant = tenantStoreMap[slug] || tenantStoreMap['default'] || null;
+
+    let sanitizedTenant = null;
+    if (tenant) {
+      sanitizedTenant = {
+        ...tenant,
+        isActive: tenant.isActive !== false,
+        dokuSettings: {
+          ...tenant.dokuSettings,
+          secretKey: tenant.dokuSettings?.secretKey ? '••••••••••••••••' : '',
+          hasSecretKey: Boolean(tenant.dokuSettings?.secretKey && tenant.dokuSettings.secretKey.trim().length > 0),
+        },
+      };
+    }
+
+    return res.json({
+      success: true,
+      slug,
+      settings: {
+        brandConfig: settings.brandConfig || null,
+        tenant: sanitizedTenant,
+        receiptConfigs: settings.receiptConfigs || null,
+        storePromos: settings.storePromos || null,
+        couriers: settings.couriers || null,
+        updatedAt: settings.updatedAt || new Date().toISOString(),
+      },
+      source: 'database',
+      message: 'Pengaturan aplikasi berhasil dimuat dari database.',
+    });
+  });
+
+  app.post('/api/app-settings', async (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || incoming.storeSlug || (req.headers['x-tenant-slug'] as string) || 'default').trim().toLowerCase();
+
+      if (!appSettingsMap[slug]) {
+        appSettingsMap[slug] = {};
+      }
+
+      if (incoming.brandConfig) {
+        appSettingsMap[slug].brandConfig = incoming.brandConfig;
+        if (incoming.brandConfig.brandLogoImageUrl || incoming.brandConfig.brandLogoText) {
+          if (!tenantStoreMap[slug]) {
+            tenantStoreMap[slug] = { storeSlug: slug, storeName: incoming.brandConfig.brandNamePart1 || 'Toko Online' };
+          }
+          if (incoming.brandConfig.brandLogoImageUrl) {
+            tenantStoreMap[slug].logoUrl = incoming.brandConfig.brandLogoImageUrl;
+          }
+          if (incoming.brandConfig.brandLogoText) {
+            tenantStoreMap[slug].logoText = incoming.brandConfig.brandLogoText;
+          }
+        }
+      }
+
+      if (incoming.tenant) {
+        appSettingsMap[slug].tenant = incoming.tenant;
+        tenantStoreMap[slug] = {
+          ...(tenantStoreMap[slug] || {}),
+          ...incoming.tenant,
+          storeSlug: slug,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      if (incoming.receiptConfigs) {
+        appSettingsMap[slug].receiptConfigs = incoming.receiptConfigs;
+      }
+      if (incoming.storePromos) {
+        appSettingsMap[slug].storePromos = incoming.storePromos;
+      }
+      if (incoming.couriers) {
+        appSettingsMap[slug].couriers = incoming.couriers;
+      }
+
+      appSettingsMap[slug].updatedAt = new Date().toISOString();
+
+      saveAppSettingsToFile();
+      saveTenantsToFile();
+
+      // Simpan juga ke MySQL jika pool tersedia
+      try {
+        const pool = getMySqlPool();
+        if (pool) {
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS store_settings (
+              tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+              module_key VARCHAR(64) NOT NULL,
+              config_data LONGTEXT NOT NULL,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (tenant_slug, module_key)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+          `);
+          if (incoming.brandConfig) {
+            await pool.query(
+              `INSERT INTO store_settings (tenant_slug, module_key, config_data) VALUES (?, 'brand_config', ?) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data)`,
+              [slug, JSON.stringify(incoming.brandConfig)]
+            );
+          }
+          if (incoming.tenant) {
+            await pool.query(
+              `INSERT INTO store_settings (tenant_slug, module_key, config_data) VALUES (?, 'identity', ?) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data)`,
+              [slug, JSON.stringify(incoming.tenant)]
+            );
+          }
+        }
+      } catch (_) {}
+
+      console.log(`[AppSettings] Pengaturan aplikasi untuk '${slug}' berhasil disimpan di database.`);
+      return res.json({
+        success: true,
+        message: `Pengaturan toko '${slug}' berhasil disimpan secara permanen di database.`,
+        settings: appSettingsMap[slug],
+      });
+    } catch (err: any) {
+      console.error('[AppSettings] Gagal menyimpan ke database:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Gagal menyimpan pengaturan' });
+    }
   });
 
   // 1b-1. List All Registered Subdomains under toko-online.online
@@ -754,6 +910,17 @@ async function startServer() {
 
       tenantStoreMap[slug] = updatedTenant;
       saveTenantsToFile();
+
+      // Sinkronisasikan juga ke appSettingsMap database
+      if (!appSettingsMap[slug]) {
+        appSettingsMap[slug] = {};
+      }
+      appSettingsMap[slug].tenant = updatedTenant;
+      if (incoming.brandConfig) {
+        appSettingsMap[slug].brandConfig = incoming.brandConfig;
+      }
+      appSettingsMap[slug].updatedAt = new Date().toISOString();
+      saveAppSettingsToFile();
 
       const sanitizedResponse = {
         ...updatedTenant,
@@ -3311,6 +3478,48 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ success: false, message: `Migrasi gagal: ${err.message}` });
     }
+  });
+
+  // Dynamic Favicon Route - Logo address bar mengikuti database
+  app.get(['/favicon.ico', '/favicon.png'], (req, res, next) => {
+    try {
+      const host = (req.headers['host'] || '').split(':')[0].toLowerCase();
+      let slug = 'default';
+      if (host.endsWith('.toko-online.online') && host !== 'www.toko-online.online') {
+        slug = host.replace('.toko-online.online', '');
+      }
+      if (req.query.slug) {
+        slug = String(req.query.slug).toLowerCase();
+      }
+
+      const settings = appSettingsMap[slug] || appSettingsMap['default'] || {};
+      const tenant = tenantStoreMap[slug] || tenantStoreMap['default'] || {};
+      const logoUrl = settings.brandConfig?.brandLogoImageUrl || tenant.logoUrl;
+
+      if (logoUrl && typeof logoUrl === 'string') {
+        if (logoUrl.startsWith('data:image/png;base64,')) {
+          const base64Data = logoUrl.replace(/^data:image\/png;base64,/, '');
+          const imgBuffer = Buffer.from(base64Data, 'base64');
+          res.setHeader('Content-Type', 'image/png');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(imgBuffer);
+        } else if (logoUrl.startsWith('data:image/jpeg;base64,') || logoUrl.startsWith('data:image/jpg;base64,')) {
+          const base64Data = logoUrl.replace(/^data:image\/(jpeg|jpg);base64,/, '');
+          const imgBuffer = Buffer.from(base64Data, 'base64');
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(imgBuffer);
+        } else if (logoUrl.startsWith('data:image/svg+xml')) {
+          const svgContent = decodeURIComponent(logoUrl.replace(/^data:image\/svg\+xml;charset=utf-8,/, ''));
+          res.setHeader('Content-Type', 'image/svg+xml');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(svgContent);
+        } else if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+          return res.redirect(logoUrl);
+        }
+      }
+    } catch (_) {}
+    next();
   });
 
   // Vite middleware for development or static serving for production

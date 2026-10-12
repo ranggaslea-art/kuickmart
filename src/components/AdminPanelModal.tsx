@@ -2742,7 +2742,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & Toko Bebas', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
                 { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
                 { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
-                { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
+                { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Header & Identitas Toko', icon: <Palette className="w-4 h-4 text-amber-500" /> },
 
                 // 6. USER, KEAMANAN & SERVER
                 { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: (staffUsers || []).length },

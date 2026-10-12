@@ -46,6 +46,8 @@ import {
 } from '../utils/tenantHelper';
 import { compressImageFile } from '../utils/imageHelper';
 import { RegisteredSubdomainsManager } from './RegisteredSubdomainsManager';
+import { updateAddressBarFavicon } from '../utils/faviconHelper';
+import { saveAppSettingsToDatabase } from '../utils/appSettingsDatabase';
 
 interface StoreDokuSettingsManagerProps {
   brandConfig: BrandHeaderFooterConfig;
@@ -171,7 +173,16 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
       const updatedBrand = syncBrandConfigFromTenant(tenantData, brandConfig);
       onUpdateBrandConfig(updatedBrand);
 
-      setSaveSuccessNotice(`Pengaturan nama toko "${tenantData.storeName}" dan DOKU berhasil disimpan!`);
+      // 4. Simpan ke Database Server (Patokan Utama) & perbarui logo address bar
+      saveAppSettingsToDatabase({ tenant: tenantData, brandConfig: updatedBrand }, tenantData.storeSlug);
+      updateAddressBarFavicon({
+        imageUrl: tenantData.logoUrl || updatedBrand.brandLogoImageUrl,
+        text: tenantData.logoText || updatedBrand.brandLogoText,
+        storeName: tenantData.storeName,
+        primaryColor: tenantData.primaryColor,
+      });
+
+      setSaveSuccessNotice(`Pengaturan identitas toko "${tenantData.storeName}" berhasil disimpan ke database dan aktif di address bar!`);
       setTimeout(() => setSaveSuccessNotice(null), 4000);
     } catch (err: any) {
       console.error('Error saving settings:', err);

@@ -142,6 +142,8 @@ import {
   fetchTenantDataFromCloud, 
   subscribeToTenantCloudChanges 
 } from './utils/tenantCloudSync';
+import { updateAddressBarFavicon } from './utils/faviconHelper';
+import { loadAppSettingsFromDatabase, saveAppSettingsToDatabase } from './utils/appSettingsDatabase';
 
 const STORAGE_CART_KEY = 'nusamart_cart';
 const STORAGE_ORDERS_KEY = 'nusamart_orders';
@@ -509,6 +511,91 @@ export default function App() {
       return null;
     }
   });
+
+  // 1. Patokan Utama: Load settingan aplikasi dari Database Server
+  useEffect(() => {
+    let isMounted = true;
+    loadAppSettingsFromDatabase(currentSlug).then((dbData) => {
+      if (!isMounted || !dbData) return;
+
+      if (dbData.brandConfig) {
+        setBrandConfig(dbData.brandConfig);
+      }
+      if (dbData.tenant) {
+        setCurrentTenant(dbData.tenant);
+        setCurrentStore((prev) => ({
+          ...prev,
+          name: dbData.tenant?.storeName || prev.name,
+          address: dbData.tenant?.address || prev.address,
+          city: dbData.tenant?.city || prev.city,
+          phone: dbData.tenant?.whatsapp || dbData.tenant?.phone || prev.phone,
+          whatsapp: dbData.tenant?.whatsapp || dbData.tenant?.phone || prev.whatsapp,
+        }));
+        if (typeof document !== 'undefined') {
+          document.title = `${dbData.tenant.storeName} - Belanja & Kasir Online`;
+        }
+      }
+      if (dbData.receiptConfigs && Array.isArray(dbData.receiptConfigs) && dbData.receiptConfigs.length > 0) {
+        setReceiptConfigs(dbData.receiptConfigs);
+      }
+      if (dbData.storePromos && Array.isArray(dbData.storePromos) && dbData.storePromos.length > 0) {
+        setStorePromos(dbData.storePromos);
+      }
+
+      // Update addressbar logo langsung dari database
+      updateAddressBarFavicon({
+        imageUrl: dbData.brandConfig?.brandLogoImageUrl || dbData.tenant?.logoUrl,
+        text: dbData.brandConfig?.brandLogoText || dbData.tenant?.logoText,
+        storeName: dbData.tenant?.storeName || dbData.brandConfig?.brandNamePart1,
+        primaryColor: dbData.tenant?.primaryColor,
+      });
+    });
+
+    const handleAppSettingsDbSynced = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && isMounted) {
+        const { brandConfig: b, tenant: t, receiptConfigs: r, storePromos: p } = customEvent.detail;
+        if (b) setBrandConfig(b);
+        if (t) {
+          setCurrentTenant(t);
+          setCurrentStore((prev) => ({
+            ...prev,
+            name: t.storeName || prev.name,
+            address: t.address || prev.address,
+            city: t.city || prev.city,
+            phone: t.whatsapp || t.phone || prev.phone,
+            whatsapp: t.whatsapp || t.phone || prev.whatsapp,
+          }));
+        }
+        if (r && Array.isArray(r)) setReceiptConfigs(r);
+        if (p && Array.isArray(p)) setStorePromos(p);
+      }
+    };
+
+    window.addEventListener('app_settings_database_synced', handleAppSettingsDbSynced);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('app_settings_database_synced', handleAppSettingsDbSynced);
+    };
+  }, [currentSlug]);
+
+  // 2. Logo di address bar / browser tab selalu mengikuti settingan modul Header & Identitas Toko
+  useEffect(() => {
+    updateAddressBarFavicon({
+      imageUrl: brandConfig.brandLogoImageUrl || currentTenant?.logoUrl,
+      text: brandConfig.brandLogoText || currentTenant?.logoText,
+      storeName: currentTenant?.storeName || brandConfig.brandNamePart1,
+      primaryColor: currentTenant?.primaryColor,
+    });
+  }, [
+    brandConfig.brandLogoImageUrl,
+    brandConfig.brandLogoText,
+    brandConfig.brandNamePart1,
+    currentTenant?.logoUrl,
+    currentTenant?.logoText,
+    currentTenant?.primaryColor,
+    currentTenant?.storeName,
+  ]);
 
   useEffect(() => {
     const slug = getStoreSlugFromUrl();
@@ -1147,6 +1234,13 @@ export default function App() {
     setBrandConfig((prev) => {
       const next = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
       saveTenantDataToCloud('brand', next, currentSlug);
+      saveAppSettingsToDatabase({ brandConfig: next }, currentSlug);
+      updateAddressBarFavicon({
+        imageUrl: next.brandLogoImageUrl || currentTenant?.logoUrl,
+        text: next.brandLogoText || currentTenant?.logoText,
+        storeName: currentTenant?.storeName || next.brandNamePart1,
+        primaryColor: currentTenant?.primaryColor,
+      });
       return next;
     });
   };

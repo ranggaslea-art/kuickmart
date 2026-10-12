@@ -32,6 +32,8 @@ import {
 import { BrandHeaderFooterConfig, FooterSection, FooterFeatureItem, FooterQuickLink, FooterIconType } from '../types';
 import { INITIAL_BRAND_CONFIG } from '../data/mockData';
 import { compressImageFile } from '../utils/imageHelper';
+import { updateAddressBarFavicon } from '../utils/faviconHelper';
+import { saveAppSettingsToDatabase } from '../utils/appSettingsDatabase';
 
 interface BrandInfoManagerProps {
   brandConfig: BrandHeaderFooterConfig;
@@ -71,6 +73,12 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
       } catch (e) {
         console.error(e);
       }
+      // Sinkronisasikan logo address bar seketika
+      updateAddressBarFavicon({
+        imageUrl: next.brandLogoImageUrl,
+        text: next.brandLogoText,
+        storeName: next.brandNamePart1,
+      });
       return next;
     });
   };
@@ -144,7 +152,8 @@ export const BrandInfoManager: React.FC<BrandInfoManagerProps> = ({
       updatedAt: new Date().toISOString(),
     };
     setFormData(updated);
-    showNotification('Konfigurasi identitas Brand, Header, dan Footer berhasil disimpan dan langsung aktif di halaman toko!');
+    saveAppSettingsToDatabase({ brandConfig: updated });
+    showNotification('Konfigurasi identitas Brand, Header, dan Logo berhasil disimpan ke database dan langsung aktif di halaman toko & address bar!');
   };
 
   const handleResetToDefault = () => {

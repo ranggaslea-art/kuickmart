@@ -59,11 +59,23 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="toko-online.online" />
+    <link rel="icon" id="app-favicon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" id="app-apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <script>
+      (function() {
+        try {
+          var cachedFavicon = localStorage.getItem('app_active_favicon_href');
+          if (cachedFavicon) {
+            var icon = document.getElementById('app-favicon');
+            if (icon) icon.href = cachedFavicon;
+            var appleIcon = document.getElementById('app-apple-touch-icon');
+            if (appleIcon) appleIcon.href = cachedFavicon;
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- OpenGraph (Facebook, WhatsApp, Telegram, etc.) -->
     <meta property="og:type" content="website" />
