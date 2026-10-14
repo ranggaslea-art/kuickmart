@@ -1404,7 +1404,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
                 <span>
-                  Pesanan ({effectiveDeliveryType === 'delivery' ? 'Antar Kurir' : 'Ambil di Toko'}) otomatis masuk ke WhatsApp: <strong>{store.name}</strong> ({store.phone || store.whatsapp || 'Cabang Toko'})
+                  Pesanan ({effectiveDeliveryType === 'delivery' ? 'Antar Kurir' : effectiveDeliveryType === 'expedition' ? 'Ekspedisi' : 'Ambil di Toko'}) otomatis masuk ke WhatsApp: <strong>{store.name}</strong> ({store.phone || store.whatsapp || 'Cabang Toko'})
                 </span>
               </div>
               <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full shrink-0">

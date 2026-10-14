@@ -212,9 +212,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-right duration-300">
-        {/* Header */}
-        <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
+        {/* Header - Fixed at Top */}
+        <div className="shrink-0 p-4 border-b border-stone-100 flex items-center justify-between bg-white z-20">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-blue-600" />
             <h3 className="font-bold text-base text-stone-900">
@@ -225,62 +225,64 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             {cartItems.length > 0 && (
               <button
                 onClick={onClearCart}
-                className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1"
+                className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 cursor-pointer"
               >
                 Kosongkan
               </button>
             )}
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Free Shipping / Below Min Order Notification Bar */}
-        {isBelowMinOrder ? (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 text-amber-900">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <div>
-                <span className="font-bold text-[11px] block">
-                  Belanja di bawah batas minimum {formatRupiah(store.minOrder)}
-                </span>
-                <p className="text-[10px] text-amber-800 leading-tight mt-0.5">
-                  Ongkos kirim nonaktif. Anda tetap bisa lanjut transaksi &amp; bayar via <strong>Ambil di Toko</strong>.
-                </p>
+        {/* Unified Scrollable Body: Notification bar, items, delivery options, expedition panel, vouchers, breakdown */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {/* Free Shipping / Below Min Order Notification Bar */}
+          {isBelowMinOrder ? (
+            <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div>
+                  <span className="font-bold text-[11px] block">
+                    Belanja di bawah batas minimum {formatRupiah(store.minOrder)}
+                  </span>
+                  <p className="text-[10px] text-amber-800 leading-tight mt-0.5">
+                    Ongkos kirim kurir toko nonaktif. Anda tetap bisa lanjut transaksi &amp; bayar via <strong>Ambil di Toko</strong> atau <strong>Ekspedisi</strong>.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold uppercase bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded shrink-0">
+                Kurir Off
+              </span>
+            </div>
+          ) : effectiveDeliveryType === 'delivery' ? (
+            <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2.5 border-b border-stone-100">
+              <div className="flex items-center justify-between text-xs font-semibold text-stone-800 mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-blue-600" />
+                  {remainingForFreeShipping === 0 ? (
+                    <span className="text-emerald-700 font-bold">Selamat! Kamu Mendapat Gratis Ongkir</span>
+                  ) : (
+                    <span>Tambah <strong className="text-blue-700">{formatRupiah(remainingForFreeShipping)}</strong> lagi untuk Gratis Ongkir</span>
+                  )}
+                </div>
+                <span className="text-[11px] text-stone-500 font-mono">{Math.round(progressToFreeShipping)}%</span>
+              </div>
+              <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
+                  style={{ width: `${progressToFreeShipping}%` }}
+                />
               </div>
             </div>
-            <span className="text-[9px] font-bold uppercase bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded shrink-0">
-              Ongkir Nonaktif
-            </span>
-          </div>
-        ) : effectiveDeliveryType === 'delivery' ? (
-          <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2.5 border-b border-stone-100">
-            <div className="flex items-center justify-between text-xs font-semibold text-stone-800 mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-blue-600" />
-                {remainingForFreeShipping === 0 ? (
-                  <span className="text-emerald-700 font-bold">Selamat! Kamu Mendapat Gratis Ongkir</span>
-                ) : (
-                  <span>Tambah <strong className="text-blue-700">{formatRupiah(remainingForFreeShipping)}</strong> lagi untuk Gratis Ongkir</span>
-                )}
-              </div>
-              <span className="text-[11px] text-stone-500 font-mono">{Math.round(progressToFreeShipping)}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
-                style={{ width: `${progressToFreeShipping}%` }}
-              />
-            </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* Cart Item List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Cart Item List */}
+          <div className="p-4 space-y-3">
           {cartItems.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6">
               <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-3">
@@ -706,18 +708,43 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <span className="text-lg font-black text-blue-900">{formatRupiah(total)}</span>
               </div>
             </div>
+          </div>
+        )}
+        </div>
 
-            {/* Checkout Button - Clickable even below minimum spend */}
+        {/* Sticky Action Footer - Fixed at Bottom with Total & Checkout / Payment Button */}
+        {cartItems.length > 0 && (
+          <div className="shrink-0 p-4 border-t border-stone-200 bg-white/95 backdrop-blur-xs shadow-xl space-y-2.5 z-20">
+            <div className="flex justify-between items-center text-stone-900">
+              <div>
+                <span className="text-xs font-semibold text-stone-500 block">Total Pembayaran</span>
+                {pointsEarned > 0 && (
+                  <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
+                    <Award className="w-3 h-3" /> +{pointsEarned} Poin Member
+                  </span>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-black text-blue-900 tracking-tight block font-mono">
+                  {formatRupiah(total)}
+                </span>
+                <span className="text-[10px] text-stone-500 font-medium">
+                  {cartItems.reduce((a, b) => a + b.quantity, 0)} Item ({effectiveDeliveryType === 'delivery' ? 'Diantar Kurir' : effectiveDeliveryType === 'expedition' ? 'Ekspedisi' : 'Ambil di Toko'})
+                </span>
+              </div>
+            </div>
+
+            {/* Checkout Button - Clickable at all times, never pushed off-screen */}
             <button
               onClick={onProceedToCheckout}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-transform active:scale-98 cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-xs py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
             >
               <span>Lanjut ke Pembayaran</span>
               <ArrowRight className="w-4 h-4" />
             </button>
             {isBelowMinOrder && (
-              <p className="text-[11px] text-blue-900 bg-blue-50/90 border border-blue-200/80 rounded-xl p-2.5 text-center font-medium leading-relaxed">
-                Belanja di bawah minimum ({formatRupiah(store.minOrder)}): Ongkos kirim nonaktif, pesanan diproses via <strong>Ambil di Toko</strong>. Anda tetap dapat melanjutkan transaksi dan menekan tombol pembayaran.
+              <p className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200/80 rounded-lg p-2 text-center font-medium leading-relaxed">
+                Belanja di bawah minimum ({formatRupiah(store.minOrder)}): Layanan kurir toko nonaktif. Pesanan otomatis diproses via <strong>Ambil di Toko</strong> atau <strong>Ekspedisi</strong>.
               </p>
             )}
           </div>
