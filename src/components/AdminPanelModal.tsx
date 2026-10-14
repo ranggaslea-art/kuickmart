@@ -840,17 +840,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [isOpen, currentSlug]);
 
-  // Login Authentication State - Sesi login tersimpan di sessionStorage & localStorage agar user tidak tiba-tiba terlempar keluar saat menggunakan modul
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const saved = sessionStorage.getItem('toko_online_admin_active_user') || localStorage.getItem('toko_online_admin_active_user');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch {}
-    return null;
-  });
+  // Login Authentication State - Selalu wajibkan login saat masuk ke modul admin demi keamanan
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
@@ -860,27 +851,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Dialog konfirmasi keluar / tutup panel admin
   const [confirmExitAction, setConfirmExitAction] = useState<'logout' | 'close' | null>(null);
 
-  // Pertahankan sesi login saat panel dibuka & sync kontrol modul
+  // Setiap kali modal admin dibuka dari etalase toko: selalu munculkan modul login
   useEffect(() => {
     if (isOpen) {
       setLoginError(null);
       syncSubdomainModulePolicyFromServer().catch(() => {});
       
-      // Ambil user dari storage jika state currentUser kosong
-      if (!currentUser) {
-        try {
-          const saved = sessionStorage.getItem('toko_online_admin_active_user') || localStorage.getItem('toko_online_admin_active_user');
-          if (saved) {
-            setCurrentUser(JSON.parse(saved));
-          } else {
-            setInputUsername('');
-            setInputPin('');
-          }
-        } catch {
-          setInputUsername('');
-          setInputPin('');
-        }
-      }
+      // Bersihkan sesi lama dari storage agar selalu muncul modul login saat masuk
+      try {
+        sessionStorage.removeItem('toko_online_admin_active_user');
+        localStorage.removeItem('toko_online_admin_active_user');
+      } catch {}
+
+      setCurrentUser(null);
+      setInputUsername('');
+      setInputPin('');
 
       if (initialTab) {
         setActiveTab(initialTab);
@@ -900,10 +885,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         else if (systemTabs.includes(initialTab)) setSelectedGroup('system');
         else setSelectedGroup('all');
       }
+    } else {
+      // Saat ditutup, pastikan sesi direset agar masuk berikutnya wajib login kembali
+      setCurrentUser(null);
+      setInputUsername('');
+      setInputPin('');
+      setLoginError(null);
+      try {
+        sessionStorage.removeItem('toko_online_admin_active_user');
+        localStorage.removeItem('toko_online_admin_active_user');
+      } catch {}
     }
   }, [isOpen, initialTab]);
 
   const handleClose = () => {
+    try {
+      sessionStorage.removeItem('toko_online_admin_active_user');
+      localStorage.removeItem('toko_online_admin_active_user');
+    } catch {}
+    setCurrentUser(null);
+    setInputUsername('');
+    setInputPin('');
     setConfirmExitAction(null);
     onClose();
   };
@@ -5858,7 +5860,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               {confirmExitAction === 'logout' ? (
                 <span>Sesi aktif Anda akan diakhiri. Anda perlu memasukkan ID & PIN saat membuka kembali panel admin.</span>
               ) : (
-                <span>Sesi login dan data modul Anda tetap aman tersimpan selama tab browser aktif.</span>
+                <span>Panel admin akan ditutup dan kembali ke etalase toko. Sesi login admin akan diakhiri demi keamanan data toko.</span>
               )}
             </div>
 

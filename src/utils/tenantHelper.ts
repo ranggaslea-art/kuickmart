@@ -825,6 +825,7 @@ export interface RegisteredSubdomain {
   displaySlug: string;
   subdomain: string;
   subdomainUrl: string;
+  liveUrl?: string;
   storeName: string;
   tagline: string;
   ownerName: string;
@@ -844,6 +845,29 @@ export interface RegisteredSubdomain {
   dokuEnvironment?: string;
   hasDoku?: boolean;
   qrisEnabled?: boolean;
+}
+
+/**
+ * Mendapatkan Live Working URL toko yang bisa langsung diakses saat ini
+ * - Jika aplikasi diakses via custom domain toko-online.online, gunakan format subdomain (https://slug.toko-online.online)
+ * - Jika aplikasi diakses di Cloud Run (*.run.app), localhost, workers.dev, dll, gunakan origin saat ini dengan query ?store=slug
+ */
+export function getStoreLiveUrl(slug?: string | null): string {
+  const normSlug = normalizeTenantSlug(slug);
+  const isMain = normSlug === 'default';
+
+  if (typeof window === 'undefined') {
+    return isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
+  }
+
+  const hostname = (window.location.hostname || '').toLowerCase();
+  if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}` || hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`)) {
+    return isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
+  }
+
+  const origin = window.location.origin;
+  const pathname = window.location.pathname;
+  return isMain ? `${origin}${pathname}` : `${origin}${pathname}?store=${encodeURIComponent(normSlug)}`;
 }
 
 export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
@@ -1052,12 +1076,14 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
             const parsed = JSON.parse(raw);
             const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
             const existing = mapBySlug[slug];
+            const liveUrl = getStoreLiveUrl(slug);
             mapBySlug[slug] = {
               storeId: parsed.storeId || slug,
               storeSlug: slug,
               displaySlug: isMain ? 'pusat' : slug,
               subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
-              subdomainUrl: isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`,
+              subdomainUrl: liveUrl,
+              liveUrl: liveUrl,
               storeName: parsed.storeName || (existing?.storeName) || (isMain ? 'toko-online.online (Pusat)' : slug),
               tagline: parsed.tagline || (existing?.tagline) || '',
               ownerName: parsed.ownerName || (existing?.ownerName) || 'Pengelola Toko',
@@ -1097,13 +1123,15 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
         const slug = ct.storeSlug.toLowerCase();
         const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
         const existing = mapBySlug[slug];
+        const liveUrl = getStoreLiveUrl(slug);
 
         mapBySlug[slug] = {
           storeId: ct.storeId || slug,
           storeSlug: slug,
           displaySlug: isMain ? 'pusat' : slug,
           subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
-          subdomainUrl: isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`,
+          subdomainUrl: liveUrl,
+          liveUrl: liveUrl,
           storeName: ct.storeName || (existing?.storeName) || (isMain ? 'toko-online.online (Pusat)' : slug),
           tagline: ct.tagline || (existing?.tagline) || '',
           ownerName: ct.ownerName || (existing?.ownerName) || 'Pengelola Toko',
