@@ -78,7 +78,6 @@ import {
   Rocket,
   Download,
   Sliders,
-  MessageSquare,
 } from 'lucide-react';
 import { 
   Product, 
@@ -102,7 +101,8 @@ import {
   RewardItem,
   PointsLedgerEntry,
   BrandItem,
-  Category
+  Category,
+  Expedition
 } from '../types';
 import { 
   INITIAL_STAFF_USERS, 
@@ -113,6 +113,7 @@ import {
   CATEGORIES,
   INITIAL_BRANDS 
 } from '../data/mockData';
+import { INITIAL_EXPEDITIONS } from '../data/mockExpeditions';
 import { 
   INITIAL_SUPPLIERS, 
   INITIAL_CUSTOMERS, 
@@ -144,7 +145,7 @@ import { UserAccessManager } from './UserAccessManager';
 import { ReceiptInfoManager } from './ReceiptInfoManager';
 import { PromoInfoManager } from './PromoInfoManager';
 import { CourierManager } from './CourierManager';
-import { openStoreOrderWhatsApp, extractWhatsAppNumber } from '../utils/whatsappHelper';
+import { ExpeditionManager } from './ExpeditionManager';
 import { BrandInfoManager } from './BrandInfoManager';
 import { StoreDokuSettingsManager } from './StoreDokuSettingsManager';
 import { PushNotificationManager } from './PushNotificationManager';
@@ -213,6 +214,8 @@ interface AdminPanelModalProps {
   onUpdateStorePromos?: (promos: StorePromoInfo[]) => void;
   couriers?: CourierInfo[];
   onUpdateCouriers?: (couriers: CourierInfo[]) => void;
+  expeditions?: Expedition[];
+  onUpdateExpeditions?: (expeditions: Expedition[]) => void;
   brandConfig?: BrandHeaderFooterConfig;
   onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
   staffUsers?: StaffUser[];
@@ -233,7 +236,7 @@ interface AdminPanelModalProps {
   onUpdateCategories?: (categories: Category[]) => void;
   brands?: BrandItem[];
   onUpdateBrands?: (brands: BrandItem[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'expeditions' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db';
 }
 
 interface AdminUser {
@@ -274,6 +277,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateStorePromos,
   couriers,
   onUpdateCouriers,
+  expeditions,
+  onUpdateExpeditions,
   brandConfig,
   onUpdateBrandConfig,
   staffUsers: propStaffUsers,
@@ -525,6 +530,31 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_couriers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCouriers));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Internal fallback for expeditions if not provided via props
+  const [internalExpeditions, setInternalExpeditions] = useState<Expedition[]>(() => {
+    try {
+      const key = getTenantStorageKey('toko_online_expeditions', currentSlug);
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : (isNewStore ? [] : INITIAL_EXPEDITIONS);
+    } catch {
+      return isNewStore ? [] : INITIAL_EXPEDITIONS;
+    }
+  });
+
+  const activeExpeditions = expeditions || internalExpeditions;
+  const handleUpdateExpeditions = (newExpeditions: Expedition[]) => {
+    if (onUpdateExpeditions) {
+      onUpdateExpeditions(newExpeditions);
+    }
+    setInternalExpeditions(newExpeditions);
+    try {
+      const key = getTenantStorageKey('toko_online_expeditions', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newExpeditions));
     } catch (e) {
       console.error(e);
     }
@@ -810,8 +840,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   }, [isOpen, currentSlug]);
 
-  // Login Authentication State - Setiap kali masuk panel admin, user wajib melewati modul login
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  // Login Authentication State - Sesi login tersimpan di sessionStorage & localStorage agar user tidak tiba-tiba terlempar keluar saat menggunakan modul
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = sessionStorage.getItem('toko_online_admin_active_user') || localStorage.getItem('toko_online_admin_active_user');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
+  });
 
   const [inputUsername, setInputUsername] = useState('');
   const [inputPin, setInputPin] = useState('');
@@ -821,20 +860,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Dialog konfirmasi keluar / tutup panel admin
   const [confirmExitAction, setConfirmExitAction] = useState<'logout' | 'close' | null>(null);
 
-  // Wajibkan autentikasi modul login setiap kali panel dibuka
+  // Pertahankan sesi login saat panel dibuka & sync kontrol modul
   useEffect(() => {
     if (isOpen) {
       setLoginError(null);
       syncSubdomainModulePolicyFromServer().catch(() => {});
       
-      // Bersihkan sesi dan pastikan user selalu harus login terlebih dahulu
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
-      try {
-        sessionStorage.removeItem('toko_online_admin_active_user');
-        localStorage.removeItem('toko_online_admin_active_user');
-      } catch {}
+      // Ambil user dari storage jika state currentUser kosong
+      if (!currentUser) {
+        try {
+          const saved = sessionStorage.getItem('toko_online_admin_active_user') || localStorage.getItem('toko_online_admin_active_user');
+          if (saved) {
+            setCurrentUser(JSON.parse(saved));
+          } else {
+            setInputUsername('');
+            setInputPin('');
+          }
+        } catch {
+          setInputUsername('');
+          setInputPin('');
+        }
+      }
 
       if (initialTab) {
         setActiveTab(initialTab);
@@ -843,7 +889,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         const masterTabs = ['products', 'categories_brands', 'customers', 'suppliers', 'bulk_import'];
         const inventoryTabs = ['stock_card', 'stock_opname', 'stock_mutations', 'purchase_orders', 'purchases'];
         const marketingTabs = ['promos', 'vouchers', 'points_rewards', 'push_notifications'];
-        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'brand_info'];
+        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'expeditions', 'brand_info'];
         const systemTabs = ['users', 'permissions', 'mysql_db', 'vps_deploy', 'seo_google'];
 
         if (posTabs.includes(initialTab)) setSelectedGroup('pos');
@@ -854,27 +900,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         else if (systemTabs.includes(initialTab)) setSelectedGroup('system');
         else setSelectedGroup('all');
       }
-    } else {
-      // Saat panel ditutup, reset status login
-      setCurrentUser(null);
-      setInputUsername('');
-      setInputPin('');
-      try {
-        sessionStorage.removeItem('toko_online_admin_active_user');
-        localStorage.removeItem('toko_online_admin_active_user');
-      } catch {}
     }
   }, [isOpen, initialTab]);
 
   const handleClose = () => {
     setConfirmExitAction(null);
-    setCurrentUser(null);
-    setInputUsername('');
-    setInputPin('');
-    try {
-      sessionStorage.removeItem('toko_online_admin_active_user');
-      localStorage.removeItem('toko_online_admin_active_user');
-    } catch {}
     onClose();
   };
 
@@ -887,11 +917,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setInputUsername('');
     setInputPin('');
     setConfirmExitAction(null);
-    onClose();
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'expeditions' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
 
   // Kelompok Modul Menu Navigasi Admin
@@ -1301,6 +1330,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
+      try {
+        sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+        localStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+      } catch {}
       setLoginError(null);
       setInputPin('');
 
@@ -1362,6 +1395,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
+      try {
+        sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+        localStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+      } catch {}
       setLoginError(null);
       setInputUsername('');
       setInputPin('');
@@ -1783,7 +1820,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         address: storeAddress.trim(),
         city: storeCity.trim(),
         phone: storePhone.trim(),
-        whatsapp: storePhone.trim(),
         openHours: storeIs24Hours ? 'Buka 24 Jam Non-Stop' : storeOpenHours.trim(),
         distanceKm: Number(storeDistanceKm) || 1.0,
         deliveryFee: Number(storeDeliveryFee) || 0,
@@ -1816,8 +1852,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         code: storeCode.trim() || `KM-${Math.floor(100 + Math.random() * 900)}`,
         address: storeAddress.trim(),
         city: storeCity.trim() || 'Jakarta',
-        phone: storePhone.trim() || '0812-3456-7890',
-        whatsapp: storePhone.trim() || '0812-3456-7890',
+        phone: storePhone.trim() || '021-12345678',
         openHours: storeIs24Hours ? 'Buka 24 Jam Non-Stop' : storeOpenHours.trim(),
         distanceKm: Number(storeDistanceKm) || 1.0,
         deliveryFee: Number(storeDeliveryFee) || 8000,
@@ -2739,10 +2774,11 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                   label: 'Kontrol Modul Subdomain',
                   icon: <Sliders className="w-4 h-4 text-indigo-600" />
                 }] : []),
-                { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & Toko Bebas', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
+                { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & DOKU', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
                 { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
                 { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
-                { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Header & Identitas Toko', icon: <Palette className="w-4 h-4 text-amber-500" /> },
+                { id: 'expeditions', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Editor Ekspedisi & Tarif', icon: <Truck className="w-4 h-4 text-orange-600" />, count: (activeExpeditions || []).length },
+                { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Info Brand & Footer', icon: <Palette className="w-4 h-4 text-amber-500" /> },
 
                 // 6. USER, KEAMANAN & SERVER
                 { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: (staffUsers || []).length },
@@ -3980,27 +4016,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         </div>
                         <div className="text-[11px] text-stone-600 bg-stone-50 p-2.5 rounded-xl space-y-1">
                           <div><strong>Metode:</strong> {order.paymentMethod.toUpperCase()} ({order.paymentStatus})</div>
-                          <div><strong>Tipe:</strong> {order.deliveryType === 'delivery' ? 'Antar ke Rumah' : 'Ambil di Toko'}</div>
-                          <div>
-                            <strong>Cabang Toko:</strong> <span className="font-semibold text-emerald-800">{order.store?.name || 'Cabang Toko'}</span>
-                          </div>
-                          <div>
-                            <strong>No. Telepon / WA Toko:</strong> <span className="font-mono font-bold text-stone-900 bg-white border border-stone-200 px-1.5 py-0.5 rounded text-[10px]">{order.store?.phone || order.store?.whatsapp || '-'}</span>
-                          </div>
+                          <div><strong>Tipe:</strong> {order.deliveryType === 'delivery' ? 'Antar ke Rumah' : order.deliveryType === 'expedition' ? `Ekspedisi (${order.selectedExpedition?.expeditionName || 'JNE'} - ${order.selectedExpedition?.serviceName || 'Reguler'})` : 'Ambil di Toko'}</div>
                           {order.address && (
                             <div><strong>Alamat:</strong> {order.address.fullAddress}</div>
                           )}
-                          <div className="pt-1.5 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openStoreOrderWhatsApp(order)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                              title="Kirim / Teruskan Rincian Pesanan ke WhatsApp Toko Cabang"
-                            >
-                              <MessageSquare className="w-3 h-3" />
-                              <span>Kirim ke WA Cabang</span>
-                            </button>
-                          </div>
                           {(order.customerLocation || order.address?.latitude) && (
                             <div className="mt-2 pt-2 border-t border-stone-200">
                               <div className="flex items-center justify-between">
@@ -4141,22 +4160,16 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                       <div>
-                        <label className="block font-bold text-stone-700 mb-1 flex items-center justify-between">
-                          <span>Nomor Telepon / WhatsApp Toko:</span>
-                          <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                            Pesanan Masuk ke WA Ini
-                          </span>
+                        <label className="block font-bold text-stone-700 mb-1">
+                          Nomor Telepon / WhatsApp Toko:
                         </label>
                         <input
                           type="text"
                           value={storePhone}
                           onChange={e => setStorePhone(e.target.value)}
-                          placeholder="0812-3456-7890 / 0857-1122-3344"
+                          placeholder="021-3901234 / 0812-3456-7890"
                           className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl bg-white font-medium text-stone-900 focus:ring-2 focus:ring-purple-200"
                         />
-                        <p className="text-[10px] text-stone-500 mt-1">
-                          Setiap pesanan baru (baik pesanan diambil di kasir maupun diantar kurir) otomatis masuk ke nomor WhatsApp cabang ini.
-                        </p>
                       </div>
 
                       <div>
@@ -4446,21 +4459,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
                           {/* Detail Pills */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-2 border-t border-stone-100">
-                            <div className="bg-emerald-50/70 border border-emerald-200/60 p-2 rounded-xl text-stone-700 flex items-center justify-between gap-1.5">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span className="truncate font-semibold">{store.phone || store.whatsapp || '-'}</span>
-                              </div>
-                              <a
-                                href={`https://wa.me/${extractWhatsAppNumber(store.phone || store.whatsapp)}?text=${encodeURIComponent(`Halo ${store.name}, tes koneksi WhatsApp Toko Cabang.`)}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[9px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-1.5 py-0.5 rounded shadow-2xs shrink-0 flex items-center gap-0.5 cursor-pointer"
-                                title="Tes Kirim Pesan ke WhatsApp Toko Cabang"
-                              >
-                                <MessageSquare className="w-2.5 h-2.5" />
-                                <span>Tes WA</span>
-                              </a>
+                            <div className="bg-stone-50 p-2 rounded-xl text-stone-700 flex items-center gap-1.5">
+                              <Phone className="w-3 h-3 text-stone-400 shrink-0" />
+                              <span className="truncate">{store.phone || '-'}</span>
                             </div>
 
                             <div className="bg-stone-50 p-2 rounded-xl text-stone-700 flex items-center gap-1.5">
@@ -5422,6 +5423,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             </div>
           ))}
 
+          {/* TAB 9B: MODUL EXPEDISI EDITOR & TARIF PENGIRIMAN (JNE, J&T, SICEPAT, DLL) */}
+          {activeTab === 'expeditions' && (!currentUserPermissions.couriers?.canView ? (
+            renderAccessDenied('Editor Ekspedisi & Tarif')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.couriers?.canEdit && renderReadOnlyBanner('Editor Ekspedisi & Tarif')}
+              <ExpeditionManager
+                expeditions={activeExpeditions}
+                onUpdateExpeditions={handleUpdateExpeditions}
+                currentSlug={currentSlug}
+              />
+            </div>
+          ))}
+
           {/* TAB 10: INFO BRAND, HEADER & FOOTER (KUSTOMISASI LOGO & FOOTER) */}
           {activeTab === 'brand_info' && (!currentUserPermissions.brand_info?.canView ? (
             renderAccessDenied('Informasi Brand & Footer')
@@ -5437,32 +5452,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
           {/* TAB: IDENTITAS TOKO BEBAS & DOKU PAYMENT GATEWAY */}
           {activeTab === 'store_doku_settings' && (!currentUserPermissions.brand_info?.canView ? (
-            renderAccessDenied('Identitas Toko & Toko Bebas')
+            renderAccessDenied('Identitas Toko & DOKU')
           ) : (
             <div className="space-y-4">
-              {!currentUserPermissions.brand_info?.canEdit && renderReadOnlyBanner('Identitas Toko & Toko Bebas')}
+              {!currentUserPermissions.brand_info?.canEdit && renderReadOnlyBanner('Identitas Toko & DOKU')}
               <StoreDokuSettingsManager
                 brandConfig={activeBrandConfig}
                 onUpdateBrandConfig={handleUpdateBrandConfig}
-                onUpdateTenantConfig={(updatedTenant) => {
-                  if (onUpdateStores && stores) {
-                    const normSlug = (updatedTenant.storeSlug || '').toLowerCase();
-                    const newStores = stores.map((s) => {
-                      if (s.id === normSlug || s.id === updatedTenant.storeId || normSlug === 'default') {
-                        return {
-                          ...s,
-                          name: updatedTenant.storeName,
-                          phone: updatedTenant.whatsapp || updatedTenant.phone || s.phone,
-                          whatsapp: updatedTenant.whatsapp || updatedTenant.phone || s.whatsapp,
-                          address: updatedTenant.address || s.address,
-                          city: updatedTenant.city || s.city,
-                        };
-                      }
-                      return s;
-                    });
-                    onUpdateStores(newStores);
-                  }
-                }}
               />
             </div>
           ))}
@@ -5860,9 +5856,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
             <div className="bg-stone-50 rounded-2xl p-3 border border-stone-200 text-xs text-stone-600">
               {confirmExitAction === 'logout' ? (
-                <span>Sesi aktif Anda akan diakhiri. Anda wajib memasukkan ID & PIN saat masuk kembali ke panel admin.</span>
+                <span>Sesi aktif Anda akan diakhiri. Anda perlu memasukkan ID & PIN saat membuka kembali panel admin.</span>
               ) : (
-                <span>Sesi panel admin akan ditutup. Anda wajib memasukkan ID Pengguna & Password/PIN saat membuka kembali panel admin.</span>
+                <span>Sesi login dan data modul Anda tetap aman tersimpan selama tab browser aktif.</span>
               )}
             </div>
 

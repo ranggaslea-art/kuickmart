@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Trash2, 
@@ -12,11 +12,16 @@ import {
   AlertCircle, 
   Check,
   Percent,
-  Store as StoreIcon
+  Store as StoreIcon,
+  Bike,
+  Clock,
+  Scale,
+  Package
 } from 'lucide-react';
-import { CartItem, Voucher, MemberProfile, Store } from '../types';
+import { CartItem, Voucher, MemberProfile, Store, Expedition, ExpeditionServiceRate, OrderExpeditionDetail } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
+import { INITIAL_EXPEDITIONS, calculateExpeditionRate, estimateCartWeightKg } from '../data/mockExpeditions';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -33,8 +38,11 @@ interface CartDrawerProps {
   onToggleUsePoints: (use: boolean) => void;
   onProceedToCheckout: () => void;
   store: Store;
-  deliveryType: 'delivery' | 'pickup';
-  onSelectDeliveryType?: (type: 'delivery' | 'pickup') => void;
+  deliveryType: 'delivery' | 'pickup' | 'expedition';
+  onSelectDeliveryType?: (type: 'delivery' | 'pickup' | 'expedition') => void;
+  expeditions?: Expedition[];
+  selectedExpedition?: OrderExpeditionDetail | null;
+  onSelectExpedition?: (detail: OrderExpeditionDetail | null) => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -54,18 +62,90 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   store,
   deliveryType,
   onSelectDeliveryType,
+  expeditions = INITIAL_EXPEDITIONS,
+  selectedExpedition,
+  onSelectExpedition,
 }) => {
   const [customCouponInput, setCustomCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [showVoucherList, setShowVoucherList] = useState(false);
 
+  // Active expeditions
+  const activeExpeditions = useMemo(() => {
+    return (expeditions && expeditions.length > 0 ? expeditions : INITIAL_EXPEDITIONS).filter(
+      (e) => e.isActive
+    );
+  }, [expeditions]);
+
+  // Estimated cart weight
+  const estimatedWeightKg = useMemo(() => {
+    return estimateCartWeightKg(cartItems);
+  }, [cartItems]);
+
+  // Internal selected expedition state if not controlled externally
+  const [internalExpeditionId, setInternalExpeditionId] = useState<string>(() => {
+    return selectedExpedition?.expeditionId || activeExpeditions[0]?.id || 'exp_jne';
+  });
+
+  const currentExpedition = useMemo(() => {
+    return activeExpeditions.find((e) => e.id === internalExpeditionId) || activeExpeditions[0];
+  }, [activeExpeditions, internalExpeditionId]);
+
+  const [internalServiceId, setInternalServiceId] = useState<string>(() => {
+    if (selectedExpedition?.serviceId) return selectedExpedition.serviceId;
+    const firstActiveSrv = activeExpeditions[0]?.services?.find((s) => s.isActive);
+    return firstActiveSrv?.id || '';
+  });
+
+  const currentService = useMemo(() => {
+    if (!currentExpedition) return null;
+    const activeServices = (currentExpedition.services || []).filter((s) => s.isActive);
+    return activeServices.find((s) => s.id === internalServiceId) || activeServices[0] || null;
+  }, [currentExpedition, internalServiceId]);
+
+  // Notify parent of expedition details when selection or weight changes
+  useEffect(() => {
+    if (currentExpedition && currentService) {
+      const calculatedRate = calculateExpeditionRate(currentService, estimatedWeightKg);
+      const detail: OrderExpeditionDetail = {
+        expeditionId: currentExpedition.id,
+        expeditionName: currentExpedition.name,
+        expeditionCode: currentExpedition.code,
+        serviceId: currentService.id,
+        serviceName: currentService.serviceName,
+        serviceCode: currentService.serviceCode,
+        etd: currentService.etd,
+        rate: calculatedRate,
+        weightKg: estimatedWeightKg,
+      };
+      if (onSelectExpedition) {
+        onSelectExpedition(detail);
+      }
+    }
+  }, [currentExpedition?.id, currentService?.id, estimatedWeightKg]);
+
+  const expeditionFee = useMemo(() => {
+    if (!currentService) return 12000;
+    return calculateExpeditionRate(currentService, estimatedWeightKg);
+  }, [currentService, estimatedWeightKg]);
+
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
 
-  // Check if shopping is below minimum spend
+  // Check if shopping is below minimum spend for local delivery
   const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
-  // When below minimum spend, ongkos kirim is disabled / inactive and service switches to 'pickup'
-  const effectiveDeliveryType = isBelowMinOrder ? 'pickup' : deliveryType;
-  const rawDeliveryFee = (!isBelowMinOrder && effectiveDeliveryType === 'delivery') ? store.deliveryFee : 0;
+  // When below minimum spend, only local store delivery switches to 'pickup', expedition stays selectable
+  const effectiveDeliveryType = (isBelowMinOrder && deliveryType === 'delivery') ? 'pickup' : deliveryType;
+
+  // Calculate raw delivery fee
+  const rawDeliveryFee = useMemo(() => {
+    if (effectiveDeliveryType === 'delivery') {
+      return isBelowMinOrder ? 0 : store.deliveryFee;
+    }
+    if (effectiveDeliveryType === 'expedition') {
+      return expeditionFee;
+    }
+    return 0; // pickup
+  }, [effectiveDeliveryType, isBelowMinOrder, store.deliveryFee, expeditionFee]);
 
   // Sync to parent if below minimum and was 'delivery'
   useEffect(() => {
@@ -309,39 +389,151 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Bottom Section: Delivery Selector, Vouchers, Loyalty, Breakdown, and Checkout Button */}
         {cartItems.length > 0 && (
           <div className="p-4 border-t border-stone-200 bg-stone-50/70 space-y-3">
-            {/* Delivery Service Mode Selector */}
-            <div className="bg-stone-100/90 p-1 rounded-xl grid grid-cols-2 gap-1 text-xs font-semibold">
+            {/* Delivery Service Mode Selector: Diantar, Ekspedisi, Ambil di Toko */}
+            <div className="bg-stone-100/90 p-1 rounded-xl grid grid-cols-3 gap-1 text-xs font-semibold">
               <button
                 type="button"
                 disabled={isBelowMinOrder}
                 onClick={() => !isBelowMinOrder && onSelectDeliveryType && onSelectDeliveryType('delivery')}
-                className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                className={`py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
                   isBelowMinOrder
                     ? 'opacity-50 cursor-not-allowed bg-stone-200/50 text-stone-400'
                     : effectiveDeliveryType === 'delivery'
                     ? 'bg-white text-blue-700 font-bold shadow-2xs cursor-pointer'
                     : 'text-stone-600 hover:text-stone-900 cursor-pointer'
                 }`}
+                title="Pengantaran langsung oleh kurir toko ke alamat Anda"
               >
-                <Truck className="w-3.5 h-3.5" />
-                <span>
-                  {isBelowMinOrder ? 'Diantar (Nonaktif)' : `Diantar (${formatRupiah(store.deliveryFee)})`}
+                <Bike className="w-3.5 h-3.5" />
+                <span className="truncate">
+                  {isBelowMinOrder ? 'Diantar (Off)' : 'Diantar'}
                 </span>
               </button>
 
               <button
                 type="button"
+                onClick={() => onSelectDeliveryType && onSelectDeliveryType('expedition')}
+                className={`py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  effectiveDeliveryType === 'expedition'
+                    ? 'bg-white text-orange-600 font-bold shadow-2xs ring-1 ring-orange-500/20'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="Pengiriman paket via ekspedisi logistik (JNE, J&T, SiCepat, dll)"
+              >
+                <Truck className="w-3.5 h-3.5 text-orange-600" />
+                <span className="truncate">Ekspedisi</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => onSelectDeliveryType && onSelectDeliveryType('pickup')}
-                className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   effectiveDeliveryType === 'pickup'
                     ? 'bg-white text-red-600 font-bold shadow-2xs'
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
+                title="Ambil sendiri langsung di kasir toko"
               >
                 <StoreIcon className="w-3.5 h-3.5" />
-                <span>Ambil di Toko (Gratis)</span>
+                <span className="truncate">Ambil Toko</span>
               </button>
             </div>
+
+            {/* EXPEDITION SELECTOR PANEL JNE / J&T / SICEPAT / DLL */}
+            {effectiveDeliveryType === 'expedition' && (
+              <div className="bg-white rounded-xl border border-orange-200 p-3 shadow-2xs space-y-2.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="p-1 rounded-lg bg-orange-100 text-orange-700">
+                      <Truck className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="text-xs font-bold text-stone-900">Ekspedisi &amp; Tarif Kirim</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Scale className="w-2.5 h-2.5 text-stone-500" /> Est. {estimatedWeightKg} kg
+                  </span>
+                </div>
+
+                {/* Pilih Ekspedisi (JNE, J&T, SiCepat, POS, TIKI, dll) */}
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                    Pilih Mitra Ekspedisi:
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5 max-h-24 overflow-y-auto pr-0.5">
+                    {activeExpeditions.map((exp) => {
+                      const isCurrent = (currentExpedition?.id === exp.id);
+                      return (
+                        <button
+                          key={exp.id}
+                          type="button"
+                          onClick={() => {
+                            setInternalExpeditionId(exp.id);
+                            const firstActiveSrv = exp.services?.find((s) => s.isActive);
+                            if (firstActiveSrv) {
+                              setInternalServiceId(firstActiveSrv.id);
+                            }
+                          }}
+                          className={`p-1.5 rounded-xl border text-center transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'border-orange-500 bg-orange-50 text-orange-950 font-bold shadow-2xs'
+                              : 'border-stone-200 hover:border-stone-300 bg-stone-50/50 text-stone-700'
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold block truncate">{exp.name}</span>
+                          <span className="text-[9px] font-mono text-stone-500">{exp.code}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Pilih Layanan & Tarif Pengiriman */}
+                {currentExpedition && (
+                  <div className="space-y-1.5 pt-1.5 border-t border-stone-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                      Pilihan Layanan {currentExpedition.name}:
+                    </span>
+                    <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                      {(currentExpedition.services || []).filter((s) => s.isActive).map((srv) => {
+                        const calculated = calculateExpeditionRate(srv, estimatedWeightKg);
+                        const isSelected = (currentService?.id === srv.id);
+                        return (
+                          <div
+                            key={srv.id}
+                            onClick={() => setInternalServiceId(srv.id)}
+                            className={`p-2 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
+                              isSelected
+                                ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-400 font-bold shadow-2xs'
+                                : 'border-stone-200 hover:border-stone-300 bg-white'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-stone-900 truncate">{srv.serviceName}</span>
+                                <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-stone-100 text-stone-600">
+                                  {srv.serviceCode}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-stone-500 flex items-center gap-1 mt-0.5">
+                                <Clock className="w-2.5 h-2.5 text-stone-400 shrink-0" /> {srv.etd}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="font-bold text-xs text-orange-700 block font-mono">
+                                {formatRupiah(calculated)}
+                              </span>
+                              <span className="text-[9px] text-stone-400">
+                                {srv.rateType === 'per_kg' ? `(${Math.ceil(estimatedWeightKg)} kg)` : 'Flat'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Voucher Selector Accordion */}
             <div className="bg-white rounded-xl border border-stone-200 p-2.5">
@@ -459,7 +651,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <span>Subtotal Produk</span>
                 <span className="font-semibold text-stone-900">{formatRupiah(subtotal)}</span>
               </div>
-              {isBelowMinOrder ? (
+              {isBelowMinOrder && effectiveDeliveryType === 'delivery' ? (
                 <div className="flex justify-between items-center text-xs">
                   <span className="flex items-center gap-1">
                     <span>Ongkos Kirim</span>
@@ -469,15 +661,27 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </span>
                   <span className="font-semibold text-emerald-700">Rp 0 (Ambil di Toko)</span>
                 </div>
+              ) : effectiveDeliveryType === 'expedition' ? (
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1 min-w-0 pr-2">
+                    <span className="truncate">
+                      Ongkir Ekspedisi ({currentExpedition?.code || 'JNE'} - {currentService?.serviceName || 'Reguler'})
+                    </span>
+                    <span className="text-[9px] bg-orange-100 text-orange-800 font-semibold px-1.5 py-0.2 rounded shrink-0">
+                      {currentService?.etd || '1-2 Hari'}
+                    </span>
+                  </div>
+                  <span className="font-semibold text-stone-900 shrink-0 font-mono">{formatRupiah(rawDeliveryFee)}</span>
+                </div>
               ) : effectiveDeliveryType === 'delivery' ? (
                 <div className="flex justify-between">
                   <span>Ongkos Kirim ({store.distanceKm} km)</span>
-                  <span className="font-semibold text-stone-900">{formatRupiah(rawDeliveryFee)}</span>
+                  <span className="font-semibold text-stone-900 font-mono">{formatRupiah(rawDeliveryFee)}</span>
                 </div>
               ) : (
                 <div className="flex justify-between">
                   <span>Ongkos Kirim (Ambil di Toko)</span>
-                  <span className="font-semibold text-emerald-600">Gratis (Rp 0)</span>
+                  <span className="font-semibold text-emerald-600 font-mono">Gratis (Rp 0)</span>
                 </div>
               )}
               {voucherDiscount > 0 && (

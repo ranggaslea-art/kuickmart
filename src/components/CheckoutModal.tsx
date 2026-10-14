@@ -24,7 +24,8 @@ import {
   Compass,
   Loader2,
   Zap,
-  Check
+  Check,
+  Truck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -35,7 +36,9 @@ import {
   MemberProfile, 
   PaymentMethod, 
   Order,
-  CourierInfo 
+  CourierInfo,
+  Expedition,
+  OrderExpeditionDetail
 } from '../types';
 import { formatRupiah, generateOrderNumber } from '../utils/formatters';
 import { loadStoreTenantConfig, getStoreSlugFromUrl } from '../utils/tenantHelper';
@@ -49,14 +52,17 @@ interface CheckoutModalProps {
   addresses: Address[];
   currentAddress: Address;
   onSelectAddress: (addr: Address) => void;
-  deliveryType: 'delivery' | 'pickup';
-  onSelectDeliveryType: (type: 'delivery' | 'pickup') => void;
+  deliveryType: 'delivery' | 'pickup' | 'expedition';
+  onSelectDeliveryType: (type: 'delivery' | 'pickup' | 'expedition') => void;
   appliedVoucher: Voucher | null;
   usePoints: boolean;
   member: MemberProfile;
   onOrderCreated: (order: Order) => void;
   couriers?: CourierInfo[];
   visitorId?: string;
+  expeditions?: Expedition[];
+  selectedExpedition?: OrderExpeditionDetail | null;
+  onSelectExpedition?: (detail: OrderExpeditionDetail | null) => void;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -75,6 +81,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOrderCreated,
   couriers,
   visitorId,
+  expeditions,
+  selectedExpedition,
+  onSelectExpedition,
 }) => {
   const [deliverySlot, setDeliverySlot] = useState('Instan 30 Menit');
   const [pickupSlot, setPickupSlot] = useState('15 Menit Lagi (Siap Ambil)');
@@ -249,8 +258,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
   const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
-  const effectiveDeliveryType = isBelowMinOrder ? 'pickup' : deliveryType;
-  const rawDeliveryFee = (!isBelowMinOrder && effectiveDeliveryType === 'delivery') ? store.deliveryFee : 0;
+  const effectiveDeliveryType = (isBelowMinOrder && deliveryType === 'delivery') ? 'pickup' : deliveryType;
+  const rawDeliveryFee = (() => {
+    if (effectiveDeliveryType === 'delivery') {
+      return isBelowMinOrder ? 0 : store.deliveryFee;
+    }
+    if (effectiveDeliveryType === 'expedition') {
+      return selectedExpedition?.rate || 12000;
+    }
+    return 0; // pickup
+  })();
 
   // Auto-switch to pickup if below minimum and was on delivery
   useEffect(() => {
@@ -423,13 +440,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         items: [...cartItems],
         store: orderStore,
         deliveryType: effectiveDeliveryType,
-        deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
+        selectedExpedition: effectiveDeliveryType === 'expedition' ? (selectedExpedition || undefined) : undefined,
+        deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : (effectiveDeliveryType === 'expedition' ? selectedExpedition?.etd : undefined),
         pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
         customerId: member?.id || visitorId,
         customerName: currentAddress?.recipientName || member?.name || 'Pelanggan',
         customerPhone: currentAddress?.phone || member?.phone || '',
         deviceSessionId: visitorId,
-        address: effectiveDeliveryType === 'delivery' ? {
+        address: (effectiveDeliveryType === 'delivery' || effectiveDeliveryType === 'expedition') ? {
           ...currentAddress,
           ...(recordedLocation ? {
             latitude: recordedLocation.latitude,
@@ -521,16 +539,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           },
           {
             status: 'picking',
-            title: 'Pengecekan Barang & Kadaluarsa',
-            description: 'Item telah lengkap & dikemas dalam kantong ramah lingkungan.',
+            title: effectiveDeliveryType === 'expedition' ? 'Pengecekan & Pengemasan Paket' : 'Pengecekan Barang & Kadaluarsa',
+            description: effectiveDeliveryType === 'expedition'
+              ? 'Item lengkap dan dipacking aman siap serah terima ke pihak ekspedisi.'
+              : 'Item telah lengkap & dikemas dalam kantong ramah lingkungan.',
             timestamp: 'Estimasi +5 Menit',
             isCompleted: false,
           },
           {
-            status: deliveryType === 'delivery' ? 'delivering' : 'ready_for_pickup',
-            title: deliveryType === 'delivery' ? 'Driver Menuju Alamat Anda' : 'Siap Diambil di Kasir',
-            description: deliveryType === 'delivery' ? 'Driver kurir sedang dalam perjalanan menuju alamat Anda.' : 'Tunjukkan barcode pesanan ke kasir toko.',
-            timestamp: 'Estimasi +15 Menit',
+            status: effectiveDeliveryType === 'delivery' ? 'delivering' : (effectiveDeliveryType === 'expedition' ? 'delivering' : 'ready_for_pickup'),
+            title: effectiveDeliveryType === 'delivery'
+              ? 'Driver Menuju Alamat Anda'
+              : effectiveDeliveryType === 'expedition'
+              ? `Pengiriman via ${selectedExpedition?.expeditionName || 'Ekspedisi'}`
+              : 'Siap Diambil di Kasir',
+            description: effectiveDeliveryType === 'delivery'
+              ? 'Driver kurir sedang dalam perjalanan menuju alamat Anda.'
+              : effectiveDeliveryType === 'expedition'
+              ? `Paket diproses via ${selectedExpedition?.serviceName || 'Layanan Reguler'} (${selectedExpedition?.etd || '1-2 Hari'}). No. Resi pengiriman akan segera diterbitkan.`
+              : 'Tunjukkan barcode pesanan ke kasir toko.',
+            timestamp: effectiveDeliveryType === 'expedition' ? (selectedExpedition?.etd || '1-2 Hari') : 'Estimasi +15 Menit',
             isCompleted: false,
           },
         ],
@@ -582,12 +610,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <label className="text-xs font-bold uppercase tracking-wider text-stone-500">
               1. Pilihan Layanan
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 disabled={isBelowMinOrder}
                 onClick={() => !isBelowMinOrder && onSelectDeliveryType('delivery')}
-                className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
                   isBelowMinOrder
                     ? 'opacity-50 cursor-not-allowed bg-stone-100 border-stone-200'
                     : effectiveDeliveryType === 'delivery'
@@ -595,15 +623,35 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     : 'border-stone-200 hover:border-stone-300 bg-white cursor-pointer'
                 }`}
               >
-                <div className={`p-2 rounded-xl ${isBelowMinOrder ? 'bg-stone-200 text-stone-400' : effectiveDeliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <div className={`p-2 rounded-xl shrink-0 ${isBelowMinOrder ? 'bg-stone-200 text-stone-400' : effectiveDeliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
                   <Bike className="w-4 h-4" />
                 </div>
-                <div>
-                  <div className="font-bold text-xs text-stone-900">
-                    {isBelowMinOrder ? 'Diantar (Nonaktif)' : 'Diantar Kurir'}
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-stone-900 truncate">
+                    {isBelowMinOrder ? 'Diantar (Off)' : 'Diantar Kurir'}
                   </div>
-                  <div className="text-[10px] text-stone-500">
-                    {isBelowMinOrder ? `Min. ${formatRupiah(store.minOrder)} (Ongkir Nonaktif)` : `Ongkir ${formatRupiah(store.deliveryFee)}`}
+                  <div className="text-[10px] text-stone-500 truncate">
+                    {isBelowMinOrder ? `Min. ${formatRupiah(store.minOrder)}` : `${formatRupiah(store.deliveryFee)}`}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectDeliveryType('expedition')}
+                className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                  effectiveDeliveryType === 'expedition'
+                    ? 'border-orange-600 bg-orange-50/50 shadow-2xs ring-1 ring-orange-500/20'
+                    : 'border-stone-200 hover:border-stone-300 bg-white'
+                }`}
+              >
+                <div className={`p-2 rounded-xl shrink-0 ${effectiveDeliveryType === 'expedition' ? 'bg-orange-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-stone-900 truncate">Ekspedisi</div>
+                  <div className="text-[10px] text-orange-700 font-semibold truncate">
+                    {selectedExpedition ? `${selectedExpedition.expeditionCode} (${formatRupiah(selectedExpedition.rate)})` : 'JNE, J&T, dll'}
                   </div>
                 </div>
               </button>
@@ -611,21 +659,53 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectDeliveryType('pickup')}
-                className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                   effectiveDeliveryType === 'pickup'
                     ? 'border-red-600 bg-red-50/50 shadow-2xs'
                     : 'border-stone-200 hover:border-stone-300 bg-white'
                 }`}
               >
-                <div className={`p-2 rounded-xl ${effectiveDeliveryType === 'pickup' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <div className={`p-2 rounded-xl shrink-0 ${effectiveDeliveryType === 'pickup' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
                   <StoreIcon className="w-4 h-4" />
                 </div>
-                <div>
-                  <div className="font-bold text-xs text-stone-900">Ambil di Toko</div>
-                  <div className="text-[10px] text-emerald-600 font-semibold">Gratis (Rp 0 Ongkir)</div>
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-stone-900 truncate">Ambil Toko</div>
+                  <div className="text-[10px] text-emerald-600 font-semibold truncate">Gratis (Rp 0)</div>
                 </div>
               </button>
             </div>
+
+            {/* Expedition Selected Details Banner */}
+            {effectiveDeliveryType === 'expedition' && (
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 bg-orange-100 text-orange-700 rounded-xl shrink-0">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-stone-900 text-xs truncate">
+                      {selectedExpedition?.expeditionName || 'JNE Express'} - {selectedExpedition?.serviceName || 'Layanan Reguler'}
+                    </div>
+                    <div className="text-[10px] text-stone-600 flex items-center gap-2 mt-0.5">
+                      <span className="flex items-center gap-1 font-medium">
+                        <Clock className="w-2.5 h-2.5 text-stone-400" /> {selectedExpedition?.etd || '1-2 Hari Kerja'}
+                      </span>
+                      <span>•</span>
+                      <span>Ongkir: <strong className="text-orange-950 font-mono">{formatRupiah(selectedExpedition?.rate || 12000)}</strong></span>
+                      {selectedExpedition?.weightKg && (
+                        <>
+                          <span>•</span>
+                          <span>Est. {selectedExpedition.weightKg} kg</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span className="font-mono font-black text-[11px] text-orange-800 bg-orange-200/60 px-2 py-0.5 rounded-lg shrink-0">
+                  {selectedExpedition?.serviceCode || 'REG'}
+                </span>
+              </div>
+            )}
 
             {/* Below min order warning banner */}
             {isBelowMinOrder && (
@@ -636,14 +716,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     Belanja di bawah batas minimum ({formatRupiah(store.minOrder)})
                   </span>
                   <span className="text-[10px] text-amber-800 leading-tight block mt-0.5">
-                    Layanan antar kurir dan ongkos kirim dinonaktifkan. Pesanan Anda diproses via <strong>Ambil di Toko</strong> dan Anda dapat langsung menekan tombol pembayaran.
+                    Layanan antar kurir dan ongkos kirim dinonaktifkan. Anda dapat memilih <strong>Ekspedisi</strong> atau <strong>Ambil di Toko</strong> dan langsung menyelesaikan pembayaran.
                   </span>
                 </div>
               </div>
             )}
 
-            {/* Time Slot Picker */}
-            {deliveryType === 'delivery' ? (
+            {/* Time Slot Picker for Delivery or Pickup */}
+            {effectiveDeliveryType === 'delivery' ? (
               <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200">
                 <span className="text-[11px] font-semibold text-stone-700 block mb-1.5 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-blue-600" /> Pilih Estimasi Waktu Pengantaran:
@@ -664,7 +744,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   ))}
                 </div>
               </div>
-            ) : (
+            ) : effectiveDeliveryType === 'pickup' ? (
               <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200">
                 <span className="text-[11px] font-semibold text-stone-700 block mb-1.5 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-red-600" /> Waktu Pengambilan di Outlet:
@@ -685,16 +765,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* 2. Alamat Pengantaran / Toko Pickup */}
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-stone-500">
-              {deliveryType === 'delivery' ? '2. Alamat Pengiriman' : '2. Lokasi Outlet Pengambilan'}
+              {effectiveDeliveryType === 'delivery'
+                ? '2. Alamat Pengantaran Kurir'
+                : effectiveDeliveryType === 'expedition'
+                ? '2. Alamat Pengiriman Ekspedisi (Lengkap)'
+                : '2. Lokasi Outlet Pengambilan'}
             </label>
 
-            {deliveryType === 'delivery' ? (
+            {effectiveDeliveryType === 'delivery' || effectiveDeliveryType === 'expedition' ? (
               <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2">
@@ -1265,7 +1349,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <span>Total Pesanan ({cartItems.reduce((a, b) => a + b.quantity, 0)} paket)</span>
               <span className="font-semibold text-stone-900">{formatRupiah(subtotal)}</span>
             </div>
-            {isBelowMinOrder ? (
+            {isBelowMinOrder && effectiveDeliveryType === 'delivery' ? (
               <div className="flex justify-between text-xs text-stone-600 items-center">
                 <span className="flex items-center gap-1">
                   <span>Ongkos Kirim</span>
@@ -1275,15 +1359,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
                 <span className="font-semibold text-emerald-700">Rp 0 (Ambil di Toko)</span>
               </div>
+            ) : effectiveDeliveryType === 'expedition' ? (
+              <div className="flex justify-between text-xs text-stone-600 items-center">
+                <span className="truncate pr-2">
+                  Biaya Ekspedisi ({selectedExpedition?.expeditionCode || 'JNE'} - {selectedExpedition?.serviceName || 'Reguler'})
+                </span>
+                <span className="font-semibold text-stone-900 shrink-0 font-mono">{formatRupiah(rawDeliveryFee)}</span>
+              </div>
             ) : effectiveDeliveryType === 'delivery' ? (
               <div className="flex justify-between text-xs text-stone-600">
-                <span>Biaya Pengantaran</span>
-                <span className="font-semibold text-stone-900">{formatRupiah(rawDeliveryFee)}</span>
+                <span>Biaya Pengantaran ({store.distanceKm} km)</span>
+                <span className="font-semibold text-stone-900 font-mono">{formatRupiah(rawDeliveryFee)}</span>
               </div>
             ) : (
               <div className="flex justify-between text-xs text-stone-600">
                 <span>Biaya Pengantaran (Ambil di Toko)</span>
-                <span className="font-semibold text-emerald-600">Gratis (Rp 0)</span>
+                <span className="font-semibold text-emerald-600 font-mono">Gratis (Rp 0)</span>
               </div>
             )}
             {voucherDiscount > 0 && (

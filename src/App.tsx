@@ -69,7 +69,9 @@ import {
   BrandHeaderFooterConfig,
   StaffUser,
   StoreTenantIdentity,
-  BrandItem
+  BrandItem,
+  Expedition,
+  OrderExpeditionDetail
 } from './types';
 import { 
   PRODUCTS, 
@@ -85,6 +87,7 @@ import {
   INITIAL_STAFF_USERS,
   INITIAL_BRANDS
 } from './data/mockData';
+import { INITIAL_EXPEDITIONS } from './data/mockExpeditions';
 import { INITIAL_SAMPLE_ORDERS } from './data/mockOrders';
 import { 
   fetchMySqlStatus,
@@ -154,6 +157,7 @@ const STORAGE_STORES_KEY = 'toko_online_stores';
 const STORAGE_RECEIPT_CONFIGS_KEY = 'nusamart_receipt_configs';
 const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
 const STORAGE_COURIERS_KEY = 'toko_online_couriers';
+const STORAGE_EXPEDITIONS_KEY = 'toko_online_expeditions';
 const STORAGE_BRAND_CONFIG_KEY = 'toko_online_brand_config';
 const STORAGE_STAFF_USERS_KEY = 'toko_online_staff_users';
 const STORAGE_MY_ORDER_IDS_KEY = 'nusamart_my_order_ids';
@@ -332,7 +336,8 @@ export default function App() {
   });
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [currentAddress, setCurrentAddress] = useState<Address>(INITIAL_ADDRESSES[0]);
-  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
+  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup' | 'expedition'>('delivery');
+  const [selectedExpedition, setSelectedExpedition] = useState<OrderExpeditionDetail | null>(null);
 
   // Member & Loyalty
   const [member, setMember] = useState<MemberProfile>(() => {
@@ -403,7 +408,7 @@ export default function App() {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>('products');
+  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'expeditions' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
@@ -767,6 +772,36 @@ export default function App() {
     const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
     localStorage.setItem(key, JSON.stringify(couriers));
   }, [couriers, currentSlug]);
+
+  // Expeditions Management State (JNE, J&T, SiCepat, dll. & Macam-Macam Tarif Pengiriman)
+  const [expeditions, setExpeditions] = useState<Expedition[]>(() => {
+    try {
+      const key = getTenantStorageKey(STORAGE_EXPEDITIONS_KEY, currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return isNewStore ? [] : INITIAL_EXPEDITIONS;
+    } catch {
+      return isNewStore ? [] : INITIAL_EXPEDITIONS;
+    }
+  });
+
+  useEffect(() => {
+    const key = getTenantStorageKey(STORAGE_EXPEDITIONS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(expeditions));
+  }, [expeditions, currentSlug]);
+
+  const handleUpdateExpeditions = (newExpeditions: Expedition[]) => {
+    setExpeditions(newExpeditions);
+    try {
+      const key = getTenantStorageKey(STORAGE_EXPEDITIONS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newExpeditions));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Staff Users Management State (Admin, Supervisor, Kasir, Gudang)
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
@@ -2311,6 +2346,10 @@ export default function App() {
         }}
         store={currentStore}
         deliveryType={deliveryType}
+        onSelectDeliveryType={setDeliveryType}
+        expeditions={expeditions}
+        selectedExpedition={selectedExpedition}
+        onSelectExpedition={setSelectedExpedition}
       />
 
       {/* 3. Checkout Modal */}
@@ -2330,6 +2369,9 @@ export default function App() {
         onOrderCreated={handleOrderCreated}
         couriers={couriers}
         visitorId={visitorId}
+        expeditions={expeditions}
+        selectedExpedition={selectedExpedition}
+        onSelectExpedition={setSelectedExpedition}
       />
 
       {/* 4. Live Order Tracker Modal */}
@@ -2393,6 +2435,8 @@ export default function App() {
           onUpdateStorePromos={handleUpdateStorePromos}
           couriers={couriers}
           onUpdateCouriers={handleUpdateCouriers}
+          expeditions={expeditions}
+          onUpdateExpeditions={handleUpdateExpeditions}
           brandConfig={brandConfig}
           onUpdateBrandConfig={handleUpdateBrandConfig}
           staffUsers={staffUsers}
