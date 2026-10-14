@@ -123,8 +123,11 @@ export function extractWhatsAppNumber(rawPhoneOrStore?: string | Store | Order |
  */
 export function generateStoreOrderWhatsAppMessage(order: Order): string {
   const isDelivery = order.deliveryType === 'delivery';
+  const isExpedition = order.deliveryType === 'expedition';
   const typeHeader = isDelivery
     ? '🛵 *PESANAN DIANTAR OLEH KURIR (EXPRESS DELIVERY)*'
+    : isExpedition
+    ? `📦 *PENGIRIMAN VIA EKSPEDISI (${order.selectedExpedition?.expeditionName || 'EKSPEDISI'} - ${order.selectedExpedition?.serviceName || 'REGULER'})*`
     : '🛍️ *PESANAN DIAMBIL SENDIRI DI TOKO (SELF PICKUP / CLICK & COLLECT)*';
 
   const orderTimeStr = order.createdAt ? formatDateTime(order.createdAt) : new Date().toLocaleString('id-ID');
@@ -145,7 +148,29 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
     `========================================`,
   ];
 
-  if (isDelivery) {
+  if (isExpedition) {
+    lines.push(`📦 *DATA PENGIRIMAN EKSPEDISI (LENGKAP):*`);
+    lines.push(`🚚 *Jasa Ekspedisi:* ${order.selectedExpedition?.expeditionName || 'Ekspedisi'} (${order.selectedExpedition?.serviceName || 'Layanan Reguler'})`);
+    if (order.selectedExpedition?.etd) {
+      lines.push(`⏱️ *Estimasi Tiba:* ${order.selectedExpedition.etd}`);
+    }
+    const recipient = order.address?.recipientName || order.customerName || 'Pelanggan';
+    const phone = order.address?.phone || order.customerPhone || '-';
+    lines.push(`👤 *Nama Penerima:* ${recipient}`);
+    lines.push(`📞 *No. Telp / WhatsApp:* ${phone}`);
+    if (order.address?.fullAddress) {
+      lines.push(`🏠 *Alamat Lengkap Tujuan:* ${order.address.fullAddress}`);
+    }
+    if (order.address?.city) {
+      lines.push(`🏙️ *Kota / Kab / Kec:* ${order.address.city}`);
+    }
+    if (order.address?.postalCode) {
+      lines.push(`📮 *Kode Pos:* ${order.address.postalCode}`);
+    }
+    if (order.address?.detailNote) {
+      lines.push(`📌 *Patokan / Petunjuk:* ${order.address.detailNote}`);
+    }
+  } else if (isDelivery) {
     lines.push(`🚚 *DATA PENGIRIMAN KURIR:*`);
     if (order.deliverySlot) {
       lines.push(`⏱️ *Jadwal Kirim:* ${order.deliverySlot}`);

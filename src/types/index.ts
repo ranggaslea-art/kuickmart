@@ -119,6 +119,7 @@ export interface Address {
   phone: string;
   fullAddress: string;
   city: string;
+  postalCode?: string;
   detailNote?: string;
   isDefault: boolean;
   latitude?: number;
