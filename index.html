@@ -10,10 +10,19 @@
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://www.toko-online.online/" />
     
-    <!-- Cross-Browser Service Worker Auto-Recovery for Firefox & Mobile -->
+    <!-- PWA Service Worker Registration (Guaranteed Detection for PWABuilder & Mobile Browsers) -->
     <script>
       (function() {
         if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+              .then(function(reg) {
+                console.log('[PWA] Service Worker registered:', reg.scope);
+              })
+              .catch(function(err) {
+                console.warn('[PWA] Service Worker registration failed:', err);
+              });
+          });
           navigator.serviceWorker.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'RELOAD_PAGE') {
               window.location.reload();

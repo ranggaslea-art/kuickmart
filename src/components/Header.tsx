@@ -24,6 +24,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
+import { PWAInstallButton } from './PWAInstallButton';
 import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -370,6 +371,9 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )
             )}
+
+            {/* PWA Install Button & Status */}
+            <PWAInstallButton className="shrink-0" />
 
             {/* Admin Panel Button */}
             <button
