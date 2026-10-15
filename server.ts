@@ -275,7 +275,39 @@ async function startServer() {
     res.status(404).send('// Service worker not found');
   });
 
-  // Global CORS and Preflight handler for API endpoints
+  // Dedicated PWA Web App Manifest route with explicit application/manifest+json MIME type
+  app.get(['/manifest.json', '/manifest.webmanifest'], (_req, res) => {
+    const manifestCandidates = [
+      path.join(process.cwd(), 'dist', 'manifest.json'),
+      path.join(process.cwd(), 'public', 'manifest.json'),
+      path.join(appDir, 'dist', 'manifest.json'),
+      path.join(appDir, 'public', 'manifest.json'),
+    ];
+    const manifestPath = manifestCandidates.find((p) => fs.existsSync(p));
+
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    if (manifestPath) {
+      return res.sendFile(manifestPath);
+    }
+    res.status(404).json({ error: 'Manifest not found' });
+  });
+
+  // Dedicated Android Digital Asset Links route for PWABuilder / TWA verification
+  app.get('/.well-known/assetlinks.json', (_req, res) => {
+    const assetlinksFile = path.join(process.cwd(), 'public', '.well-known', 'assetlinks.json');
+    if (fs.existsSync(assetlinksFile)) {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.sendFile(assetlinksFile);
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json([]);
+  });
+
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');

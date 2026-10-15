@@ -1,14 +1,18 @@
-// toko-online.online - PWA Service Worker (v5 Firefox & Cross-Browser Compliant)
-const CACHE_NAME = 'toko-online-cache-v5';
+// toko-online.online - PWA Service Worker (v6 PWABuilder & Cross-Browser Compliant)
+const CACHE_NAME = 'toko-online-cache-v6';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
   '/icon.svg',
+  '/pwa-96x96.png',
+  '/pwa-144x144.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
-  '/favicon.png'
+  '/favicon.png',
+  '/screenshot-narrow.png',
+  '/screenshot-wide.png'
 ];
 
 self.addEventListener('install', (event) => {
