@@ -24,13 +24,7 @@ import {
   Compass,
   Loader2,
   Zap,
-  Check,
-  Truck,
-  Edit3,
-  User,
-  Phone,
-  FileText,
-  Plus
+  Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -41,9 +35,7 @@ import {
   MemberProfile, 
   PaymentMethod, 
   Order,
-  CourierInfo,
-  Expedition,
-  OrderExpeditionDetail
+  CourierInfo 
 } from '../types';
 import { formatRupiah, generateOrderNumber } from '../utils/formatters';
 import { loadStoreTenantConfig, getStoreSlugFromUrl } from '../utils/tenantHelper';
@@ -57,17 +49,14 @@ interface CheckoutModalProps {
   addresses: Address[];
   currentAddress: Address;
   onSelectAddress: (addr: Address) => void;
-  deliveryType: 'delivery' | 'pickup' | 'expedition';
-  onSelectDeliveryType: (type: 'delivery' | 'pickup' | 'expedition') => void;
+  deliveryType: 'delivery' | 'pickup';
+  onSelectDeliveryType: (type: 'delivery' | 'pickup') => void;
   appliedVoucher: Voucher | null;
   usePoints: boolean;
   member: MemberProfile;
   onOrderCreated: (order: Order) => void;
   couriers?: CourierInfo[];
   visitorId?: string;
-  expeditions?: Expedition[];
-  selectedExpedition?: OrderExpeditionDetail | null;
-  onSelectExpedition?: (detail: OrderExpeditionDetail | null) => void;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -86,9 +75,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOrderCreated,
   couriers,
   visitorId,
-  expeditions,
-  selectedExpedition,
-  onSelectExpedition,
 }) => {
   const [deliverySlot, setDeliverySlot] = useState('Instan 30 Menit');
   const [pickupSlot, setPickupSlot] = useState('15 Menit Lagi (Siap Ambil)');
@@ -98,27 +84,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [copiedVa, setCopiedVa] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-
-  // Editable Shipping Address State (for Expedition & Courier Delivery)
-  const [recipientName, setRecipientName] = useState(currentAddress?.recipientName || member?.name || 'Pelanggan');
-  const [recipientPhone, setRecipientPhone] = useState(currentAddress?.phone || member?.phone || '');
-  const [fullAddress, setFullAddress] = useState(currentAddress?.fullAddress || '');
-  const [city, setCity] = useState(currentAddress?.city || '');
-  const [postalCode, setPostalCode] = useState(currentAddress?.postalCode || '');
-  const [detailNote, setDetailNote] = useState(currentAddress?.detailNote || '');
-  const [isEditingDeliveryAddress, setIsEditingDeliveryAddress] = useState(false);
-  const [addressValidationError, setAddressValidationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (currentAddress) {
-      setRecipientName(currentAddress.recipientName || member?.name || 'Pelanggan');
-      setRecipientPhone(currentAddress.phone || member?.phone || '');
-      setFullAddress(currentAddress.fullAddress || '');
-      setCity(currentAddress.city || '');
-      setPostalCode(currentAddress.postalCode || '');
-      setDetailNote(currentAddress.detailNote || '');
-    }
-  }, [currentAddress]);
 
   // DOKU Jokul Direct API State
   const [dokuPaymentData, setDokuPaymentData] = useState<{
@@ -274,75 +239,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     );
   };
 
-  const handleFieldChange = (field: keyof Address, value: string) => {
-    if (field === 'recipientName') setRecipientName(value);
-    if (field === 'phone') setRecipientPhone(value);
-    if (field === 'fullAddress') setFullAddress(value);
-    if (field === 'city') setCity(value);
-    if (field === 'postalCode') setPostalCode(value);
-    if (field === 'detailNote') setDetailNote(value);
-
-    // Sync to active currentAddress in parent
-    const updated: Address = {
-      ...currentAddress,
-      recipientName: field === 'recipientName' ? value : recipientName,
-      phone: field === 'phone' ? value : recipientPhone,
-      fullAddress: field === 'fullAddress' ? value : fullAddress,
-      city: field === 'city' ? value : city,
-      postalCode: field === 'postalCode' ? value : postalCode,
-      detailNote: field === 'detailNote' ? value : detailNote,
-    };
-    onSelectAddress(updated);
-  };
-
   const handleAddressButtonClick = (addr: Address) => {
     onSelectAddress(addr);
-    setRecipientName(addr.recipientName || member?.name || 'Pelanggan');
-    setRecipientPhone(addr.phone || member?.phone || '');
-    setFullAddress(addr.fullAddress || '');
-    setCity(addr.city || '');
-    setPostalCode(addr.postalCode || '');
-    setDetailNote(addr.detailNote || '');
-    setAddressValidationError(null);
-
     // When buyer presses the home button / address containing "rumah":
     if (addr.label.toLowerCase().includes('rumah')) {
       activateGoogleMapsAndRecordLocation(addr);
     }
   };
 
-  const handleAddNewAddress = () => {
-    const newAddr: Address = {
-      id: `addr_${Date.now()}`,
-      label: 'Alamat Ekspedisi Baru',
-      recipientName: recipientName || member?.name || '',
-      phone: recipientPhone || member?.phone || '',
-      fullAddress: '',
-      city: '',
-      postalCode: '',
-      detailNote: '',
-      isDefault: false,
-    };
-    onSelectAddress(newAddr);
-    setFullAddress('');
-    setCity('');
-    setPostalCode('');
-    setDetailNote('');
-    setAddressValidationError(null);
-  };
-
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
   const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
-  const effectiveDeliveryType = (isBelowMinOrder && deliveryType === 'delivery') ? 'pickup' : deliveryType;
-  const rawDeliveryFee = (() => {
-    if (effectiveDeliveryType === 'delivery') {
-      return isBelowMinOrder ? 0 : store.deliveryFee;
-    }
-    if (effectiveDeliveryType === 'expedition') {
-      return selectedExpedition?.rate || 12000;
-    }
-    return 0; // pickup
-  })();
+  const effectiveDeliveryType = isBelowMinOrder ? 'pickup' : deliveryType;
+  const rawDeliveryFee = (!isBelowMinOrder && effectiveDeliveryType === 'delivery') ? store.deliveryFee : 0;
 
   // Auto-switch to pickup if below minimum and was on delivery
   useEffect(() => {
@@ -481,23 +389,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   const handleCreateOrder = () => {
-    // Validation for expedition: complete address and phone are required
-    if (effectiveDeliveryType === 'expedition') {
-      if (!fullAddress.trim()) {
-        setAddressValidationError('Mohon lengkapi Kolom Alamat Pengiriman Ekspedisi terlebih dahulu agar paket dapat dikirimkan ke alamat Anda.');
-        return;
-      }
-      if (!recipientName.trim()) {
-        setAddressValidationError('Mohon masukkan Nama Lengkap Penerima paket ekspedisi.');
-        return;
-      }
-      if (!recipientPhone.trim()) {
-        setAddressValidationError('Mohon masukkan Nomor WhatsApp / HP Penerima untuk konfirmasi pengiriman.');
-        return;
-      }
-    }
-
-    setAddressValidationError(null);
     setIsProcessing(true);
 
     // Launch celebratory confetti
@@ -518,21 +409,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       const orderStore: Store = {
         ...store,
-        name: tenantConfig.storeName || store.name || 'toko-online.online',
+        name: tenantConfig.storeName || store.name || 'LapakOke',
         whatsapp: storeWhatsApp,
         phone: storeWhatsApp || store.phone,
         address: tenantConfig.address || store.address,
         city: tenantConfig.city || store.city,
-      };
-
-      const finalOrderAddress: Address = {
-        ...currentAddress,
-        recipientName: recipientName.trim() || currentAddress.recipientName || member?.name || 'Pelanggan',
-        phone: recipientPhone.trim() || currentAddress.phone || member?.phone || '',
-        fullAddress: fullAddress.trim() || currentAddress.fullAddress || '',
-        city: city.trim() || currentAddress.city || '',
-        postalCode: postalCode.trim() || currentAddress.postalCode || '',
-        detailNote: detailNote.trim() || currentAddress.detailNote || '',
       };
 
       const newOrder: Order = {
@@ -542,43 +423,36 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         items: [...cartItems],
         store: orderStore,
         deliveryType: effectiveDeliveryType,
-        selectedExpedition: effectiveDeliveryType === 'expedition' ? (selectedExpedition || undefined) : undefined,
-        deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : (effectiveDeliveryType === 'expedition' ? selectedExpedition?.etd : undefined),
+        deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
         pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
         customerId: member?.id || visitorId,
-        customerName: finalOrderAddress.recipientName,
-        customerPhone: finalOrderAddress.phone,
+        customerName: currentAddress?.recipientName || member?.name || 'Pelanggan',
+        customerPhone: currentAddress?.phone || member?.phone || '',
         deviceSessionId: visitorId,
-        address: (effectiveDeliveryType === 'delivery' || effectiveDeliveryType === 'expedition') ? {
-          ...finalOrderAddress,
+        address: effectiveDeliveryType === 'delivery' ? {
+          ...currentAddress,
           ...(recordedLocation ? {
             latitude: recordedLocation.latitude,
             longitude: recordedLocation.longitude,
             mapsUrl: recordedLocation.mapsUrl,
             accuracy: recordedLocation.accuracy,
             recordedAt: recordedLocation.recordedAt,
-          } : (finalOrderAddress.latitude && finalOrderAddress.longitude ? {
-            latitude: finalOrderAddress.latitude,
-            longitude: finalOrderAddress.longitude,
-            mapsUrl: finalOrderAddress.mapsUrl || `https://www.google.com/maps?q=${finalOrderAddress.latitude},${finalOrderAddress.longitude}`,
-            accuracy: finalOrderAddress.accuracy,
-            recordedAt: finalOrderAddress.recordedAt,
+          } : (currentAddress.latitude && currentAddress.longitude ? {
+            latitude: currentAddress.latitude,
+            longitude: currentAddress.longitude,
+            mapsUrl: currentAddress.mapsUrl || `https://www.google.com/maps?q=${currentAddress.latitude},${currentAddress.longitude}`,
+            accuracy: currentAddress.accuracy,
+            recordedAt: currentAddress.recordedAt,
           } : {}))
         } : undefined,
-        customerLocation: recordedLocation || (finalOrderAddress.latitude && finalOrderAddress.longitude ? {
-          latitude: finalOrderAddress.latitude,
-          longitude: finalOrderAddress.longitude,
-          accuracy: finalOrderAddress.accuracy,
-          mapsUrl: finalOrderAddress.mapsUrl || `https://www.google.com/maps?q=${finalOrderAddress.latitude},${finalOrderAddress.longitude}`,
-          recordedAt: finalOrderAddress.recordedAt || new Date().toLocaleString('id-ID'),
-          addressText: finalOrderAddress.fullAddress,
-        } : (finalOrderAddress.fullAddress ? {
-          latitude: 0,
-          longitude: 0,
-          mapsUrl: '',
-          recordedAt: new Date().toLocaleString('id-ID'),
-          addressText: finalOrderAddress.fullAddress,
-        } : undefined)),
+        customerLocation: recordedLocation || (currentAddress.latitude && currentAddress.longitude ? {
+          latitude: currentAddress.latitude,
+          longitude: currentAddress.longitude,
+          accuracy: currentAddress.accuracy,
+          mapsUrl: currentAddress.mapsUrl || `https://www.google.com/maps?q=${currentAddress.latitude},${currentAddress.longitude}`,
+          recordedAt: currentAddress.recordedAt || new Date().toLocaleString('id-ID'),
+          addressText: currentAddress.fullAddress,
+        } : undefined),
         status: paymentMethod === 'cod' || paymentMethod === 'pay_at_store' ? 'processing' : 'processing',
         paymentMethod: paymentMethod,
         paymentStatus: 'paid',
@@ -647,26 +521,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           },
           {
             status: 'picking',
-            title: effectiveDeliveryType === 'expedition' ? 'Pengecekan & Pengemasan Paket' : 'Pengecekan Barang & Kadaluarsa',
-            description: effectiveDeliveryType === 'expedition'
-              ? 'Item lengkap dan dipacking aman siap serah terima ke pihak ekspedisi.'
-              : 'Item telah lengkap & dikemas dalam kantong ramah lingkungan.',
+            title: 'Pengecekan Barang & Kadaluarsa',
+            description: 'Item telah lengkap & dikemas dalam kantong ramah lingkungan.',
             timestamp: 'Estimasi +5 Menit',
             isCompleted: false,
           },
           {
-            status: effectiveDeliveryType === 'delivery' ? 'delivering' : (effectiveDeliveryType === 'expedition' ? 'delivering' : 'ready_for_pickup'),
-            title: effectiveDeliveryType === 'delivery'
-              ? 'Driver Menuju Alamat Anda'
-              : effectiveDeliveryType === 'expedition'
-              ? `Pengiriman via ${selectedExpedition?.expeditionName || 'Ekspedisi'}`
-              : 'Siap Diambil di Kasir',
-            description: effectiveDeliveryType === 'delivery'
-              ? 'Driver kurir sedang dalam perjalanan menuju alamat Anda.'
-              : effectiveDeliveryType === 'expedition'
-              ? `Paket diproses via ${selectedExpedition?.serviceName || 'Layanan Reguler'} (${selectedExpedition?.etd || '1-2 Hari'}). No. Resi pengiriman akan segera diterbitkan.`
-              : 'Tunjukkan barcode pesanan ke kasir toko.',
-            timestamp: effectiveDeliveryType === 'expedition' ? (selectedExpedition?.etd || '1-2 Hari') : 'Estimasi +15 Menit',
+            status: deliveryType === 'delivery' ? 'delivering' : 'ready_for_pickup',
+            title: deliveryType === 'delivery' ? 'Driver Menuju Alamat Anda' : 'Siap Diambil di Kasir',
+            description: deliveryType === 'delivery' ? 'Driver kurir sedang dalam perjalanan menuju alamat Anda.' : 'Tunjukkan barcode pesanan ke kasir toko.',
+            timestamp: 'Estimasi +15 Menit',
             isCompleted: false,
           },
         ],
@@ -718,12 +582,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <label className="text-xs font-bold uppercase tracking-wider text-stone-500">
               1. Pilihan Layanan
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 disabled={isBelowMinOrder}
                 onClick={() => !isBelowMinOrder && onSelectDeliveryType('delivery')}
-                className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all ${
+                className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
                   isBelowMinOrder
                     ? 'opacity-50 cursor-not-allowed bg-stone-100 border-stone-200'
                     : effectiveDeliveryType === 'delivery'
@@ -731,35 +595,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     : 'border-stone-200 hover:border-stone-300 bg-white cursor-pointer'
                 }`}
               >
-                <div className={`p-2 rounded-xl shrink-0 ${isBelowMinOrder ? 'bg-stone-200 text-stone-400' : effectiveDeliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <div className={`p-2 rounded-xl ${isBelowMinOrder ? 'bg-stone-200 text-stone-400' : effectiveDeliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
                   <Bike className="w-4 h-4" />
                 </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-stone-900 truncate">
-                    {isBelowMinOrder ? 'Diantar (Off)' : 'Diantar Kurir'}
+                <div>
+                  <div className="font-bold text-xs text-stone-900">
+                    {isBelowMinOrder ? 'Diantar (Nonaktif)' : 'Diantar Kurir'}
                   </div>
-                  <div className="text-[10px] text-stone-500 truncate">
-                    {isBelowMinOrder ? `Min. ${formatRupiah(store.minOrder)}` : `${formatRupiah(store.deliveryFee)}`}
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onSelectDeliveryType('expedition')}
-                className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
-                  effectiveDeliveryType === 'expedition'
-                    ? 'border-orange-600 bg-orange-50/50 shadow-2xs ring-1 ring-orange-500/20'
-                    : 'border-stone-200 hover:border-stone-300 bg-white'
-                }`}
-              >
-                <div className={`p-2 rounded-xl shrink-0 ${effectiveDeliveryType === 'expedition' ? 'bg-orange-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
-                  <Truck className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-stone-900 truncate">Ekspedisi</div>
-                  <div className="text-[10px] text-orange-700 font-semibold truncate">
-                    {selectedExpedition ? `${selectedExpedition.expeditionCode} (${formatRupiah(selectedExpedition.rate)})` : 'JNE, J&T, dll'}
+                  <div className="text-[10px] text-stone-500">
+                    {isBelowMinOrder ? `Min. ${formatRupiah(store.minOrder)} (Ongkir Nonaktif)` : `Ongkir ${formatRupiah(store.deliveryFee)}`}
                   </div>
                 </div>
               </button>
@@ -767,53 +611,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={() => onSelectDeliveryType('pickup')}
-                className={`p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
                   effectiveDeliveryType === 'pickup'
                     ? 'border-red-600 bg-red-50/50 shadow-2xs'
                     : 'border-stone-200 hover:border-stone-300 bg-white'
                 }`}
               >
-                <div className={`p-2 rounded-xl shrink-0 ${effectiveDeliveryType === 'pickup' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <div className={`p-2 rounded-xl ${effectiveDeliveryType === 'pickup' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600'}`}>
                   <StoreIcon className="w-4 h-4" />
                 </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-xs text-stone-900 truncate">Ambil Toko</div>
-                  <div className="text-[10px] text-emerald-600 font-semibold truncate">Gratis (Rp 0)</div>
+                <div>
+                  <div className="font-bold text-xs text-stone-900">Ambil di Toko</div>
+                  <div className="text-[10px] text-emerald-600 font-semibold">Gratis (Rp 0 Ongkir)</div>
                 </div>
               </button>
             </div>
-
-            {/* Expedition Selected Details Banner */}
-            {effectiveDeliveryType === 'expedition' && (
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-2 bg-orange-100 text-orange-700 rounded-xl shrink-0">
-                    <Truck className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-stone-900 text-xs truncate">
-                      {selectedExpedition?.expeditionName || 'JNE Express'} - {selectedExpedition?.serviceName || 'Layanan Reguler'}
-                    </div>
-                    <div className="text-[10px] text-stone-600 flex items-center gap-2 mt-0.5">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Clock className="w-2.5 h-2.5 text-stone-400" /> {selectedExpedition?.etd || '1-2 Hari Kerja'}
-                      </span>
-                      <span>•</span>
-                      <span>Ongkir: <strong className="text-orange-950 font-mono">{formatRupiah(selectedExpedition?.rate || 12000)}</strong></span>
-                      {selectedExpedition?.weightKg && (
-                        <>
-                          <span>•</span>
-                          <span>Est. {selectedExpedition.weightKg} kg</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <span className="font-mono font-black text-[11px] text-orange-800 bg-orange-200/60 px-2 py-0.5 rounded-lg shrink-0">
-                  {selectedExpedition?.serviceCode || 'REG'}
-                </span>
-              </div>
-            )}
 
             {/* Below min order warning banner */}
             {isBelowMinOrder && (
@@ -824,14 +636,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     Belanja di bawah batas minimum ({formatRupiah(store.minOrder)})
                   </span>
                   <span className="text-[10px] text-amber-800 leading-tight block mt-0.5">
-                    Layanan antar kurir dan ongkos kirim dinonaktifkan. Anda dapat memilih <strong>Ekspedisi</strong> atau <strong>Ambil di Toko</strong> dan langsung menyelesaikan pembayaran.
+                    Layanan antar kurir dan ongkos kirim dinonaktifkan. Pesanan Anda diproses via <strong>Ambil di Toko</strong> dan Anda dapat langsung menekan tombol pembayaran.
                   </span>
                 </div>
               </div>
             )}
 
-            {/* Time Slot Picker for Delivery or Pickup */}
-            {effectiveDeliveryType === 'delivery' ? (
+            {/* Time Slot Picker */}
+            {deliveryType === 'delivery' ? (
               <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200">
                 <span className="text-[11px] font-semibold text-stone-700 block mb-1.5 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-blue-600" /> Pilih Estimasi Waktu Pengantaran:
@@ -852,7 +664,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   ))}
                 </div>
               </div>
-            ) : effectiveDeliveryType === 'pickup' ? (
+            ) : (
               <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200">
                 <span className="text-[11px] font-semibold text-stone-700 block mb-1.5 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-red-600" /> Waktu Pengambilan di Outlet:
@@ -873,298 +685,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   ))}
                 </div>
               </div>
-            ) : null}
+            )}
           </div>
 
           {/* 2. Alamat Pengantaran / Toko Pickup */}
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-stone-500">
-              {effectiveDeliveryType === 'delivery'
-                ? '2. Alamat Pengantaran Kurir'
-                : effectiveDeliveryType === 'expedition'
-                ? '2. Alamat Pengiriman Ekspedisi (Lengkap)'
-                : '2. Lokasi Outlet Pengambilan'}
+              {deliveryType === 'delivery' ? '2. Alamat Pengiriman' : '2. Lokasi Outlet Pengambilan'}
             </label>
 
-            {effectiveDeliveryType === 'expedition' ? (
-              <div className="bg-orange-50/40 p-4 rounded-2xl border border-orange-200 space-y-3.5 animate-in fade-in duration-200">
-                {/* Header & Quick Preset Switcher */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-orange-200/80">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-orange-600 text-white rounded-lg shrink-0">
-                      <Truck className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-stone-900">
-                        Input Alamat Pengiriman Ekspedisi Lengkap
-                      </h4>
-                      <p className="text-[10px] text-stone-500">
-                        Pastikan alamat tujuan detail agar paket kurir {selectedExpedition?.expeditionName || 'Ekspedisi'} sampai dengan tepat
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Preset Addresses Switcher & Add New Address */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {addresses.map((addr) => {
-                      const isSelected = addr.id === currentAddress.id;
-                      return (
-                        <button
-                          key={addr.id}
-                          type="button"
-                          onClick={() => handleAddressButtonClick(addr)}
-                          className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 cursor-pointer ${
-                            isSelected
-                              ? 'bg-orange-600 text-white border-orange-600 shadow-2xs'
-                              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                          }`}
-                          title={`Gunakan alamat ${addr.label}`}
-                        >
-                          <MapPin className="w-2.5 h-2.5" />
-                          <span>{addr.label}</span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={handleAddNewAddress}
-                      className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-orange-400 bg-orange-100 text-orange-900 hover:bg-orange-200 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                      title="Isi alamat baru secara manual"
-                    >
-                      <Plus className="w-2.5 h-2.5 text-orange-700" />
-                      <span>+ Isi Manual / Alamat Baru</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Manual Edit Instruction Banner */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-orange-200 text-xs text-orange-950 font-medium">
-                  <Edit3 className="w-4 h-4 text-orange-600 shrink-0" />
-                  <span>
-                    Kolom alamat pengiriman ekspedisi di bawah ini <strong>bisa langsung diketik / diedit secara manual</strong> oleh pembeli.
-                  </span>
-                </div>
-
-                {/* Validation Error Banner */}
-                {addressValidationError && (
-                  <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-700 font-medium animate-in fade-in duration-200">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                    <span>{addressValidationError}</span>
-                  </div>
-                )}
-
-                {/* Editable Fields Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Nama Penerima */}
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1 mb-1">
-                      <User className="w-3.5 h-3.5 text-orange-600" />
-                      <span>Nama Lengkap Penerima:</span>
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={recipientName}
-                      onChange={(e) => {
-                        setAddressValidationError(null);
-                        handleFieldChange('recipientName', e.target.value);
-                      }}
-                      placeholder="Contoh: Budi Pratama"
-                      className="w-full text-xs font-semibold px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                    />
-                  </div>
-
-                  {/* No. Telepon / WhatsApp */}
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1 mb-1">
-                      <Phone className="w-3.5 h-3.5 text-orange-600" />
-                      <span>No. WhatsApp / HP Penerima:</span>
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={recipientPhone}
-                      onChange={(e) => {
-                        setAddressValidationError(null);
-                        handleFieldChange('phone', e.target.value);
-                      }}
-                      placeholder="Contoh: 081234567890 (Wajib untuk info resi)"
-                      className="w-full text-xs font-semibold px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono transition-all"
-                    />
-                  </div>
-
-                  {/* Kolom Alamat Pengiriman Ekspedisi Lengkap */}
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-bold text-stone-700 flex items-center justify-between gap-1 mb-1">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-orange-600" />
-                        <span>Kolom Alamat Pengiriman Ekspedisi Lengkap:</span>
-                        <span className="text-red-500">*</span>
-                      </span>
-                      <span className="text-[10px] text-stone-500 font-normal">
-                        Jalan, No. Rumah, RT/RW, Dusun/Kelurahan
-                      </span>
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={fullAddress}
-                      onChange={(e) => {
-                        setAddressValidationError(null);
-                        handleFieldChange('fullAddress', e.target.value);
-                      }}
-                      placeholder="Masukkan alamat pengiriman ekspedisi selengkap-lengkapnya. Contoh: Jl. Sudirman Indah No. 42, RT 03 / RW 05, Kelurahan Menteng, Rumah tingkat dua cat abu-abu..."
-                      className="w-full text-xs font-medium px-3 py-2.5 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 leading-relaxed resize-none transition-all"
-                    />
-                  </div>
-
-                  {/* Kota / Kabupaten / Kecamatan */}
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1 mb-1">
-                      <Building2 className="w-3.5 h-3.5 text-orange-600" />
-                      <span>Kota / Kabupaten & Kecamatan:</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => handleFieldChange('city', e.target.value)}
-                      placeholder="Contoh: Jakarta Pusat, Menteng"
-                      className="w-full text-xs font-semibold px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                    />
-                  </div>
-
-                  {/* Kode Pos */}
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1 mb-1">
-                      <FileText className="w-3.5 h-3.5 text-orange-600" />
-                      <span>Kode Pos:</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={postalCode}
-                      onChange={(e) => handleFieldChange('postalCode', e.target.value)}
-                      placeholder="Contoh: 10310"
-                      className="w-full text-xs font-semibold px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono transition-all"
-                    />
-                  </div>
-
-                  {/* Patokan / Catatan Alamat */}
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1 mb-1">
-                      <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-                      <span>Patokan / Catatan Pengiriman (Opsional):</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={detailNote}
-                      onChange={(e) => handleFieldChange('detailNote', e.target.value)}
-                      placeholder="Contoh: Pagar hitam samping pos satpam, titipkan tetangga jika sepi"
-                      className="w-full text-xs font-medium px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-orange-200/80 flex flex-wrap items-center justify-between gap-2 text-[10px] text-orange-950 font-medium">
-                  <span className="flex items-center gap-1.5 text-emerald-800">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Kolom alamat pengiriman aktif & otomatis tertera pada resi paket ekspedisi.</span>
-                  </span>
-                  <span className="text-orange-800 font-semibold bg-orange-100 px-2 py-0.5 rounded-md">
-                    Layanan: {selectedExpedition?.serviceName || 'Reguler'} ({selectedExpedition?.etd || '1-2 Hari'})
-                  </span>
-                </div>
-              </div>
-            ) : effectiveDeliveryType === 'delivery' ? (
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-3">
+            {deliveryType === 'delivery' ? (
+              <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2 min-w-0">
+                  <div className="flex items-start gap-2">
                     <MapPin className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                    <div className="min-w-0">
+                    <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-stone-900">{currentAddress.label}</span>
-                        <span className="text-[10px] text-stone-500 font-medium">({recipientName || currentAddress.recipientName} - {recipientPhone || currentAddress.phone})</span>
+                        <span className="text-[10px] text-stone-500 font-medium">({currentAddress.recipientName} - {currentAddress.phone})</span>
                       </div>
-                      <p className="text-xs text-stone-600 mt-0.5 break-words">{fullAddress || currentAddress.fullAddress}{city ? `, ${city}` : (currentAddress.city ? `, ${currentAddress.city}` : '')}</p>
-                      {(detailNote || currentAddress.detailNote) && (
-                        <p className="text-[11px] text-stone-500 italic mt-0.5">Catatan: {detailNote || currentAddress.detailNote}</p>
+                      <p className="text-xs text-stone-600 mt-0.5">{currentAddress.fullAddress}, {currentAddress.city}</p>
+                      {currentAddress.detailNote && (
+                        <p className="text-[11px] text-stone-500 italic mt-0.5">Catatan: {currentAddress.detailNote}</p>
                       )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingDeliveryAddress(!isEditingDeliveryAddress)}
-                    className="shrink-0 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-white border border-stone-200 hover:border-blue-300 px-2.5 py-1 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <Edit3 className="w-3 h-3 text-blue-600" />
-                    <span>{isEditingDeliveryAddress ? 'Tutup Edit' : 'Edit Alamat'}</span>
-                  </button>
                 </div>
-
-                {/* Inline Editing for Courier Delivery Address */}
-                {isEditingDeliveryAddress && (
-                  <div className="p-3 bg-white border border-blue-200 rounded-xl space-y-2.5 animate-in fade-in duration-150">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-stone-100">
-                      <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
-                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-                        Edit Alamat Pengantaran Kurir
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingDeliveryAddress(false)}
-                        className="text-[10px] font-bold text-blue-600 hover:underline"
-                      >
-                        Selesai
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-600 block mb-0.5">Nama Penerima:</label>
-                        <input
-                          type="text"
-                          value={recipientName}
-                          onChange={(e) => handleFieldChange('recipientName', e.target.value)}
-                          className="w-full text-xs font-semibold px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-600 block mb-0.5">No. HP / WhatsApp:</label>
-                        <input
-                          type="tel"
-                          value={recipientPhone}
-                          onChange={(e) => handleFieldChange('phone', e.target.value)}
-                          className="w-full text-xs font-semibold px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="text-[10px] font-bold text-stone-600 block mb-0.5">Alamat Lengkap:</label>
-                        <textarea
-                          rows={2}
-                          value={fullAddress}
-                          onChange={(e) => handleFieldChange('fullAddress', e.target.value)}
-                          className="w-full text-xs font-medium px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-600 block mb-0.5">Kota / Area:</label>
-                        <input
-                          type="text"
-                          value={city}
-                          onChange={(e) => handleFieldChange('city', e.target.value)}
-                          className="w-full text-xs font-semibold px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-600 block mb-0.5">Patokan / Catatan:</label>
-                        <input
-                          type="text"
-                          value={detailNote}
-                          onChange={(e) => handleFieldChange('detailNote', e.target.value)}
-                          className="w-full text-xs font-medium px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Quick Address Switcher */}
                 {addresses.length > 1 && (
@@ -1719,7 +1265,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <span>Total Pesanan ({cartItems.reduce((a, b) => a + b.quantity, 0)} paket)</span>
               <span className="font-semibold text-stone-900">{formatRupiah(subtotal)}</span>
             </div>
-            {isBelowMinOrder && effectiveDeliveryType === 'delivery' ? (
+            {isBelowMinOrder ? (
               <div className="flex justify-between text-xs text-stone-600 items-center">
                 <span className="flex items-center gap-1">
                   <span>Ongkos Kirim</span>
@@ -1729,22 +1275,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
                 <span className="font-semibold text-emerald-700">Rp 0 (Ambil di Toko)</span>
               </div>
-            ) : effectiveDeliveryType === 'expedition' ? (
-              <div className="flex justify-between text-xs text-stone-600 items-center">
-                <span className="truncate pr-2">
-                  Biaya Ekspedisi ({selectedExpedition?.expeditionCode || 'JNE'} - {selectedExpedition?.serviceName || 'Reguler'})
-                </span>
-                <span className="font-semibold text-stone-900 shrink-0 font-mono">{formatRupiah(rawDeliveryFee)}</span>
-              </div>
             ) : effectiveDeliveryType === 'delivery' ? (
               <div className="flex justify-between text-xs text-stone-600">
-                <span>Biaya Pengantaran ({store.distanceKm} km)</span>
-                <span className="font-semibold text-stone-900 font-mono">{formatRupiah(rawDeliveryFee)}</span>
+                <span>Biaya Pengantaran</span>
+                <span className="font-semibold text-stone-900">{formatRupiah(rawDeliveryFee)}</span>
               </div>
             ) : (
               <div className="flex justify-between text-xs text-stone-600">
                 <span>Biaya Pengantaran (Ambil di Toko)</span>
-                <span className="font-semibold text-emerald-600 font-mono">Gratis (Rp 0)</span>
+                <span className="font-semibold text-emerald-600">Gratis (Rp 0)</span>
               </div>
             )}
             {voucherDiscount > 0 && (
@@ -1774,7 +1313,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
                 <span>
-                  Pesanan ({effectiveDeliveryType === 'delivery' ? 'Antar Kurir' : effectiveDeliveryType === 'expedition' ? 'Ekspedisi' : 'Ambil di Toko'}) otomatis masuk ke WhatsApp: <strong>{store.name}</strong> ({store.phone || store.whatsapp || 'Cabang Toko'})
+                  Pesanan ({effectiveDeliveryType === 'delivery' ? 'Antar Kurir' : 'Ambil di Toko'}) otomatis masuk ke WhatsApp: <strong>{store.name}</strong> ({store.phone || store.whatsapp || 'Cabang Toko'})
                 </span>
               </div>
               <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full shrink-0">
@@ -1785,23 +1324,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-stone-100 bg-stone-50 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-stone-500 w-full sm:w-auto">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="p-4 border-t border-stone-100 bg-stone-50 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs text-stone-500">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>Transaksi Dijamin Aman 100%</span>
           </div>
 
-          {addressValidationError && (
-            <div className="text-[11px] text-red-600 font-semibold bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-in fade-in w-full sm:w-auto">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-              <span>{addressValidationError}</span>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-bold text-xs hover:bg-stone-100 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-bold text-xs hover:bg-stone-100"
             >
               Kembali
             </button>
@@ -1809,7 +1341,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <button
               onClick={handleCreateOrder}
               disabled={isProcessing}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-stone-400 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-stone-400 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md flex items-center gap-2 transition-transform active:scale-95"
             >
               {isProcessing ? (
                 <span>Memproses Pesanan...</span>

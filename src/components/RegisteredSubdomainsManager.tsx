@@ -42,7 +42,6 @@ import {
   ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
   SIMULATE_FOREIGN_DOMAIN_KEY,
   SIMULATED_DOMAIN_NAME_KEY,
-  getStoreLiveUrl,
 } from '../utils/tenantHelper';
 
 interface RegisteredSubdomainsManagerProps {
@@ -316,10 +315,8 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
   };
 
   const handleCopyLink = (subdomainUrl: string, slug: string) => {
-    // Utamakan Live URL aktif agar saat link disalin dan dibuka di browser TIDAK terjadi "not found"
-    const targetUrl = getStoreLiveUrl(slug);
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(targetUrl);
+      navigator.clipboard.writeText(subdomainUrl);
       setCopiedSlug(slug);
       setTimeout(() => setCopiedSlug(null), 2500);
     }
@@ -330,8 +327,10 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
       onNavigateToStore(item.storeSlug);
       return;
     }
-    // Buka menggunakan Live URL yang aktif saat ini
-    const url = getStoreLiveUrl(item.storeSlug);
+    // Jika di development atau preview, gunakan query parameter ?store=slug
+    const url = typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}?store=${item.storeSlug}`
+      : item.subdomainUrl;
     window.location.href = url;
   };
 
@@ -407,13 +406,14 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                   </a>
 
                   <a
-                    href={typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://toko-online.online'}
+                    href="https://toko-online.online"
+                    target="_blank"
+                    rel="noreferrer"
                     className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-950/70 hover:border-emerald-400/60 transition group cursor-pointer"
-                    title="Buka Halaman Domain Utama yang Aktif"
                   >
                     <div className="flex items-center gap-2 font-mono font-bold text-emerald-200 truncate">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                      <span className="truncate">Domain Utama (Live Saat Ini)</span>
+                      <span className="truncate">toko-online.online (Domain Utama)</span>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
                   </a>
@@ -635,10 +635,10 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-black text-amber-950">
-                Informasi: Mengapa &quot;not found toko-online.online&quot; Muncul Saat Membuka Domain?
+                Mengapa Subdomain Baru (seperti tokoalda.toko-online.online) Muncul &quot;DNS_PROBE_FINISHED_NXDOMAIN&quot;?
               </h4>
               <p className="text-[11px] sm:text-xs text-amber-800/90 mt-0.5">
-                Domain kustom <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950 font-bold">toko-online.online</code> adalah alamat domain kustom. Jika DNS belum diarahkan di penyedia domain / Cloudflare, browser akan menampilkan &quot;Not Found&quot;. Namun toko Anda <strong>100% aktif &amp; bisa langsung dibuka</strong> melalui <strong>Live URL</strong> aplikasi saat ini!
+                Penyebabnya adalah DNS Cloudflare belum memiliki record <span className="font-bold">Wildcard CNAME (*)</span> atau <span className="font-bold">Worker Route</span> untuk domain <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950">toko-online.online</code>.
               </p>
             </div>
           </div>
@@ -647,7 +647,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
             onClick={() => setShowDnsGuide(!showDnsGuide)}
             className="px-3 py-1.5 bg-amber-200/80 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-auto"
           >
-            <span>{showDnsGuide ? 'Sembunyikan Solusi' : 'Lihat Solusi DNS Cloudflare'}</span>
+            <span>{showDnsGuide ? 'Sembunyikan Solusi' : 'Lihat Solusi 2 Langkah'}</span>
             {showDnsGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -897,28 +897,21 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
 
                         {/* URL Subdomain with quick copy */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <code className="text-xs font-mono font-bold text-stone-800 bg-stone-100 px-2.5 py-1 rounded-md border border-stone-200 flex items-center gap-1.5" title="Alamat Subdomain Kustom">
+                          <code className="text-xs font-mono font-bold text-stone-800 bg-stone-100 px-2 py-1 rounded-md border border-stone-200 flex items-center gap-1.5">
                             <Globe className="w-3.5 h-3.5 text-stone-500" />
                             <span>{item.subdomain}</span>
                           </code>
 
-                          {/* Tombol Salin Link Aktif (Bisa langsung dibuka tanpa Not Found) */}
                           <button
                             type="button"
                             onClick={() => handleCopyLink(item.subdomainUrl, item.storeSlug)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-md transition cursor-pointer shadow-2xs"
-                            title="Salin link aktif toko yang bisa langsung dibuka di browser sekarang"
+                            className="text-stone-500 hover:text-stone-800 p-1 hover:bg-stone-100 rounded-md transition"
+                            title="Salin Link Subdomain"
                           >
                             {copiedSlug === item.storeSlug ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                <span className="text-emerald-700">Link Aktif Tersalin!</span>
-                              </>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
                             ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Salin Link Toko</span>
-                              </>
+                              <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
                         </div>

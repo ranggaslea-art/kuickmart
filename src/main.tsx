@@ -10,7 +10,7 @@ setupGlobalPrintInterceptor();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary fallbackTitle="Kendala Memuat Halaman toko-online.online">
+    <ErrorBoundary fallbackTitle="Kendala Memuat Halaman lapakoke.com">
       <App />
     </ErrorBoundary>
   </StrictMode>,

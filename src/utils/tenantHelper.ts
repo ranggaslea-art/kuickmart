@@ -6,15 +6,26 @@ export const STORAGE_TENANT_PREFIX = 'store_tenant_identity_';
 
 /**
  * Domain Resmi Berwenang:
- * Sesuai aturan sistem, HANYA domain toko-online.online yang dapat menambahkan subdomain.
- * Di luar domain toko-online.online (domain lain maupun subdomain toko) tidak bisa menambahkan subdomain lagi.
+ * Sesuai aturan sistem, HANYA domain lapakoke.com (dan alias toko-online.online) yang dapat menambahkan subdomain.
+ * Di luar domain resmi (domain lain maupun subdomain toko) tidak bisa menambahkan subdomain lagi.
  */
-export const ROOT_AUTHORITY_DOMAIN = 'toko-online.online';
-export const ALLOWED_ROOT_DOMAINS = ['toko-online.online', 'www.toko-online.online'];
+export const ROOT_AUTHORITY_DOMAIN = 'lapakoke.com';
+export const ALLOWED_ROOT_DOMAINS = [
+  'lapakoke.com',
+  'www.lapakoke.com',
+  'toko-online.online',
+  'www.toko-online.online',
+  'toko-online.com',
+  'www.toko-online.com',
+];
 export const ALLOWED_SUBDOMAIN_MODULE_DOMAINS = [
+  'lapakoke.com',
+  'www.lapakoke.com',
   'kuickmart.ranggaslea.workers.dev',
   'toko-online.online',
   'www.toko-online.online',
+  'toko-online.com',
+  'www.toko-online.com',
 ];
 export const SIMULATE_FOREIGN_DOMAIN_KEY = 'toko_online_simulate_foreign_domain';
 export const SIMULATED_DOMAIN_NAME_KEY = 'toko_online_simulated_domain_name';
@@ -29,7 +40,7 @@ export interface SubdomainModuleAccessResult {
 
 /**
  * Aturan Akses Modul Info Subdomain:
- * HANYA bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.
+ * HANYA bisa diakses oleh domain utama lapakoke.com.
  * Domain lain maupun subdomain cabang toko DILARANG mengakses modul info subdomain ini.
  */
 export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAccessResult {
@@ -47,9 +58,7 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
 
   if (isSimulatedForeign) {
     const isSimAllowed =
-      simulatedDomain === 'kuickmart.ranggaslea.workers.dev' ||
-      simulatedDomain === 'toko-online.online' ||
-      simulatedDomain === 'www.toko-online.online';
+      ALLOWED_SUBDOMAIN_MODULE_DOMAINS.includes(simulatedDomain);
 
     if (!isSimAllowed) {
       return {
@@ -57,7 +66,7 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
         currentDomain: simulatedDomain,
         allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
         isSimulated: true,
-        reason: `Akses Ditolak: Domain '${simulatedDomain}' tidak diizinkan. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+        reason: `Akses Ditolak: Domain '${simulatedDomain}' tidak diizinkan. Modul info subdomain hanya bisa diakses oleh domain resmi ${ROOT_AUTHORITY_DOMAIN}.`,
       };
     }
   }
@@ -77,11 +86,7 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
   }
 
   // 1. Cek kecocokan langsung dengan domain yang berhak
-  if (
-    hostname === 'kuickmart.ranggaslea.workers.dev' ||
-    hostname === 'toko-online.online' ||
-    hostname === 'www.toko-online.online'
-  ) {
+  if (ALLOWED_SUBDOMAIN_MODULE_DOMAINS.includes(hostname)) {
     return {
       allowed: true,
       currentDomain: hostname,
@@ -89,13 +94,16 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
     };
   }
 
-  // 2. Subdomain dari toko-online.online (misal: berkah-mart.toko-online.online)
-  if (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) {
+  // 2. Subdomain toko (misal: berkah-mart.lapakoke.com)
+  if (
+    (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) ||
+    (hostname.endsWith('.toko-online.online') && hostname !== 'www.toko-online.online')
+  ) {
     return {
       allowed: false,
       currentDomain: hostname,
       allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
-      reason: `Akses Ditolak: Anda saat ini berada di subdomain toko '${hostname}'. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+      reason: `Akses Ditolak: Anda saat ini berada di subdomain toko '${hostname}'. Modul info subdomain hanya bisa diakses oleh domain resmi ${ROOT_AUTHORITY_DOMAIN}.`,
     };
   }
 
@@ -119,7 +127,7 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
         allowed: false,
         currentDomain: `${cleanSlug}.${ROOT_AUTHORITY_DOMAIN}`,
         allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
-        reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${cleanSlug}'. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+        reason: `Akses Ditolak: Anda sedang aktif di subdomain toko '${cleanSlug}'. Modul info subdomain hanya bisa diakses oleh domain resmi ${ROOT_AUTHORITY_DOMAIN}.`,
       };
     }
 
@@ -135,7 +143,7 @@ export function canAccessSubdomainModule(customHost?: string): SubdomainModuleAc
     allowed: false,
     currentDomain: hostname,
     allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
-    reason: `Akses Ditolak: Domain '${hostname}' tidak memiliki izin. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+    reason: `Akses Ditolak: Domain '${hostname}' tidak memiliki izin. Modul info subdomain hanya bisa diakses oleh domain resmi ${ROOT_AUTHORITY_DOMAIN}.`,
   };
 }
 
@@ -162,16 +170,23 @@ export function normalizeTenantSlug(slug?: string | null): string {
   let clean = slug.toLowerCase().trim();
   clean = clean.replace(/^https?:\/\//, '');
   clean = clean.replace(/:\d+$/, '');
+  clean = clean.replace(/\.lapakoke\.com$/, '');
   clean = clean.replace(/\.toko-online\.online$/, '');
+  clean = clean.replace(/\.toko-online\.com$/, '');
   clean = clean.replace(/\.ranggaslea\.workers\.dev$/, '');
   clean = clean.replace(/^store-/, '');
   clean = clean.split('/')[0].split('?')[0].trim();
   if (
     !clean ||
     clean === 'default' ||
+    clean === 'lapakoke' ||
+    clean === 'lapakoke.com' ||
+    clean === 'www.lapakoke.com' ||
     clean === 'toko-online' ||
     clean === 'toko-online.online' ||
     clean === 'www.toko-online.online' ||
+    clean === 'toko-online.com' ||
+    clean === 'www.toko-online.com' ||
     clean === 'pusat' ||
     clean === 'to-sdm01' ||
     clean === 'to-snp02' ||
@@ -187,7 +202,7 @@ export function normalizeTenantSlug(slug?: string | null): string {
 }
 
 /**
- * Memeriksa apakah akses saat ini berada di domain root resmi toko-online.online
+ * Memeriksa apakah akses saat ini berada di domain root resmi lapakoke.com / toko-online.online
  */
 export function isRootDomain(customHost?: string, targetSlug?: string): boolean {
   if (typeof window === 'undefined') return true;
@@ -207,13 +222,16 @@ export function isRootDomain(customHost?: string, targetSlug?: string): boolean 
 
   const hostname = (customHost || window.location.hostname || '').toLowerCase().trim();
 
-  // Root domain asli
-  if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}`) {
+  // Root domain asli atau domain alias yang diizinkan
+  if (ALLOWED_ROOT_DOMAINS.includes(hostname) || hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}`) {
     return true;
   }
 
-  // Jika hostname berakhiran .toko-online.online (cth: berkah-jaya.toko-online.online) dan bukan www
-  if (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) {
+  // Jika hostname berakhiran subdomain toko dan bukan www
+  if (
+    (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) ||
+    (hostname.endsWith('.toko-online.online') && hostname !== 'www.toko-online.online')
+  ) {
     return false;
   }
 
@@ -244,8 +262,8 @@ export function isRootDomain(customHost?: string, targetSlug?: string): boolean 
 
 /**
  * Aturan Otoritas Subdomain:
- * HANYA domain toko-online.online yang berhak dan bisa menambahkan subdomain baru.
- * Subdomain yang sudah ada atau domain di luar toko-online.online DILARANG menambahkan subdomain.
+ * HANYA domain lapakoke.com yang berhak dan bisa menambahkan subdomain baru.
+ * Subdomain yang sudah ada atau domain di luar lapakoke.com DILARANG menambahkan subdomain.
  */
 export function canAddSubdomain(customHost?: string): SubdomainPolicyResult {
   if (typeof window === 'undefined') {
@@ -279,8 +297,8 @@ export function canAddSubdomain(customHost?: string): SubdomainPolicyResult {
     hostname.includes('run.app') ||
     hostname.includes('webcontainer');
 
-  // 1. Domain Utama Asli (toko-online.online atau www.toko-online.online)
-  if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}`) {
+  // 1. Domain Utama Asli (lapakoke.com atau www.lapakoke.com atau domain alias yang diizinkan)
+  if (ALLOWED_ROOT_DOMAINS.includes(hostname) || hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}`) {
     return {
       allowed: true,
       isRootDomain: true,
@@ -289,8 +307,11 @@ export function canAddSubdomain(customHost?: string): SubdomainPolicyResult {
     };
   }
 
-  // 2. Subdomain dari toko-online.online (misal: berkah.toko-online.online)
-  if (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) {
+  // 2. Subdomain toko (misal: berkah.lapakoke.com)
+  if (
+    (hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`) && hostname !== `www.${ROOT_AUTHORITY_DOMAIN}`) ||
+    (hostname.endsWith('.toko-online.online') && hostname !== 'www.toko-online.online')
+  ) {
     return {
       allowed: false,
       isRootDomain: false,
@@ -306,7 +327,7 @@ export function canAddSubdomain(customHost?: string): SubdomainPolicyResult {
     const paramStore = urlParams.get('store');
 
     // Jika sedang mengakses ?store=nama-toko (bukan root), simulasikan pembatasan subdomain
-    if (paramStore && paramStore !== 'default' && paramStore !== 'toko-online' && paramStore !== 'toko-online.online') {
+    if (paramStore && paramStore !== 'default' && paramStore !== 'lapakoke' && paramStore !== 'lapakoke.com' && paramStore !== 'toko-online' && paramStore !== 'toko-online.online') {
       return {
         allowed: false,
         isRootDomain: false,
@@ -319,7 +340,7 @@ export function canAddSubdomain(customHost?: string): SubdomainPolicyResult {
     return {
       allowed: true,
       isRootDomain: true,
-      currentHostname: `${hostname} (Dev Mode toko-online.online)`,
+      currentHostname: `${hostname} (Dev Mode ${ROOT_AUTHORITY_DOMAIN})`,
       rootDomain: ROOT_AUTHORITY_DOMAIN,
     };
   }
@@ -339,7 +360,7 @@ export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
   environment: 'sandbox',
   clientId: 'BRN-0241-1788726490929',
   secretKey: '',
-  merchantName: 'toko-online.online',
+  merchantName: 'lapakoke.com',
   notificationUrl: '',
   enableQris: true,
   enableBcaVa: true,
@@ -355,8 +376,16 @@ export const DEFAULT_DOKU_SETTINGS: DokuSettings = {
  * Contoh: "berkah-mart-jaya" -> "Berkah Mart Jaya"
  */
 export function formatSlugToStoreName(slug: string): string {
-  if (!slug || slug.trim() === '' || slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online') {
-    return 'toko-online.online';
+  if (
+    !slug ||
+    slug.trim() === '' ||
+    slug === 'default' ||
+    slug === 'lapakoke' ||
+    slug === 'lapakoke.com' ||
+    slug === 'toko-online' ||
+    slug === 'toko-online.online'
+  ) {
+    return 'LapakOke';
   }
   return slug
     .replace(/[^a-zA-Z0-9\s-_]/g, '')
@@ -369,7 +398,7 @@ export function formatSlugToStoreName(slug: string): string {
 /**
  * Ambil slug toko dari URL browser:
  * 1. Cek query parameter `?store=namatoko` (sangat berguna untuk testing dan demo langsung)
- * 2. Cek Subdomain `namatoko.domain.com` (dari wildcard Cloudflare)
+ * 2. Cek Subdomain `namatoko.domain.com` (dari wildcard DNS)
  * 3. Cek localStorage aktif
  */
 export function getStoreSlugFromUrl(): string {
@@ -382,7 +411,7 @@ export function getStoreSlugFromUrl(): string {
     return paramStore.trim().toLowerCase();
   }
 
-  // 2. Cek Subdomain dari hostname (misal: tokoberkah.toko-online.online atau berkah-mart.domainanda.com)
+  // 2. Cek Subdomain dari hostname (misal: tokoalda.lapakoke.com atau tokoberkah.toko-online.online)
   const hostname = window.location.hostname;
   const isLocalOrPreview =
     hostname.includes('localhost') ||
@@ -393,8 +422,13 @@ export function getStoreSlugFromUrl(): string {
     hostname.includes('workers.dev');
 
   if (!isLocalOrPreview) {
-    // Root domain resmi toko-online.online atau worker dev root
-    if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}` || hostname === 'kuickmart.ranggaslea.workers.dev') {
+    // Root domain resmi lapakoke.com, alias toko-online.online, atau worker dev root
+    if (
+      ALLOWED_ROOT_DOMAINS.includes(hostname) ||
+      hostname === ROOT_AUTHORITY_DOMAIN ||
+      hostname === `www.${ROOT_AUTHORITY_DOMAIN}` ||
+      hostname === 'kuickmart.ranggaslea.workers.dev'
+    ) {
       return 'default';
     }
     const parts = hostname.split('.');
@@ -825,7 +859,6 @@ export interface RegisteredSubdomain {
   displaySlug: string;
   subdomain: string;
   subdomainUrl: string;
-  liveUrl?: string;
   storeName: string;
   tagline: string;
   ownerName: string;
@@ -847,37 +880,14 @@ export interface RegisteredSubdomain {
   qrisEnabled?: boolean;
 }
 
-/**
- * Mendapatkan Live Working URL toko yang bisa langsung diakses saat ini
- * - Jika aplikasi diakses via custom domain toko-online.online, gunakan format subdomain (https://slug.toko-online.online)
- * - Jika aplikasi diakses di Cloud Run (*.run.app), localhost, workers.dev, dll, gunakan origin saat ini dengan query ?store=slug
- */
-export function getStoreLiveUrl(slug?: string | null): string {
-  const normSlug = normalizeTenantSlug(slug);
-  const isMain = normSlug === 'default';
-
-  if (typeof window === 'undefined') {
-    return isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
-  }
-
-  const hostname = (window.location.hostname || '').toLowerCase();
-  if (hostname === ROOT_AUTHORITY_DOMAIN || hostname === `www.${ROOT_AUTHORITY_DOMAIN}` || hostname.endsWith(`.${ROOT_AUTHORITY_DOMAIN}`)) {
-    return isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
-  }
-
-  const origin = window.location.origin;
-  const pathname = window.location.pathname;
-  return isMain ? `${origin}${pathname}` : `${origin}${pathname}?store=${encodeURIComponent(normSlug)}`;
-}
-
 export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
   {
     storeId: 'default',
     storeSlug: 'default',
     displaySlug: 'pusat',
-    subdomain: 'toko-online.online',
-    subdomainUrl: 'https://toko-online.online',
-    storeName: 'toko-online.online',
+    subdomain: 'lapakoke.com',
+    subdomainUrl: 'https://lapakoke.com',
+    storeName: 'LapakOke Pusat',
     tagline: 'Pusat Belanja Online Hemat & Cepat',
     ownerName: 'Administrator',
     phone: '0812-3456-7890',
@@ -885,7 +895,7 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     address: 'Jl. Pemuda No. 88, Pusat Niaga',
     city: 'Jakarta',
     logoUrl: '/logo.png',
-    logoText: 'TO',
+    logoText: 'LO',
     primaryColor: '#E51A24',
     isActive: true,
     disabledReason: null,
@@ -901,8 +911,8 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     storeId: 'mrberkah',
     storeSlug: 'mrberkah',
     displaySlug: 'mrberkah',
-    subdomain: 'mrberkah.toko-online.online',
-    subdomainUrl: 'https://mrberkah.toko-online.online',
+    subdomain: 'mrberkah.lapakoke.com',
+    subdomainUrl: 'https://mrberkah.lapakoke.com',
     storeName: 'Mr Berkah Mart',
     tagline: 'Pilihan Belanja Berkah dan Hemat',
     ownerName: 'Pengelola Mr Berkah',
@@ -927,8 +937,8 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     storeId: 'berkah-mart',
     storeSlug: 'berkah-mart',
     displaySlug: 'berkah-mart',
-    subdomain: 'berkah-mart.toko-online.online',
-    subdomainUrl: 'https://berkah-mart.toko-online.online',
+    subdomain: 'berkah-mart.lapakoke.com',
+    subdomainUrl: 'https://berkah-mart.lapakoke.com',
     storeName: 'Berkah Mart',
     tagline: 'Kebutuhan Harian Lengkap & Terjangkau',
     ownerName: 'Pengelola Toko',
@@ -953,8 +963,8 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     storeId: 'berkah-jaya',
     storeSlug: 'berkah-jaya',
     displaySlug: 'berkah-jaya',
-    subdomain: 'berkah-jaya.toko-online.online',
-    subdomainUrl: 'https://berkah-jaya.toko-online.online',
+    subdomain: 'berkah-jaya.lapakoke.com',
+    subdomainUrl: 'https://berkah-jaya.lapakoke.com',
     storeName: 'Berkah Jaya Mart',
     tagline: 'Melayani Kebutuhan Anda Sepenuh Hati',
     ownerName: 'Pengelola Toko',
@@ -979,8 +989,8 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     storeId: 'tokoalda',
     storeSlug: 'tokoalda',
     displaySlug: 'tokoalda',
-    subdomain: 'tokoalda.toko-online.online',
-    subdomainUrl: 'https://tokoalda.toko-online.online',
+    subdomain: 'tokoalda.lapakoke.com',
+    subdomainUrl: 'https://tokoalda.lapakoke.com',
     storeName: 'Toko Alda',
     tagline: 'Belanja Mudah, Hemat, dan Lengkap',
     ownerName: 'Pengelola Toko Alda',
@@ -1005,8 +1015,8 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
     storeId: 'kuickmart',
     storeSlug: 'kuickmart',
     displaySlug: 'kuickmart',
-    subdomain: 'kuickmart.toko-online.online',
-    subdomainUrl: 'https://kuickmart.toko-online.online',
+    subdomain: 'kuickmart.lapakoke.com',
+    subdomainUrl: 'https://kuickmart.lapakoke.com',
     storeName: 'Kuickmart',
     tagline: 'Pusat Belanja Minimarket Cepat & Lengkap',
     ownerName: 'Pengelola Kuickmart',
@@ -1030,7 +1040,7 @@ export const BUILTIN_REGISTERED_SUBDOMAINS: RegisteredSubdomain[] = [
 ];
 
 /**
- * Mengambil daftar seluruh subdomain yang terdaftar di toko-online.online
+ * Mengambil daftar seluruh subdomain yang terdaftar di lapakoke.com
  * Menggabungkan database server Express, built-in fallback data, dan cache localStorage lokal.
  */
 export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]> {
@@ -1074,17 +1084,15 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
           const raw = localStorage.getItem(key);
           if (raw) {
             const parsed = JSON.parse(raw);
-            const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+            const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
             const existing = mapBySlug[slug];
-            const liveUrl = getStoreLiveUrl(slug);
             mapBySlug[slug] = {
               storeId: parsed.storeId || slug,
               storeSlug: slug,
               displaySlug: isMain ? 'pusat' : slug,
-              subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
-              subdomainUrl: liveUrl,
-              liveUrl: liveUrl,
-              storeName: parsed.storeName || (existing?.storeName) || (isMain ? 'toko-online.online (Pusat)' : slug),
+              subdomain: isMain ? ROOT_AUTHORITY_DOMAIN : `${slug}.${ROOT_AUTHORITY_DOMAIN}`,
+              subdomainUrl: isMain ? `https://${ROOT_AUTHORITY_DOMAIN}` : `https://${slug}.${ROOT_AUTHORITY_DOMAIN}`,
+              storeName: parsed.storeName || (existing?.storeName) || (isMain ? 'LapakOke (Pusat)' : slug),
               tagline: parsed.tagline || (existing?.tagline) || '',
               ownerName: parsed.ownerName || (existing?.ownerName) || 'Pengelola Toko',
               phone: parsed.phone || parsed.whatsapp || (existing?.phone) || '',
@@ -1121,18 +1129,16 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
       cloudTenants.forEach((ct: any) => {
         if (!ct || !ct.storeSlug) return;
         const slug = ct.storeSlug.toLowerCase();
-        const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+        const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
         const existing = mapBySlug[slug];
-        const liveUrl = getStoreLiveUrl(slug);
 
         mapBySlug[slug] = {
           storeId: ct.storeId || slug,
           storeSlug: slug,
           displaySlug: isMain ? 'pusat' : slug,
-          subdomain: isMain ? 'toko-online.online' : `${slug}.toko-online.online`,
-          subdomainUrl: liveUrl,
-          liveUrl: liveUrl,
-          storeName: ct.storeName || (existing?.storeName) || (isMain ? 'toko-online.online (Pusat)' : slug),
+          subdomain: isMain ? ROOT_AUTHORITY_DOMAIN : `${slug}.${ROOT_AUTHORITY_DOMAIN}`,
+          subdomainUrl: isMain ? `https://${ROOT_AUTHORITY_DOMAIN}` : `https://${slug}.${ROOT_AUTHORITY_DOMAIN}`,
+          storeName: ct.storeName || (existing?.storeName) || (isMain ? 'LapakOke (Pusat)' : slug),
           tagline: ct.tagline || (existing?.tagline) || '',
           ownerName: ct.ownerName || (existing?.ownerName) || 'Pengelola Toko',
           phone: ct.phone || ct.whatsapp || (existing?.phone) || '',
@@ -1171,16 +1177,16 @@ export async function fetchRegisteredSubdomains(): Promise<RegisteredSubdomain[]
       storeId: 'default',
       storeSlug: 'default',
       displaySlug: 'pusat',
-      subdomain: 'toko-online.online',
-      subdomainUrl: 'https://toko-online.online',
-      storeName: 'toko-online.online (Pusat)',
+      subdomain: ROOT_AUTHORITY_DOMAIN,
+      subdomainUrl: `https://${ROOT_AUTHORITY_DOMAIN}`,
+      storeName: 'LapakOke (Pusat)',
       tagline: 'Pusat Belanja Online Hemat, Cepat, dan Terpercaya',
       ownerName: 'Administrator',
       phone: '0812-3456-7890',
       whatsapp: '6281234567890',
       address: 'Jl. Pemuda No. 88, Pusat Niaga',
       city: 'Jakarta',
-      logoText: 'TO',
+      logoText: 'LO',
       primaryColor: '#E51A24',
       isActive: true,
       createdAt: new Date().toISOString(),
@@ -1212,12 +1218,12 @@ export async function toggleSubdomainStatus(
   reason?: string
 ): Promise<{ success: boolean; message: string; tenant?: any }> {
   const slug = (storeSlug || '').toLowerCase().trim();
-  const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+  const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
 
   if (isMain && !isActive) {
     return {
       success: false,
-      message: 'Domain utama toko-online.online merupakan induk sistem dan tidak dapat dinonaktifkan.',
+      message: `Domain utama ${ROOT_AUTHORITY_DOMAIN} merupakan induk sistem dan tidak dapat dinonaktifkan.`,
     };
   }
 
@@ -1258,7 +1264,7 @@ export async function toggleSubdomainStatus(
           parsed.isActive = isActive;
           parsed.updatedAt = new Date().toISOString();
           if (!isActive) {
-            parsed.disabledReason = reason || 'Dinonaktifkan oleh administrator toko-online.online';
+            parsed.disabledReason = reason || `Dinonaktifkan oleh administrator ${ROOT_AUTHORITY_DOMAIN}`;
             parsed.disabledAt = new Date().toISOString();
           } else {
             delete parsed.disabledReason;
@@ -1295,7 +1301,7 @@ export async function toggleSubdomainStatus(
 
     return {
       success: true,
-      message: data.message || `Subdomain '${slug}.toko-online.online' berhasil ${isActive ? 'diaktifkan' : 'dinonaktifkan'}.`,
+      message: data.message || `Subdomain '${slug}.${ROOT_AUTHORITY_DOMAIN}' berhasil ${isActive ? 'diaktifkan' : 'dinonaktifkan'}.`,
       tenant: data.tenant,
     };
   } catch (err: any) {

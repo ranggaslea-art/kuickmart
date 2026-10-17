@@ -589,7 +589,7 @@ export async function fetchOrdersFromSupabase(storeId?: string): Promise<Order[]
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com');
   const isNew = !isDefaultStore(targetSlug);
 
   try {
@@ -778,7 +778,7 @@ export async function fetchProductsFromSupabase(storeId?: string): Promise<Produ
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const targetSlug = (storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
+  const targetSlug = (storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com') || 'lapakoke.com').toLowerCase();
   const isNew = !isDefaultStore(targetSlug);
 
   try {
@@ -1041,7 +1041,7 @@ export async function fetchVouchersFromSupabase(storeId?: string): Promise<Vouch
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const targetSlug = (storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
+  const targetSlug = (storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com') || 'lapakoke.com').toLowerCase();
   const isNew = !isDefaultStore(targetSlug);
 
   try {
@@ -1115,7 +1115,7 @@ export async function saveProductToSupabase(
 
   if (!supabase) return { success: false, error: 'Klien Supabase belum terhubung.' };
   try {
-    const targetSlug = (product.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
+    const targetSlug = (product.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com') || 'lapakoke.com').toLowerCase();
     const isNew = !isDefaultStore(targetSlug);
 
     const payload: Record<string, any> = {
@@ -1409,7 +1409,7 @@ export async function saveVoucherToSupabase(voucher: Voucher): Promise<boolean> 
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
-    const targetSlug = ((voucher as any).storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online') || 'toko-online.online').toLowerCase();
+    const targetSlug = ((voucher as any).storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com') || 'lapakoke.com').toLowerCase();
     const isNew = !isDefaultStore(targetSlug);
     const payload: Record<string, any> = {
       id: voucher.id,
@@ -1688,7 +1688,7 @@ export async function deleteStorePromoFromSupabase(promoId: string): Promise<boo
 export async function fetchCouriersFromSupabase(storeId?: string): Promise<CourierInfo[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
-  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com');
   const isNew = !isDefaultStore(targetSlug);
 
   try {
@@ -1732,7 +1732,7 @@ export async function saveCourierToSupabase(courier: CourierInfo): Promise<boole
   const supabase = getSupabase();
   if (!supabase) return false;
   try {
-    const targetSlug = courier.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+    const targetSlug = courier.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com');
     const payload = {
       id: courier.id,
       name: courier.name,
@@ -1773,7 +1773,7 @@ export async function deleteCourierFromSupabase(courierId: string): Promise<bool
 export async function fetchStaffUsersFromSupabase(storeId?: string): Promise<StaffUser[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
-  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online');
+  const targetSlug = storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com');
   const isNew = !isDefaultStore(targetSlug);
 
   try {
@@ -1832,7 +1832,7 @@ export async function saveStaffUserToSupabase(user: StaffUser): Promise<boolean>
       pin: user.pin,
       phone: user.phone || null,
       email: user.email || null,
-      store_id: user.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'toko-online.online'),
+      store_id: user.storeId || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'lapakoke.com'),
       store_name: user.storeName || null,
       is_active: user.isActive ?? true,
       created_at: formatSupabaseTimestamp(user.createdAt) || new Date().toISOString(),

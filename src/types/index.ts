@@ -119,7 +119,6 @@ export interface Address {
   phone: string;
   fullAddress: string;
   city: string;
-  postalCode?: string;
   detailNote?: string;
   isDefault: boolean;
   latitude?: number;
@@ -154,52 +153,6 @@ export type PaymentMethod =
   | 'debit'
   | 'tempo';
 
-// ==========================================
-// MODUL EKSPEDISI & TARIF PENGIRIMAN
-// ==========================================
-export interface ExpeditionServiceRate {
-  id: string;
-  serviceCode: string; // e.g. "REG", "YES", "OKE", "JTR", "EZ", "BEST", "STANDARD"
-  serviceName: string; // e.g. "Reguler", "Yakin Esok Sampai", "Ekonomis", "Cargo"
-  etd: string; // e.g. "1-2 Hari", "Besok Sampai (24 Jam)", "2-4 Hari"
-  rateType: 'flat' | 'per_kg'; // Flat per pesanan atau per kg
-  baseRate: number; // Tarif dasar (Rp)
-  ratePerKg?: number; // Biaya per kg jika per_kg
-  minWeightKg?: number; // Minimal bobot kg (default 1)
-  description?: string;
-  isActive: boolean;
-}
-
-export interface Expedition {
-  id: string;
-  name: string; // e.g. "JNE Express", "J&T Express", "SiCepat Ekspres"
-  code: string; // e.g. "JNE", "JNT", "SICEPAT", "POS", "TIKI", "ANTERAJA"
-  logo?: string;
-  color?: string; // hex or badge color
-  isActive: boolean;
-  trackingUrlPattern?: string; // e.g. "https://cekresi.com/?noresi={resi}"
-  phone?: string;
-  notes?: string;
-  services: ExpeditionServiceRate[];
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface OrderExpeditionDetail {
-  expeditionId: string;
-  expeditionName: string;
-  expeditionCode: string;
-  serviceId: string;
-  serviceName: string;
-  serviceCode: string;
-  etd: string;
-  rate: number;
-  weightKg?: number;
-  trackingNumber?: string; // Nomor Resi
-  destinationCity?: string;
-  postalCode?: string;
-}
-
 export interface CourierInfo {
   id: string;
   name: string;
@@ -225,8 +178,7 @@ export interface Order {
   items: CartItem[];
   store: Store;
   pickupStoreName?: string;
-  deliveryType: 'delivery' | 'pickup' | 'expedition';
-  selectedExpedition?: OrderExpeditionDetail;
+  deliveryType: 'delivery' | 'pickup';
   deliverySlot?: string;
   pickupTime?: string;
   address?: Address;

@@ -27,7 +27,7 @@ const IS_PRODUCTION = process.env.DOKU_IS_PRODUCTION === 'true';
 const VAPID_FILE = path.join(process.cwd(), 'data', 'vapid-config.json');
 let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
 let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@toko-online.online';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@lapakoke.com';
 
 // Initialize or load stable VAPID keypair
 if (!vapidPublicKey || !vapidPrivateKey) {
@@ -275,39 +275,7 @@ async function startServer() {
     res.status(404).send('// Service worker not found');
   });
 
-  // Dedicated PWA Web App Manifest route with explicit application/manifest+json MIME type
-  app.get(['/manifest.json', '/manifest.webmanifest'], (_req, res) => {
-    const manifestCandidates = [
-      path.join(process.cwd(), 'dist', 'manifest.json'),
-      path.join(process.cwd(), 'public', 'manifest.json'),
-      path.join(appDir, 'dist', 'manifest.json'),
-      path.join(appDir, 'public', 'manifest.json'),
-    ];
-    const manifestPath = manifestCandidates.find((p) => fs.existsSync(p));
-
-    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-
-    if (manifestPath) {
-      return res.sendFile(manifestPath);
-    }
-    res.status(404).json({ error: 'Manifest not found' });
-  });
-
-  // Dedicated Android Digital Asset Links route for PWABuilder / TWA verification
-  app.get('/.well-known/assetlinks.json', (_req, res) => {
-    const assetlinksFile = path.join(process.cwd(), 'public', '.well-known', 'assetlinks.json');
-    if (fs.existsSync(assetlinksFile)) {
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      return res.sendFile(assetlinksFile);
-    }
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.json([]);
-  });
-
+  // Global CORS and Preflight handler for API endpoints
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -325,7 +293,7 @@ async function startServer() {
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
-      service: 'toko-online.online API Server',
+      service: 'lapakoke.com API Server',
       timestamp: new Date().toISOString(),
     });
   });
@@ -345,7 +313,7 @@ async function startServer() {
       environment: isProd ? 'production' : 'sandbox',
       baseUrl: isProd ? 'https://api.doku.com' : 'https://api-sandbox.doku.com',
       hasSecretKey,
-      merchantName: dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online',
+      merchantName: dokuSettings?.merchantName || tenant?.storeName || 'lapakoke.com',
       supportedMethods: ['bca_va', 'mandiri_va', 'bri_va', 'bni_va', 'permata_va', 'qris'],
     });
   });
@@ -375,7 +343,7 @@ async function startServer() {
         tenant: sanitized,
         brandConfig: settings?.brandConfig || null,
         isDisabled: !isTenantActive,
-        disabledReason: tenant.disabledReason || 'Subdomain ini telah dinonaktifkan oleh administrator toko-online.online.'
+        disabledReason: tenant.disabledReason || 'Subdomain ini telah dinonaktifkan oleh administrator lapakoke.com.'
       });
     }
 
@@ -511,27 +479,27 @@ async function startServer() {
     }
   });
 
-  // 1b-1. List All Registered Subdomains under toko-online.online
+  // 1b-1. List All Registered Subdomains under lapakoke.com & toko-online.online
   const ALLOWED_SUBDOMAIN_MODULE_DOMAINS = [
+    'lapakoke.com',
+    'www.lapakoke.com',
     'kuickmart.ranggaslea.workers.dev',
     'toko-online.online',
     'www.toko-online.online',
+    'toko-online.com',
+    'www.toko-online.com',
   ];
 
   function verifySubdomainModuleAccess(req: express.Request): { allowed: boolean; reason?: string } {
     // Cek jika ada simulasi domain pengujian via header
     const simulateHeader = (req.headers['x-simulate-domain'] as string | undefined)?.trim().toLowerCase();
     if (simulateHeader) {
-      if (
-        simulateHeader === 'kuickmart.ranggaslea.workers.dev' ||
-        simulateHeader === 'toko-online.online' ||
-        simulateHeader === 'www.toko-online.online'
-      ) {
+      if (ALLOWED_SUBDOMAIN_MODULE_DOMAINS.includes(simulateHeader)) {
         return { allowed: true };
       }
       return {
         allowed: false,
-        reason: `Akses Ditolak: Domain '${simulateHeader}' tidak memiliki izin. Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.`,
+        reason: `Akses Ditolak: Domain '${simulateHeader}' tidak memiliki izin. Modul info subdomain hanya bisa diakses oleh domain resmi lapakoke.com.`,
       };
     }
 
@@ -561,14 +529,10 @@ async function startServer() {
       extractHost(referer),
     ].filter(Boolean) as string[];
 
-    // Diizinkan secara eksplisit jika berasal dari kuickmart.ranggaslea.workers.dev atau toko-online.online
+    // Diizinkan secara eksplisit jika berasal dari lapakoke.com, kuickmart worker atau toko-online.online
     const isExplicitlyAllowed = hostList.some((h) => {
       const clean = extractHost(h);
-      return (
-        clean === 'kuickmart.ranggaslea.workers.dev' ||
-        clean === 'toko-online.online' ||
-        clean === 'www.toko-online.online'
-      );
+      return ALLOWED_SUBDOMAIN_MODULE_DOMAINS.includes(clean);
     });
 
     if (isExplicitlyAllowed) {
@@ -593,7 +557,7 @@ async function startServer() {
 
     return {
       allowed: false,
-      reason: 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.',
+      reason: 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain resmi lapakoke.com.',
     };
   }
 
@@ -603,17 +567,19 @@ async function startServer() {
       if (!access.allowed) {
         return res.status(403).json({
           success: false,
-          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.',
+          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain resmi lapakoke.com.',
           allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
         });
       }
+
+      const rootDomain = 'lapakoke.com';
 
       // Pastikan domain utama selalu ada dalam daftar
       if (!tenantStoreMap['default']) {
         tenantStoreMap['default'] = {
           storeId: 'default',
           storeSlug: 'default',
-          storeName: 'toko-online.online (Pusat)',
+          storeName: 'LapakOke (Pusat)',
           tagline: 'Minimarket & Toko Online Resmi',
           ownerName: 'Administrator',
           city: 'Jakarta',
@@ -624,10 +590,10 @@ async function startServer() {
 
       const list = Object.keys(tenantStoreMap).map((slug) => {
         const t = tenantStoreMap[slug] || {};
-        const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+        const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
         const displaySlug = isMain ? 'pusat' : slug;
-        const subdomain = isMain ? 'toko-online.online' : `${slug}.toko-online.online`;
-        const subdomainUrl = isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
+        const subdomain = isMain ? rootDomain : `${slug}.${rootDomain}`;
+        const subdomainUrl = isMain ? `https://${rootDomain}` : `https://${slug}.${rootDomain}`;
         const isActive = t.isActive !== false;
 
         return {
@@ -636,7 +602,7 @@ async function startServer() {
           displaySlug,
           subdomain,
           subdomainUrl,
-          storeName: t.storeName || (isMain ? 'toko-online.online (Pusat)' : slug),
+          storeName: t.storeName || (isMain ? 'LapakOke (Pusat)' : slug),
           tagline: t.tagline || '',
           ownerName: t.ownerName || 'Pengelola Toko',
           phone: t.phone || t.whatsapp || '',
@@ -667,7 +633,7 @@ async function startServer() {
 
       return res.json({
         success: true,
-        rootDomain: 'toko-online.online',
+        rootDomain,
         total: list.length,
         activeCount: list.filter((item) => item.isActive).length,
         disabledCount: list.filter((item) => !item.isActive).length,
@@ -686,7 +652,7 @@ async function startServer() {
       if (!access.allowed) {
         return res.status(403).json({
           success: false,
-          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain kuickmart.ranggaslea.workers.dev dan domain toko-online.online.',
+          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain resmi lapakoke.com.',
           allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
         });
       }
@@ -697,12 +663,12 @@ async function startServer() {
       }
 
       const slug = storeSlug.trim().toLowerCase();
-      const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+      const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
 
       if (isMain && isActive === false) {
         return res.status(400).json({
           success: false,
-          error: 'Domain utama toko-online.online merupakan induk sistem dan tidak dapat dinonaktifkan.',
+          error: 'Domain utama lapakoke.com merupakan induk sistem dan tidak dapat dinonaktifkan.',
         });
       }
 
@@ -719,7 +685,7 @@ async function startServer() {
       existing.updatedAt = new Date().toISOString();
 
       if (!newIsActive) {
-        existing.disabledReason = reason || 'Dinonaktifkan oleh administrator toko-online.online';
+        existing.disabledReason = reason || 'Dinonaktifkan oleh administrator lapakoke.com';
         existing.disabledAt = new Date().toISOString();
       } else {
         delete existing.disabledReason;
@@ -733,7 +699,7 @@ async function startServer() {
 
       return res.json({
         success: true,
-        message: `Subdomain '${slug}.toko-online.online' berhasil ${newIsActive ? 'diaktifkan kembali' : 'dinonaktifkan'}.`,
+        message: `Subdomain '${slug}.lapakoke.com' berhasil ${newIsActive ? 'diaktifkan kembali' : 'dinonaktifkan'}.`,
         tenant: {
           storeSlug: slug,
           isActive: newIsActive,
@@ -753,34 +719,41 @@ async function startServer() {
     const rawHost = (req.headers['x-client-hostname'] || req.headers['x-forwarded-host'] || req.headers['host'] || '').toString().toLowerCase();
     const clientHost = rawHost.split(':')[0].trim();
     const isDevOrPreview = clientHost.includes('localhost') || clientHost.includes('127.0.0.1') || clientHost.includes('run.app') || clientHost.includes('webcontainer');
-    const isRootTokoOnline = clientHost === 'toko-online.online' || clientHost === 'www.toko-online.online';
-    const isSubdomain = clientHost.endsWith('.toko-online.online') && clientHost !== 'www.toko-online.online';
+    const isRootDomain =
+      ALLOWED_SUBDOMAIN_MODULE_DOMAINS.includes(clientHost) ||
+      clientHost === 'lapakoke.com' ||
+      clientHost === 'www.lapakoke.com' ||
+      clientHost === 'toko-online.online' ||
+      clientHost === 'www.toko-online.online';
+    const isSubdomain =
+      (clientHost.endsWith('.lapakoke.com') && clientHost !== 'www.lapakoke.com') ||
+      (clientHost.endsWith('.toko-online.online') && clientHost !== 'www.toko-online.online');
 
     if (isSubdomain) {
       return res.json({
         allowed: false,
         isRootDomain: false,
         currentHost: clientHost,
-        rootDomain: 'toko-online.online',
-        reason: `Subdomain '${clientHost}' tidak diizinkan menambahkan subdomain baru. Hanya domain utama toko-online.online yang berwenang.`,
+        rootDomain: 'lapakoke.com',
+        reason: `Subdomain '${clientHost}' tidak diizinkan menambahkan subdomain baru. Hanya domain utama lapakoke.com yang berwenang.`,
       });
     }
 
-    if (!isRootTokoOnline && !isDevOrPreview) {
+    if (!isRootDomain && !isDevOrPreview) {
       return res.json({
         allowed: false,
         isRootDomain: false,
         currentHost: clientHost,
-        rootDomain: 'toko-online.online',
-        reason: `Domain '${clientHost}' berada di luar domain resmi toko-online.online. Penambahan subdomain hanya dapat dilakukan melalui toko-online.online.`,
+        rootDomain: 'lapakoke.com',
+        reason: `Domain '${clientHost}' berada di luar domain resmi lapakoke.com. Penambahan subdomain hanya dapat dilakukan melalui lapakoke.com.`,
       });
     }
 
     return res.json({
       allowed: true,
       isRootDomain: true,
-      currentHost: clientHost || 'toko-online.online',
-      rootDomain: 'toko-online.online',
+      currentHost: clientHost || 'lapakoke.com',
+      rootDomain: 'lapakoke.com',
       message: 'Otoritas domain terverifikasi: Diizinkan menambahkan subdomain baru.',
     });
   });
@@ -878,35 +851,41 @@ async function startServer() {
       const existing = tenantStoreMap[slug] || {};
 
       // ATURAN OTORITAS SUBDOMAIN:
-      // Hanya domain toko-online.online yang dapat menambahkan subdomain baru.
-      // Di luar domain toko-online.online (domain eksternal atau subdomain yang sudah ada) tidak bisa menambahkan subdomain lagi.
-      const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+      // Hanya domain lapakoke.com (dan domain resmi terdaftar) yang dapat menambahkan subdomain baru.
+      const isMainStore = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
       const isExisting = Boolean(tenantStoreMap[slug]);
 
       if (!isMainStore && !isExisting) {
         const rawHost = (req.headers['x-client-hostname'] || incoming._clientHostname || req.headers['x-forwarded-host'] || req.headers['host'] || '').toString().toLowerCase();
         const clientHost = rawHost.split(':')[0].trim();
         const isDevOrPreview = clientHost.includes('localhost') || clientHost.includes('127.0.0.1') || clientHost.includes('run.app') || clientHost.includes('webcontainer');
-        const isRootTokoOnline = clientHost === 'toko-online.online' || clientHost === 'www.toko-online.online';
-        const isSubdomain = clientHost.endsWith('.toko-online.online') && clientHost !== 'www.toko-online.online';
+        const isRootDomain =
+          ALLOWED_SUBDOMAIN_MODULE_DOMAINS.includes(clientHost) ||
+          clientHost === 'lapakoke.com' ||
+          clientHost === 'www.lapakoke.com' ||
+          clientHost === 'toko-online.online' ||
+          clientHost === 'www.toko-online.online';
+        const isSubdomain =
+          (clientHost.endsWith('.lapakoke.com') && clientHost !== 'www.lapakoke.com') ||
+          (clientHost.endsWith('.toko-online.online') && clientHost !== 'www.toko-online.online');
 
         if (isSubdomain) {
           console.warn(`[Subdomain Policy] Ditolak: Subdomain '${clientHost}' mencoba menambahkan subdomain baru '${slug}'`);
           return res.status(403).json({
             success: false,
-            error: `Akses Ditolak: Anda saat ini berada di subdomain '${clientHost}'. Subdomain tidak dapat menambahkan subdomain baru. Hanya domain utama toko-online.online yang berwenang.`,
+            error: `Akses Ditolak: Anda saat ini berada di subdomain '${clientHost}'. Subdomain tidak dapat menambahkan subdomain baru. Hanya domain utama lapakoke.com yang berwenang.`,
             code: 'SUBDOMAIN_CREATION_FORBIDDEN_FROM_SUBDOMAIN',
-            rootDomain: 'toko-online.online',
+            rootDomain: 'lapakoke.com',
           });
         }
 
-        if (!isRootTokoOnline && !isDevOrPreview) {
+        if (!isRootDomain && !isDevOrPreview) {
           console.warn(`[Subdomain Policy] Ditolak: Domain eksternal '${clientHost}' mencoba menambahkan subdomain '${slug}'`);
           return res.status(403).json({
             success: false,
-            error: `Akses Ditolak: Domain '${clientHost}' berada di luar domain resmi toko-online.online. Sesuai aturan sistem, penambahan subdomain HANYA diizinkan melalui domain toko-online.online.`,
+            error: `Akses Ditolak: Domain '${clientHost}' berada di luar domain resmi lapakoke.com. Sesuai aturan sistem, penambahan subdomain HANYA diizinkan melalui domain lapakoke.com.`,
             code: 'SUBDOMAIN_CREATION_FORBIDDEN_OUTSIDE_DOMAIN',
-            rootDomain: 'toko-online.online',
+            rootDomain: 'lapakoke.com',
           });
         }
       }
@@ -1114,13 +1093,13 @@ async function startServer() {
       if (tenant && tenant.isActive === false) {
         return res.status(403).json({
           success: false,
-          error: `Subdomain '${slug}.toko-online.online' saat ini sedang dinonaktifkan oleh administrator. Transaksi Virtual Account tidak dapat diproses.`,
+          error: `Subdomain '${slug}.lapakoke.com' saat ini sedang dinonaktifkan oleh administrator. Transaksi Virtual Account tidak dapat diproses.`,
           isDisabled: true,
-          disabledReason: tenant.disabledReason || 'Dinonaktifkan oleh administrator toko-online.online',
+          disabledReason: tenant.disabledReason || 'Dinonaktifkan oleh administrator lapakoke.com',
         });
       }
 
-      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online';
+      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'lapakoke.com';
       const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
       const effectiveSecretKey = (customSecretKey && !customSecretKey.includes('•••'))
         ? customSecretKey
@@ -1256,13 +1235,13 @@ async function startServer() {
       if (tenant && tenant.isActive === false) {
         return res.status(403).json({
           success: false,
-          error: `Subdomain '${slug}.toko-online.online' saat ini sedang dinonaktifkan oleh administrator. Pembuatan QRIS tidak dapat diproses.`,
+          error: `Subdomain '${slug}.lapakoke.com' saat ini sedang dinonaktifkan oleh administrator. Pembuatan QRIS tidak dapat diproses.`,
           isDisabled: true,
-          disabledReason: tenant.disabledReason || 'Dinonaktifkan oleh administrator toko-online.online',
+          disabledReason: tenant.disabledReason || 'Dinonaktifkan oleh administrator lapakoke.com',
         });
       }
 
-      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'toko-online.online';
+      const effectiveMerchantName = incomingMerchantName || tenant?.dokuSettings?.merchantName || tenant?.storeName || 'lapakoke.com';
       const effectiveClientId = customClientId || tenant?.dokuSettings?.clientId || DOKU_CLIENT_ID;
       const city = (tenant?.city || 'JAKARTA').replace(/[^a-zA-Z0-9 ]/g, '').trim().toUpperCase().slice(0, 15);
 
@@ -1308,7 +1287,7 @@ async function startServer() {
     // Acknowledge notification back to DOKU
     res.status(200).json({
       status: 'OK',
-      message: 'Notification successfully processed by toko-online.online',
+      message: 'Notification successfully processed by lapakoke.com',
     });
   });
 
@@ -1747,7 +1726,7 @@ async function startServer() {
   // POST /api/push/subscribe: Register a new subscriber from PWA client
   app.post('/api/push/subscribe', (req, res) => {
     try {
-      const { subscription, customerName = 'Pelanggan toko-online.online PWA', deviceType = 'Mobile PWA' } = req.body || {};
+      const { subscription, customerName = 'Pelanggan lapakoke.com PWA', deviceType = 'Mobile PWA' } = req.body || {};
 
       if (!subscription || !subscription.endpoint || !subscription.keys) {
         return res.status(400).json({ error: 'Subscription data tidak valid (membutuhkan endpoint dan keys)' });
@@ -1785,7 +1764,7 @@ async function startServer() {
 
       res.json({
         success: true,
-        message: 'Perangkat berhasil terdaftar untuk menerima notifikasi promosi toko-online.online!',
+        message: 'Perangkat berhasil terdaftar untuk menerima notifikasi promosi lapakoke.com!',
         totalSubscribers: pushSubscribers.length,
       });
     } catch (err: any) {
@@ -1821,8 +1800,8 @@ async function startServer() {
   app.post('/api/push/broadcast', async (req, res) => {
     try {
       const {
-        title = '🎉 Promo Kilat toko-online.online!',
-        body = 'Diskon spesial dan voucher hemat menanti Anda hari ini di toko-online.online!',
+        title = '🎉 Promo Kilat lapakoke.com!',
+        body = 'Diskon spesial dan voucher hemat menanti Anda hari ini di lapakoke.com!',
         url = '/',
         image,
         tag = 'toko-online-promo',
@@ -1911,7 +1890,7 @@ async function startServer() {
   // POST /api/push/test: Send instant test notification to specific subscriber or local
   app.post('/api/push/test', async (req, res) => {
     try {
-      const { subscription, title = '🔔 Uji Coba Notifikasi toko-online.online', body = 'Halo! Notifikasi Web Push PWA Anda bekerja dengan sempurna!' } = req.body || {};
+      const { subscription, title = '🔔 Uji Coba Notifikasi lapakoke.com', body = 'Halo! Notifikasi Web Push PWA Anda bekerja dengan sempurna!' } = req.body || {};
 
       if (!subscription || !subscription.endpoint || !subscription.keys) {
         return res.status(400).json({ error: 'Subscription data tidak valid' });
@@ -1955,7 +1934,7 @@ async function startServer() {
     if (fs.existsSync(robotsPath)) {
       return res.sendFile(robotsPath);
     }
-    res.send('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: https://www.toko-online.online/sitemap.xml\n');
+    res.send('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\nSitemap: https://www.lapakoke.com/sitemap.xml\n');
   });
 
   app.get('/sitemap.xml', (_req, res) => {
@@ -1968,13 +1947,13 @@ async function startServer() {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.toko-online.online/</loc>
+    <loc>https://www.lapakoke.com/</loc>
     <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://toko-online.online/</loc>
+    <loc>https://lapakoke.com/</loc>
     <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
@@ -2728,7 +2707,7 @@ async function startServer() {
 
         const fallbackStore = {
           id: r.store_id || 'str_01',
-          name: 'toko-online.online - Sudirman Thamrin',
+          name: 'LapakOke - Sudirman Thamrin',
           code: 'TO-SDM01',
           address: 'Jl. Jendral Sudirman No. 18, Menteng',
           city: 'Jakarta Pusat',
@@ -3517,7 +3496,9 @@ async function startServer() {
     try {
       const host = (req.headers['host'] || '').split(':')[0].toLowerCase();
       let slug = 'default';
-      if (host.endsWith('.toko-online.online') && host !== 'www.toko-online.online') {
+      if (host.endsWith('.lapakoke.com') && host !== 'www.lapakoke.com') {
+        slug = host.replace('.lapakoke.com', '');
+      } else if (host.endsWith('.toko-online.online') && host !== 'www.toko-online.online') {
         slug = host.replace('.toko-online.online', '');
       }
       if (req.query.slug) {
@@ -3625,7 +3606,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`toko-online.online Full-Stack Server running on http://0.0.0.0:${PORT}`);
+    console.log(`lapakoke.com Full-Stack Server running on http://0.0.0.0:${PORT}`);
     console.log(`DOKU Client ID configured: ${DOKU_CLIENT_ID}`);
   });
 }

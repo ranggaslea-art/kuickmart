@@ -142,7 +142,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
     setIsSaving(true);
     try {
       const slug = (tenantData.storeSlug || '').toLowerCase().trim();
-      const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+      const isMainStore = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
       const isExistingTenant = Boolean(localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`));
       const isBuiltinTenant = BUILTIN_REGISTERED_SUBDOMAINS.some(
         (b) => b.storeSlug.toLowerCase() === slug || b.storeId.toLowerCase() === slug
@@ -150,9 +150,9 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
       const isEditingCurrentStore = slug === getStoreSlugFromUrl().toLowerCase();
 
       // Validasi Aturan Subdomain:
-      // Hanya domain toko-online.online yang bisa mendaftarkan subdomain baru
+      // Hanya domain lapakoke.com yang bisa mendaftarkan subdomain baru
       if (!isMainStore && !isExistingTenant && !isBuiltinTenant && !isEditingCurrentStore && !policy.allowed) {
-        alert(policy.reason || 'Hanya domain utama toko-online.online yang berwenang menambahkan subdomain baru. Di luar toko-online.online tidak dapat menambah subdomain.');
+        alert(policy.reason || 'Hanya domain utama lapakoke.com yang berwenang menambahkan subdomain baru. Di luar lapakoke.com tidak dapat menambah subdomain.');
         setIsSaving(false);
         return;
       }
@@ -258,7 +258,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
 
   const notificationWebhookUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/api/doku/notification` 
-    : 'https://toko-online.online/api/doku/notification';
+    : 'https://lapakoke.com/api/doku/notification';
 
   return (
     <div className="space-y-6">
@@ -392,7 +392,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
                 type="button"
                 onClick={() => handleToggleSimulateForeignDomain(true)}
                 className="text-xs bg-white hover:bg-stone-100 text-stone-700 font-semibold px-3 py-1.5 rounded-xl border border-stone-300 flex items-center gap-1.5 shadow-2xs cursor-pointer transition"
-                title="Uji coba sistem ketika diakses di luar toko-online.online"
+                title="Uji coba sistem ketika diakses di luar lapakoke.com"
               >
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                 <span>Simulasikan Akses Luar Domain</span>
@@ -554,7 +554,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
                   className="w-full text-sm font-semibold px-3.5 py-2.5 rounded-xl border border-stone-300 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition"
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
-                  Anda bisa menamainya apapun, bukan hanya toko-online.online.
+                  Anda bisa menamainya apapun, bukan hanya LapakOke.
                 </span>
               </div>
 
@@ -1355,7 +1355,7 @@ export const StoreDokuSettingsManager: React.FC<StoreDokuSettingsManagerProps> =
           onNavigateToStore={(slug) => {
             const url = typeof window !== 'undefined'
               ? `${window.location.origin}${window.location.pathname}?store=${slug}`
-              : `https://${slug}.toko-online.online`;
+              : `https://${slug}.lapakoke.com`;
             window.location.href = url;
           }}
         />

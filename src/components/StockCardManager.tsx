@@ -527,12 +527,12 @@ export const StockCardManager: React.FC<StockCardManagerProps> = ({
             type="button"
             onClick={() => {
               if (activeTab === 'individual' && currentLedger) {
-                exportStockCardToCSV(currentLedger, currentStore?.name || 'toko-online.online');
+                exportStockCardToCSV(currentLedger, currentStore?.name || 'LapakOke');
               } else {
                 exportStockSummaryToCSV(
                   filteredSummaryItems,
                   { startDate, endDate },
-                  currentStore?.name || 'toko-online.online'
+                  currentStore?.name || 'LapakOke'
                 );
               }
             }}

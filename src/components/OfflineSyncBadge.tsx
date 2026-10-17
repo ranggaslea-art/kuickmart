@@ -238,7 +238,7 @@ export const OfflineSyncBadge: React.FC<OfflineSyncBadgeProps> = ({
                     )}
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Sistem toko-online.online terintegrasi MySQL / MariaDB Server
+                    Sistem lapakoke.com terintegrasi MySQL / MariaDB Server
                   </p>
                 </div>
               </div>

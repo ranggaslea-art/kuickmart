@@ -1,43 +1,18 @@
 {
   "id": "/",
-  "name": "toko-online.online",
-  "short_name": "toko-online",
-  "description": "Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, pengiriman cepat antar langsung ke rumah.",
+  "name": "lapakoke.com",
+  "short_name": "LapakOke",
+  "description": "Aplikasi belanja minimarket online & kasir pintar lapakoke.com dengan pengiriman cepat dan hemat.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "window-controls-overlay"],
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
   "theme_color": "#E51A24",
   "lang": "id",
   "dir": "ltr",
   "categories": ["shopping", "business", "lifestyle"],
-  "prefer_related_applications": false,
-  "related_applications": [
-    {
-      "platform": "play",
-      "url": "https://play.google.com/store/apps/details?id=online.tokoonline.twa",
-      "id": "online.tokoonline.twa"
-    }
-  ],
-  "handle_links": "preferred",
-  "launch_handler": {
-    "client_mode": "auto"
-  },
   "icons": [
-    {
-      "src": "/pwa-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
     {
       "src": "/pwa-192x192.png",
       "sizes": "192x192",
@@ -55,60 +30,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Belanja Sembako",
-      "short_name": "Belanja",
-      "description": "Buka katalog sembako dan kebutuhan pokok hemat",
-      "url": "/?source=pwa_shortcut",
-      "icons": [
-        {
-          "src": "/pwa-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        },
-        {
-          "src": "/pwa-192x192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Keranjang Belanja",
-      "short_name": "Keranjang",
-      "description": "Lihat pesanan dan keranjang belanja Anda",
-      "url": "/?open=cart&source=pwa_shortcut",
-      "icons": [
-        {
-          "src": "/pwa-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        },
-        {
-          "src": "/pwa-192x192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshot-narrow.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Toko Online Mobile"
-    },
-    {
-      "src": "/screenshot-wide.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Toko Online Desktop"
     }
   ]
 }

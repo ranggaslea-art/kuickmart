@@ -420,14 +420,14 @@ export default {
         });
       }
 
-      // 10. List All Registered Subdomains under toko-online.online
+      // 10. List All Registered Subdomains under lapakoke.com
       if (url.pathname === '/api/tenants') {
         const list = Object.keys(workerTenantMap).map((slug) => {
           const t = workerTenantMap[slug] || {};
-          const isMain = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+          const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
           const displaySlug = isMain ? 'pusat' : slug;
-          const subdomain = isMain ? 'toko-online.online' : `${slug}.toko-online.online`;
-          const subdomainUrl = isMain ? 'https://toko-online.online' : `https://${slug}.toko-online.online`;
+          const subdomain = isMain ? 'lapakoke.com' : `${slug}.lapakoke.com`;
+          const subdomainUrl = isMain ? 'https://lapakoke.com' : `https://${slug}.lapakoke.com`;
           const isActive = t.isActive !== false;
 
           return {
@@ -436,7 +436,7 @@ export default {
             displaySlug,
             subdomain,
             subdomainUrl,
-            storeName: t.storeName || (isMain ? 'toko-online.online (Pusat)' : slug),
+            storeName: t.storeName || (isMain ? 'LapakOke (Pusat)' : slug),
             tagline: t.tagline || '',
             ownerName: t.ownerName || 'Pengelola Toko',
             phone: t.phone || t.whatsapp || '',
@@ -466,7 +466,7 @@ export default {
 
         return jsonResponse({
           success: true,
-          rootDomain: 'toko-online.online',
+          rootDomain: 'lapakoke.com',
           total: list.length,
           activeCount: list.filter((i) => i.isActive).length,
           disabledCount: list.filter((i) => !i.isActive).length,
@@ -535,10 +535,10 @@ export default {
           const { storeSlug, isActive, reason } = body || {};
           const slug = (storeSlug || '').trim().toLowerCase();
 
-          if ((slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online') && !isActive) {
+          if ((slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online') && !isActive) {
             return jsonResponse({
               success: false,
-              error: 'Domain utama toko-online.online tidak dapat dinonaktifkan.',
+              error: 'Domain utama lapakoke.com tidak dapat dinonaktifkan.',
             }, 400);
           }
 
@@ -585,7 +585,7 @@ export default {
           success: true,
           canAdd: true,
           allowed: true,
-          rootDomain: 'toko-online.online',
+          rootDomain: 'lapakoke.com',
         });
       }
 

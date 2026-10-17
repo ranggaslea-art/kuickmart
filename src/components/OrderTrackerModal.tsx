@@ -27,7 +27,17 @@ import { Order, OrderStatus, ReceiptInfo, CourierInfo } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
 import { cleanReceiptText, formatReceiptAddress } from '../utils/sanitizeReceipt';
 import { generateDotMatrixReceiptHtml, printPosReceiptViaIframe } from '../utils/posPrinterHelper';
-import { cleanPhoneNumber, generateOrderWhatsAppMessage, getWhatsAppChatUrl, openWhatsAppDirect } from '../utils/whatsappHelper';
+import { 
+  cleanPhoneNumber, 
+  generateOrderWhatsAppMessage, 
+  getWhatsAppChatUrl, 
+  openWhatsAppDirect,
+  extractWhatsAppNumber,
+  openStoreOrderWhatsApp,
+  generateStoreOrderWhatsAppMessage,
+  getStoreWhatsAppUrl,
+  getStoreOrderWhatsAppNumber
+} from '../utils/whatsappHelper';
 
 interface OrderTrackerModalProps {
   order: Order | null;
@@ -58,6 +68,21 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
+  const [copiedStorePhone, setCopiedStorePhone] = useState(false);
+
+  // WhatsApp Toko Cabang handlers (baik pesanan diambil maupun diantar kurir)
+  const handleOpenStoreWhatsApp = () => {
+    if (!order) return;
+    openStoreOrderWhatsApp(order);
+  };
+
+  const handleCopyStorePhone = () => {
+    if (!order) return;
+    const phone = getStoreOrderWhatsAppNumber(order);
+    navigator.clipboard.writeText(phone);
+    setCopiedStorePhone(true);
+    setTimeout(() => setCopiedStorePhone(false), 2000);
+  };
 
   if (!order) return null;
 
@@ -69,7 +94,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     const message = generateOrderWhatsAppMessage({
       driverName: order.driver.name,
       orderNumber: order.orderNumber,
-      storeName: order.store.name,
+      storeName: order.store?.name || 'toko-online.online',
       destinationAddress: order.address?.fullAddress,
       customerName: order.address?.recipientName,
       isCallRequest: false
@@ -89,7 +114,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     const message = generateOrderWhatsAppMessage({
       driverName: order.driver.name,
       orderNumber: order.orderNumber,
-      storeName: order.store.name,
+      storeName: order.store?.name || 'toko-online.online',
       destinationAddress: order.address?.fullAddress,
       customerName: order.address?.recipientName,
       isCallRequest: true
@@ -124,8 +149,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
     // 2. Match by store id or store name
     const matchByStore = list?.find(
-      r => (r.storeId && r.storeId !== 'all' && r.storeId === order?.store.id) || 
-           (r.storeName && order?.store.name && r.storeName.toLowerCase() === order?.store.name.toLowerCase())
+      r => (r.storeId && r.storeId !== 'all' && r.storeId === order?.store?.id) || 
+           (r.storeName && order?.store?.name && r.storeName.toLowerCase() === order?.store?.name.toLowerCase())
     );
     if (matchByStore) return matchByStore;
 
@@ -136,11 +161,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     return {
       id: 'default_rcp',
       profileName: 'Struk Standar',
-      headerBrand: order?.store.name || 'STRUK PENJUALAN',
-      storeName: order?.store.name || '',
-      address: order?.store.address || '',
-      city: order?.store.city || '',
-      phone: order?.store.phone || '',
+      headerBrand: order?.store?.name || 'STRUK PENJUALAN',
+      storeName: order?.store?.name || '',
+      address: order?.store?.address || '',
+      city: order?.store?.city || '',
+      phone: order?.store?.phone || '',
       footerMessage1: 'Terima kasih telah berbelanja.',
       showBarcode: true,
     };
@@ -159,11 +184,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       case 'picking':
         return 'Pengecekan Kualitas & Packing';
       case 'delivering':
-        return order.deliveryType === 'delivery'
-          ? 'Kurir Sedang Mengantar'
-          : order.deliveryType === 'expedition'
-          ? `Dalam Pengiriman Ekspedisi (${order.selectedExpedition?.expeditionCode || 'JNE'})`
-          : 'Siap Diambil di Kasir Toko';
+        return order.deliveryType === 'delivery' ? 'Kurir Sedang Mengantar' : 'Siap Diambil di Kasir Toko';
       case 'ready_for_pickup':
         return 'Siap Diambil di Outlet';
       case 'completed':
@@ -237,7 +258,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-stone-500 mt-0.5">
-              Dipesan pada {formatDateTime(order.createdAt)} • {order.store.name}
+              Dipesan pada {formatDateTime(order.createdAt)} • {order.store?.name || 'Cabang Toko'}
             </p>
           </div>
 
@@ -280,18 +301,10 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1">
                       <Navigation className="w-3 h-3 text-blue-300" />
-                      {order.deliveryType === 'delivery'
-                        ? 'Live Courier Dispatch'
-                        : order.deliveryType === 'expedition'
-                        ? `Ekspedisi Logistik (${order.selectedExpedition?.expeditionCode || 'JNE'})`
-                        : 'Express Store Pickup'}
+                      {order.deliveryType === 'delivery' ? 'Live Courier Dispatch' : 'Express Store Pickup'}
                     </span>
                     <span className="text-xs font-mono font-bold bg-white/10 px-2 py-0.5 rounded">
-                      {order.status === 'completed'
-                        ? 'Tiba di Tujuan'
-                        : order.deliveryType === 'expedition'
-                        ? (order.selectedExpedition?.etd || '1-2 Hari')
-                        : 'Estimasi: 12 Menit'}
+                      {order.status === 'completed' ? 'Tiba di Tujuan' : 'Estimasi: 12 Menit'}
                     </span>
                   </div>
 
@@ -300,15 +313,13 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                       ? 'Pesanan Berhasil Diterima'
                       : order.deliveryType === 'delivery'
                       ? 'Kurir Sedang Menuju Rumahmu'
-                      : order.deliveryType === 'expedition'
-                      ? `Dalam Pengiriman via ${order.selectedExpedition?.expeditionName || 'Ekspedisi'}`
                       : 'Barang Siap Diambil di Outlet Minimarket'}
                   </h3>
 
                   <p className="text-xs text-stone-300">
-                    {order.deliveryType === 'delivery' || order.deliveryType === 'expedition'
-                      ? `Dikirim ke: ${order.address?.fullAddress || 'Alamat Penerima'}`
-                      : `Lokasi: ${order.store.address}`}
+                    {order.deliveryType === 'delivery'
+                      ? `Dikirim ke: ${order.address?.fullAddress || '-'}`
+                      : `Lokasi: ${order.store?.address || 'Outlet Toko'}`}
                   </p>
                 </div>
 
@@ -327,6 +338,82 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                           : '100%',
                     }}
                   />
+                </div>
+              </div>
+
+              {/* KARTU RESMI NOMOR TELEPON & WHATSAPP TOKO (MODUL CABANG TOKO) */}
+              {/* Berlaku untuk setiap pesanan: baik yang diambil maupun diantar kurir */}
+              <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 rounded-2xl p-4 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                      <StoreIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white px-2 py-0.5 rounded-full">
+                          Cabang Toko Pemroses
+                        </span>
+                        <span className="text-[11px] font-bold text-emerald-800">
+                          {order.deliveryType === 'delivery' ? '🛵 Pesanan Diantar Kurir' : '🛍️ Pesanan Ambil di Toko'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-stone-900 mt-1">{order.store?.name || 'Cabang Toko'}</h4>
+                      <p className="text-xs text-stone-600">{order.store?.address || '-'}</p>
+                      
+                      <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
+                        <span className="text-stone-500 font-semibold">Nomor WhatsApp Kasir & CS:</span>
+                        <span className="font-mono font-bold text-emerald-900 bg-white border border-emerald-200 px-2 py-0.5 rounded-md shadow-2xs">
+                          {getStoreOrderWhatsAppNumber(order)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyStorePhone}
+                          className="text-[11px] text-stone-500 hover:text-stone-800 font-medium flex items-center gap-1 cursor-pointer"
+                          title="Salin Nomor WhatsApp Kasir & CS Toko"
+                        >
+                          {copiedStorePhone ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedStorePhone ? 'Tersalin' : 'Salin'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto justify-end pt-1 sm:pt-0">
+                    {/* Tombol Utama: Kirim / Buka Percakapan WhatsApp Toko */}
+                    <button
+                      type="button"
+                      onClick={handleOpenStoreWhatsApp}
+                      className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center gap-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                      title="Kirim / Teruskan Rincian Pesanan ke WhatsApp Kasir & CS Toko Ini"
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-100" />
+                      <span>Kirim ke WA Kasir & CS</span>
+                    </button>
+
+                    {/* Tombol Telepon Seluler Toko */}
+                    <a
+                      href={`tel:${(order.store?.phone || order.store?.whatsapp || '').replace(/[^0-9+]/g, '')}`}
+                      className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 flex items-center justify-center gap-1.5 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                      title="Panggilan Telepon ke Cabang Toko"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-stone-600" />
+                      <span>Telepon</span>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Info Status Pengiriman WA */}
+                <div className="pt-2 border-t border-emerald-200/70 flex items-center justify-between text-[11px] text-emerald-900 flex-wrap gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <span>
+                      Rincian pesanan #{order.orderNumber} ({order.deliveryType === 'delivery' ? 'Antar Kurir' : 'Ambil di Kasir'}) otomatis diteruskan ke WhatsApp cabang toko.
+                    </span>
+                  </div>
+                  <span className="font-bold text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
+                    Modul Cabang Toko Aktif
+                  </span>
                 </div>
               </div>
 
@@ -811,13 +898,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span>Layanan:</span>
-                    <span className="font-semibold text-stone-800">
-                      {order.deliveryType === 'delivery'
-                        ? 'Antar Kurir Toko'
-                        : order.deliveryType === 'expedition'
-                        ? `Ekspedisi (${order.selectedExpedition?.expeditionName || 'JNE/J&T'} - ${order.selectedExpedition?.serviceName || 'Reguler'})`
-                        : 'Ambil di Toko'}
-                    </span>
+                    <span className="font-semibold text-stone-800">{order.deliveryType === 'delivery' ? 'Antar Kurir Instan' : 'Ambil di Toko'}</span>
                   </div>
                 </div>
 

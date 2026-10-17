@@ -459,7 +459,7 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
                   <h3 className="font-bold text-stone-900 text-base">
                     {editingCustomer ? 'Edit Data Pelanggan' : 'Pendaftaran Pelanggan / Member Baru'}
                   </h3>
-                  <p className="text-xs text-stone-500">Isi data lengkap profil member toko-online.online</p>
+                  <p className="text-xs text-stone-500">Isi data lengkap profil member lapakoke.com</p>
                 </div>
               </div>
               <button
@@ -692,7 +692,7 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
 
             <div className="flex items-center justify-between pt-2">
               <a
-                href={`https://wa.me/${selectedCustomerDetail.phone.replace(/[^0-9]/g, '')}?text=Halo%20${encodeURIComponent(selectedCustomerDetail.name)},%20terima%20kasih%20telah%20menjadi%20member%20setia%20toko-online.online!`}
+                href={`https://wa.me/${selectedCustomerDetail.phone.replace(/[^0-9]/g, '')}?text=Halo%20${encodeURIComponent(selectedCustomerDetail.name)},%20terima%20kasih%20telah%20menjadi%20member%20setia%20lapakoke.com!`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs"

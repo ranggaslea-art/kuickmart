@@ -3,26 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <title>toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat</title>
-    <meta name="description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, produk lengkap, pengiriman cepat antar langsung ke rumah." />
-    <meta name="keywords" content="toko online, belanja sembako online, minimarket online, pesan sembako murah, belanja bulanan hemat, pengiriman cepat antar ke rumah, grosir sembako, toko-online.online" />
-    <meta name="author" content="toko-online.online" />
+    <title>lapakoke.com - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat</title>
+    <meta name="description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di lapakoke.com. Harga murah, produk lengkap, pengiriman cepat antar langsung ke rumah." />
+    <meta name="keywords" content="lapakoke, lapakoke.com, toko online, belanja sembako online, minimarket online, pesan sembako murah, belanja bulanan hemat, pengiriman cepat antar ke rumah, grosir sembako" />
+    <meta name="author" content="lapakoke.com" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-    <link rel="canonical" href="https://www.toko-online.online/" />
+    <link rel="canonical" href="https://www.lapakoke.com/" />
     
-    <!-- PWA Service Worker Registration (Guaranteed Detection for PWABuilder & Mobile Browsers) -->
+    <!-- Cross-Browser Service Worker Auto-Recovery for Firefox & Mobile -->
     <script>
       (function() {
         if ('serviceWorker' in navigator) {
-          window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js', { scope: '/' })
-              .then(function(reg) {
-                console.log('[PWA] Service Worker registered:', reg.scope);
-              })
-              .catch(function(err) {
-                console.warn('[PWA] Service Worker registration failed:', err);
-              });
-          });
           navigator.serviceWorker.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'RELOAD_PAGE') {
               window.location.reload();
@@ -68,11 +59,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="toko-online" />
-    <link rel="icon" id="app-favicon" type="image/png" href="/pwa-192x192.png" />
-    <link rel="apple-touch-icon" id="app-apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
+    <link rel="icon" id="app-favicon" href="/logo.png" />
+    <link rel="apple-touch-icon" id="app-apple-touch-icon" href="/logo.png" />
     <script>
       (function() {
         try {
@@ -82,6 +70,8 @@
           var slug = 'default';
           if (paramStore && paramStore.trim()) {
             slug = paramStore.trim().toLowerCase();
+          } else if (host.endsWith('.lapakoke.com') && host !== 'www.lapakoke.com') {
+            slug = host.replace('.lapakoke.com', '').toLowerCase();
           } else if (host.endsWith('.toko-online.online') && host !== 'www.toko-online.online') {
             slug = host.replace('.toko-online.online', '').toLowerCase();
           }
@@ -109,18 +99,18 @@
     <!-- OpenGraph (Facebook, WhatsApp, Telegram, etc.) -->
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="id_ID" />
-    <meta property="og:site_name" content="toko-online.online" />
-    <meta property="og:url" content="https://www.toko-online.online/" />
-    <meta property="og:title" content="toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat" />
-    <meta property="og:description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, pengiriman cepat langsung ke rumah." />
-    <meta property="og:image" content="https://www.toko-online.online/pwa-512x512.png" />
+    <meta property="og:site_name" content="lapakoke.com" />
+    <meta property="og:url" content="https://www.lapakoke.com/" />
+    <meta property="og:title" content="lapakoke.com - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat" />
+    <meta property="og:description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di lapakoke.com. Harga murah, pengiriman cepat langsung ke rumah." />
+    <meta property="og:image" content="https://www.lapakoke.com/pwa-512x512.png" />
 
     <!-- Twitter / X Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://www.toko-online.online/" />
-    <meta name="twitter:title" content="toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat" />
-    <meta name="twitter:description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, pengiriman cepat langsung ke rumah." />
-    <meta name="twitter:image" content="https://www.toko-online.online/pwa-512x512.png" />
+    <meta name="twitter:url" content="https://www.lapakoke.com/" />
+    <meta name="twitter:title" content="lapakoke.com - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat" />
+    <meta name="twitter:description" content="Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di lapakoke.com. Harga murah, pengiriman cepat langsung ke rumah." />
+    <meta name="twitter:image" content="https://www.lapakoke.com/pwa-512x512.png" />
 
     <!-- Schema.org Structured Data (JSON-LD) for Google Rich Snippets -->
     <script type="application/ld+json">
@@ -129,24 +119,24 @@
       "@graph": [
         {
           "@type": "WebSite",
-          "@id": "https://www.toko-online.online/#website",
-          "url": "https://www.toko-online.online/",
-          "name": "toko-online.online",
+          "@id": "https://www.lapakoke.com/#website",
+          "url": "https://www.lapakoke.com/",
+          "name": "lapakoke.com",
           "description": "Toko belanja sembako dan kebutuhan harian minimarket online hemat dan terpercaya.",
           "inLanguage": "id-ID",
           "potentialAction": {
             "@type": "SearchAction",
-            "target": "https://www.toko-online.online/?q={search_term_string}",
+            "target": "https://www.lapakoke.com/?q={search_term_string}",
             "query-input": "required name=search_term_string"
           }
         },
         {
           "@type": "OnlineStore",
-          "@id": "https://www.toko-online.online/#store",
-          "name": "toko-online.online",
-          "url": "https://www.toko-online.online/",
-          "logo": "https://www.toko-online.online/pwa-512x512.png",
-          "image": "https://www.toko-online.online/pwa-512x512.png",
+          "@id": "https://www.lapakoke.com/#store",
+          "name": "lapakoke.com",
+          "url": "https://www.lapakoke.com/",
+          "logo": "https://www.lapakoke.com/pwa-512x512.png",
+          "image": "https://www.lapakoke.com/pwa-512x512.png",
           "description": "Pusat belanja kebutuhan pokok, sembako, bumbu dapur, makanan ringan, dan minuman dingin dengan layanan pesan antar kilat.",
           "currenciesAccepted": "IDR",
           "paymentAccepted": "Cash, QRIS, Virtual Account, Credit Card",

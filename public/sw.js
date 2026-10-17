@@ -1,18 +1,14 @@
-// toko-online.online - PWA Service Worker (v6 PWABuilder & Cross-Browser Compliant)
-const CACHE_NAME = 'toko-online-cache-v6';
+// lapakoke.com - PWA Service Worker (v6 Firefox & Cross-Browser Compliant)
+const CACHE_NAME = 'lapakoke-cache-v6';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
   '/icon.svg',
-  '/pwa-96x96.png',
-  '/pwa-144x144.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
-  '/favicon.png',
-  '/screenshot-narrow.png',
-  '/screenshot-wide.png'
+  '/favicon.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -80,7 +76,7 @@ self.addEventListener('fetch', (event) => {
           }
           // Never resolve undefined to event.respondWith in Firefox!
           return new Response(
-            '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>toko-online.online - Offline</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;background:#F8F9FA;color:#1F2937}h1{color:#E51A24;font-size:24px;margin-bottom:12px}p{font-size:14px;color:#4B5563;max-width:400px;margin:0 auto 24px}button{background:#E51A24;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;font-size:14px}</style></head><body><h1>toko-online.online</h1><p>Halaman sedang offline atau koneksi internet terputus. Silakan periksa jaringan Anda lalu coba lagi.</p><button onclick="window.location.reload()">Muat Ulang Halaman</button></body></html>',
+            '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>lapakoke.com - Offline</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;background:#F8F9FA;color:#1F2937}h1{color:#E51A24;font-size:24px;margin-bottom:12px}p{font-size:14px;color:#4B5563;max-width:400px;margin:0 auto 24px}button{background:#E51A24;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:bold;cursor:pointer;font-size:14px}</style></head><body><h1>lapakoke.com</h1><p>Halaman sedang offline atau koneksi internet terputus. Silakan periksa jaringan Anda lalu coba lagi.</p><button onclick="window.location.reload()">Muat Ulang Halaman</button></body></html>',
             {
               status: 200,
               headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -131,8 +127,8 @@ self.addEventListener('fetch', (event) => {
 // PWA Push Notification Event Listener
 self.addEventListener('push', (event) => {
   let notificationData = {
-    title: 'toko-online.online Promo Spesial! 🎉',
-    body: 'Ada diskon dan promo menarik baru saja hadir di toko-online.online!',
+    title: 'lapakoke.com Promo Spesial! 🎉',
+    body: 'Ada diskon dan promo menarik baru saja hadir di lapakoke.com!',
     url: '/',
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',

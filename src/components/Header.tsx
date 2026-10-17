@@ -21,10 +21,8 @@ import {
   Globe,
   RotateCcw,
   Lock,
-  Truck,
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
-import { PWAInstallButton } from './PWAInstallButton';
 import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -34,8 +32,8 @@ import { getStoreSlugFromUrl, isDefaultStore, isRootDomain, normalizeTenantSlug,
 
 interface HeaderProps {
   currentStore: Store;
-  deliveryType: 'delivery' | 'pickup' | 'expedition';
-  onToggleDeliveryType: (type: 'delivery' | 'pickup' | 'expedition') => void;
+  deliveryType: 'delivery' | 'pickup';
+  onToggleDeliveryType: (type: 'delivery' | 'pickup') => void;
   onOpenStoreSelector: () => void;
   member: MemberProfile;
   onOpenMemberModal: () => void;
@@ -360,7 +358,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    alert(`Modul Penjualan Kasir (POS) saat ini dinonaktifkan / dikunci untuk cabang ${currentStore.name} oleh Administrator Domain Utama (${isDefaultStore(effectiveStoreSlug) ? 'toko-online.online' : effectiveStoreSlug}).`);
+                    alert(`Modul Penjualan Kasir (POS) saat ini dinonaktifkan / dikunci untuk cabang ${currentStore.name} oleh Administrator Domain Utama (${isDefaultStore(effectiveStoreSlug) ? 'lapakoke.com' : effectiveStoreSlug}).`);
                   }}
                   title={`Modul Penjualan Kasir (POS) dinonaktifkan di subdomain ${effectiveStoreSlug} oleh Domain Utama`}
                   className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-500 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-not-allowed shrink-0 border border-stone-300/80 opacity-75"
@@ -371,9 +369,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )
             )}
-
-            {/* PWA Install Button & Status */}
-            <PWAInstallButton className="shrink-0" />
 
             {/* Admin Panel Button */}
             <button
@@ -440,21 +435,11 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
               id="btn-delivery-toggle"
-              onClick={() => {
-                const nextType = deliveryType === 'delivery' ? 'expedition' : deliveryType === 'expedition' ? 'pickup' : 'delivery';
-                onToggleDeliveryType(nextType);
-              }}
+              onClick={() => onToggleDeliveryType(deliveryType === 'delivery' ? 'pickup' : 'delivery')}
               className="px-2 py-1 sm:px-2.5 rounded-lg bg-stone-100 hover:bg-stone-200 font-semibold text-stone-700 flex items-center gap-1 shrink-0 transition-colors cursor-pointer text-[11px] sm:text-xs"
-              title="Ganti Mode Layanan: Antar Kurir / Ekspedisi Logistik / Ambil di Toko"
             >
-              {deliveryType === 'delivery' ? (
-                <Bike className="w-3.5 h-3.5 text-blue-600" />
-              ) : deliveryType === 'expedition' ? (
-                <Truck className="w-3.5 h-3.5 text-orange-600" />
-              ) : (
-                <StoreIcon className="w-3.5 h-3.5 text-red-600" />
-              )}
-              <span>{deliveryType === 'delivery' ? 'Antar' : deliveryType === 'expedition' ? 'Ekspedisi' : 'Ambil'}</span>
+              {deliveryType === 'delivery' ? <Bike className="w-3.5 h-3.5 text-blue-600" /> : <StoreIcon className="w-3.5 h-3.5 text-red-600" />}
+              <span>{deliveryType === 'delivery' ? 'Antar' : 'Ambil'}</span>
             </button>
             <button
               id="btn-outlet-selector"

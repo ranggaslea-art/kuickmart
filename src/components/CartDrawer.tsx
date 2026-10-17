@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Trash2, 
@@ -12,16 +12,11 @@ import {
   AlertCircle, 
   Check,
   Percent,
-  Store as StoreIcon,
-  Bike,
-  Clock,
-  Scale,
-  Package
+  Store as StoreIcon
 } from 'lucide-react';
-import { CartItem, Voucher, MemberProfile, Store, Expedition, ExpeditionServiceRate, OrderExpeditionDetail } from '../types';
+import { CartItem, Voucher, MemberProfile, Store } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
-import { INITIAL_EXPEDITIONS, calculateExpeditionRate, estimateCartWeightKg } from '../data/mockExpeditions';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -38,11 +33,8 @@ interface CartDrawerProps {
   onToggleUsePoints: (use: boolean) => void;
   onProceedToCheckout: () => void;
   store: Store;
-  deliveryType: 'delivery' | 'pickup' | 'expedition';
-  onSelectDeliveryType?: (type: 'delivery' | 'pickup' | 'expedition') => void;
-  expeditions?: Expedition[];
-  selectedExpedition?: OrderExpeditionDetail | null;
-  onSelectExpedition?: (detail: OrderExpeditionDetail | null) => void;
+  deliveryType: 'delivery' | 'pickup';
+  onSelectDeliveryType?: (type: 'delivery' | 'pickup') => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -62,90 +54,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   store,
   deliveryType,
   onSelectDeliveryType,
-  expeditions = INITIAL_EXPEDITIONS,
-  selectedExpedition,
-  onSelectExpedition,
 }) => {
   const [customCouponInput, setCustomCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [showVoucherList, setShowVoucherList] = useState(false);
 
-  // Active expeditions
-  const activeExpeditions = useMemo(() => {
-    return (expeditions && expeditions.length > 0 ? expeditions : INITIAL_EXPEDITIONS).filter(
-      (e) => e.isActive
-    );
-  }, [expeditions]);
-
-  // Estimated cart weight
-  const estimatedWeightKg = useMemo(() => {
-    return estimateCartWeightKg(cartItems);
-  }, [cartItems]);
-
-  // Internal selected expedition state if not controlled externally
-  const [internalExpeditionId, setInternalExpeditionId] = useState<string>(() => {
-    return selectedExpedition?.expeditionId || activeExpeditions[0]?.id || 'exp_jne';
-  });
-
-  const currentExpedition = useMemo(() => {
-    return activeExpeditions.find((e) => e.id === internalExpeditionId) || activeExpeditions[0];
-  }, [activeExpeditions, internalExpeditionId]);
-
-  const [internalServiceId, setInternalServiceId] = useState<string>(() => {
-    if (selectedExpedition?.serviceId) return selectedExpedition.serviceId;
-    const firstActiveSrv = activeExpeditions[0]?.services?.find((s) => s.isActive);
-    return firstActiveSrv?.id || '';
-  });
-
-  const currentService = useMemo(() => {
-    if (!currentExpedition) return null;
-    const activeServices = (currentExpedition.services || []).filter((s) => s.isActive);
-    return activeServices.find((s) => s.id === internalServiceId) || activeServices[0] || null;
-  }, [currentExpedition, internalServiceId]);
-
-  // Notify parent of expedition details when selection or weight changes
-  useEffect(() => {
-    if (currentExpedition && currentService) {
-      const calculatedRate = calculateExpeditionRate(currentService, estimatedWeightKg);
-      const detail: OrderExpeditionDetail = {
-        expeditionId: currentExpedition.id,
-        expeditionName: currentExpedition.name,
-        expeditionCode: currentExpedition.code,
-        serviceId: currentService.id,
-        serviceName: currentService.serviceName,
-        serviceCode: currentService.serviceCode,
-        etd: currentService.etd,
-        rate: calculatedRate,
-        weightKg: estimatedWeightKg,
-      };
-      if (onSelectExpedition) {
-        onSelectExpedition(detail);
-      }
-    }
-  }, [currentExpedition?.id, currentService?.id, estimatedWeightKg]);
-
-  const expeditionFee = useMemo(() => {
-    if (!currentService) return 12000;
-    return calculateExpeditionRate(currentService, estimatedWeightKg);
-  }, [currentService, estimatedWeightKg]);
-
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
 
-  // Check if shopping is below minimum spend for local delivery
+  // Check if shopping is below minimum spend
   const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
-  // When below minimum spend, only local store delivery switches to 'pickup', expedition stays selectable
-  const effectiveDeliveryType = (isBelowMinOrder && deliveryType === 'delivery') ? 'pickup' : deliveryType;
-
-  // Calculate raw delivery fee
-  const rawDeliveryFee = useMemo(() => {
-    if (effectiveDeliveryType === 'delivery') {
-      return isBelowMinOrder ? 0 : store.deliveryFee;
-    }
-    if (effectiveDeliveryType === 'expedition') {
-      return expeditionFee;
-    }
-    return 0; // pickup
-  }, [effectiveDeliveryType, isBelowMinOrder, store.deliveryFee, expeditionFee]);
+  // When below minimum spend, ongkos kirim is disabled / inactive and service switches to 'pickup'
+  const effectiveDeliveryType = isBelowMinOrder ? 'pickup' : deliveryType;
+  const rawDeliveryFee = (!isBelowMinOrder && effectiveDeliveryType === 'delivery') ? store.deliveryFee : 0;
 
   // Sync to parent if below minimum and was 'delivery'
   useEffect(() => {
@@ -212,9 +132,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
-        {/* Header - Fixed at Top */}
-        <div className="shrink-0 p-4 border-b border-stone-100 flex items-center justify-between bg-white z-20">
+      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-blue-600" />
             <h3 className="font-bold text-base text-stone-900">
@@ -225,64 +145,62 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             {cartItems.length > 0 && (
               <button
                 onClick={onClearCart}
-                className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 cursor-pointer"
+                className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1"
               >
                 Kosongkan
               </button>
             )}
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Unified Scrollable Body: Notification bar, items, delivery options, expedition panel, vouchers, breakdown */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          {/* Free Shipping / Below Min Order Notification Bar */}
-          {isBelowMinOrder ? (
-            <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 text-amber-900">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <div>
-                  <span className="font-bold text-[11px] block">
-                    Belanja di bawah batas minimum {formatRupiah(store.minOrder)}
-                  </span>
-                  <p className="text-[10px] text-amber-800 leading-tight mt-0.5">
-                    Ongkos kirim kurir toko nonaktif. Anda tetap bisa lanjut transaksi &amp; bayar via <strong>Ambil di Toko</strong> atau <strong>Ekspedisi</strong>.
-                  </p>
-                </div>
-              </div>
-              <span className="text-[9px] font-bold uppercase bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded shrink-0">
-                Kurir Off
-              </span>
-            </div>
-          ) : effectiveDeliveryType === 'delivery' ? (
-            <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2.5 border-b border-stone-100">
-              <div className="flex items-center justify-between text-xs font-semibold text-stone-800 mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Truck className="w-3.5 h-3.5 text-blue-600" />
-                  {remainingForFreeShipping === 0 ? (
-                    <span className="text-emerald-700 font-bold">Selamat! Kamu Mendapat Gratis Ongkir</span>
-                  ) : (
-                    <span>Tambah <strong className="text-blue-700">{formatRupiah(remainingForFreeShipping)}</strong> lagi untuk Gratis Ongkir</span>
-                  )}
-                </div>
-                <span className="text-[11px] text-stone-500 font-mono">{Math.round(progressToFreeShipping)}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
-                  style={{ width: `${progressToFreeShipping}%` }}
-                />
+        {/* Free Shipping / Below Min Order Notification Bar */}
+        {isBelowMinOrder ? (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <div>
+                <span className="font-bold text-[11px] block">
+                  Belanja di bawah batas minimum {formatRupiah(store.minOrder)}
+                </span>
+                <p className="text-[10px] text-amber-800 leading-tight mt-0.5">
+                  Ongkos kirim nonaktif. Anda tetap bisa lanjut transaksi &amp; bayar via <strong>Ambil di Toko</strong>.
+                </p>
               </div>
             </div>
-          ) : null}
+            <span className="text-[9px] font-bold uppercase bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded shrink-0">
+              Ongkir Nonaktif
+            </span>
+          </div>
+        ) : effectiveDeliveryType === 'delivery' ? (
+          <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-2.5 border-b border-stone-100">
+            <div className="flex items-center justify-between text-xs font-semibold text-stone-800 mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                {remainingForFreeShipping === 0 ? (
+                  <span className="text-emerald-700 font-bold">Selamat! Kamu Mendapat Gratis Ongkir</span>
+                ) : (
+                  <span>Tambah <strong className="text-blue-700">{formatRupiah(remainingForFreeShipping)}</strong> lagi untuk Gratis Ongkir</span>
+                )}
+              </div>
+              <span className="text-[11px] text-stone-500 font-mono">{Math.round(progressToFreeShipping)}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
+                style={{ width: `${progressToFreeShipping}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
 
-          {/* Cart Item List */}
-          <div className="p-4 space-y-3">
+        {/* Cart Item List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {cartItems.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6">
               <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-3">
@@ -391,151 +309,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Bottom Section: Delivery Selector, Vouchers, Loyalty, Breakdown, and Checkout Button */}
         {cartItems.length > 0 && (
           <div className="p-4 border-t border-stone-200 bg-stone-50/70 space-y-3">
-            {/* Delivery Service Mode Selector: Diantar, Ekspedisi, Ambil di Toko */}
-            <div className="bg-stone-100/90 p-1 rounded-xl grid grid-cols-3 gap-1 text-xs font-semibold">
+            {/* Delivery Service Mode Selector */}
+            <div className="bg-stone-100/90 p-1 rounded-xl grid grid-cols-2 gap-1 text-xs font-semibold">
               <button
                 type="button"
                 disabled={isBelowMinOrder}
                 onClick={() => !isBelowMinOrder && onSelectDeliveryType && onSelectDeliveryType('delivery')}
-                className={`py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                   isBelowMinOrder
                     ? 'opacity-50 cursor-not-allowed bg-stone-200/50 text-stone-400'
                     : effectiveDeliveryType === 'delivery'
                     ? 'bg-white text-blue-700 font-bold shadow-2xs cursor-pointer'
                     : 'text-stone-600 hover:text-stone-900 cursor-pointer'
                 }`}
-                title="Pengantaran langsung oleh kurir toko ke alamat Anda"
               >
-                <Bike className="w-3.5 h-3.5" />
-                <span className="truncate">
-                  {isBelowMinOrder ? 'Diantar (Off)' : 'Diantar'}
+                <Truck className="w-3.5 h-3.5" />
+                <span>
+                  {isBelowMinOrder ? 'Diantar (Nonaktif)' : `Diantar (${formatRupiah(store.deliveryFee)})`}
                 </span>
               </button>
 
               <button
                 type="button"
-                onClick={() => onSelectDeliveryType && onSelectDeliveryType('expedition')}
-                className={`py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                  effectiveDeliveryType === 'expedition'
-                    ? 'bg-white text-orange-600 font-bold shadow-2xs ring-1 ring-orange-500/20'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-                title="Pengiriman paket via ekspedisi logistik (JNE, J&T, SiCepat, dll)"
-              >
-                <Truck className="w-3.5 h-3.5 text-orange-600" />
-                <span className="truncate">Ekspedisi</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => onSelectDeliveryType && onSelectDeliveryType('pickup')}
-                className={`py-1.5 px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   effectiveDeliveryType === 'pickup'
                     ? 'bg-white text-red-600 font-bold shadow-2xs'
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
-                title="Ambil sendiri langsung di kasir toko"
               >
                 <StoreIcon className="w-3.5 h-3.5" />
-                <span className="truncate">Ambil Toko</span>
+                <span>Ambil di Toko (Gratis)</span>
               </button>
             </div>
-
-            {/* EXPEDITION SELECTOR PANEL JNE / J&T / SICEPAT / DLL */}
-            {effectiveDeliveryType === 'expedition' && (
-              <div className="bg-white rounded-xl border border-orange-200 p-3 shadow-2xs space-y-2.5 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="p-1 rounded-lg bg-orange-100 text-orange-700">
-                      <Truck className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="text-xs font-bold text-stone-900">Ekspedisi &amp; Tarif Kirim</span>
-                  </div>
-                  <span className="text-[10px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Scale className="w-2.5 h-2.5 text-stone-500" /> Est. {estimatedWeightKg} kg
-                  </span>
-                </div>
-
-                {/* Pilih Ekspedisi (JNE, J&T, SiCepat, POS, TIKI, dll) */}
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                    Pilih Mitra Ekspedisi:
-                  </span>
-                  <div className="grid grid-cols-3 gap-1.5 max-h-24 overflow-y-auto pr-0.5">
-                    {activeExpeditions.map((exp) => {
-                      const isCurrent = (currentExpedition?.id === exp.id);
-                      return (
-                        <button
-                          key={exp.id}
-                          type="button"
-                          onClick={() => {
-                            setInternalExpeditionId(exp.id);
-                            const firstActiveSrv = exp.services?.find((s) => s.isActive);
-                            if (firstActiveSrv) {
-                              setInternalServiceId(firstActiveSrv.id);
-                            }
-                          }}
-                          className={`p-1.5 rounded-xl border text-center transition-all cursor-pointer ${
-                            isCurrent
-                              ? 'border-orange-500 bg-orange-50 text-orange-950 font-bold shadow-2xs'
-                              : 'border-stone-200 hover:border-stone-300 bg-stone-50/50 text-stone-700'
-                          }`}
-                        >
-                          <span className="text-[11px] font-bold block truncate">{exp.name}</span>
-                          <span className="text-[9px] font-mono text-stone-500">{exp.code}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Pilih Layanan & Tarif Pengiriman */}
-                {currentExpedition && (
-                  <div className="space-y-1.5 pt-1.5 border-t border-stone-100">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
-                      Pilihan Layanan {currentExpedition.name}:
-                    </span>
-                    <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
-                      {(currentExpedition.services || []).filter((s) => s.isActive).map((srv) => {
-                        const calculated = calculateExpeditionRate(srv, estimatedWeightKg);
-                        const isSelected = (currentService?.id === srv.id);
-                        return (
-                          <div
-                            key={srv.id}
-                            onClick={() => setInternalServiceId(srv.id)}
-                            className={`p-2 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
-                              isSelected
-                                ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-400 font-bold shadow-2xs'
-                                : 'border-stone-200 hover:border-stone-300 bg-white'
-                            }`}
-                          >
-                            <div className="min-w-0 pr-2">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-stone-900 truncate">{srv.serviceName}</span>
-                                <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-stone-100 text-stone-600">
-                                  {srv.serviceCode}
-                                </span>
-                              </div>
-                              <div className="text-[10px] text-stone-500 flex items-center gap-1 mt-0.5">
-                                <Clock className="w-2.5 h-2.5 text-stone-400 shrink-0" /> {srv.etd}
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="font-bold text-xs text-orange-700 block font-mono">
-                                {formatRupiah(calculated)}
-                              </span>
-                              <span className="text-[9px] text-stone-400">
-                                {srv.rateType === 'per_kg' ? `(${Math.ceil(estimatedWeightKg)} kg)` : 'Flat'}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Voucher Selector Accordion */}
             <div className="bg-white rounded-xl border border-stone-200 p-2.5">
@@ -653,7 +459,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <span>Subtotal Produk</span>
                 <span className="font-semibold text-stone-900">{formatRupiah(subtotal)}</span>
               </div>
-              {isBelowMinOrder && effectiveDeliveryType === 'delivery' ? (
+              {isBelowMinOrder ? (
                 <div className="flex justify-between items-center text-xs">
                   <span className="flex items-center gap-1">
                     <span>Ongkos Kirim</span>
@@ -663,27 +469,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </span>
                   <span className="font-semibold text-emerald-700">Rp 0 (Ambil di Toko)</span>
                 </div>
-              ) : effectiveDeliveryType === 'expedition' ? (
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-1 min-w-0 pr-2">
-                    <span className="truncate">
-                      Ongkir Ekspedisi ({currentExpedition?.code || 'JNE'} - {currentService?.serviceName || 'Reguler'})
-                    </span>
-                    <span className="text-[9px] bg-orange-100 text-orange-800 font-semibold px-1.5 py-0.2 rounded shrink-0">
-                      {currentService?.etd || '1-2 Hari'}
-                    </span>
-                  </div>
-                  <span className="font-semibold text-stone-900 shrink-0 font-mono">{formatRupiah(rawDeliveryFee)}</span>
-                </div>
               ) : effectiveDeliveryType === 'delivery' ? (
                 <div className="flex justify-between">
                   <span>Ongkos Kirim ({store.distanceKm} km)</span>
-                  <span className="font-semibold text-stone-900 font-mono">{formatRupiah(rawDeliveryFee)}</span>
+                  <span className="font-semibold text-stone-900">{formatRupiah(rawDeliveryFee)}</span>
                 </div>
               ) : (
                 <div className="flex justify-between">
                   <span>Ongkos Kirim (Ambil di Toko)</span>
-                  <span className="font-semibold text-emerald-600 font-mono">Gratis (Rp 0)</span>
+                  <span className="font-semibold text-emerald-600">Gratis (Rp 0)</span>
                 </div>
               )}
               {voucherDiscount > 0 && (
@@ -708,43 +502,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <span className="text-lg font-black text-blue-900">{formatRupiah(total)}</span>
               </div>
             </div>
-          </div>
-        )}
-        </div>
 
-        {/* Sticky Action Footer - Fixed at Bottom with Total & Checkout / Payment Button */}
-        {cartItems.length > 0 && (
-          <div className="shrink-0 p-4 border-t border-stone-200 bg-white/95 backdrop-blur-xs shadow-xl space-y-2.5 z-20">
-            <div className="flex justify-between items-center text-stone-900">
-              <div>
-                <span className="text-xs font-semibold text-stone-500 block">Total Pembayaran</span>
-                {pointsEarned > 0 && (
-                  <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
-                    <Award className="w-3 h-3" /> +{pointsEarned} Poin Member
-                  </span>
-                )}
-              </div>
-              <div className="text-right">
-                <span className="text-lg font-black text-blue-900 tracking-tight block font-mono">
-                  {formatRupiah(total)}
-                </span>
-                <span className="text-[10px] text-stone-500 font-medium">
-                  {cartItems.reduce((a, b) => a + b.quantity, 0)} Item ({effectiveDeliveryType === 'delivery' ? 'Diantar Kurir' : effectiveDeliveryType === 'expedition' ? 'Ekspedisi' : 'Ambil di Toko'})
-                </span>
-              </div>
-            </div>
-
-            {/* Checkout Button - Clickable at all times, never pushed off-screen */}
+            {/* Checkout Button - Clickable even below minimum spend */}
             <button
               onClick={onProceedToCheckout}
-              className="w-full bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-xs py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-transform active:scale-98 cursor-pointer"
             >
               <span>Lanjut ke Pembayaran</span>
               <ArrowRight className="w-4 h-4" />
             </button>
             {isBelowMinOrder && (
-              <p className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200/80 rounded-lg p-2 text-center font-medium leading-relaxed">
-                Belanja di bawah minimum ({formatRupiah(store.minOrder)}): Layanan kurir toko nonaktif. Pesanan otomatis diproses via <strong>Ambil di Toko</strong> atau <strong>Ekspedisi</strong>.
+              <p className="text-[11px] text-blue-900 bg-blue-50/90 border border-blue-200/80 rounded-xl p-2.5 text-center font-medium leading-relaxed">
+                Belanja di bawah minimum ({formatRupiah(store.minOrder)}): Ongkos kirim nonaktif, pesanan diproses via <strong>Ambil di Toko</strong>. Anda tetap dapat melanjutkan transaksi dan menekan tombol pembayaran.
               </p>
             )}
           </div>

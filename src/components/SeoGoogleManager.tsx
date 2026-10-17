@@ -24,8 +24,8 @@ interface SeoGoogleManagerProps {
 }
 
 export const SeoGoogleManager: React.FC<SeoGoogleManagerProps> = ({
-  currentStoreName = 'toko-online.online',
-  storeDomain = 'https://www.toko-online.online'
+  currentStoreName = 'lapakoke.com',
+  storeDomain = 'https://www.lapakoke.com'
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [devicePreview, setDevicePreview] = useState<'mobile' | 'desktop'>('mobile');
@@ -207,10 +207,10 @@ export const SeoGoogleManager: React.FC<SeoGoogleManagerProps> = ({
           <div className={`mx-auto transition-all ${devicePreview === 'mobile' ? 'max-w-md bg-white p-4 rounded-2xl shadow-sm border border-gray-200' : 'max-w-2xl bg-white p-5 rounded-xl shadow-sm border border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center font-black text-xs">
-                TO
+                LO
               </div>
               <div className="leading-tight overflow-hidden">
-                <div className="text-xs font-medium text-gray-900 truncate">toko-online.online</div>
+                <div className="text-xs font-medium text-gray-900 truncate">lapakoke.com</div>
                 <div className="text-[11px] text-gray-500 truncate">{storeDomain}</div>
               </div>
             </div>
@@ -221,11 +221,11 @@ export const SeoGoogleManager: React.FC<SeoGoogleManagerProps> = ({
               rel="noreferrer" 
               className="text-blue-800 hover:underline font-medium text-base md:text-lg block leading-snug"
             >
-              toko-online.online - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat
+              lapakoke.com - Belanja Sembako & Minimarket Online Murah Pengiriman Cepat
             </a>
 
             <p className="text-xs md:text-sm text-gray-600 mt-1.5 leading-relaxed line-clamp-3">
-              Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di toko-online.online. Harga murah, produk lengkap, pengiriman cepat antar langsung ke rumah.
+              Belanja kebutuhan pokok, sembako, beras, minyak goreng, makanan, dan minuman online di lapakoke.com. Harga murah, produk lengkap, pengiriman cepat antar langsung ke rumah.
             </p>
 
             <div className="flex items-center gap-3 mt-3 pt-2.5 border-t border-gray-100 text-[11px] text-emerald-700 font-medium">
@@ -276,7 +276,7 @@ export const SeoGoogleManager: React.FC<SeoGoogleManagerProps> = ({
                   </a>
                 </div>
                 <p className="text-xs text-gray-600 leading-relaxed">
-                  Google Search Console adalah pintu masuk resmi gratis dari Google untuk pemilik website. Masukkan domain <span className="font-bold text-gray-800">toko-online.online</span> di menu <i>Add Property</i>.
+                  Google Search Console adalah pintu masuk resmi gratis dari Google untuk pemilik website. Masukkan domain <span className="font-bold text-gray-800">lapakoke.com</span> di menu <i>Add Property</i>.
                 </p>
 
                 {/* Form Input Verification Code */}
