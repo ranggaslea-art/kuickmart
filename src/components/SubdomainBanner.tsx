@@ -19,11 +19,11 @@ export const SubdomainBanner: React.FC<SubdomainBannerProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
-  const isMain = currentSlug === 'default' || currentSlug === 'toko-online' || currentSlug === 'toko-online.online';
+  const isMain = currentSlug === 'default' || currentSlug === 'lapakoke' || currentSlug === 'lapakoke.com' || currentSlug === 'toko-online' || currentSlug === 'toko-online.online';
   if (isMain) return null;
 
   const storeName = tenantConfig?.storeName || currentSlug;
-  const subdomainHost = `${currentSlug}.toko-online.online`;
+  const subdomainHost = `${currentSlug}.lapakoke.com`;
   const fullSubdomainUrl = `https://${subdomainHost}`;
   const isActive = tenantConfig?.isActive !== false;
   const logoText = tenantConfig?.logoText || storeName.slice(0, 2).toUpperCase();
@@ -141,7 +141,7 @@ export const SubdomainBanner: React.FC<SubdomainBannerProps> = ({
                 type="button"
                 onClick={onBackToMainStore}
                 className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-stone-800/90 hover:bg-stone-800 text-stone-200 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border border-white/10 whitespace-nowrap"
-                title="Kembali ke Domain Induk toko-online.online"
+                title="Kembali ke Domain Induk lapakoke.com"
               >
                 <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
                 <span>Domain Utama</span>

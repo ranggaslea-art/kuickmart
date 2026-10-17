@@ -475,7 +475,7 @@ export function mapRowToProduct(
     rating: existing?.rating || 4.9,
     soldCount: existing?.soldCount || 0,
     tags: existing?.tags || ['Best Seller'],
-    description: rawKeterangan || `Produk resmi ${rawNama || 'minimarket'} terdaftar di sistem toko-online.online.`,
+    description: rawKeterangan || `Produk resmi ${rawNama || 'minimarket'} terdaftar di sistem LapakOke.`,
     barcode,
     itemCode: rawKode || barcode,
     shelf: rawRak || undefined,

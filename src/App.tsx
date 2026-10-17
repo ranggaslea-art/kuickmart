@@ -2434,7 +2434,7 @@ export default function App() {
         onClose={() => setIsSplashScreenEditorOpen(false)}
         activeTenantSlug={currentSlug}
         currentStoreName={currentStore.name}
-        storeLogoUrl={brandConfig.logoUrl}
+        storeLogoUrl={brandConfig.brandLogoImageUrl}
       />
 
       {/* 11. Web Push PWA Notification Prompt Banner */}

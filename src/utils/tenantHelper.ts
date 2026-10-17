@@ -450,7 +450,7 @@ export function getStoreSlugFromUrl(): string {
 }
 
 /**
- * Memeriksa apakah toko saat ini adalah toko default/utama (toko-online.online)
+ * Memeriksa apakah toko saat ini adalah toko default/utama (LapakOke / lapakoke.com)
  */
 export function isDefaultStore(slug?: string): boolean {
   const effectiveSlug = normalizeTenantSlug(slug || getStoreSlugFromUrl());
@@ -459,7 +459,7 @@ export function isDefaultStore(slug?: string): boolean {
 
 /**
  * Menghasilkan kunci localStorage yang terisolasi per tenant/toko.
- * - Toko default tetap menggunakan kunci asli agar data lama toko-online.online tidak hilang.
+ * - Toko default tetap menggunakan kunci asli agar data lama LapakOke tidak hilang.
  * - Toko baru (seperti Toko Alda) otomatis menggunakan kunci unik `${baseKey}__tenant_${slug}`.
  */
 export function getTenantStorageKey(baseKey: string, slug?: string): string {

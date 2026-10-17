@@ -304,8 +304,9 @@ function readSharedCookie(name: string): string | null {
 function writeSharedCookie(name: string, val: string): void {
   if (typeof document === 'undefined') return;
   try {
+    const isLapakoke = typeof window !== 'undefined' && window.location.hostname.endsWith('lapakoke.com');
     const isTokoOnline = typeof window !== 'undefined' && window.location.hostname.endsWith('toko-online.online');
-    const domainPart = isTokoOnline ? '; domain=.toko-online.online' : '';
+    const domainPart = isLapakoke ? '; domain=.lapakoke.com' : (isTokoOnline ? '; domain=.toko-online.online' : '');
     document.cookie = `${name}=${encodeURIComponent(val)}; path=/${domainPart}; max-age=31536000; SameSite=Lax`;
   } catch {}
 }
@@ -571,7 +572,7 @@ if (typeof window !== 'undefined') {
  * Cek apakah modul tertentu aktif di subdomain yang sedang diakses atau slug yang dituju.
  * 
  * ATURAN MUTLAK:
- * 1. Jika diakses dari Domain Utama (root domain / toko-online.online), SEMUA MODUL SELALU AKTIF (true).
+ * 1. Jika diakses dari Domain Utama (root domain / lapakoke.com), SEMUA MODUL SELALU AKTIF (true).
  * 2. Jika diakses dari Subdomain (cabang toko), periksa apakah modul tersebut di-enabled atau di-disabled
  *    oleh administrator domain utama.
  */

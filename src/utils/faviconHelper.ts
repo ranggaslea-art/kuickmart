@@ -2,7 +2,7 @@
  * Favicon & Address Bar Logo Helper
  * Mengatur logo yang muncul di address bar / tab browser secara dinamis
  * sesuai dengan pengaturan di modul "Header & Identitas Toko" dan "Identitas Toko & Toko Bebas".
- * Berlaku di domain utama (toko-online.online) dan semua subdomain.
+ * Berlaku di domain utama (lapakoke.com) dan semua subdomain.
  */
 
 export interface FaviconSyncOptions {
@@ -20,7 +20,7 @@ export function generateDynamicFaviconSvg(
   badgeText: string,
   primaryColor = '#E51A24'
 ): string {
-  const cleanText = (badgeText || 'TO').trim().slice(0, 3).toUpperCase();
+  const cleanText = (badgeText || 'LO').trim().slice(0, 3).toUpperCase();
   const fontSize = cleanText.length > 2 ? '22' : '26';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
@@ -54,7 +54,7 @@ export function updateAddressBarFavicon(options: FaviconSyncOptions): string {
   if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
     targetFavicon = imageUrl.trim();
   } else if (!text && !storeName) {
-    // 2. Default resmi toko-online.online adalah /logo.png
+    // 2. Default resmi lapakoke.com adalah /logo.png
     targetFavicon = '/logo.png';
   } else {
     // 3. Generate SVG favicon dinamis dengan inisial dan warna toko

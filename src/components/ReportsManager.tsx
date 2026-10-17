@@ -533,7 +533,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
         p.soldCount || 0,
       ];
     });
-    exportCsv(`Laporan_Info_Barang_toko-online.online_${new Date().toISOString().split('T')[0]}.csv`, [headers, ...rows]);
+    exportCsv(`Laporan_Info_Barang_LapakOke_${new Date().toISOString().split('T')[0]}.csv`, [headers, ...rows]);
   };
 
   const handleExportSalesCsv = () => {
@@ -551,12 +551,12 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
       ord.deliveryFee,
       ord.total,
     ]);
-    exportCsv(`Laporan_Penjualan_toko-online.online_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, [headers, ...rows]);
+    exportCsv(`Laporan_Penjualan_LapakOke_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, [headers, ...rows]);
   };
 
   const handleExportProfitLossCsv = () => {
     const rows: (string | number)[][] = [
-      ['LAPORAN LABA RUGI TOKO-ONLINE.ONLINE PANGANDARAN'],
+      ['LAPORAN LABA RUGI LAPAKOKE PANGANDARAN'],
       ['Periode:', `${activeDateRange.start.toLocaleDateString('id-ID')} s/d ${activeDateRange.end.toLocaleDateString('id-ID')}`],
       [''],
       ['KOMPONEN', 'NOMINAL (RP)'],
@@ -580,7 +580,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
       ['Net Margin (%)', `${netProfitMarginPercent.toFixed(1)}%`],
       ['Status Keuangan', netProfit >= 0 ? 'SURPLUS (LABA BERSIH)' : 'DEFISIT (RUGI)'],
     ];
-    exportCsv(`Laporan_Laba_Rugi_toko-online.online_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, rows);
+    exportCsv(`Laporan_Laba_Rugi_LapakOke_${activeDateRange.start.toISOString().split('T')[0]}_sd_${activeDateRange.end.toISOString().split('T')[0]}.csv`, rows);
   };
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -1361,7 +1361,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
                                 <div className="text-2xs text-stone-400">{ord.customerPhone || '-'}</div>
                               </td>
                               <td className="py-3 px-4 text-stone-700 font-medium">
-                                {ord.store?.name || 'toko-online.online Pangandaran'}
+                                {ord.store?.name || 'LapakOke Pangandaran'}
                               </td>
                               <td className="py-3 px-4 text-center">
                                 <span className="inline-block px-2 py-0.5 rounded text-2xs font-bold uppercase bg-stone-100 text-stone-800 border border-stone-200">
@@ -1862,7 +1862,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
 
             {/* FOOTER AUDIT NOTES */}
             <div className="border-t border-stone-200 pt-4 text-2xs text-stone-400 text-center">
-              Laporan Keuangan toko-online.online • Digenerate otomatis berdasarkan data transaksi POS & sistem inventori cloud.
+              Laporan Keuangan LapakOke • Digenerate otomatis berdasarkan data transaksi POS & sistem inventori cloud.
             </div>
           </div>
         </div>

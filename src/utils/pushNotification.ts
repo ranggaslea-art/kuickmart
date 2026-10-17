@@ -1,5 +1,5 @@
 /**
- * toko-online.online - Web Push Notification Utility (PWA & VAPID)
+ * LapakOke (lapakoke.com) - Web Push Notification Utility (PWA & VAPID)
  * Memungkinkan pendaftaran token perangkat pelanggan dan penerimaan pesan promosi
  */
 
@@ -46,7 +46,7 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
 }
 
 /**
- * Mendaftarkan perangkat pengguna ke Push Service & Backend toko-online.online
+ * Mendaftarkan perangkat pengguna ke Push Service & Backend LapakOke
  */
 export async function subscribeUserToPush(customerName?: string): Promise<{
   success: boolean;
@@ -99,7 +99,7 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
       });
     }
 
-    // 4. Kirim data token perangkat ke backend toko-online.online
+    // 4. Kirim data token perangkat ke backend LapakOke
     const userAgent = navigator.userAgent.toLowerCase();
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -117,7 +117,7 @@ export async function subscribeUserToPush(customerName?: string): Promise<{
     const subJson = subscription.toJSON();
     const payload = {
       subscription: subJson,
-      customerName: customerName || 'Pelanggan toko-online.online',
+      customerName: customerName || 'Pelanggan LapakOke',
       deviceType,
     };
 

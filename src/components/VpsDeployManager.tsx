@@ -394,7 +394,7 @@ export const VpsDeployManager: React.FC = () => {
                 <div className="w-3 h-3 rounded-full bg-rose-500" />
                 <div className="w-3 h-3 rounded-full bg-amber-500" />
                 <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="ml-2 text-slate-400 text-[11px]">deploy-runner@toko-online-vps:~</span>
+                <span className="ml-2 text-slate-400 text-[11px]">deploy-runner@lapakoke-vps:~</span>
               </div>
               <div className="text-slate-500 text-[10px]">
                 {statusData?.lastDeployTime ? `Deploy Terakhir: ${new Date(statusData.lastDeployTime).toLocaleTimeString('id-ID')}` : 'Siap Menjalankan Tugas'}

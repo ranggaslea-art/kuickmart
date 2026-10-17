@@ -149,7 +149,7 @@ export const MySqlDatabaseManager: React.FC<MySqlDatabaseManagerProps> = ({
 
   const phpMyAdminUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/phpmyadmin/`
-    : 'https://www.toko-online.online/phpmyadmin/';
+    : 'https://www.lapakoke.com/phpmyadmin/';
 
   return (
     <div className="space-y-6">

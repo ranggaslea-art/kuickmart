@@ -185,7 +185,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
     if (item.isRootDomain) {
       setActionNotice({
         type: 'error',
-        message: 'Domain utama toko-online.online merupakan induk sistem dan tidak dapat dinonaktifkan.',
+        message: 'Domain utama lapakoke.com merupakan induk sistem dan tidak dapat dinonaktifkan.',
       });
       setTimeout(() => setActionNotice(null), 4000);
       return;
@@ -194,7 +194,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
     if (item.isActive) {
       // Ingin menonaktifkan -> Buka dialog konfirmasi alasan
       setPendingDisableSubdomain(item);
-      setDisableReasonInput('Dinonaktifkan sementara oleh administrator toko-online.online.');
+      setDisableReasonInput('Dinonaktifkan sementara oleh administrator lapakoke.com.');
     } else {
       // Ingin mengaktifkan kembali -> Langsung proses checklist ON
       executeToggleStatus(item.storeSlug, true);
@@ -358,7 +358,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-rose-200/90 mt-1">
-                    Modul info subdomain hanya bisa diakses oleh domain <strong>kuickmart.ranggaslea.workers.dev</strong> dan domain <strong>toko-online.online</strong>
+                    Modul info subdomain hanya bisa diakses oleh domain <strong>lapakoke.com</strong> (dan domain resmi yang diotorisasi)
                   </p>
                 </div>
               </div>
@@ -389,31 +389,18 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
               <div className="bg-stone-900/80 border border-emerald-800/40 rounded-2xl p-4 space-y-3">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Dua Domain Resmi yang Berwenang</span>
+                  <span>Domain Utama Resmi yang Berwenang</span>
                 </div>
                 <div className="space-y-2 text-xs">
                   <a
-                    href="https://kuickmart.ranggaslea.workers.dev"
+                    href="https://lapakoke.com"
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-950/70 hover:border-emerald-400/60 transition group cursor-pointer"
                   >
                     <div className="flex items-center gap-2 font-mono font-bold text-emerald-200 truncate">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                      <span className="truncate">kuickmart.ranggaslea.workers.dev</span>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
-                  </a>
-
-                  <a
-                    href="https://toko-online.online"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-950/70 hover:border-emerald-400/60 transition group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 font-mono font-bold text-emerald-200 truncate">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                      <span className="truncate">toko-online.online (Domain Utama)</span>
+                      <span className="truncate">lapakoke.com (Domain Utama)</span>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
                   </a>
@@ -452,15 +439,15 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleToggleSimulation('toko-online.online')}
+                  onClick={() => handleToggleSimulation('lapakoke.com')}
                   className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer text-xs"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Uji: toko-online.online (Diizinkan)</span>
+                  <span>Uji: lapakoke.com (Diizinkan)</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleToggleSimulation('berkah-mart.toko-online.online')}
+                  onClick={() => handleToggleSimulation('tokoalda.lapakoke.com')}
                   className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer text-xs"
                 >
                   <XCircle className="w-3.5 h-3.5" />
@@ -500,7 +487,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                 Pantau seluruh subdomain toko yang terdaftar di ekosistem resmi <strong>{ROOT_AUTHORITY_DOMAIN}</strong>. 
                 Anda dapat mengaktifkan atau menonaktifkan akses subdomain sewaktu-waktu menggunakan tombol checklist status.
                 <span className="block text-emerald-300/90 text-xs mt-1 font-medium">
-                  ✓ Diotorisasi khusus untuk: <strong>kuickmart.ranggaslea.workers.dev</strong> &amp; <strong>toko-online.online</strong>
+                  ✓ Diotorisasi khusus untuk: <strong>{ROOT_AUTHORITY_DOMAIN}</strong>
                 </span>
               </p>
             </div>
@@ -635,10 +622,10 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
             </div>
             <div>
               <h4 className="text-xs sm:text-sm font-black text-amber-950">
-                Mengapa Subdomain Baru (seperti tokoalda.toko-online.online) Muncul &quot;DNS_PROBE_FINISHED_NXDOMAIN&quot;?
+                Mengapa Subdomain Baru (seperti tokoalda.lapakoke.com) Muncul &quot;DNS_PROBE_FINISHED_NXDOMAIN&quot;?
               </h4>
               <p className="text-[11px] sm:text-xs text-amber-800/90 mt-0.5">
-                Penyebabnya adalah DNS Cloudflare belum memiliki record <span className="font-bold">Wildcard CNAME (*)</span> atau <span className="font-bold">Worker Route</span> untuk domain <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950">toko-online.online</code>.
+                Penyebabnya adalah DNS Cloudflare belum memiliki record <span className="font-bold">Wildcard A / CNAME (*)</span> atau <span className="font-bold">Worker Route</span> untuk domain <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-950">lapakoke.com</code>.
               </p>
             </div>
           </div>
@@ -666,7 +653,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-600 leading-relaxed">
-                  Buka <strong>Cloudflare Dashboard ➔ toko-online.online ➔ DNS ➔ Records ➔ Add record</strong>:
+                  Buka <strong>Cloudflare Dashboard ➔ lapakoke.com ➔ DNS ➔ Records ➔ Add record</strong>:
                 </p>
                 <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200 font-mono text-[11px] space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -689,10 +676,10 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                   <div className="flex items-center justify-between">
                     <span className="text-stone-500">Target:</span>
                     <div className="flex items-center gap-1.5">
-                      <code className="font-bold text-stone-800">toko-online.online</code>
+                      <code className="font-bold text-stone-800">lapakoke.com</code>
                       <button
                         type="button"
-                        onClick={() => handleCopyField('toko-online.online', 'dns_target')}
+                        onClick={() => handleCopyField('lapakoke.com', 'dns_target')}
                         className="text-[10px] px-1.5 py-0.5 bg-stone-200 hover:bg-stone-300 rounded font-sans cursor-pointer text-stone-700"
                       >
                         {copiedField === 'dns_target' ? '✓ Disalin' : 'Salin'}
@@ -726,10 +713,10 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                   <div className="flex items-center justify-between">
                     <span className="text-stone-500">Route:</span>
                     <div className="flex items-center gap-1.5">
-                      <code className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">*.toko-online.online/*</code>
+                      <code className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">*.lapakoke.com/*</code>
                       <button
                         type="button"
-                        onClick={() => handleCopyField('*.toko-online.online/*', 'worker_route')}
+                        onClick={() => handleCopyField('*.lapakoke.com/*', 'worker_route')}
                         className="text-[10px] px-1.5 py-0.5 bg-stone-200 hover:bg-stone-300 rounded font-sans cursor-pointer text-stone-700"
                       >
                         {copiedField === 'worker_route' ? '✓ Disalin' : 'Salin'}
@@ -738,7 +725,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-stone-500">Zone:</span>
-                    <span className="font-bold text-stone-800">toko-online.online</span>
+                    <span className="font-bold text-stone-800">lapakoke.com</span>
                   </div>
                 </div>
                 <p className="text-[10px] text-stone-500 italic">
@@ -923,7 +910,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                             <div>
                               <p className="font-bold">Status Subdomain: Nonaktif</p>
                               <p className="text-[11px] text-rose-800 opacity-90">
-                                {item.disabledReason || 'Dinonaktifkan oleh administrator toko-online.online.'}
+                                {item.disabledReason || 'Dinonaktifkan oleh administrator lapakoke.com.'}
                               </p>
                               {item.disabledAt && (
                                 <p className="text-[10px] text-rose-700 mt-0.5">
@@ -1124,7 +1111,7 @@ export const RegisteredSubdomainsManager: React.FC<RegisteredSubdomainsManagerPr
                   executeToggleStatus(
                     pendingDisableSubdomain.storeSlug,
                     false,
-                    disableReasonInput.trim() || 'Dinonaktifkan oleh administrator toko-online.online'
+                    disableReasonInput.trim() || 'Dinonaktifkan oleh administrator lapakoke.com'
                   )
                 }
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"

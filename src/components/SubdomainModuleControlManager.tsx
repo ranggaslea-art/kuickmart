@@ -107,7 +107,7 @@ export const SubdomainModuleControlManager: React.FC = () => {
         setSubdomains(list);
         if (list.length > 0 && !selectedSubdomainSlug) {
           // Pilih subdomain pertama yang bukan root jika ada
-          const firstSub = list.find(s => s.storeSlug !== 'default' && s.storeSlug !== 'toko-online' && s.storeSlug !== 'toko-online.online') || list[0];
+          const firstSub = list.find(s => s.storeSlug !== 'default' && s.storeSlug !== 'lapakoke' && s.storeSlug !== 'lapakoke.com' && s.storeSlug !== 'toko-online' && s.storeSlug !== 'toko-online.online') || list[0];
           if (firstSub) {
             setSelectedSubdomainSlug(firstSub.storeSlug);
           }
@@ -321,7 +321,7 @@ export const SubdomainModuleControlManager: React.FC = () => {
             </h1>
             
             <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
-              Atur hak ketersediaan modul untuk seluruh subdomain cabang toko (<code className="text-cyan-300 bg-white/10 px-1.5 py-0.5 rounded text-[11px]">*.toko-online.online</code>).
+              Atur hak ketersediaan modul untuk seluruh subdomain cabang toko (<code className="text-cyan-300 bg-white/10 px-1.5 py-0.5 rounded text-[11px]">*.lapakoke.com</code>).
               Modul yang dinonaktifkan di sini otomatis terkunci dan tidak dapat diakses di subdomain terkait.
             </p>
           </div>
@@ -491,7 +491,7 @@ export const SubdomainModuleControlManager: React.FC = () => {
             <div className="bg-white p-3.5 rounded-2xl border border-purple-200 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="space-y-0.5">
                 <div className="font-bold text-stone-900">
-                  Mengelola: <span className="text-purple-700 font-extrabold">{currentSubdomain.storeName}</span> ({currentSubdomain.storeSlug}.toko-online.online)
+                  Mengelola: <span className="text-purple-700 font-extrabold">{currentSubdomain.storeName}</span> ({currentSubdomain.storeSlug}.lapakoke.com)
                 </div>
                 <div className="text-[11px] text-stone-500 flex items-center gap-2">
                   <span>Pemilik: {currentSubdomain.ownerName || '-'}</span>

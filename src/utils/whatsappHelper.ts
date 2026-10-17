@@ -128,7 +128,7 @@ export function generateStoreOrderWhatsAppMessage(order: Order): string {
     : '🛍️ *PESANAN DIAMBIL SENDIRI DI TOKO (SELF PICKUP / CLICK & COLLECT)*';
 
   const orderTimeStr = order.createdAt ? formatDateTime(order.createdAt) : new Date().toLocaleString('id-ID');
-  const storeName = order.store?.name || 'toko-online.online';
+  const storeName = order.store?.name || 'LapakOke';
   const storeAddress = order.store?.address || '-';
   const targetWhatsApp = getStoreOrderWhatsAppNumber(order);
   const storePhone = targetWhatsApp || order.store?.whatsapp || order.store?.phone || '-';
@@ -279,7 +279,7 @@ export function generateOrderWhatsAppMessage(params: {
   if (isCallRequest) {
     return `Halo Kak ${driverName} (Kurir),
 Saya pemesan No. Pesanan *${orderNumber}*${customerName ? ` (${customerName})` : ''}.
-Saya ingin melakukan konfirmasi/panggilan telepon terkait posisi pengiriman paket belanja dari ${storeName || 'toko-online.online'}.
+Saya ingin melakukan konfirmasi/panggilan telepon terkait posisi pengiriman paket belanja dari ${storeName || 'LapakOke'}.
 Mohon respons jika sudah aman di tepi jalan. Terima kasih! 🙏`;
   }
 

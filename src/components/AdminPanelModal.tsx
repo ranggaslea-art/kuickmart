@@ -235,8 +235,41 @@ interface AdminPanelModalProps {
   onUpdateCategories?: (categories: Category[]) => void;
   brands?: BrandItem[];
   onUpdateBrands?: (brands: BrandItem[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db' | 'splash_screen';
+  initialTab?: AdminTab;
 }
+
+export type AdminTab =
+  | 'products'
+  | 'orders'
+  | 'purchases'
+  | 'purchase_orders'
+  | 'suppliers'
+  | 'customers'
+  | 'points_rewards'
+  | 'stores'
+  | 'subdomains'
+  | 'subdomain_modules'
+  | 'vouchers'
+  | 'users'
+  | 'permissions'
+  | 'bulk_import'
+  | 'receipts'
+  | 'promos'
+  | 'couriers'
+  | 'brand_info'
+  | 'store_doku_settings'
+  | 'push_notifications'
+  | 'reports'
+  | 'pos_cashier'
+  | 'stock_opname'
+  | 'returns'
+  | 'stock_mutations'
+  | 'stock_card'
+  | 'categories_brands'
+  | 'vps_deploy'
+  | 'seo_google'
+  | 'mysql_db'
+  | 'splash_screen';
 
 interface AdminUser {
   username: string;
@@ -343,7 +376,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     return loadStoreTenantConfig(currentSlug);
   }, [currentSlug]);
 
-  // Otoritas Domain Utama: Tab 'Kontrol Modul Subdomain' & 'Subdomain Terdaftar' HANYA dapat dikelola melalui domain utama (toko-online.online)
+  // Otoritas Domain Utama: Tab 'Kontrol Modul Subdomain' & 'Subdomain Terdaftar' HANYA dapat dikelola melalui domain utama (lapakoke.com)
   const hasSubdomainAuthority = useMemo(() => {
     if (!isDefaultStore(currentSlug)) {
       return false;
@@ -893,7 +926,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>(initialTab || 'products');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'products');
   const [userSubTab, setUserSubTab] = useState<'accounts' | 'permissions'>('accounts');
 
   // Kelompok Modul Menu Navigasi Admin
@@ -1415,7 +1448,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setFormStock(50);
     setFormBarcode(Math.floor(1000000000000 + Math.random() * 9000000000000).toString());
     setFormImage('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400');
-    setFormDescription('Produk segar dan berkualitas toko-online.online');
+    setFormDescription('Produk segar dan berkualitas LapakOke');
     setFormTags('Best Seller');
     setFormConversions([]);
     setIsAddingProduct(true);
@@ -1736,7 +1769,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       return;
     }
     setEditingStore(null);
-    setStoreName('toko-online.online - Cabang Baru');
+    setStoreName('LapakOke - Cabang Baru');
     setStoreCode(`KM-${Math.floor(100 + Math.random() * 900)}`);
     setStoreAddress('Jl. Raya Utama No. 10');
     setStoreCity('');
@@ -1868,7 +1901,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           const price = parseInt(parts[1].replace(/[^0-9]/g, ''), 10) || 15000;
           const stock = parts[2] ? parseInt(parts[2], 10) || 30 : 30;
           const category = parts[3] || 'sembako-dapur';
-          const brand = parts[4] || 'toko-online.online';
+          const brand = parts[4] || 'LapakOke';
 
           newItems.push({
             id: `bulk_${Date.now()}_${index}`,
@@ -1883,7 +1916,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             soldCount: 0,
             barcode: Math.floor(8990000000000 + Math.random() * 999999999).toString(),
             image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400',
-            description: `Produk resmi ${name} berkualitas tinggi di minimarket toko-online.online.`,
+            description: `Produk resmi ${name} berkualitas tinggi di minimarket LapakOke.`,
             tags: ['Best Seller'],
           });
         }
@@ -2064,13 +2097,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
   const handleOpenAddVoucher = () => {
     setEditingVoucher(null);
     setVoucherCode(`TOKO${Math.floor(100 + Math.random() * 900)}`);
-    setVoucherTitle('Diskon Spesial toko-online.online');
+    setVoucherTitle('Diskon Spesial LapakOke');
     setVoucherType('percentage');
     setVoucherDiscountAmount(20);
     setVoucherMinSpend(50000);
     setVoucherMaxDiscount(25000);
     setVoucherValidUntil('31 Des 2026');
-    setVoucherDescription('Potongan 20% s.d. Rp 25.000 untuk belanja di toko-online.online');
+    setVoucherDescription('Potongan 20% s.d. Rp 25.000 untuk belanja di LapakOke');
     setIsAddingVoucher(true);
   };
 
@@ -4089,7 +4122,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                           required
                           value={storeName}
                           onChange={e => setStoreName(e.target.value)}
-                          placeholder="Contoh: toko-online.online - Sudirman Thamrin"
+                          placeholder="Contoh: LapakOke - Sudirman Thamrin"
                           className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl bg-white font-semibold text-stone-900 focus:ring-2 focus:ring-purple-200"
                         />
                       </div>
@@ -4296,7 +4329,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-extrabold text-sm text-purple-950 flex items-center gap-1.5">
                           <Building2 className="w-4 h-4 text-purple-700" />
-                          <span>Manajemen Cabang Minimarket toko-online.online</span>
+                          <span>Manajemen Cabang Minimarket LapakOke</span>
                         </h4>
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
                           canAddSubdomain().allowed
@@ -4599,7 +4632,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                             setVoucherDiscountAmount(20);
                             setVoucherMinSpend(50000);
                             setVoucherMaxDiscount(25000);
-                            setVoucherDescription('Diskon 20% spesial gajian hemat toko-online.online');
+                            setVoucherDescription('Diskon 20% spesial gajian hemat LapakOke');
                           }}
                           className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold"
                         >
@@ -4629,7 +4662,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                             setVoucherDiscountAmount(8000);
                             setVoucherMinSpend(30000);
                             setVoucherMaxDiscount(8000);
-                            setVoucherDescription('Gratis ongkir kilat toko-online.online hingga Rp 8.000');
+                            setVoucherDescription('Gratis ongkir kilat LapakOke hingga Rp 8.000');
                           }}
                           className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-lg text-xs font-semibold"
                         >
@@ -4735,7 +4768,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         rows={2}
                         value={voucherDescription}
                         onChange={e => setVoucherDescription(e.target.value)}
-                        placeholder="Contoh: Berlaku untuk semua produk di seluruh gerai toko-online.online"
+                        placeholder="Contoh: Berlaku untuk semua produk di seluruh gerai LapakOke"
                         className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium"
                       />
                     </div>
@@ -4938,7 +4971,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     <span>Manajemen Akun Pengguna & Hak Akses Staff</span>
                   </h4>
                   <p className="text-[11px] text-stone-500">
-                    Kelola akun login Store Manager (Admin), Supervisor, Kasir Toko, dan Staff Gudang toko-online.online.
+                    Kelola akun login Store Manager (Admin), Supervisor, Kasir Toko, dan Staff Gudang LapakOke.
                   </p>
                 </div>
 
@@ -5126,7 +5159,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         type="email"
                         value={userEmail}
                         onChange={e => setUserEmail(e.target.value)}
-                        placeholder="staff@toko-online.online"
+                        placeholder="staff@lapakoke.com"
                         className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-white font-medium text-stone-900"
                       />
                     </div>
@@ -5447,7 +5480,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <SplashScreenManager
                 activeTenantSlug={currentSlug}
                 currentStoreName={currentStore.name}
-                storeLogoUrl={activeBrandConfig?.logoUrl}
+                storeLogoUrl={activeBrandConfig?.brandLogoImageUrl}
                 onOpenFullScreenTest={() => {
                   onClose();
                   setTimeout(() => {
@@ -5506,7 +5539,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 onNavigateToStore={(targetSlug) => {
                   const url = typeof window !== 'undefined'
                     ? `${window.location.origin}${window.location.pathname}?store=${targetSlug}`
-                    : `https://${targetSlug}.toko-online.online`;
+                    : `https://${targetSlug}.lapakoke.com`;
                   window.location.href = url;
                 }}
               />
@@ -5793,7 +5826,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {activeTab === 'seo_google' && (
             <SeoGoogleManager 
               currentStoreName={activeTenantIdentity.storeName}
-              storeDomain={typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') ? window.location.origin : 'https://www.toko-online.online'}
+              storeDomain={typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('run.app') ? window.location.origin : 'https://www.lapakoke.com'}
             />
           )}
             </>

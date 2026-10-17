@@ -87,9 +87,9 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
     const activeStore = stores[0];
     setProfileName(`Struk Toko Baru ${receiptConfigs.length + 1}`);
     setStoreId(activeStore ? activeStore.id : 'all');
-    setHeaderBrand('NUSA MART EXPRESS');
+    setHeaderBrand('LAPAKOKE EXPRESS');
     setSubHeader('Minimarket & Grosir Kebutuhan Sehari-Hari');
-    setStoreName(activeStore ? activeStore.name : 'toko-online.online - Cabang Baru');
+    setStoreName(activeStore ? activeStore.name : 'LapakOke - Cabang Baru');
     setAddress(activeStore ? cleanReceiptText(activeStore.address) : 'Jl. Sudirman No. 10');
     setCity(activeStore ? cleanReceiptText(activeStore.city) : '');
     setPhone(activeStore ? activeStore.phone : '021-5551234');
@@ -613,7 +613,7 @@ export const ReceiptInfoManager: React.FC<ReceiptInfoManagerProps> = ({
                     required
                     value={storeName}
                     onChange={e => setStoreName(e.target.value)}
-                    placeholder="Contoh: toko-online.online - Sudirman Thamrin"
+                    placeholder="Contoh: LapakOke - Sudirman Thamrin"
                     className="w-full px-3 py-2 border border-stone-300 rounded-xl bg-stone-50/50 font-semibold text-stone-900 focus:bg-white focus:ring-2 focus:ring-blue-200"
                   />
                 </div>
