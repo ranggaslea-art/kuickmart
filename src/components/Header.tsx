@@ -57,6 +57,7 @@ interface HeaderProps {
   onRefreshData?: () => void;
   onGoHome?: () => void;
   onNavigatePromo?: (target: PromoNavigationTarget) => void;
+  onOpenSplashScreenEditor?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -86,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRefreshData,
   onGoHome,
   onNavigatePromo,
+  onOpenSplashScreenEditor,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -368,6 +370,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-[9px] bg-rose-100 text-rose-700 px-1 py-0.2 rounded font-mono font-bold">Kunci</span>
                 </button>
               )
+            )}
+
+            {/* Splash Screen Editor Button */}
+            {onOpenSplashScreenEditor && (
+              <button
+                onClick={onOpenSplashScreenEditor}
+                title="Kustomisasi Gambar & Animasi Splash Screen LapakOke"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 font-extrabold text-xs flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-orange-600 animate-pulse" />
+                <span className="hidden xl:inline">Splash Screen</span>
+              </button>
             )}
 
             {/* Admin Panel Button */}

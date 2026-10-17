@@ -188,6 +188,8 @@ import {
   STORAGE_ACTIVE_TENANT_KEY
 } from '../utils/tenantHelper';
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
+import { SplashScreenManager } from './SplashScreenManager';
+import { triggerManualSplashScreen } from '../utils/splashScreenHelper';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -233,7 +235,7 @@ interface AdminPanelModalProps {
   onUpdateCategories?: (categories: Category[]) => void;
   brands?: BrandItem[];
   onUpdateBrands?: (brands: BrandItem[]) => void;
-  initialTab?: 'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db';
+  initialTab?: 'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db' | 'splash_screen';
 }
 
 interface AdminUser {
@@ -2743,6 +2745,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
                 { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
                 { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Header & Identitas Toko', icon: <Palette className="w-4 h-4 text-amber-500" /> },
+                { id: 'splash_screen', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Splash Screen Editor', icon: <Sparkles className="w-4 h-4 text-orange-500" /> },
 
                 // 6. USER, KEAMANAN & SERVER
                 { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: (staffUsers || []).length },
@@ -5431,6 +5434,26 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <BrandInfoManager
                 brandConfig={activeBrandConfig}
                 onUpdateBrandConfig={handleUpdateBrandConfig}
+              />
+            </div>
+          ))}
+
+          {/* TAB: SPLASH SCREEN EDITOR & LOADING AWAL */}
+          {activeTab === 'splash_screen' && (!currentUserPermissions.brand_info?.canView ? (
+            renderAccessDenied('Splash Screen Editor')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.brand_info?.canEdit && renderReadOnlyBanner('Splash Screen Editor')}
+              <SplashScreenManager
+                activeTenantSlug={currentSlug}
+                currentStoreName={currentStore.name}
+                storeLogoUrl={activeBrandConfig?.logoUrl}
+                onOpenFullScreenTest={() => {
+                  onClose();
+                  setTimeout(() => {
+                    triggerManualSplashScreen();
+                  }, 150);
+                }}
               />
             </div>
           ))}

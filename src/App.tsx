@@ -37,6 +37,12 @@ import {
   AdminPanelModal 
 } from './components/AdminPanelModal';
 import { 
+  SplashScreen 
+} from './components/SplashScreen';
+import { 
+  SplashScreenEditorModal 
+} from './components/SplashScreenEditorModal';
+import { 
   ErrorBoundary 
 } from './components/ErrorBoundary';
 import { 
@@ -403,7 +409,8 @@ export default function App() {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isStoreSelectorOpen, setIsStoreSelectorOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db'>('products');
+  const [isSplashScreenEditorOpen, setIsSplashScreenEditorOpen] = useState(false);
+  const [adminPanelInitialTab, setAdminPanelInitialTab] = useState<'products' | 'orders' | 'purchases' | 'purchase_orders' | 'suppliers' | 'customers' | 'points_rewards' | 'stores' | 'subdomains' | 'subdomain_modules' | 'vouchers' | 'users' | 'permissions' | 'bulk_import' | 'receipts' | 'promos' | 'couriers' | 'brand_info' | 'store_doku_settings' | 'push_notifications' | 'reports' | 'pos_cashier' | 'stock_opname' | 'returns' | 'stock_mutations' | 'stock_card' | 'categories_brands' | 'vps_deploy' | 'seo_google' | 'mysql_db' | 'splash_screen'>('products');
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
@@ -1739,6 +1746,12 @@ export default function App() {
         </div>
       )}
 
+      {/* 0. Layar Pembuka / Splash Screen Awal Loading Index */}
+      <SplashScreen
+        activeTenantSlug={currentSlug}
+        currentStoreName={currentStore.name}
+      />
+
       {/* Sticky Header */}
       <Header
         currentStore={currentStore}
@@ -1754,6 +1767,7 @@ export default function App() {
           setIsAdminPanelOpen(true);
         }}
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        onOpenSplashScreenEditor={() => setIsSplashScreenEditorOpen(true)}
         onOpenSubdomains={() => {
           setAdminPanelInitialTab('subdomains');
           setIsAdminPanelOpen(true);
@@ -2414,7 +2428,16 @@ export default function App() {
         />
       </ErrorBoundary>
 
-      {/* 10. Web Push PWA Notification Prompt Banner */}
+      {/* 10. Modul Editor Splash Screen LapakOke */}
+      <SplashScreenEditorModal
+        isOpen={isSplashScreenEditorOpen}
+        onClose={() => setIsSplashScreenEditorOpen(false)}
+        activeTenantSlug={currentSlug}
+        currentStoreName={currentStore.name}
+        storeLogoUrl={brandConfig.logoUrl}
+      />
+
+      {/* 11. Web Push PWA Notification Prompt Banner */}
       <PushNotificationPrompt />
 
       {/* 9. Floating Bottom Cart Bar (Akses Cepat Keranjang Belanja) */}
