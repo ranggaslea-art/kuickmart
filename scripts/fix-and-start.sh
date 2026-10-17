@@ -68,7 +68,7 @@ if curl -sI http://127.0.0.1:3000 | grep -E "HTTP/|200|301|302|404"; then
   echo ""
   echo "=========================================================="
   echo "✅ SUKSES! Kuickmart sudah AKTIF di port 3000."
-  echo "🌐 Silakan buka kembali https://toko-online.online"
+  echo "🌐 Silakan buka kembali https://lapakoke.com"
   echo "=========================================================="
 else
   echo ""

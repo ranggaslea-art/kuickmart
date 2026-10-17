@@ -520,8 +520,8 @@ export function getTenantStore(slug?: string, tenantConfig?: StoreTenantIdentity
   if (isDefault) {
     return {
       id: 'store_1',
-      name: tenant.storeName || 'toko-online.online',
-      code: 'TOKO-ONLINE',
+      name: tenant.storeName || 'LapakOke',
+      code: 'LAPAKOKE',
       address: tenant.address || 'Jl. Jendral Sudirman No. 18, Menteng',
       city: tenant.city || 'Jakarta Pusat',
       distanceKm: 0.8,
@@ -568,7 +568,7 @@ export function getDefaultStoreTenant(slug?: string): StoreTenantIdentity {
   );
 
   const isDefault = isDefaultStore(effectiveSlug);
-  const storeName = builtin?.storeName || (isDefault ? 'toko-online.online' : formatSlugToStoreName(effectiveSlug));
+  const storeName = builtin?.storeName || (isDefault ? 'LapakOke' : formatSlugToStoreName(effectiveSlug));
 
   // Buat 2 huruf inisial untuk logo teks (misal: "Berkah Mart" -> "BM")
   const logoText = builtin?.logoText || (() => {
@@ -650,7 +650,7 @@ export async function saveStoreTenantConfig(config: StoreTenantIdentity): Promis
 
   try {
     const slug = config.storeSlug.toLowerCase();
-    const isMainStore = slug === 'default' || slug === 'toko-online' || slug === 'toko-online.online';
+    const isMainStore = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com' || slug === 'toko-online' || slug === 'toko-online.online';
     const isExistingTenant = Boolean(localStorage.getItem(`${STORAGE_TENANT_PREFIX}${slug}`));
     const isBuiltinTenant = BUILTIN_REGISTERED_SUBDOMAINS.some(
       (b) => b.storeSlug.toLowerCase() === slug || b.storeId.toLowerCase() === slug

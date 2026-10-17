@@ -66,7 +66,7 @@ echo "Respon Port 3000: $LOCAL_RES"
 if echo "$LOCAL_RES" | grep -qE "200|301|302|404"; then
   echo ""
   echo "✅ SUKSES! Server di Port 3000 sudah AKTIF NORMAL!"
-  echo "🌐 Silakan buka kembali https://toko-online.online"
+  echo "🌐 Silakan buka kembali https://lapakoke.com"
 else
   echo ""
   echo "⚠️ Port 3000 masih belum merespon. Menjalankan fallback langsung via node:"
