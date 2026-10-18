@@ -873,3 +873,18 @@ export interface StockSummaryReportItem {
   status: 'safe' | 'low' | 'out_of_stock' | 'negative';
 }
 
+export interface ChatMessage {
+  id: string;
+  storeId: string;
+  storeName?: string;
+  customerVisitorId: string;
+  customerName: string;
+  senderRole: 'customer' | 'admin' | 'staff';
+  senderName: string;
+  senderAvatar?: string;
+  text: string;
+  createdAt: number;
+  read?: boolean;
+}
+
+

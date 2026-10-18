@@ -1,0 +1,84 @@
+{
+  "id": "/?store=tokoalda",
+  "name": "Toko Alda - LapakOke",
+  "short_name": "Toko Alda",
+  "description": "Aplikasi belanja sembako dan kebutuhan harian Toko Alda lapakoke.com hemat dan cepat",
+  "start_url": "/?store=tokoalda",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#E51A24",
+  "lang": "id",
+  "dir": "ltr",
+  "categories": [
+    "shopping",
+    "business",
+    "lifestyle"
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tampilan Aplikasi Mobile Toko Alda"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Tampilan Belanja Desktop Toko Alda"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Katalog Promo",
+      "short_name": "Promo",
+      "description": "Promo sembako Toko Alda",
+      "url": "/?store=tokoalda&tab=promo",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Keranjang Belanja",
+      "short_name": "Keranjang",
+      "description": "Keranjang pesanan",
+      "url": "/?store=tokoalda&open_cart=true",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

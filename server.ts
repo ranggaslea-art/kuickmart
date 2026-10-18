@@ -2,10 +2,19 @@ import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
+import zlib from 'zlib';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+// Optional sharp loader with safe fallback so server runs even without native sharp binary
+let sharp: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  sharp = require('sharp');
+} catch {
+  sharp = null;
+}
 
 // Safe directory detection compatible with both ESM (tsx dev) and CommonJS (dist/server.cjs in production)
 const appDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
@@ -3491,64 +3500,452 @@ async function startServer() {
     }
   });
 
-  // Dynamic Favicon Route - Logo address bar mengikuti database & modul Header Toko
-  app.get(['/favicon.ico', '/favicon.png', '/icon.svg', '/apple-touch-icon.png', '/pwa-192x192.png'], (req, res, next) => {
-    try {
-      const host = (req.headers['host'] || '').split(':')[0].toLowerCase();
-      let slug = 'default';
-      if (host.endsWith('.lapakoke.com') && host !== 'www.lapakoke.com') {
-        slug = host.replace('.lapakoke.com', '');
-      } else if (host.endsWith('.toko-online.online') && host !== 'www.toko-online.online') {
-        slug = host.replace('.toko-online.online', '');
-      }
-      if (req.query.slug) {
-        slug = String(req.query.slug).toLowerCase();
-      }
+  // Helper to extract store slug from request
+  function getSlugFromReq(req: express.Request): string {
+    const rawHost = ((req.headers['x-forwarded-host'] as string) || req.headers['host'] || '').split(':')[0].toLowerCase();
+    let slug = 'default';
+    if (rawHost.endsWith('.lapakoke.com') && rawHost !== 'www.lapakoke.com') {
+      slug = rawHost.replace('.lapakoke.com', '');
+    } else if (rawHost.endsWith('.toko-online.online') && rawHost !== 'www.toko-online.online') {
+      slug = rawHost.replace('.toko-online.online', '');
+    } else if (rawHost.includes('tokoalda')) {
+      slug = 'tokoalda';
+    }
 
-      const settings = appSettingsMap[slug] || appSettingsMap['default'] || {};
-      const tenant = tenantStoreMap[slug] || tenantStoreMap['default'] || {};
-      const logoUrl = settings.brandConfig?.brandLogoImageUrl || tenant.logoUrl || '/logo.png';
-
-      if (logoUrl && typeof logoUrl === 'string') {
-        if (logoUrl.startsWith('data:image/png;base64,')) {
-          const base64Data = logoUrl.replace(/^data:image\/png;base64,/, '');
-          const imgBuffer = Buffer.from(base64Data, 'base64');
-          res.setHeader('Content-Type', 'image/png');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-          return res.send(imgBuffer);
-        } else if (logoUrl.startsWith('data:image/jpeg;base64,') || logoUrl.startsWith('data:image/jpg;base64,')) {
-          const base64Data = logoUrl.replace(/^data:image\/(jpeg|jpg);base64,/, '');
-          const imgBuffer = Buffer.from(base64Data, 'base64');
-          res.setHeader('Content-Type', 'image/jpeg');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-          return res.send(imgBuffer);
-        } else if (logoUrl.startsWith('data:image/svg+xml')) {
-          const svgContent = decodeURIComponent(logoUrl.replace(/^data:image\/svg\+xml;charset=utf-8,/, ''));
-          res.setHeader('Content-Type', 'image/svg+xml');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-          return res.send(svgContent);
-        } else if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
-          return res.redirect(logoUrl);
-        } else if (logoUrl.startsWith('/')) {
-          const filePath = path.join(process.cwd(), 'public', logoUrl.replace(/^\//, ''));
-          if (fs.existsSync(filePath)) {
-            const ext = path.extname(filePath).toLowerCase();
-            const mime = ext === '.svg' ? 'image/svg+xml' : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg' : 'image/png';
-            res.setHeader('Content-Type', mime);
-            res.setHeader('Cache-Control', 'public, max-age=86400');
-            return res.sendFile(filePath);
+    // Check Referer header if Host was obscured by reverse proxy
+    if (slug === 'default') {
+      const referer = (req.headers['referer'] as string) || '';
+      if (referer) {
+        try {
+          const refUrl = new URL(referer);
+          const refHost = refUrl.hostname.toLowerCase();
+          if (refHost.endsWith('.lapakoke.com') && refHost !== 'www.lapakoke.com') {
+            slug = refHost.replace('.lapakoke.com', '');
+          } else if (refHost.endsWith('.toko-online.online') && refHost !== 'www.toko-online.online') {
+            slug = refHost.replace('.toko-online.online', '');
+          } else if (refHost.includes('tokoalda')) {
+            slug = 'tokoalda';
           }
+          if (refUrl.searchParams.get('store')) {
+            slug = refUrl.searchParams.get('store')!.toLowerCase();
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (req.query.slug) {
+      slug = String(req.query.slug).toLowerCase();
+    } else if (req.query.store) {
+      slug = String(req.query.store).toLowerCase();
+    }
+    return slug;
+  }
+
+  // Built-in store identities fallback
+  const BUILTIN_STORES_META: Record<string, { storeName: string; logoText: string; primaryColor: string; tagline: string }> = {
+    'default': { storeName: 'LapakOke', logoText: 'LO', primaryColor: '#E51A24', tagline: 'Pusat Belanja Online Hemat & Cepat' },
+    'tokoalda': { storeName: 'Toko Alda', logoText: 'TA', primaryColor: '#E51A24', tagline: 'Belanja Mudah, Hemat, dan Lengkap' },
+    'mrberkah': { storeName: 'Mr Berkah Mart', logoText: 'MB', primaryColor: '#059669', tagline: 'Pilihan Belanja Berkah dan Hemat' },
+    'berkah-mart': { storeName: 'Berkah Mart', logoText: 'BM', primaryColor: '#E51A24', tagline: 'Kebutuhan Harian Lengkap & Terjangkau' },
+    'berkah-jaya': { storeName: 'Berkah Jaya Mart', logoText: 'BJ', primaryColor: '#E51A24', tagline: 'Melayani Kebutuhan Anda Sepenuh Hati' },
+    'kuickmart': { storeName: 'Kuickmart', logoText: 'KM', primaryColor: '#2563EB', tagline: 'Pusat Belanja Minimarket Cepat & Lengkap' },
+  };
+
+  // In-memory icon cache so sharp doesn't re-render on every single request
+  const iconCache = new Map<string, Buffer>();
+
+  function generateFallbackPng(width: number, height: number, hexColor = '#E51A24'): Buffer {
+    const crcTable = new Int32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      crcTable[n] = c;
+    }
+    function crc32(buf: Buffer) {
+      let crc = -1;
+      for (let i = 0; i < buf.length; i++) {
+        crc = (crc >>> 8) ^ crcTable[(crc ^ buf[i]) & 0xff];
+      }
+      return (crc ^ -1) >>> 0;
+    }
+    function makeChunk(type: string, data: Buffer) {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length, 0);
+      const t = Buffer.from(type, 'ascii');
+      const crcBuf = Buffer.concat([t, data]);
+      const crc = Buffer.alloc(4);
+      crc.writeUInt32BE(crc32(crcBuf), 0);
+      return Buffer.concat([len, t, data, crc]);
+    }
+
+    const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0);
+    ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 6;
+    ihdr[10] = 0;
+    ihdr[11] = 0;
+    ihdr[12] = 0;
+    const ihdrChunk = makeChunk('IHDR', ihdr);
+
+    let r = 229, g = 26, b = 36;
+    const cleanHex = hexColor.replace('#', '');
+    if (cleanHex.length === 6) {
+      r = parseInt(cleanHex.substring(0, 2), 16) || 229;
+      g = parseInt(cleanHex.substring(2, 4), 16) || 26;
+      b = parseInt(cleanHex.substring(4, 6), 16) || 36;
+    }
+
+    const rowLen = width * 4 + 1;
+    const raw = Buffer.alloc(rowLen * height);
+    const cx = width / 2;
+    const cy = height / 2;
+
+    for (let y = 0; y < height; y++) {
+      const offset = y * rowLen;
+      raw[offset] = 0;
+      for (let x = 0; x < width; x++) {
+        const p = offset + 1 + x * 4;
+        const dx = Math.abs(x - cx) / (width * 0.46);
+        const dy = Math.abs(y - cy) / (height * 0.46);
+        const dist = Math.pow(dx, 4) + Math.pow(dy, 4);
+        if (dist <= 1.0) {
+          const factor = 0.85 + 0.25 * (1 - y / height);
+          raw[p] = Math.min(255, Math.round(r * factor));
+          raw[p + 1] = Math.min(255, Math.round(g * factor));
+          raw[p + 2] = Math.min(255, Math.round(b * factor));
+          raw[p + 3] = 255;
+        } else {
+          raw[p] = 255;
+          raw[p + 1] = 255;
+          raw[p + 2] = 255;
+          raw[p + 3] = 0;
         }
       }
+    }
 
-      const defaultLogoPath = path.join(process.cwd(), 'public', 'logo.png');
-      if (fs.existsSync(defaultLogoPath)) {
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.sendFile(defaultLogoPath);
+    const compressed = zlib.deflateSync(raw);
+    const idatChunk = makeChunk('IDAT', compressed);
+    const iendChunk = makeChunk('IEND', Buffer.alloc(0));
+    return Buffer.concat([sig, ihdrChunk, idatChunk, iendChunk]);
+  }
+
+  async function generateTenantIconPng(slug: string, size: number, isMaskable = false): Promise<Buffer> {
+    const cacheKey = `${slug}_${size}_${isMaskable ? 'maskable' : 'any'}`;
+    if (iconCache.has(cacheKey)) {
+      return iconCache.get(cacheKey)!;
+    }
+
+    const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com';
+    const publicDir = path.join(process.cwd(), 'public');
+
+    // For root domain / LapakOke, serve the pre-rendered official glossy 3D assets
+    if (isMain) {
+      const fileName = isMaskable
+        ? 'pwa-maskable-512x512.png'
+        : (size <= 64 ? 'favicon.png' : (size <= 180 ? 'apple-touch-icon.png' : (size <= 192 ? 'pwa-192x192.png' : 'pwa-512x512.png')));
+      const filePath = path.join(publicDir, fileName);
+      if (fs.existsSync(filePath)) {
+        const buf = fs.readFileSync(filePath);
+        iconCache.set(cacheKey, buf);
+        return buf;
       }
-    } catch (_) {}
-    next();
+    }
+
+    const tenant = tenantStoreMap[slug] || {};
+    const settings = appSettingsMap[slug] || {};
+    const brand = settings.brandConfig || {};
+    const builtin = BUILTIN_STORES_META[slug];
+
+    const storeName = tenant.storeName || brand.brandNamePart1 || builtin?.storeName || slug;
+    const logoText = tenant.logoText || brand.brandLogoText || builtin?.logoText || (storeName.slice(0, 2).toUpperCase());
+    const primaryColor = tenant.primaryColor || brand.primaryColor || builtin?.primaryColor || '#E51A24';
+    const logoUrl = brand.brandLogoImageUrl || tenant.logoUrl;
+
+    let iconBuffer: Buffer | null = null;
+
+    // 1. If tenant has custom logo image uploaded and sharp is available
+    if (sharp && logoUrl && typeof logoUrl === 'string') {
+      try {
+        if (logoUrl.startsWith('data:image/')) {
+          const base64Data = logoUrl.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+          const rawBuf = Buffer.from(base64Data, 'base64');
+          if (isMaskable) {
+            const inner = await sharp(rawBuf)
+              .resize(Math.round(size * 0.75), Math.round(size * 0.75), { fit: 'contain' })
+              .toBuffer();
+            iconBuffer = await sharp({
+              create: {
+                width: size,
+                height: size,
+                channels: 4,
+                background: { r: 255, g: 255, b: 255, alpha: 1 },
+              },
+            })
+              .composite([{ input: inner, gravity: 'center' }])
+              .png({ quality: 95 })
+              .toBuffer();
+          } else {
+            iconBuffer = await sharp(rawBuf)
+              .resize(size, size, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+              .png({ quality: 95 })
+              .toBuffer();
+          }
+        } else if (logoUrl.startsWith('/')) {
+          const localPath = path.join(publicDir, logoUrl.replace(/^\//, ''));
+          if (fs.existsSync(localPath)) {
+            iconBuffer = await sharp(localPath)
+              .resize(size, size, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: isMaskable ? 1 : 0 } })
+              .png({ quality: 95 })
+              .toBuffer();
+          }
+        }
+      } catch (err) {
+        console.warn(`[Icon Generator] Failed processing custom logo for ${slug}:`, err);
+      }
+    }
+
+    // 2. If no custom image or sharp rendered nothing, try vector SVG badge if sharp is available
+    if (!iconBuffer && sharp) {
+      try {
+        const badgeSvg = `
+        <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="g_${slug}" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="${primaryColor}" />
+              <stop offset="60%" stop-color="${primaryColor}" />
+              <stop offset="100%" stop-color="#0f172a" />
+            </linearGradient>
+            <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35" />
+              <stop offset="50%" stop-color="#ffffff" stop-opacity="0" />
+            </linearGradient>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="10" stdDeviation="15" flood-opacity="0.3" />
+            </filter>
+          </defs>
+          <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#g_${slug})" filter="url(#shadow)" />
+          <rect x="24" y="24" width="464" height="232" rx="120" fill="url(#shine)" />
+          <circle cx="256" cy="256" r="190" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity="0.25" stroke-dasharray="12 12" />
+          <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="190" letter-spacing="-2px">${logoText}</text>
+          <text x="50%" y="78%" dominant-baseline="middle" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="800" font-size="32" letter-spacing="1px" opacity="0.95">${storeName.toUpperCase().slice(0, 18)}</text>
+        </svg>
+        `;
+
+        if (isMaskable) {
+          const inner = await sharp(Buffer.from(badgeSvg))
+            .resize(Math.round(size * 0.78), Math.round(size * 0.78), { fit: 'contain' })
+            .toBuffer();
+          iconBuffer = await sharp({
+            create: {
+              width: size,
+              height: size,
+              channels: 4,
+              background: { r: 255, g: 255, b: 255, alpha: 1 },
+            },
+          })
+            .composite([{ input: inner, gravity: 'center' }])
+            .png({ quality: 95 })
+            .toBuffer();
+        } else {
+          iconBuffer = await sharp(Buffer.from(badgeSvg))
+            .resize(size, size, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+            .png({ quality: 95 })
+            .toBuffer();
+        }
+      } catch (e) {
+        console.warn(`[Icon Generator] Sharp SVG rendering failed:`, e);
+      }
+    }
+
+    // 3. Ultra-resilient pure Node.js fallback (zero npm dependency):
+    if (!iconBuffer) {
+      // Check if static public icon exists first
+      const fallbackFile = isMaskable ? 'pwa-maskable-512x512.png' : (size <= 192 ? 'pwa-192x192.png' : 'pwa-512x512.png');
+      const staticPath = path.join(publicDir, fallbackFile);
+      if (fs.existsSync(staticPath)) {
+        iconBuffer = fs.readFileSync(staticPath);
+      } else {
+        iconBuffer = generateFallbackPng(size, size, primaryColor);
+      }
+    }
+
+    iconCache.set(cacheKey, iconBuffer);
+    return iconBuffer;
+  }
+
+  // 1. Dynamic Web App Manifest Route for PWABuilder & App Stores
+  app.get(['/manifest.json', '/manifest.webmanifest'], (req, res) => {
+    try {
+      const slug = getSlugFromReq(req);
+      const isMain = slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com';
+      const tenant = tenantStoreMap[slug] || {};
+      const settings = appSettingsMap[slug] || {};
+      const brand = settings.brandConfig || {};
+      const builtin = BUILTIN_STORES_META[slug];
+
+      const storeName = isMain ? 'LapakOke' : (tenant.storeName || brand.brandNamePart1 || builtin?.storeName || slug.toUpperCase());
+      const appName = isMain
+        ? 'LapakOke - Belanja Sembako & Minimarket Online'
+        : `${storeName} - LapakOke`;
+      const shortName = storeName.length > 12 ? storeName.slice(0, 12).trim() : storeName;
+      const tagline = tenant.tagline || brand.tagline || builtin?.tagline || (isMain 
+        ? 'Aplikasi belanja minimarket online & kasir pintar lapakoke.com dengan pengiriman cepat dan hemat.'
+        : `Aplikasi belanja minimarket online ${storeName} lapakoke.com dengan pengiriman cepat dan hemat.`);
+      const themeColor = tenant.primaryColor || brand.primaryColor || builtin?.primaryColor || '#E51A24';
+      const startUrl = isMain ? '/' : `/?store=${slug}`;
+      const id = isMain ? '/' : `/?store=${slug}`;
+
+      // Dynamic icons route: includes slug query param when on non-default store
+      const queryParam = isMain ? '' : `?slug=${encodeURIComponent(slug)}`;
+      const icon192 = `/pwa-192x192.png${queryParam}`;
+      const icon512 = `/pwa-512x512.png${queryParam}`;
+      const iconMaskable = `/pwa-maskable-512x512.png${queryParam}`;
+
+      const manifestData = {
+        id,
+        name: appName,
+        short_name: shortName,
+        description: tagline,
+        start_url: startUrl,
+        scope: '/',
+        display: 'standalone',
+        orientation: 'portrait-primary',
+        background_color: '#ffffff',
+        theme_color: themeColor,
+        lang: 'id',
+        dir: 'ltr',
+        categories: ['shopping', 'business', 'lifestyle'],
+        prefer_related_applications: false,
+        icons: [
+          {
+            src: icon192,
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: icon512,
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: iconMaskable,
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+        screenshots: [
+          {
+            src: '/screenshot-mobile.png',
+            sizes: '1080x1920',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: `Tampilan Aplikasi Mobile ${storeName}`,
+          },
+          {
+            src: '/screenshot-desktop.png',
+            sizes: '1920x1080',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: `Tampilan Belanja Minimarket Desktop ${storeName}`,
+          },
+        ],
+        shortcuts: [
+          {
+            name: 'Katalog Promo',
+            short_name: 'Promo',
+            description: `Promo diskon sembako hemat di ${storeName}`,
+            url: isMain ? '/?tab=promo' : `/?store=${slug}&tab=promo`,
+            icons: [{ src: icon192, sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: 'Keranjang Belanja',
+            short_name: 'Keranjang',
+            description: 'Lihat keranjang pesanan Anda',
+            url: isMain ? '/?open_cart=true' : `/?store=${slug}&open_cart=true`,
+            icons: [{ src: icon192, sizes: '192x192', type: 'image/png' }],
+          },
+        ],
+      };
+
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.json(manifestData);
+    } catch (e: any) {
+      console.warn('[Manifest Error]', e);
+      return res.sendFile(path.join(process.cwd(), 'public', 'manifest.json'));
+    }
+  });
+
+  // 2. Dynamic PWA Icons - Always true PNG with exact requested dimensions
+  app.get('/pwa-192x192.png', async (req, res) => {
+    try {
+      const slug = getSlugFromReq(req);
+      const buf = await generateTenantIconPng(slug, 192, false);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buf);
+    } catch (e) {
+      return res.sendFile(path.join(process.cwd(), 'public', 'pwa-192x192.png'));
+    }
+  });
+
+  app.get('/pwa-512x512.png', async (req, res) => {
+    try {
+      const slug = getSlugFromReq(req);
+      const buf = await generateTenantIconPng(slug, 512, false);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buf);
+    } catch (e) {
+      return res.sendFile(path.join(process.cwd(), 'public', 'pwa-512x512.png'));
+    }
+  });
+
+  app.get('/pwa-maskable-512x512.png', async (req, res) => {
+    try {
+      const slug = getSlugFromReq(req);
+      const buf = await generateTenantIconPng(slug, 512, true);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buf);
+    } catch (e) {
+      return res.sendFile(path.join(process.cwd(), 'public', 'pwa-maskable-512x512.png'));
+    }
+  });
+
+  app.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], async (req, res) => {
+    try {
+      const slug = getSlugFromReq(req);
+      const buf = await generateTenantIconPng(slug, 180, true);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buf);
+    } catch (e) {
+      return res.sendFile(path.join(process.cwd(), 'public', 'apple-touch-icon.png'));
+    }
+  });
+
+  app.get(['/favicon.png', '/favicon.ico'], async (req, res) => {
+    try {
+      const slug = getSlugFromReq(req);
+      const buf = await generateTenantIconPng(slug, 64, false);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buf);
+    } catch (e) {
+      return res.sendFile(path.join(process.cwd(), 'public', 'favicon.png'));
+    }
+  });
+
+  app.get('/icon.svg', (req, res) => {
+    return res.sendFile(path.join(process.cwd(), 'public', 'icon.svg'));
   });
 
   // Vite middleware for development or static serving for production

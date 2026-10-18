@@ -21,6 +21,7 @@ import {
   Globe,
   RotateCcw,
   Lock,
+  MessageSquare,
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { PromoNavigationTarget } from './HeroBanner';
@@ -58,6 +59,9 @@ interface HeaderProps {
   onGoHome?: () => void;
   onNavigatePromo?: (target: PromoNavigationTarget) => void;
   onOpenSplashScreenEditor?: () => void;
+  onOpenChat?: () => void;
+  unreadChatCount?: number;
+  isChatOpen?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -88,6 +92,9 @@ export const Header: React.FC<HeaderProps> = ({
   onGoHome,
   onNavigatePromo,
   onOpenSplashScreenEditor,
+  onOpenChat,
+  unreadChatCount = 0,
+  isChatOpen = false,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -421,6 +428,32 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
+
+            {/* Real-time Customer & Store Admin Chat Button */}
+            {onOpenChat && (
+              <button
+                id="btn-header-chat"
+                onClick={onOpenChat}
+                title={isChatOpen ? 'Tutup Chat Toko' : 'Chat Real-time dengan Toko'}
+                className={`p-1.5 sm:px-2.5 sm:py-2 rounded-xl border font-bold text-xs flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95 ${
+                  isChatOpen 
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-xs' 
+                    : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-200'
+                }`}
+              >
+                {isChatOpen ? (
+                  <X className="w-4 h-4 text-white" />
+                ) : (
+                  <MessageSquare className="w-4 h-4 text-blue-600 shrink-0" />
+                )}
+                <span className="text-xs font-bold hidden sm:inline">{isChatOpen ? 'Tutup Chat' : 'Chat'}</span>
+                {!isChatOpen && unreadChatCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white font-bold text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center animate-pulse shadow-xs">
+                    {unreadChatCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Cart Button (Keranjang) - Selalu Tampil & Prioritas Utama */}
             <button

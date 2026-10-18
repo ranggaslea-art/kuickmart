@@ -57,6 +57,9 @@ import {
 import { 
   SubdomainBanner 
 } from './components/SubdomainBanner';
+import { 
+  Chat 
+} from './components/Chat';
 import { cleanReceiptText } from './utils/sanitizeReceipt';
 import { DEFAULT_ROLE_PERMISSIONS } from './utils/permissions';
 import { 
@@ -129,7 +132,9 @@ import {
   ChevronRight,
   Package,
   Plus,
-  AlertTriangle
+  AlertTriangle,
+  MessageSquare,
+  X
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -415,6 +420,8 @@ export default function App() {
   const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
   const [isViewingOrderHistory, setIsViewingOrderHistory] = useState(false);
   const [isLiveTrafficModalOpen, setIsLiveTrafficModalOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
@@ -1790,6 +1797,9 @@ export default function App() {
         onRefreshData={loadAllFromMySql}
         onGoHome={handleGoHome}
         onNavigatePromo={handleNavigatePromo}
+        onOpenChat={() => setIsChatOpen(prev => !prev)}
+        unreadChatCount={unreadChatCount}
+        isChatOpen={isChatOpen}
       />
 
       {/* Main View Container */}
@@ -2439,6 +2449,62 @@ export default function App() {
 
       {/* 11. Web Push PWA Notification Prompt Banner */}
       <PushNotificationPrompt />
+
+      {/* 12. Real-time Customer & Store Admin Chat Window (Firestore) */}
+      <Chat
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        currentStore={currentStore}
+        currentSlug={currentSlug}
+        member={member}
+        visitorId={visitorId}
+        onUnreadChange={setUnreadChatCount}
+      />
+
+      {/* Floating Action Button (FAB) on Main Layout - Toggles Chat Window & Dynamic Icon State */}
+      <div 
+        className={`fixed z-40 transition-all duration-300 ${
+          cartItems.length > 0 && !isCartOpen && !isCheckoutOpen
+            ? 'bottom-20 right-4 sm:bottom-24 sm:right-6'
+            : 'bottom-5 right-4 sm:bottom-6 sm:right-6'
+        }`}
+      >
+        <button
+          id="btn-floating-chat"
+          type="button"
+          onClick={() => setIsChatOpen((prev) => !prev)}
+          className={`group flex items-center gap-2.5 px-4 py-3.5 rounded-full shadow-2xl transition-all duration-300 active:scale-95 border cursor-pointer select-none ${
+            isChatOpen
+              ? 'bg-stone-900 hover:bg-stone-800 text-white border-white/20 ring-4 ring-blue-500/20 shadow-stone-900/50'
+              : 'bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-blue-400/30 shadow-blue-600/40 hover:shadow-blue-600/60 hover:scale-105'
+          }`}
+          aria-label={isChatOpen ? 'Tutup Chat Toko' : 'Buka Chat dengan Admin Toko'}
+          title={isChatOpen ? 'Tutup Chat Toko' : 'Buka Chat dengan Admin Toko'}
+        >
+          <div className="relative flex items-center justify-center">
+            {isChatOpen ? (
+              <X className="w-5 h-5 text-white animate-in spin-in-90 duration-200" />
+            ) : (
+              <>
+                <MessageSquare className="w-5 h-5 text-white animate-in zoom-in-50 duration-200" />
+                {unreadChatCount > 0 && (
+                  <span className="absolute -top-2 -right-2.5 bg-red-500 text-white font-black text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow-xs">
+                    {unreadChatCount}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          
+          <span className="text-xs font-bold tracking-tight pr-0.5">
+            {isChatOpen ? 'Tutup Chat' : 'Chat Toko'}
+          </span>
+          
+          {!isChatOpen && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse hidden sm:inline-block shadow-xs" title="Admin Online" />
+          )}
+        </button>
+      </div>
 
       {/* 9. Floating Bottom Cart Bar (Akses Cepat Keranjang Belanja) */}
       {cartItems.length > 0 && !isCartOpen && !isCheckoutOpen && (

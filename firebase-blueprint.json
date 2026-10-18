@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Pesan chat real-time antara pelanggan dan admin toko",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik pesan chat"
+        },
+        "storeId": {
+          "type": "string",
+          "description": "ID atau slug toko terkait"
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Nama toko tujuan chat"
+        },
+        "customerVisitorId": {
+          "type": "string",
+          "description": "ID unik pengunjung / pelanggan"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Nama pengirim pesan pelanggan"
+        },
+        "senderRole": {
+          "type": "string",
+          "enum": ["customer", "admin", "staff"],
+          "description": "Peran pengirim pesan"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Nama pengirim pesan"
+        },
+        "text": {
+          "type": "string",
+          "description": "Isi pesan teks"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Waktu pengiriman pesan dalam milidetik unix epoch"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Status pesan telah dibaca"
+        }
+      },
+      "required": ["storeId", "customerVisitorId", "senderRole", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/chat_messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Koleksi seluruh pesan chat real-time antara pelanggan dan admin toko"
+    }
+  }
+}
