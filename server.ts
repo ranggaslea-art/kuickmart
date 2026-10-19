@@ -3948,6 +3948,24 @@ async function startServer() {
     return res.sendFile(path.join(process.cwd(), 'public', 'icon.svg'));
   });
 
+  // 3. Android Digital Asset Links for PWABuilder / Bubblewrap / TWA
+  app.get(['/.well-known/assetlinks.json', '/.well-known/assetlinks'], (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.json([
+      {
+        relation: ['delegate_permission/common.handle_all_urls'],
+        target: {
+          namespace: 'android_app',
+          package_name: 'com.lapakoke.kuickmart',
+          sha256_cert_fingerprints: [
+            '14:6D:E9:7F:0F:72:0E:17:F7:7A:F4:60:E4:C7:E2:B0:9C:36:9C:43:08:C1:F2:1E:05:37:A6:49:15:2B:A3:99'
+          ]
+        }
+      }
+    ]);
+  });
+
   // Vite middleware for development or static serving for production
   const candidateDistPaths = [
     path.join(process.cwd(), 'dist'),
