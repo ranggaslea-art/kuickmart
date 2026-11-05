@@ -1354,83 +1354,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     }
   };
 
-  // Quick Instant Login for seamless access / demo switching
-  const handleQuickLogin = (targetUsername: string, fallbackPin?: string) => {
-    setLoginError(null);
-    const cleanInputUser = targetUsername.trim().toLowerCase();
-
-    // 1. Cek di data staffUsers
-    const staffMatch = (staffUsers || []).find(
-      u => (u?.username || '').toLowerCase() === cleanInputUser
-    );
-    const defaultMatch = DEFAULT_ACCOUNTS.find(
-      acc => (acc?.username || '').toLowerCase() === cleanInputUser
-    );
-
-    const matchedAccount = staffMatch || defaultMatch;
-
-    if (matchedAccount) {
-      if (staffMatch && !staffMatch.isActive) {
-        // Auto-reactivate on explicit quick login
-        setStaffUsers(prev => prev.map(u => u.id === staffMatch.id ? { ...u, isActive: true } : u));
-      }
-
-      const nowStr = new Intl.DateTimeFormat('id-ID', { 
-        day: '2-digit', 
-        month: 'short', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date());
-
-      if (staffMatch) {
-        setStaffUsers(prev => prev.map(u => 
-          u.id === staffMatch.id ? { ...u, lastLogin: `${nowStr} WIB`, isActive: true } : u
-        ));
-      }
-
-      const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role as keyof typeof DEFAULT_ROLE_PERMISSIONS] || DEFAULT_ROLE_PERMISSIONS.admin;
-
-      const authUser: AdminUser = {
-        username: matchedAccount.username,
-        role: matchedAccount.role,
-        name: matchedAccount.name,
-        permissions: userPerms,
-      };
-
-      setCurrentUser(authUser);
-      setLoginError(null);
-      setInputUsername('');
-      setInputPin('');
-
-      // Auto-redirect if current activeTab is not permitted to view
-      const effPerms = getEffectivePermissions(matchedAccount.role, userPerms);
-      const currentModule = activeTab as SystemModuleKey;
-      if (!effPerms[currentModule]?.canView) {
-        const orderPriority: SystemModuleKey[] = ['products', 'orders', 'promos', 'couriers', 'receipts', 'stores', 'vouchers', 'users', 'brand_info', 'bulk_import'];
-        const firstViewable = orderPriority.find(k => effPerms[k]?.canView) || 'products';
-        setActiveTab(firstViewable as any);
-      }
-    } else {
-      setLoginError(`Akun "${targetUsername}" tidak ditemukan. Silakan reset ke akun bawaan.`);
-    }
-  };
-
-  const handleResetStaffToDefaults = () => {
-    if (window.confirm('Reset semua akun staff dan password ke konfigurasi bawaan (Admin: admin123, SPV: spv2026, Kasir: 1234, Gudang: gudang2026)?')) {
-      setStaffUsers(INITIAL_STAFF_USERS);
-      try {
-        localStorage.setItem('toko_online_staff_users', JSON.stringify(INITIAL_STAFF_USERS));
-        localStorage.setItem('kuickmart_staff_users', JSON.stringify(INITIAL_STAFF_USERS));
-      } catch {}
-      setLoginError(null);
-      setInputUsername('admin');
-      setInputPin('admin123');
-      setUserFeedback('Data akun staff berhasil direset ke pengaturan default.');
-      setTimeout(() => setUserFeedback(null), 3500);
-    }
-  };
-
   // Stats calculation
   const totalRevenue = (orders || []).reduce((sum, o) => sum + (o.status !== 'cancelled' ? (o.total || 0) : 0), 0);
   const totalProducts = (products || []).length;
@@ -2238,21 +2161,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           {/* Form Login (Clean tanpa label akun bawaan) */}
           <form onSubmit={handleLogin} className="p-6 space-y-4">
             {loginError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl space-y-2 text-xs text-red-700">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                  <span>{loginError}</span>
-                </div>
-                <div className="pt-1 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleResetStaffToDefaults}
-                    className="text-[11px] font-bold text-red-800 hover:text-red-950 underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset Data Akun Staff ke Bawaan (Admin: admin123)</span>
-                  </button>
-                </div>
+              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2 text-xs text-red-700">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                <span>{loginError}</span>
               </div>
             )}
 
@@ -2305,104 +2216,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <Lock className="w-4 h-4 text-amber-300" />
               <span>Masuk ke Panel Admin</span>
             </button>
-
-            {/* Quick Demo Switcher for Testing Role Permissions */}
-            <div className="pt-3 border-t border-stone-100">
-              <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span>Pilih Akun & Masuk Langsung (1-Klik):</span>
-                <span className="text-[9px] text-emerald-600 font-extrabold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                  ⚡ Auto-Login
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5 text-left">
-                {(() => {
-                  const getPin = (uname: string, defPin: string) => {
-                    const u = (staffUsers || []).find(item => (item?.username || '').toLowerCase() === uname.toLowerCase());
-                    return u?.pin || defPin;
-                  };
-                  const isCustom = (uname: string, defPin: string) => {
-                    const u = (staffUsers || []).find(item => (item?.username || '').toLowerCase() === uname.toLowerCase());
-                    return Boolean(u && u.pin !== defPin);
-                  };
-
-                  return (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin('admin', getPin('admin', 'admin123'))}
-                        className="p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
-                        title="Klik untuk langsung masuk sebagai Store Manager (Admin)"
-                      >
-                        <div className="font-bold text-amber-900 flex items-center justify-between w-full">
-                          <span className="flex items-center gap-1">
-                            <span>👑 Admin</span>
-                            <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded font-mono">admin</span>
-                          </span>
-                          <span className="text-[8px] bg-amber-200/80 text-amber-900 font-extrabold px-1 rounded">
-                            Masuk ➔
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-amber-700 mt-0.5">Akses Penuh Semua Modul</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin('spv', getPin('spv', 'spv2026'))}
-                        className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
-                        title="Klik untuk langsung masuk sebagai Supervisor Toko"
-                      >
-                        <div className="font-bold text-blue-900 flex items-center justify-between w-full">
-                          <span className="flex items-center gap-1">
-                            <span>👔 Supervisor</span>
-                            <span className="text-[9px] bg-blue-200 text-blue-800 px-1 rounded font-mono">spv</span>
-                          </span>
-                          <span className="text-[8px] bg-blue-200/80 text-blue-900 font-extrabold px-1 rounded">
-                            Masuk ➔
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-blue-700 mt-0.5">Katalog & Cabang Toko</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin('kasir', getPin('kasir', '1234'))}
-                        className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
-                        title="Klik untuk langsung masuk sebagai Kasir Toko"
-                      >
-                        <div className="font-bold text-emerald-900 flex items-center justify-between w-full">
-                          <span className="flex items-center gap-1">
-                            <span>💳 Kasir</span>
-                            <span className="text-[9px] bg-emerald-200 text-emerald-800 px-1 rounded font-mono">kasir</span>
-                          </span>
-                          <span className="text-[8px] bg-emerald-200/80 text-emerald-900 font-extrabold px-1 rounded">
-                            Masuk ➔
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-emerald-700 mt-0.5">Penjualan & Pesanan POS</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin('gudang', getPin('gudang', 'gudang2026'))}
-                        className="p-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-300 text-[11px] transition-all flex flex-col text-left group active:scale-98 cursor-pointer shadow-2xs"
-                        title="Klik untuk langsung masuk sebagai Staff Gudang"
-                      >
-                        <div className="font-bold text-orange-900 flex items-center justify-between w-full">
-                          <span className="flex items-center gap-1">
-                            <span>📦 Gudang</span>
-                            <span className="text-[9px] bg-orange-200 text-orange-800 px-1 rounded font-mono">gudang</span>
-                          </span>
-                          <span className="text-[8px] bg-orange-200/80 text-orange-900 font-extrabold px-1 rounded">
-                            Masuk ➔
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-orange-700 mt-0.5">Stok & Katalog Produk</span>
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
 
             {/* Tombol Tutup & Kembali ke Toko Belanja */}
             <div className="pt-2 border-t border-stone-100">
@@ -2466,13 +2279,6 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
-            onClick={() => handleQuickLogin('admin', 'admin123')}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>👑 Beralih ke Akun Store Manager (Admin)</span>
-          </button>
-          <button
-            type="button"
             onClick={() => {
               setCurrentUser(null);
               setInputUsername('');
@@ -2481,7 +2287,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
             }}
             className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
-            Ganti Akun Lain
+            Login dengan Akun Lain
           </button>
         </div>
       </div>

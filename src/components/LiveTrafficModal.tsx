@@ -314,56 +314,6 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
     setLoginError('ID Pengguna atau Password/PIN salah. Silakan coba kembali.');
   };
 
-  const handleQuickLogin = (user: string, defaultPin: string) => {
-    const matchedStaff = (staffUsers || []).find(u => (u?.username || '').toLowerCase() === user.toLowerCase());
-    const effectivePin = matchedStaff ? matchedStaff.pin : defaultPin;
-
-    setUsernameInput(user);
-    setPinInput(effectivePin);
-    setLoginError(null);
-    setTimeout(() => {
-      if (matchedStaff) {
-        if (!matchedStaff.isActive) {
-          setLoginError('Akun ini sedang dinonaktifkan oleh Administrator Toko.');
-          return;
-        }
-        setCurrentUser(matchedStaff);
-        try {
-          localStorage.setItem('toko_online_traffic_auth', JSON.stringify(matchedStaff));
-          window.dispatchEvent(new Event('storage'));
-        } catch {}
-        setUsernameInput('');
-        setPinInput('');
-        setLoginError(null);
-        fetchLiveStats();
-        return;
-      }
-
-      const defaultMatch = DEFAULT_ACCOUNTS.find(
-        u => (u?.username || '').toLowerCase() === user.toLowerCase() && String(u.pin).trim() === effectivePin
-      );
-      if (defaultMatch) {
-        const userObj = {
-          id: `usr_${defaultMatch.username}`,
-          username: defaultMatch.username,
-          name: defaultMatch.name,
-          role: defaultMatch.role,
-          pin: defaultMatch.pin,
-          isActive: true,
-          createdAt: '01 Jan 2026',
-        };
-        setCurrentUser(userObj);
-        try {
-          localStorage.setItem('toko_online_traffic_auth', JSON.stringify(userObj));
-          window.dispatchEvent(new Event('storage'));
-        } catch {}
-        setUsernameInput('');
-        setPinInput('');
-        setLoginError(null);
-        fetchLiveStats();
-      }
-    }, 50);
-  };
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -495,36 +445,6 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
                 <LogIn className="w-4 h-4" />
                 <span>Masuk & Buka Halaman Live Traffic</span>
               </button>
-
-              {/* Quick Login Test Credentials */}
-              <div className="pt-4 border-t border-stone-200">
-                <p className="text-[11px] font-bold text-stone-500 mb-2">
-                  Pilih Akun Cepat untuk Masuk:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('admin', 'admin123')}
-                    className="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-amber-100 border border-stone-200 hover:border-amber-300 text-stone-800 text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    👑 Admin (admin)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('kasir', '1234')}
-                    className="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-blue-100 border border-stone-200 hover:border-blue-300 text-stone-800 text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    🛒 Kasir (kasir)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('spv', 'spv2026')}
-                    className="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-purple-100 border border-stone-200 hover:border-purple-300 text-stone-800 text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    👔 SPV (spv)
-                  </button>
-                </div>
-              </div>
             </form>
           </div>
         ) : (
