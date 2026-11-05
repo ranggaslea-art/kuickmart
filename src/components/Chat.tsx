@@ -272,13 +272,27 @@ export const Chat: React.FC<ChatProps> = ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setAllStoreMessages(parsed);
+          const sanitized = parsed.map((m: ChatMessage) => {
+            const isSelf = m.customerVisitorId === visitorId;
+            const realCustName = isSelf && member?.isRegistered && member?.name 
+              ? member.name.trim() 
+              : (m.customerName && m.customerName !== 'Budi Pratama' ? m.customerName : customerDisplayName);
+            const realSenderName = m.senderRole === 'customer'
+              ? (isSelf && member?.isRegistered && member?.name ? member.name.trim() : (m.senderName && m.senderName !== 'Budi Pratama' ? m.senderName : realCustName))
+              : m.senderName;
+            return {
+              ...m,
+              customerName: realCustName,
+              senderName: realSenderName
+            };
+          });
+          setAllStoreMessages(sanitized);
         }
       }
     } catch {
       // Ignore parse error
     }
-  }, [customerStorageKey]);
+  }, [customerStorageKey, visitorId, member, customerDisplayName]);
 
   // 2. Real-time Firestore sync via onSnapshot
   useEffect(() => {
@@ -304,14 +318,42 @@ export const Chat: React.FC<ChatProps> = ({
                                  (effectiveStoreId === 'default' && (!msgStoreId || msgStoreId === 'default'));
 
             if (matchesStore) {
+              const rawCustName = (data.customerName || '').trim();
+              const rawSenderName = (data.senderName || '').trim();
+              const isCustRole = (data.senderRole || 'customer') === 'customer';
+              const isSelf = data.customerVisitorId === visitorId;
+
+              // Priority: If message belongs to the signed-in user on this device, use registered name
+              let cleanCustName = rawCustName;
+              if (isSelf && member?.isRegistered && member?.name) {
+                cleanCustName = member.name.trim();
+              } else if (cleanCustName === 'Budi Pratama' || !cleanCustName) {
+                if (rawSenderName && rawSenderName !== 'Budi Pratama') {
+                  cleanCustName = rawSenderName;
+                } else if (isSelf && customerDisplayName !== 'Budi Pratama') {
+                  cleanCustName = customerDisplayName;
+                } else {
+                  cleanCustName = `Pelanggan #${(data.customerVisitorId || '0000').slice(-4)}`;
+                }
+              }
+
+              let cleanSenderName = rawSenderName;
+              if (isCustRole) {
+                if (isSelf && member?.isRegistered && member?.name) {
+                  cleanSenderName = member.name.trim();
+                } else if (cleanSenderName === 'Budi Pratama' || !cleanSenderName) {
+                  cleanSenderName = cleanCustName;
+                }
+              }
+
               incoming.push({
                 id: docSnap.id,
                 storeId: data.storeId || effectiveStoreId,
                 storeName: data.storeName || effectiveStoreName,
                 customerVisitorId: data.customerVisitorId || 'unknown',
-                customerName: data.customerName || 'Pelanggan',
+                customerName: cleanCustName,
                 senderRole: data.senderRole || 'customer',
-                senderName: data.senderName || 'Pengguna',
+                senderName: cleanSenderName || 'Pengguna',
                 text: data.text || '',
                 createdAt: typeof data.createdAt?.toMillis === 'function' 
                   ? data.createdAt.toMillis() 
@@ -355,7 +397,7 @@ export const Chat: React.FC<ChatProps> = ({
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [effectiveStoreId, visitorId, activeRole, effectiveStoreName, customerStorageKey]);
+  }, [effectiveStoreId, visitorId, activeRole, effectiveStoreName, customerStorageKey, member, customerDisplayName]);
 
   // 3. Group messages into conversations for Admin Mode
   const conversations: CustomerConversation[] = useMemo(() => {
@@ -375,13 +417,43 @@ export const Chat: React.FC<ChatProps> = ({
     groupMap.forEach((msgs, cId) => {
       const sorted = [...msgs].sort((a, b) => a.createdAt - b.createdAt);
       const lastMsg = sorted[sorted.length - 1];
-      const customerMsg = sorted.find(m => m.senderRole === 'customer');
-      const name = customerMsg?.customerName || lastMsg?.customerName || `Pelanggan #${cId.slice(-4)}`;
+
+      // Resolve unified customer name:
+      let resolvedName = '';
+      if (cId === visitorId && member?.isRegistered && member?.name) {
+        resolvedName = member.name.trim();
+      } else {
+        // Look backwards from the newest message to get the real customer name (ignoring mock/legacy strings)
+        for (let i = sorted.length - 1; i >= 0; i--) {
+          const item = sorted[i];
+          const cand = (item.senderRole === 'customer' ? item.senderName : '') || item.customerName || '';
+          const trimmedCand = cand.trim();
+          if (
+            trimmedCand &&
+            trimmedCand.toLowerCase() !== 'budi pratama' &&
+            trimmedCand.toLowerCase() !== 'pelanggan' &&
+            trimmedCand.toLowerCase() !== 'pelanggan tamu' &&
+            trimmedCand.toLowerCase() !== 'pelanggan lapakoke'
+          ) {
+            resolvedName = trimmedCand;
+            break;
+          }
+        }
+      }
+
+      if (!resolvedName) {
+        if (cId === visitorId) {
+          resolvedName = customerDisplayName;
+        } else {
+          resolvedName = `Pelanggan #${cId.slice(-4)}`;
+        }
+      }
+
       const unreadCount = sorted.filter(m => m.senderRole === 'customer' && !m.read).length;
 
       list.push({
         customerVisitorId: cId,
-        customerName: name,
+        customerName: resolvedName,
         lastMessageText: lastMsg.text,
         lastMessageTime: lastMsg.createdAt,
         unreadCount,
@@ -392,7 +464,7 @@ export const Chat: React.FC<ChatProps> = ({
     // Sort by latest message descending
     list.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
     return list;
-  }, [allStoreMessages]);
+  }, [allStoreMessages, visitorId, member, customerDisplayName]);
 
   // 4. Auto-select customer in Admin Mode if none selected yet
   useEffect(() => {
@@ -487,9 +559,16 @@ export const Chat: React.FC<ChatProps> = ({
 
     // Find recipient customer name
     const activeConv = conversations.find(c => c.customerVisitorId === targetCustomerVisitorId);
-    const targetCustomerName = activeRole === 'admin'
-      ? (activeConv?.customerName || (targetCustomerVisitorId === visitorId ? customerDisplayName : `Pelanggan #${targetCustomerVisitorId.slice(-4)}`))
-      : customerDisplayName;
+    let targetCustomerName = '';
+    if (targetCustomerVisitorId === visitorId && member?.isRegistered && member?.name) {
+      targetCustomerName = member.name.trim();
+    } else if (activeConv?.customerName && activeConv.customerName.toLowerCase() !== 'budi pratama') {
+      targetCustomerName = activeConv.customerName;
+    } else if (targetCustomerVisitorId === visitorId) {
+      targetCustomerName = customerDisplayName;
+    } else {
+      targetCustomerName = `Pelanggan #${targetCustomerVisitorId.slice(-4)}`;
+    }
 
     const adminSenderDisplayName = authenticatedStaffUser?.name 
       ? `${authenticatedStaffUser.name} (Admin)`
@@ -550,15 +629,22 @@ export const Chat: React.FC<ChatProps> = ({
   // Selected customer info for admin header
   const activeConversation = useMemo(() => {
     if (!selectedCustomerId) return null;
-    return conversations.find(c => c.customerVisitorId === selectedCustomerId) || {
+    const found = conversations.find(c => c.customerVisitorId === selectedCustomerId);
+    if (found) return found;
+
+    const fallbackName = selectedCustomerId === visitorId 
+      ? (member?.isRegistered && member?.name ? member.name.trim() : `${customerDisplayName} (Sesi Anda)`) 
+      : `Pelanggan #${selectedCustomerId.slice(-4)}`;
+
+    return {
       customerVisitorId: selectedCustomerId,
-      customerName: selectedCustomerId === visitorId ? `${customerDisplayName} (Sesi Anda)` : `Pelanggan #${selectedCustomerId.slice(-4)}`,
+      customerName: fallbackName,
       lastMessageText: '',
       lastMessageTime: Date.now(),
       unreadCount: 0,
       messages: []
     };
-  }, [conversations, selectedCustomerId, visitorId, customerDisplayName]);
+  }, [conversations, selectedCustomerId, visitorId, customerDisplayName, member]);
 
   // Filter conversations for admin search
   const filteredConversations = useMemo(() => {
@@ -911,7 +997,24 @@ export const Chat: React.FC<ChatProps> = ({
                     <span className="text-[10px] font-semibold text-stone-500 mb-0.5 px-1.5 flex items-center gap-1">
                       {isAdminMessage && <ShieldCheck className="w-3 h-3 text-blue-600 shrink-0" />}
                       {!isAdminMessage && <UserIcon className="w-3 h-3 text-emerald-600 shrink-0" />}
-                      <span>{msg.senderName}</span>
+                      <span>
+                        {(() => {
+                          if (isAdminMessage) {
+                            return msg.senderName;
+                          }
+                          // Unified customer display:
+                          if (activeRole === 'customer') {
+                            return isUserSender ? customerDisplayName : msg.senderName;
+                          }
+                          // Admin mode viewing customer thread:
+                          // Prefer active conversation customerName or cleaned senderName, never Budi Pratama
+                          const resolvedCustomerName = activeConversation?.customerName || customerDisplayName;
+                          if (msg.senderName.toLowerCase() === 'budi pratama' || !msg.senderName) {
+                            return resolvedCustomerName;
+                          }
+                          return msg.senderName;
+                        })()}
+                      </span>
                     </span>
 
                     <div className="flex items-end gap-1.5 max-w-[85%]">
