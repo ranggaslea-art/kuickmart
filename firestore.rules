@@ -12,6 +12,10 @@ service cloud.firestore {
         allow read, write: if true;
       }
     }
+    // Akun Pelanggan / Member LapakOke
+    match /customer_accounts/{customerId} {
+      allow read, write: if true;
+    }
     // Connection test document
     match /test/{docId} {
       allow read, write: if true;

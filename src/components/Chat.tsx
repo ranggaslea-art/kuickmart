@@ -40,6 +40,7 @@ interface ChatProps {
   member?: MemberProfile;
   visitorId: string;
   onUnreadChange?: (unreadCount: number) => void;
+  onOpenCustomerAuth?: (mode?: 'signin' | 'signup') => void;
 }
 
 export interface CustomerConversation {
@@ -109,7 +110,8 @@ export const Chat: React.FC<ChatProps> = ({
   currentSlug,
   member,
   visitorId,
-  onUnreadChange
+  onUnreadChange,
+  onOpenCustomerAuth
 }) => {
   const [allStoreMessages, setAllStoreMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -126,7 +128,13 @@ export const Chat: React.FC<ChatProps> = ({
 
   const effectiveStoreId = normalizeStoreId(currentSlug, currentStore);
   const effectiveStoreName = currentStore.name || 'Toko LapakOke';
-  const customerDisplayName = member?.name?.trim() || 'Pelanggan LapakOke';
+  
+  // Use registered member name if signed in, otherwise use clean visitor handle
+  const customerDisplayName = member?.isRegistered && member?.name
+    ? member.name.trim()
+    : (member?.name && member.name !== 'Pelanggan Tamu' && member.name !== 'Budi Pratama' 
+        ? member.name.trim() 
+        : `Pelanggan #${visitorId.slice(-4)}`);
 
   const customerStorageKey = `lapakoke_chat_customer_${effectiveStoreId}_${visitorId}`;
 
@@ -534,6 +542,34 @@ export const Chat: React.FC<ChatProps> = ({
             </button>
           </div>
         </div>
+
+        {/* CUSTOMER SUB-HEADER: Account status or Sign-in prompt */}
+        {activeRole === 'customer' && (
+          member?.isRegistered ? (
+            <div className="bg-emerald-50 border-b border-emerald-200/80 px-3 py-1.5 flex items-center justify-between text-[11px] text-emerald-950 shrink-0">
+              <span className="flex items-center gap-1.5 font-bold truncate">
+                <CheckCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">Tercatat: <strong>{customerDisplayName}</strong> (Member {member.tier})</span>
+              </span>
+              <span className="text-[10px] text-emerald-700 font-black shrink-0 ml-2">{member.points.toLocaleString('id-ID')} Poin</span>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border-b border-amber-200/80 px-3 py-1.5 flex items-center justify-between text-[11px] text-amber-950 shrink-0">
+              <span className="text-[10px] text-amber-900 truncate">
+                Tamu: <strong>{customerDisplayName}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenCustomerAuth) onOpenCustomerAuth('signin');
+                }}
+                className="text-[10px] font-black text-blue-700 hover:text-blue-900 underline shrink-0 cursor-pointer ml-2"
+              >
+                Masuk / Daftar Akun →
+              </button>
+            </div>
+          )
+        )}
 
         {/* ADMIN SUB-HEADER: Conversation selector & tabs */}
         {activeRole === 'admin' && (

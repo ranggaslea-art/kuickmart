@@ -31,6 +31,9 @@ import {
   MemberCardModal 
 } from './components/MemberCardModal';
 import { 
+  CustomerAuthModal 
+} from './components/CustomerAuthModal';
+import { 
   StoreSelectorModal 
 } from './components/StoreSelectorModal';
 import { 
@@ -87,6 +90,7 @@ import {
   VOUCHERS, 
   INITIAL_ADDRESSES, 
   INITIAL_MEMBER,
+  GUEST_MEMBER,
   INITIAL_RECEIPT_CONFIGS,
   INITIAL_STORE_PROMOS,
   INITIAL_COURIERS,
@@ -345,17 +349,28 @@ export default function App() {
   const [currentAddress, setCurrentAddress] = useState<Address>(INITIAL_ADDRESSES[0]);
   const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
 
-  // Member & Loyalty
+  // Member & Loyalty (Guest by default until customer signs in or registers)
   const [member, setMember] = useState<MemberProfile>(() => {
     try {
+      // 1. Check active customer session first
+      const globalSession = localStorage.getItem('lapakoke_customer_session');
+      if (globalSession) {
+        const parsed = JSON.parse(globalSession);
+        if (parsed && typeof parsed === 'object' && parsed.id && parsed.name && parsed.name !== 'Budi Pratama') {
+          return parsed;
+        }
+      }
+      // 2. Check tenant storage
       const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
       const saved = localStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object' && parsed.id && parsed.isRegistered && parsed.name !== 'Budi Pratama') {
+          return parsed;
+        }
       }
     } catch {}
-    return INITIAL_MEMBER;
+    return GUEST_MEMBER;
   });
 
   // Cart State
@@ -422,6 +437,37 @@ export default function App() {
   const [isLiveTrafficModalOpen, setIsLiveTrafficModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  // Customer Authentication Modal State
+  const [isCustomerAuthOpen, setIsCustomerAuthOpen] = useState(false);
+  const [customerAuthInitialMode, setCustomerAuthInitialMode] = useState<'signin' | 'signup'>('signin');
+
+  const handleOpenCustomerAuth = (mode: 'signin' | 'signup' = 'signin') => {
+    setCustomerAuthInitialMode(mode);
+    setIsCustomerAuthOpen(true);
+  };
+
+  const handleCustomerAuthSuccess = (authenticatedMember: MemberProfile) => {
+    setMember(authenticatedMember);
+    localStorage.setItem('lapakoke_customer_session', JSON.stringify(authenticatedMember));
+    const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(authenticatedMember));
+    if (authenticatedMember.address || authenticatedMember.name) {
+      setCurrentAddress(prev => ({
+        ...prev,
+        recipientName: authenticatedMember.name || prev.recipientName,
+        phone: authenticatedMember.phone || prev.phone,
+        fullAddress: authenticatedMember.address || prev.fullAddress
+      }));
+    }
+  };
+
+  const handleCustomerLogout = () => {
+    localStorage.removeItem('lapakoke_customer_session');
+    const key = getTenantStorageKey(STORAGE_MEMBER_KEY, currentSlug);
+    localStorage.removeItem(key);
+    setMember(GUEST_MEMBER);
+  };
 
   // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
@@ -1767,6 +1813,7 @@ export default function App() {
         onOpenStoreSelector={() => setIsStoreSelectorOpen(true)}
         member={member}
         onOpenMemberModal={() => setIsMemberModalOpen(true)}
+        onOpenCustomerAuth={handleOpenCustomerAuth}
         cartItems={cartItems}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenDatabaseManager={() => {
@@ -2354,6 +2401,7 @@ export default function App() {
         onOrderCreated={handleOrderCreated}
         couriers={couriers}
         visitorId={visitorId}
+        onOpenCustomerAuth={handleOpenCustomerAuth}
       />
 
       {/* 4. Live Order Tracker Modal */}
@@ -2380,6 +2428,17 @@ export default function App() {
         member={member}
         vouchers={vouchers}
         onClaimVoucher={handleClaimVoucher}
+        onOpenAuth={handleOpenCustomerAuth}
+        onLogout={handleCustomerLogout}
+      />
+
+      {/* 5b. Customer Sign In & Sign Up Modal */}
+      <CustomerAuthModal
+        isOpen={isCustomerAuthOpen}
+        onClose={() => setIsCustomerAuthOpen(false)}
+        onSuccess={handleCustomerAuthSuccess}
+        initialMode={customerAuthInitialMode}
+        storeName={currentStore.name}
       />
 
       {/* 6. Store Selector Modal */}
@@ -2460,6 +2519,7 @@ export default function App() {
         member={member}
         visitorId={visitorId}
         onUnreadChange={setUnreadChatCount}
+        onOpenCustomerAuth={handleOpenCustomerAuth}
       />
 
       {/* Floating Action Button (FAB) on Main Layout - Toggles Chat Window & Dynamic Icon State */}

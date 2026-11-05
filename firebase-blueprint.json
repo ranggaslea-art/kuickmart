@@ -48,12 +48,81 @@
         }
       },
       "required": ["storeId", "customerVisitorId", "senderRole", "text", "createdAt"]
+    },
+    "CustomerAccount": {
+      "title": "CustomerAccount",
+      "description": "Akun data member / pelanggan toko LapakOke",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik pelanggan"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nama lengkap pelanggan"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Nomor WhatsApp atau handphone pelanggan"
+        },
+        "email": {
+          "type": "string",
+          "description": "Alamat email pelanggan"
+        },
+        "pin": {
+          "type": "string",
+          "description": "PIN atau password login pelanggan"
+        },
+        "memberNumber": {
+          "type": "string",
+          "description": "Nomor kartu member loyalitas"
+        },
+        "barcode": {
+          "type": "string",
+          "description": "Kode barcode kartu member"
+        },
+        "points": {
+          "type": "number",
+          "description": "Saldo poin loyalitas"
+        },
+        "stamps": {
+          "type": "number",
+          "description": "Jumlah stamp belanja"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["Bronze", "Silver", "Gold", "Platinum"],
+          "description": "Tier keanggotaan"
+        },
+        "address": {
+          "type": "string",
+          "description": "Alamat utama pelanggan"
+        },
+        "city": {
+          "type": "string",
+          "description": "Kota tempat tinggal pelanggan"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Waktu pendaftaran akun"
+        },
+        "lastLogin": {
+          "type": "string",
+          "description": "Waktu terakhir login"
+        }
+      },
+      "required": ["id", "name", "phone", "memberNumber"]
     }
   },
   "firestore": {
     "/chat_messages/{messageId}": {
       "schema": "ChatMessage",
       "description": "Koleksi seluruh pesan chat real-time antara pelanggan dan admin toko"
+    },
+    "/customer_accounts/{customerId}": {
+      "schema": "CustomerAccount",
+      "description": "Koleksi data pendaftaran dan profil akun pelanggan / member"
     }
   }
 }

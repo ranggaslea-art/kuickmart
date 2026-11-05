@@ -22,6 +22,7 @@ import {
   RotateCcw,
   Lock,
   MessageSquare,
+  LogIn,
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { PromoNavigationTarget } from './HeroBanner';
@@ -38,6 +39,7 @@ interface HeaderProps {
   onOpenStoreSelector: () => void;
   member: MemberProfile;
   onOpenMemberModal: () => void;
+  onOpenCustomerAuth?: (mode?: 'signin' | 'signup') => void;
   cartItems: CartItem[];
   onOpenCart: () => void;
   onOpenAdminPanel: () => void;
@@ -71,6 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenStoreSelector,
   member,
   onOpenMemberModal,
+  onOpenCustomerAuth,
   cartItems,
   onOpenCart,
   onOpenDatabaseManager,
@@ -401,18 +404,32 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden md:inline">Admin Toko</span>
             </button>
 
-            {/* Member Card Button */}
-            <button
-              onClick={onOpenMemberModal}
-              title={`Member ${member.tier} - ${member.points.toLocaleString('id-ID')} Poin`}
-              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
-            >
-              <QrCode className="w-4 h-4 text-amber-700 shrink-0" />
-              <div className="text-left hidden 2xl:block leading-tight">
-                <div className="text-[10px] font-bold uppercase text-amber-700 tracking-wider">Member {member.tier}</div>
-                <div className="text-xs font-black text-amber-950">{member.points.toLocaleString('id-ID')} Poin</div>
-              </div>
-            </button>
+            {/* Member Card / Customer Auth Button */}
+            {member.isRegistered ? (
+              <button
+                onClick={onOpenMemberModal}
+                title={`Member ${member.tier} - ${member.points.toLocaleString('id-ID')} Poin (${member.name})`}
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
+              >
+                <QrCode className="w-4 h-4 text-amber-700 shrink-0" />
+                <div className="text-left hidden 2xl:block leading-tight">
+                  <div className="text-[10px] font-bold uppercase text-amber-700 tracking-wider">Member {member.tier}</div>
+                  <div className="text-xs font-black text-amber-950 truncate max-w-[100px]">{member.name}</div>
+                </div>
+              </button>
+            ) : (
+              <button
+                onClick={() => (onOpenCustomerAuth ? onOpenCustomerAuth('signin') : onOpenMemberModal())}
+                title="Masuk atau Daftar Akun Member untuk Poin Belanja & Diskon"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer active:scale-95"
+              >
+                <LogIn className="w-4 h-4 text-stone-950 shrink-0" />
+                <div className="text-left hidden sm:block leading-tight">
+                  <div className="text-[9px] uppercase font-black tracking-wide text-amber-950">Masuk / Daftar</div>
+                  <div className="text-[11px] font-extrabold text-stone-950">Member & Poin</div>
+                </div>
+              </button>
+            )}
 
             {/* Order History (Pesanan) - Selalu Tampil & Prioritas Utama */}
             <button

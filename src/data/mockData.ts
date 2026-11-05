@@ -424,41 +424,35 @@ export const INITIAL_STAFF_USERS: StaffUser[] = [
   },
 ];
 
-export const INITIAL_MEMBER: MemberProfile = {
-  id: 'usr_001',
-  name: 'Budi Pratama',
-  phone: '0812-3456-7890',
-  email: 'budi.pratama@email.com',
-  memberNumber: '9988 2024 7712',
-  barcode: '998820247712',
-  points: 12500,
-  stamps: 4,
-  tier: 'Gold',
-  joinedDate: 'Januari 2024',
+export const GUEST_MEMBER: MemberProfile = {
+  id: 'guest',
+  name: 'Pelanggan Tamu',
+  phone: '',
+  email: '',
+  memberNumber: '-',
+  barcode: '',
+  points: 0,
+  stamps: 0,
+  tier: 'Bronze',
+  joinedDate: 'Tamu',
+  isRegistered: false,
 };
+
+export const INITIAL_MEMBER: MemberProfile = GUEST_MEMBER;
 
 export const INITIAL_ADDRESSES: Address[] = [
   {
     id: 'addr_1',
-    label: 'Rumah (Utama)',
-    recipientName: 'Budi Pratama',
-    phone: '0812-3456-7890',
-    fullAddress: 'Jl. Sudirman Indah No. 42, RT 03 / RW 05, Menteng',
-    city: '',
-    detailNote: 'Pagar hitam, samping pos satpam',
+    label: 'Alamat Pengiriman',
+    recipientName: '',
+    phone: '',
+    fullAddress: 'Jl. Sudirman Indah No. 42, Menteng',
+    city: 'Jakarta Pusat',
+    detailNote: 'Dekat pos satpam',
     isDefault: true,
   },
-  {
-    id: 'addr_2',
-    label: 'Kantor',
-    recipientName: 'Budi Pratama',
-    phone: '0812-3456-7890',
-    fullAddress: 'Gedung Menara Mandiri Lt. 15, Jl. Jendral Sudirman Kav. 54',
-    city: '',
-    detailNote: 'Titipkan di resepsionis lobi utama',
-    isDefault: false,
-  },
 ];
+
 
 export const INITIAL_STORES: Store[] = [
   {

@@ -57,6 +57,7 @@ interface CheckoutModalProps {
   onOrderCreated: (order: Order) => void;
   couriers?: CourierInfo[];
   visitorId?: string;
+  onOpenCustomerAuth?: (mode?: 'signin' | 'signup') => void;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -75,6 +76,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOrderCreated,
   couriers,
   visitorId,
+  onOpenCustomerAuth,
 }) => {
   const [deliverySlot, setDeliverySlot] = useState('Instan 30 Menit');
   const [pickupSlot, setPickupSlot] = useState('15 Menit Lagi (Siap Ambil)');
@@ -282,13 +284,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const total = Math.max(0, subtotal + deliveryFee - voucherDiscount - pointsDeduction);
   const pointsEarned = Math.round(subtotal * 0.01);
 
+  const customerPhoneRaw = (member?.phone || currentAddress?.phone || '081234567890').replace(/\D/g, '') || '081234567890';
   // Virtual Account Numbers (connected to DOKU Jokul Direct API with fallback)
   const vaNumbers: Record<string, string> = {
-    bca_va: dokuPaymentData?.bank === 'bca' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '80777 ' + member.phone.replace(/\D/g, ''),
-    mandiri_va: dokuPaymentData?.bank === 'mandiri' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '89508 ' + member.phone.replace(/\D/g, ''),
-    bri_va: dokuPaymentData?.bank === 'bri' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '12800 ' + member.phone.replace(/\D/g, ''),
-    bni_va: dokuPaymentData?.bank === 'bni' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '8214 ' + member.phone.replace(/\D/g, ''),
-    permata_va: dokuPaymentData?.bank === 'permata' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '8470 ' + member.phone.replace(/\D/g, ''),
+    bca_va: dokuPaymentData?.bank === 'bca' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '80777 ' + customerPhoneRaw,
+    mandiri_va: dokuPaymentData?.bank === 'mandiri' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '89508 ' + customerPhoneRaw,
+    bri_va: dokuPaymentData?.bank === 'bri' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '12800 ' + customerPhoneRaw,
+    bni_va: dokuPaymentData?.bank === 'bni' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '8214 ' + customerPhoneRaw,
+    permata_va: dokuPaymentData?.bank === 'permata' && dokuPaymentData.vaNumber ? dokuPaymentData.vaNumber : '8470 ' + customerPhoneRaw,
   };
 
   useEffect(() => {
@@ -425,9 +428,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryType: effectiveDeliveryType,
         deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
         pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
-        customerId: member?.id || visitorId,
-        customerName: currentAddress?.recipientName || member?.name || 'Pelanggan',
-        customerPhone: currentAddress?.phone || member?.phone || '',
+        customerId: member?.isRegistered ? member.id : (visitorId || 'guest'),
+        customerName: member?.isRegistered ? member.name : (currentAddress?.recipientName || 'Pelanggan Tamu'),
+        customerPhone: member?.isRegistered ? member.phone : (currentAddress?.phone || ''),
         deviceSessionId: visitorId,
         address: effectiveDeliveryType === 'delivery' ? {
           ...currentAddress,
@@ -577,6 +580,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-5 max-h-[75vh] overflow-y-auto space-y-5">
+          {/* Member Login / Sign Up Prompt Banner */}
+          {!member?.isRegistered && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-950 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  Belum masuk akun? <strong>Daftar gratis</strong> untuk kumpulkan poin & potongan voucher belanja!
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenCustomerAuth) onOpenCustomerAuth('signin');
+                }}
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black rounded-xl text-[11px] shrink-0 cursor-pointer shadow-xs transition-all self-end sm:self-auto"
+              >
+                Masuk / Daftar Akun
+              </button>
+            </div>
+          )}
+
           {/* 1. Metode Pengiriman */}
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-stone-500">

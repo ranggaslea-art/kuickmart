@@ -254,6 +254,11 @@ export interface MemberProfile {
   lastOrderDate?: string;
   notes?: string;
   status?: 'active' | 'inactive';
+  isRegistered?: boolean;
+  pin?: string;
+  password?: string;
+  createdAt?: string;
+  lastLogin?: string;
 }
 
 export type CustomerProfile = MemberProfile;

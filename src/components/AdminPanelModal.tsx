@@ -647,13 +647,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
-  // Customers State
+  // Customers State (Includes real registered customers from lapakoke.com)
   const [internalCustomers, setInternalCustomers] = useState<MemberProfile[]>(() => {
     try {
       const key = getTenantStorageKey('toko_online_customers', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_customers', currentSlug));
-      if (saved) return JSON.parse(saved);
-      return isNewStore ? [] : INITIAL_CUSTOMERS;
+      let baseList: MemberProfile[] = saved ? JSON.parse(saved) : (isNewStore ? [] : INITIAL_CUSTOMERS);
+
+      // Merge real registered customer accounts from Sign Up flow
+      const regRaw = localStorage.getItem('lapakoke_customer_accounts');
+      if (regRaw) {
+        const regAccounts: MemberProfile[] = JSON.parse(regRaw);
+        regAccounts.forEach(reg => {
+          if (!baseList.some(c => c.id === reg.id || (reg.phone && c.phone === reg.phone))) {
+            baseList.unshift(reg);
+          }
+        });
+      }
+      return baseList;
     } catch {
       return isNewStore ? [] : INITIAL_CUSTOMERS;
     }

@@ -10,7 +10,10 @@ import {
   Copy, 
   ShieldCheck,
   Star,
-  ChevronRight
+  ChevronRight,
+  LogIn,
+  UserPlus,
+  LogOut
 } from 'lucide-react';
 import { MemberProfile, Voucher } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -21,6 +24,8 @@ interface MemberCardModalProps {
   member: MemberProfile;
   vouchers: Voucher[];
   onClaimVoucher: (voucherId: string) => void;
+  onOpenAuth?: (initialMode?: 'signin' | 'signup') => void;
+  onLogout?: () => void;
 }
 
 export const MemberCardModal: React.FC<MemberCardModalProps> = ({
@@ -29,6 +34,8 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
   member,
   vouchers,
   onClaimVoucher,
+  onOpenAuth,
+  onLogout
 }) => {
   const [copiedMemberId, setCopiedMemberId] = useState(false);
 
@@ -61,6 +68,41 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
 
         {/* Body */}
         <div className="p-5 max-h-[75vh] overflow-y-auto space-y-5">
+          {/* Guest Notice & Auth Prompt */}
+          {!member.isRegistered && (
+            <div className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-400/10 to-orange-500/10 border border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-950">
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span>Anda Belum Masuk Akun Member</span>
+                </div>
+                <p className="text-[11px] text-stone-600 mt-0.5">
+                  Daftar akun gratis sekarang untuk klaim <strong>500 Poin Bonus</strong>, simpan riwayat belanja, dan nikmati fitur chat personal!
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onOpenAuth) onOpenAuth('signin');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-stone-300 hover:bg-stone-50 text-stone-800 text-xs font-bold cursor-pointer transition-all"
+                >
+                  Masuk
+                </button>
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onOpenAuth) onOpenAuth('signup');
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 text-xs font-black cursor-pointer transition-all shadow-xs"
+                >
+                  Daftar Baru
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Virtual Digital Member Card */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-amber-600 via-amber-700 to-yellow-500 text-white p-5 shadow-lg flex flex-col justify-between min-h-[190px]">
             <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-40 h-40 bg-white/10 rounded-full blur-xl pointer-events-none" />
@@ -204,10 +246,36 @@ export const MemberCardModal: React.FC<MemberCardModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-stone-100 bg-stone-50 flex justify-end">
+        <div className="p-4 border-t border-stone-100 bg-stone-50 flex items-center justify-between">
+          {member.isRegistered ? (
+            <button
+              onClick={() => {
+                if (window.confirm('Apakah Anda yakin ingin keluar dari akun member ini?')) {
+                  if (onLogout) onLogout();
+                  onClose();
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Keluar Akun</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                onClose();
+                if (onOpenAuth) onOpenAuth('signin');
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5 text-amber-700" />
+              <span>Masuk / Daftar Akun</span>
+            </button>
+          )}
+
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-stone-900 text-white font-bold text-xs hover:bg-black"
+            className="px-5 py-2 rounded-xl bg-stone-900 text-white font-bold text-xs hover:bg-black transition-all cursor-pointer"
           >
             Tutup
           </button>
