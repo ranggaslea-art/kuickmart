@@ -21,7 +21,9 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  ShieldAlert
+  ShieldAlert,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   collection, 
@@ -32,6 +34,7 @@ import {
   limit, 
   serverTimestamp,
   updateDoc,
+  deleteDoc,
   doc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -129,6 +132,11 @@ export const Chat: React.FC<ChatProps> = ({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'offline'>('connected');
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
+
+  // Team Admin Message & Thread Deletion states
+  const [deleteTargetMessage, setDeleteTargetMessage] = useState<ChatMessage | null>(null);
+  const [deleteThreadTargetId, setDeleteThreadTargetId] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Hak Akses Admin Chat State & Authorization
   const [isAdminAuthDialogOpen, setIsAdminAuthDialogOpen] = useState(false);
@@ -541,6 +549,158 @@ export const Chat: React.FC<ChatProps> = ({
     }
   }, [isOpen, currentDisplayMessages.length, activeRole, adminViewMode, selectedCustomerId]);
 
+  // 7b. Mark conversation messages as read (transitions message from red unread to normal neutral color)
+  const markConversationAsRead = async (customerVisitorId: string) => {
+    if (!customerVisitorId) return;
+
+    // Identify unread messages for this recipient
+    const unreadMsgs = allStoreMessages.filter((m) => {
+      if (m.customerVisitorId !== customerVisitorId) return false;
+      return activeRole === 'admin'
+        ? (m.senderRole === 'customer' && !m.read)
+        : (m.senderRole === 'admin' && !m.read);
+    });
+
+    if (unreadMsgs.length === 0) return;
+
+    // 1. Optimistic local state update (color immediately changes to normal!)
+    setAllStoreMessages((prev) =>
+      prev.map((m) => {
+        if (m.customerVisitorId === customerVisitorId) {
+          if (activeRole === 'admin' && m.senderRole === 'customer' && !m.read) {
+            return { ...m, read: true };
+          }
+          if (activeRole === 'customer' && m.senderRole === 'admin' && !m.read) {
+            return { ...m, read: true };
+          }
+        }
+        return m;
+      })
+    );
+
+    // 2. Cache update
+    try {
+      const saved = localStorage.getItem(customerStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const updated = parsed.map((m: any) => {
+            if (m.customerVisitorId === customerVisitorId && !m.read) {
+              return { ...m, read: true };
+            }
+            return m;
+          });
+          localStorage.setItem(customerStorageKey, JSON.stringify(updated));
+        }
+      }
+    } catch {}
+
+    // 3. Firestore persistence update
+    for (const msg of unreadMsgs) {
+      if (msg.id && !msg.id.startsWith('local_') && msg.id !== 'welcome-01' && msg.id !== 'admin-info-01') {
+        try {
+          await updateDoc(doc(db, 'chat_messages', msg.id), { read: true });
+        } catch (e) {
+          console.warn('Update read status notice:', e);
+        }
+      }
+    }
+  };
+
+  // Auto-mark conversation as read when active in view
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (activeRole === 'admin' && adminViewMode === 'chat_thread') {
+      const target = selectedCustomerId || visitorId;
+      if (target) {
+        markConversationAsRead(target);
+      }
+    } else if (activeRole === 'customer' && visitorId) {
+      markConversationAsRead(visitorId);
+    }
+  }, [isOpen, activeRole, adminViewMode, selectedCustomerId, visitorId, allStoreMessages]);
+
+  // Delete a single read message (Admin only)
+  const handleDeleteMessage = async (msgId: string) => {
+    if (!msgId) return;
+    setIsDeleting(true);
+
+    // Optimistic removal from state
+    setAllStoreMessages((prev) => prev.filter((m) => m.id !== msgId));
+
+    // Local storage cleanup
+    try {
+      const saved = localStorage.getItem(customerStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(
+            customerStorageKey,
+            JSON.stringify(parsed.filter((m: any) => m.id !== msgId))
+          );
+        }
+      }
+    } catch {}
+
+    // Firestore document deletion
+    try {
+      if (!msgId.startsWith('local_') && msgId !== 'welcome-01' && msgId !== 'admin-info-01') {
+        await deleteDoc(doc(db, 'chat_messages', msgId));
+      }
+    } catch (err) {
+      console.warn('Gagal menghapus pesan Firestore:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTargetMessage(null);
+    }
+  };
+
+  // Delete all read messages in a thread (Admin only)
+  const handleDeleteReadMessagesInThread = async (customerVisitorId: string) => {
+    if (!customerVisitorId) return;
+    setIsDeleting(true);
+
+    const readMsgs = allStoreMessages.filter(
+      (m) => m.customerVisitorId === customerVisitorId && m.read
+    );
+
+    // Optimistic state update
+    setAllStoreMessages((prev) =>
+      prev.filter((m) => !(m.customerVisitorId === customerVisitorId && m.read))
+    );
+
+    // Local storage cleanup
+    try {
+      const saved = localStorage.getItem(customerStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(
+            customerStorageKey,
+            JSON.stringify(
+              parsed.filter((m: any) => !(m.customerVisitorId === customerVisitorId && m.read))
+            )
+          );
+        }
+      }
+    } catch {}
+
+    // Firestore batch deletion
+    for (const msg of readMsgs) {
+      if (msg.id && !msg.id.startsWith('local_') && msg.id !== 'welcome-01' && msg.id !== 'admin-info-01') {
+        try {
+          await deleteDoc(doc(db, 'chat_messages', msg.id));
+        } catch (err) {
+          console.warn('Gagal menghapus pesan read:', err);
+        }
+      }
+    }
+
+    setIsDeleting(false);
+    setDeleteThreadTargetId(null);
+  };
+
   // 8. SEND MESSAGE HANDLER - Fixed customerVisitorId assignment!
   const handleSendMessage = async (textToSend?: string) => {
     const rawText = textToSend !== undefined ? textToSend : inputText;
@@ -811,7 +971,7 @@ export const Chat: React.FC<ChatProps> = ({
                 <Users className="w-3.5 h-3.5" />
                 <span>Daftar Pelanggan ({conversations.length})</span>
                 {totalAdminUnreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                  <span className="bg-red-500 text-white text-[9px] min-w-4 h-4 px-1 rounded-full font-black flex items-center justify-center animate-in zoom-in-75 shadow-xs">
                     {totalAdminUnreadCount}
                   </span>
                 )}
@@ -819,7 +979,12 @@ export const Chat: React.FC<ChatProps> = ({
 
               <button
                 type="button"
-                onClick={() => setAdminViewMode('chat_thread')}
+                onClick={() => {
+                  setAdminViewMode('chat_thread');
+                  if (activeConversation) {
+                    markConversationAsRead(activeConversation.customerVisitorId);
+                  }
+                }}
                 className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 truncate max-w-[190px] ${
                   adminViewMode === 'chat_thread'
                     ? 'bg-amber-600 text-white shadow-xs'
@@ -831,6 +996,11 @@ export const Chat: React.FC<ChatProps> = ({
                 <span className="truncate">
                   {activeConversation?.customerName || 'Pilih Pelanggan'}
                 </span>
+                {activeConversation && activeConversation.unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] min-w-4 h-4 px-1 rounded-full font-black flex items-center justify-center animate-in zoom-in-75 shadow-xs">
+                    {activeConversation.unreadCount}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -872,6 +1042,7 @@ export const Chat: React.FC<ChatProps> = ({
                   onClick={() => {
                     setSelectedCustomerId(visitorId);
                     setAdminViewMode('chat_thread');
+                    markConversationAsRead(visitorId);
                   }}
                   className="mt-4 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 text-xs font-bold cursor-pointer"
                 >
@@ -881,26 +1052,34 @@ export const Chat: React.FC<ChatProps> = ({
             ) : (
               filteredConversations.map((conv) => {
                 const isSelected = conv.customerVisitorId === selectedCustomerId;
+                const hasUnread = conv.unreadCount > 0;
+
                 return (
                   <div
                     key={conv.customerVisitorId}
                     onClick={() => {
                       setSelectedCustomerId(conv.customerVisitorId);
                       setAdminViewMode('chat_thread');
+                      markConversationAsRead(conv.customerVisitorId);
                     }}
                     className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                       isSelected
                         ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/30 shadow-xs'
+                        : hasUnread
+                        ? 'bg-white hover:bg-amber-50/40 border-amber-300 shadow-2xs'
                         : 'bg-white hover:bg-stone-50 border-stone-200 shadow-2xs'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-extrabold flex items-center justify-center shrink-0 text-sm shadow-xs">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-extrabold flex items-center justify-center shrink-0 text-sm shadow-xs relative">
                         {conv.customerName.slice(0, 2).toUpperCase()}
+                        {hasUnread && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 border-2 border-white rounded-full animate-pulse" />
+                        )}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-bold text-stone-900 truncate">
+                          <h4 className={`text-xs truncate ${hasUnread ? 'font-extrabold text-stone-950' : 'font-bold text-stone-800'}`}>
                             {conv.customerName}
                           </h4>
                           {conv.customerVisitorId === visitorId && (
@@ -909,22 +1088,45 @@ export const Chat: React.FC<ChatProps> = ({
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-stone-500 truncate mt-0.5 max-w-[200px]">
+                        <p className={`text-[11px] truncate mt-0.5 max-w-[200px] ${hasUnread ? 'font-semibold text-stone-900' : 'text-stone-500'}`}>
                           {conv.lastMessageText || 'Tidak ada pesan'}
                         </p>
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                       <span className="text-[10px] text-stone-400">
                         {new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      {conv.unreadCount > 0 ? (
-                        <span className="bg-red-500 text-white text-[10px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-xs">
+                      
+                      {/* Read vs Unread Indicators */}
+                      {hasUnread ? (
+                        /* Unread: prominent red bubble with count */
+                        <span 
+                          className="bg-red-500 text-white text-[10px] font-black min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center shadow-xs animate-in zoom-in-75"
+                          title={`${conv.unreadCount} pesan belum dibaca`}
+                        >
                           {conv.unreadCount}
                         </span>
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-stone-300" />
+                        /* Read: normal neutral color (no red), with action for admin to delete read messages */
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-stone-500 font-medium flex items-center gap-1 bg-stone-100 px-2 py-0.5 rounded-lg border border-stone-200/60">
+                            <CheckCheck className="w-3 h-3 text-blue-500" />
+                            <span>Terbaca</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteThreadTargetId({ id: conv.customerVisitorId, name: conv.customerName });
+                            }}
+                            className="p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Hapus pesan yang telah dibaca"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -937,12 +1139,12 @@ export const Chat: React.FC<ChatProps> = ({
           <>
             {/* Active Thread Banner for Admin */}
             {activeRole === 'admin' && (
-              <div className="bg-amber-100/60 border-b border-amber-200 px-3 py-1.5 flex items-center justify-between text-xs text-amber-900 shrink-0">
-                <div className="flex items-center gap-1.5 truncate">
+              <div className="bg-amber-100/60 border-b border-amber-200 px-3 py-1.5 flex items-center justify-between text-xs text-amber-900 shrink-0 gap-2">
+                <div className="flex items-center gap-1.5 truncate min-w-0">
                   <button
                     type="button"
                     onClick={() => setAdminViewMode('conversation_list')}
-                    className="p-1 hover:bg-amber-200 rounded-lg text-amber-800 transition-colors cursor-pointer"
+                    className="p-1 hover:bg-amber-200 rounded-lg text-amber-800 transition-colors cursor-pointer shrink-0"
                     title="Kembali ke Daftar Pelanggan"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -951,9 +1153,45 @@ export const Chat: React.FC<ChatProps> = ({
                     Membalas: <strong>{activeConversation?.customerName || 'Pelanggan'}</strong>
                   </span>
                 </div>
-                <span className="text-[10px] text-amber-700 font-mono shrink-0">
-                  ID: #{selectedCustomerId ? selectedCustomerId.slice(-6) : 'default'}
-                </span>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Mark as Read / Status */}
+                  {activeConversation && activeConversation.unreadCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => markConversationAsRead(selectedCustomerId || visitorId)}
+                      className="px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                      title="Tandai semua pesan di thread ini telah dibaca"
+                    >
+                      <CheckCheck className="w-3 h-3 text-white" />
+                      <span>Tandai Dibaca ({activeConversation.unreadCount})</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-stone-600 bg-white/80 border border-amber-300/80 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
+                      <CheckCheck className="w-3 h-3 text-blue-500" />
+                      <span>Terbaca</span>
+                    </span>
+                  )}
+
+                  {/* Team admin delete read messages button */}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteThreadTargetId({ 
+                      id: selectedCustomerId || visitorId, 
+                      name: activeConversation?.customerName || 'Pelanggan' 
+                    })}
+                    className="px-2 py-0.5 rounded-lg bg-white/90 hover:bg-red-50 text-stone-600 hover:text-red-700 border border-stone-200 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                    title="Hapus semua pesan yang telah dibaca pada percakapan ini"
+                  >
+                    <Trash2 className="w-3 h-3 text-stone-500 hover:text-red-600" />
+                    <span className="hidden sm:inline">Hapus Pesan Terbaca</span>
+                    <span className="sm:hidden">Hapus</span>
+                  </button>
+
+                  <span className="text-[10px] text-amber-700 font-mono hidden md:inline-block">
+                    ID: #{selectedCustomerId ? selectedCustomerId.slice(-6) : 'default'}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1017,7 +1255,19 @@ export const Chat: React.FC<ChatProps> = ({
                       </span>
                     </span>
 
-                    <div className="flex items-end gap-1.5 max-w-[85%]">
+                    <div className="flex items-end gap-1.5 max-w-[85%] group">
+                      {/* Delete button for Admin on sent message (if read) */}
+                      {activeRole === 'admin' && isUserSender && msg.read && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTargetMessage(msg)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer shrink-0"
+                          title="Hapus pesan terbaca ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
                       {/* Message Bubble */}
                       <div
                         className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-xs break-words ${
@@ -1025,22 +1275,50 @@ export const Chat: React.FC<ChatProps> = ({
                             ? activeRole === 'admin'
                               ? 'bg-amber-600 text-white rounded-br-xs'
                               : 'bg-blue-600 text-white rounded-br-xs'
+                            : !msg.read && activeRole === 'admin'
+                            ? 'bg-amber-50 text-stone-900 border-2 border-amber-300 rounded-bl-xs'
                             : 'bg-white text-stone-800 border border-stone-200/80 rounded-bl-xs'
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{msg.text}</p>
                         
                         <div 
-                          className={`text-[9px] mt-1 flex items-center justify-end gap-1 ${
+                          className={`text-[9px] mt-1 flex items-center justify-end gap-1.5 ${
                             isUserSender ? 'text-white/80' : 'text-stone-400'
                           }`}
                         >
+                          {/* Unread vs Read badge indicator */}
+                          {!isUserSender && activeRole === 'admin' && (
+                            !msg.read ? (
+                              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-red-500 text-white shadow-2xs">
+                                Belum dibaca
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-stone-500 font-medium flex items-center gap-0.5">
+                                <CheckCheck className="w-2.5 h-2.5 text-blue-500" />
+                                Terbaca
+                              </span>
+                            )
+                          )}
+
                           <span>
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           {isUserSender && <CheckCheck className="w-3 h-3 text-white/90" />}
                         </div>
                       </div>
+
+                      {/* Delete button for Admin on incoming customer message (if read) */}
+                      {activeRole === 'admin' && !isUserSender && msg.read && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTargetMessage(msg)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer shrink-0"
+                          title="Hapus pesan terbaca ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1198,6 +1476,88 @@ export const Chat: React.FC<ChatProps> = ({
                 </div>
               </form>
 
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 1: Confirm Delete Single Message (Admin Team) */}
+        {deleteTargetMessage && (
+          <div className="absolute inset-0 z-50 bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl w-full max-w-sm p-5 border border-stone-200 shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 shadow-xs">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-stone-900 leading-tight">Hapus Pesan Terbaca?</h4>
+                  <p className="text-[10px] text-stone-500 mt-0.5">Pesan ini akan dihapus permanen oleh tim admin.</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200 text-xs text-stone-700 italic max-h-24 overflow-y-auto leading-relaxed">
+                "{deleteTargetMessage.text}"
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetMessage(null)}
+                  disabled={isDeleting}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 cursor-pointer transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteMessage(deleteTargetMessage.id)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>Ya, Hapus</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 2: Confirm Delete All Read Messages in Thread (Admin Team) */}
+        {deleteThreadTargetId && (
+          <div className="absolute inset-0 z-50 bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl w-full max-w-sm p-5 border border-stone-200 shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 shadow-xs">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-stone-900 leading-tight">Hapus Pesan Terbaca?</h4>
+                  <p className="text-[10px] text-stone-500 mt-0.5">Percakapan: <strong>{deleteThreadTargetId.name}</strong></p>
+                </div>
+              </div>
+
+              <p className="text-xs text-stone-600 leading-relaxed">
+                Semua pesan yang sudah dibaca pada percakapan ini akan dibersihkan dari daftar obrolan tim admin.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setDeleteThreadTargetId(null)}
+                  disabled={isDeleting}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 cursor-pointer transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteReadMessagesInThread(deleteThreadTargetId.id)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  <span>Ya, Bersihkan</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
