@@ -1349,6 +1349,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       };
 
       setCurrentUser(authUser);
+      try {
+        sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+        sessionStorage.setItem('lapakoke_chat_admin_user', JSON.stringify(authUser));
+      } catch {}
       setLoginError(null);
       setInputPin('');
 

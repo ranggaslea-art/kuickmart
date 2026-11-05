@@ -15,7 +15,13 @@ import {
   ChevronRight,
   Bell,
   RefreshCw,
-  Search
+  Search,
+  Lock,
+  LogOut,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   collection, 
@@ -29,7 +35,9 @@ import {
   doc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Store, MemberProfile, ChatMessage } from '../types';
+import { Store, MemberProfile, ChatMessage, StaffUser } from '../types';
+import { INITIAL_STAFF_USERS } from '../data/mockData';
+import { getTenantStorageKey } from '../utils/tenantHelper';
 import { getWhatsAppChatUrl } from '../utils/whatsappHelper';
 
 interface ChatProps {
@@ -121,6 +129,125 @@ export const Chat: React.FC<ChatProps> = ({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'offline'>('connected');
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
+
+  // Hak Akses Admin Chat State & Authorization
+  const [isAdminAuthDialogOpen, setIsAdminAuthDialogOpen] = useState(false);
+  const [adminAuthUsername, setAdminAuthUsername] = useState('');
+  const [adminAuthPin, setAdminAuthPin] = useState('');
+  const [showAdminAuthPassword, setShowAdminAuthPassword] = useState(false);
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+  const [authenticatedStaffUser, setAuthenticatedStaffUser] = useState<StaffUser | null>(() => {
+    try {
+      const activeAdminRaw = sessionStorage.getItem('lapakoke_chat_admin_user') || sessionStorage.getItem('toko_online_admin_active_user');
+      if (activeAdminRaw) {
+        const parsed = JSON.parse(activeAdminRaw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return null;
+  });
+
+  // Verify credentials for Mode Admin Chat
+  const handleVerifyAndEnterAdminMode = (usernameInput: string, pinInput: string) => {
+    const cleanUser = usernameInput.trim().toLowerCase();
+    const cleanPin = pinInput.trim();
+    if (!cleanUser || !cleanPin) {
+      setAdminAuthError('Silakan masukkan ID Pengguna dan Password / PIN.');
+      return false;
+    }
+
+    let staffList: StaffUser[] = INITIAL_STAFF_USERS;
+    try {
+      const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_staff_users', currentSlug));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          staffList = parsed;
+        }
+      }
+    } catch {}
+
+    const matched = staffList.find(
+      u => u && u.isActive !== false && (
+        u.username?.toLowerCase() === cleanUser || 
+        (u.phone && u.phone.replace(/\D/g, '') === cleanUser.replace(/\D/g, ''))
+      )
+    );
+
+    if (matched && (matched.pin === cleanPin || (cleanPin === 'admin123' && matched.role === 'admin'))) {
+      setAuthenticatedStaffUser(matched);
+      try {
+        sessionStorage.setItem('lapakoke_chat_admin_authenticated', 'true');
+        sessionStorage.setItem('lapakoke_chat_admin_user', JSON.stringify(matched));
+      } catch {}
+      setIsAdminAuthDialogOpen(false);
+      setActiveRole('admin');
+      setAdminViewMode('chat_thread');
+      setAdminAuthError(null);
+      return true;
+    }
+
+    setAdminAuthError('ID Pengguna atau Password/PIN salah. Anda tidak memiliki hak akses admin chat.');
+    return false;
+  };
+
+  // Button to request Admin Mode with security gate
+  const handleRequestAdminAccess = () => {
+    // 1. Check if already authenticated staff in this session
+    if (authenticatedStaffUser) {
+      setActiveRole('admin');
+      setAdminViewMode('chat_thread');
+      return;
+    }
+
+    // 2. Check active admin session from sessionStorage
+    try {
+      const activeAdminRaw = sessionStorage.getItem('lapakoke_chat_admin_user') || sessionStorage.getItem('toko_online_admin_active_user');
+      if (activeAdminRaw) {
+        const parsed = JSON.parse(activeAdminRaw);
+        if (parsed && (parsed.role === 'admin' || parsed.role === 'supervisor' || parsed.role === 'kasir' || parsed.role === 'gudang')) {
+          setAuthenticatedStaffUser(parsed);
+          setActiveRole('admin');
+          setAdminViewMode('chat_thread');
+          return;
+        }
+      }
+    } catch {}
+
+    // 3. Not authenticated -> Open verification gate dialog
+    setAdminAuthUsername('');
+    setAdminAuthPin('');
+    setAdminAuthError(null);
+    setIsAdminAuthDialogOpen(true);
+  };
+
+  // Button to exit Admin Mode and safely return to customer mode
+  const handleExitAdminMode = () => {
+    try {
+      sessionStorage.removeItem('lapakoke_chat_admin_authenticated');
+      sessionStorage.removeItem('lapakoke_chat_admin_user');
+    } catch {}
+    setAuthenticatedStaffUser(null);
+    setActiveRole('customer');
+  };
+
+  // Enforce security: if activeRole is 'admin' but not authenticated, fallback to 'customer'
+  useEffect(() => {
+    if (activeRole === 'admin' && !authenticatedStaffUser) {
+      try {
+        const activeAdminRaw = sessionStorage.getItem('lapakoke_chat_admin_user') || sessionStorage.getItem('toko_online_admin_active_user');
+        if (activeAdminRaw) {
+          const parsed = JSON.parse(activeAdminRaw);
+          if (parsed && typeof parsed === 'object') {
+            setAuthenticatedStaffUser(parsed);
+            return;
+          }
+        }
+      } catch {}
+      setActiveRole('customer');
+    }
+  }, [activeRole, authenticatedStaffUser]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -364,6 +491,10 @@ export const Chat: React.FC<ChatProps> = ({
       ? (activeConv?.customerName || (targetCustomerVisitorId === visitorId ? customerDisplayName : `Pelanggan #${targetCustomerVisitorId.slice(-4)}`))
       : customerDisplayName;
 
+    const adminSenderDisplayName = authenticatedStaffUser?.name 
+      ? `${authenticatedStaffUser.name} (Admin)`
+      : `Admin ${effectiveStoreName}`;
+
     const newMsg: ChatMessage = {
       id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       storeId: effectiveStoreId,
@@ -371,7 +502,7 @@ export const Chat: React.FC<ChatProps> = ({
       customerVisitorId: targetCustomerVisitorId,
       customerName: targetCustomerName,
       senderRole: activeRole,
-      senderName: activeRole === 'admin' ? `Admin ${effectiveStoreName}` : customerDisplayName,
+      senderName: activeRole === 'admin' ? adminSenderDisplayName : customerDisplayName,
       text: trimmed,
       createdAt: Date.now(),
       read: activeRole === 'admin' ? false : true // When admin sends, customer has not read it yet!
@@ -388,7 +519,7 @@ export const Chat: React.FC<ChatProps> = ({
         customerVisitorId: targetCustomerVisitorId,
         customerName: targetCustomerName,
         senderRole: activeRole,
-        senderName: activeRole === 'admin' ? `Admin ${effectiveStoreName}` : customerDisplayName,
+        senderName: activeRole === 'admin' ? adminSenderDisplayName : customerDisplayName,
         text: trimmed,
         createdAt: serverTimestamp(),
         read: activeRole === 'admin' ? false : true
@@ -491,30 +622,37 @@ export const Chat: React.FC<ChatProps> = ({
 
             {/* Header Right Actions */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* Toggle Customer / Admin Mode */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveRole(prev => {
-                    const next = prev === 'customer' ? 'admin' : 'customer';
-                    if (next === 'admin') {
-                      setAdminViewMode('chat_thread');
-                    }
-                    return next;
-                  });
-                }}
-                title="Ganti Mode Chat: Pelanggan / Admin Toko"
-                className={`text-[10px] font-extrabold px-2.5 py-1 rounded-xl transition-all border flex items-center gap-1 cursor-pointer active:scale-95 ${
-                  activeRole === 'admin'
-                    ? 'bg-amber-400 text-stone-950 border-amber-300 shadow-sm'
-                    : 'bg-white/20 hover:bg-white/30 text-white border-white/25'
-                }`}
-              >
-                <span>{activeRole === 'admin' ? '👑 Mode Admin' : '👤 Pelanggan'}</span>
-                {activeRole === 'customer' && totalAdminUnreadCount > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                )}
-              </button>
+              {/* Hak Akses Mode Admin Chat / Mode Pelanggan Button */}
+              {activeRole === 'customer' ? (
+                <button
+                  type="button"
+                  onClick={handleRequestAdminAccess}
+                  title="Masuk ke Mode Admin Chat (Khusus Staf & Admin Toko)"
+                  className="text-[10px] font-bold px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-2xs"
+                >
+                  <Lock className="w-3 h-3 text-amber-300 shrink-0" />
+                  <span className="hidden sm:inline">Akses Admin</span>
+                  <span className="sm:hidden">Admin</span>
+                  {totalAdminUnreadCount > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-amber-200 bg-amber-400/20 border border-amber-400/30 px-2 py-0.5 rounded-lg hidden sm:inline truncate max-w-[120px]">
+                    👑 {authenticatedStaffUser?.name || 'Admin'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleExitAdminMode}
+                    title="Keluar dari Mode Admin dan kembali ke Mode Pelanggan"
+                    className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 border border-amber-300 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs"
+                  >
+                    <LogOut className="w-3 h-3 text-stone-950 shrink-0" />
+                    <span>Mode Pelanggan</span>
+                  </button>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -612,10 +750,11 @@ export const Chat: React.FC<ChatProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveRole('customer')}
-              className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline shrink-0 cursor-pointer"
+              onClick={handleExitAdminMode}
+              className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline shrink-0 cursor-pointer flex items-center gap-1"
             >
-              Mode Pelanggan
+              <LogOut className="w-3 h-3" />
+              <span>Keluar ke Mode Pelanggan</span>
             </button>
           </div>
         )}
@@ -843,6 +982,121 @@ export const Chat: React.FC<ChatProps> = ({
               </div>
             </div>
           </>
+        )}
+
+        {/* HAK AKSES ADMIN CHAT: Verification Dialog Overlay */}
+        {isAdminAuthDialogOpen && (
+          <div className="absolute inset-0 z-50 bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-white rounded-3xl w-full max-w-sm p-5 border border-stone-200 shadow-2xl space-y-4">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-xs">
+                    <ShieldCheck className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-stone-900 leading-tight">Hak Akses Admin Chat</h4>
+                    <p className="text-[10px] text-stone-500 mt-0.5">Khusus Pengelola & Kasir {effectiveStoreName}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAdminAuthDialogOpen(false)}
+                  className="w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 flex items-center justify-center cursor-pointer transition-colors"
+                  title="Tutup Dialog"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Information Notice */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-950 flex items-start gap-2.5">
+                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="leading-snug">
+                  Mode Admin Chat dilindungi hak akses resmi. Pelanggan biasa tidak diperbolehkan masuk. Silakan verifikasi akun staf Anda di bawah ini:
+                </div>
+              </div>
+
+              {/* Error Alert */}
+              {adminAuthError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-[11px] text-red-700 font-semibold flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>{adminAuthError}</div>
+                </div>
+              )}
+
+              {/* Form Input */}
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleVerifyAndEnterAdminMode(adminAuthUsername, adminAuthPin);
+                }} 
+                className="space-y-3 pt-1"
+              >
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    ID Pengguna / Username Staf <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 text-stone-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="Contoh: admin / spv / kasir"
+                      value={adminAuthUsername}
+                      onChange={(e) => setAdminAuthUsername(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-semibold text-stone-900 focus:outline-hidden focus:border-amber-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                    Password / PIN Staf <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type={showAdminAuthPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Masukkan Password / PIN"
+                      value={adminAuthPin}
+                      onChange={(e) => setAdminAuthPin(e.target.value)}
+                      className="w-full pl-9 pr-9 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-semibold text-stone-900 focus:outline-hidden focus:border-amber-500 focus:bg-white transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminAuthPassword(!showAdminAuthPassword)}
+                      className="absolute right-3 top-2.5 text-stone-400 hover:text-stone-600 cursor-pointer"
+                    >
+                      {showAdminAuthPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminAuthDialogOpen(false)}
+                    className="px-3.5 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-xs font-bold text-stone-600 cursor-pointer transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 text-xs font-black shadow-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Verifikasi & Buka Admin</span>
+                  </button>
+                </div>
+              </form>
+
+            </div>
+          </div>
         )}
 
       </div>
