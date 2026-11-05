@@ -49,6 +49,9 @@ import {
   CustomerAuthPromoEditorModal 
 } from './components/CustomerAuthPromoEditorModal';
 import { 
+  AdminAuthPromptModal 
+} from './components/AdminAuthPromptModal';
+import { 
   ErrorBoundary 
 } from './components/ErrorBoundary';
 import { 
@@ -450,9 +453,49 @@ export default function App() {
   const [isCustomerAuthOpen, setIsCustomerAuthOpen] = useState(false);
   const [customerAuthInitialMode, setCustomerAuthInitialMode] = useState<'signin' | 'signup'>('signin');
   const [isCustomerPromoEditorOpen, setIsCustomerPromoEditorOpen] = useState(false);
+  const [isAdminAuthPromptOpen, setIsAdminAuthPromptOpen] = useState(false);
+  const [currentAdminUser, setCurrentAdminUser] = useState<StaffUser | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('toko_online_admin_active_user') || sessionStorage.getItem('lapakoke_admin_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [customerPromoConfig, setCustomerPromoConfig] = useState<CustomerAuthPromoConfig>(() =>
     loadCustomerAuthPromoConfig(currentSlug)
   );
+
+  // Wajib verifikasi login Admin/Supervisor untuk membuka Editor Iklan
+  const handleOpenPromoEditorWithAuth = () => {
+    let activeAdmin = currentAdminUser;
+    if (!activeAdmin) {
+      try {
+        const raw = sessionStorage.getItem('toko_online_admin_active_user') || sessionStorage.getItem('lapakoke_admin_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.role === 'admin' || parsed.role === 'supervisor' || parsed.permissions?.promos?.canEdit)) {
+            activeAdmin = parsed;
+            setCurrentAdminUser(parsed);
+          }
+        }
+      } catch {}
+    }
+
+    if (activeAdmin && (activeAdmin.role === 'admin' || activeAdmin.role === 'supervisor' || activeAdmin.permissions?.promos?.canEdit)) {
+      setIsCustomerPromoEditorOpen(true);
+    } else {
+      setIsAdminAuthPromptOpen(true);
+    }
+  };
+
+  const handleAdminLogoutFromPromo = () => {
+    setCurrentAdminUser(null);
+    try {
+      sessionStorage.removeItem('toko_online_admin_active_user');
+      sessionStorage.removeItem('lapakoke_admin_session');
+    } catch {}
+  };
 
   // Sync latest promo config from cloud whenever tenant slug changes
   useEffect(() => {
@@ -1847,7 +1890,7 @@ export default function App() {
         }}
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
         onOpenSplashScreenEditor={() => setIsSplashScreenEditorOpen(true)}
-        onOpenPromoEditor={() => setIsCustomerPromoEditorOpen(true)}
+        onOpenPromoEditor={handleOpenPromoEditorWithAuth}
         promoConfig={customerPromoConfig}
         onOpenSubdomains={() => {
           setAdminPanelInitialTab('subdomains');
@@ -2468,7 +2511,7 @@ export default function App() {
         storeName={currentStore.name}
         currentSlug={currentSlug}
         promoConfig={customerPromoConfig}
-        onOpenPromoEditor={() => setIsCustomerPromoEditorOpen(true)}
+        onOpenPromoEditor={handleOpenPromoEditorWithAuth}
       />
 
       {/* 5c. Customer Sign In / Sign Up Promo & Loyalty Bonus Editor Modal */}
@@ -2477,11 +2520,27 @@ export default function App() {
         onClose={() => setIsCustomerPromoEditorOpen(false)}
         currentSlug={currentSlug}
         storeName={currentStore.name}
+        adminUser={currentAdminUser}
+        onAdminLogout={handleAdminLogoutFromPromo}
         onSaved={(newCfg) => setCustomerPromoConfig(newCfg)}
         onOpenCustomerAuthModal={() => {
           setIsCustomerPromoEditorOpen(false);
           handleOpenCustomerAuth('signup');
         }}
+      />
+
+      {/* 5d. Admin Login Gate Modal (Khusus Hak Akses Editor Iklan & Bonus Loyalitas) */}
+      <AdminAuthPromptModal
+        isOpen={isAdminAuthPromptOpen}
+        onClose={() => setIsAdminAuthPromptOpen(false)}
+        onSuccess={(authenticatedUser) => {
+          setCurrentAdminUser(authenticatedUser);
+          setIsAdminAuthPromptOpen(false);
+          setIsCustomerPromoEditorOpen(true);
+        }}
+        storeName={currentStore.name}
+        currentSlug={currentSlug}
+        staffUsers={staffUsers}
       />
 
       {/* 6. Store Selector Modal */}
@@ -2529,6 +2588,7 @@ export default function App() {
           onUpdateBrands={handleUpdateBrands}
           initialTab={adminPanelInitialTab}
           onOpenChat={() => setIsChatOpen(true)}
+          onOpenPromoEditor={handleOpenPromoEditorWithAuth}
         />
       </ErrorBoundary>
 

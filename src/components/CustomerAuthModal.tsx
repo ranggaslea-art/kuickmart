@@ -301,11 +301,11 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
               <button
                 type="button"
                 onClick={onOpenPromoEditor}
-                className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 hover:text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Buka Editor Iklan & Bonus Poin Pendaftaran"
+                className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 hover:text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-amber-400/20"
+                title="Buka Editor Iklan & Bonus Poin Pendaftaran (Wajib Login Admin)"
               >
-                <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Editor Iklan</span>
+                <Lock className="w-3 h-3 text-amber-400" />
+                <span className="hidden sm:inline">Editor Iklan (Admin)</span>
               </button>
             )}
             <button
@@ -394,10 +394,11 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                     <button
                       type="button"
                       onClick={onOpenPromoEditor}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-stone-700 bg-white/80 hover:bg-white rounded-lg transition-all shrink-0 cursor-pointer shadow-2xs"
-                      title="Edit Kata-Kata Iklan & Nominal Poin Ini"
+                      className="opacity-0 group-hover:opacity-100 px-2 py-1 text-stone-700 hover:text-stone-950 bg-white/90 hover:bg-white border border-stone-200 rounded-lg transition-all shrink-0 cursor-pointer shadow-2xs flex items-center gap-1 text-[11px] font-bold"
+                      title="Edit Kata-Kata Iklan & Nominal Poin (Wajib Login Admin)"
                     >
-                      <Sliders className="w-3.5 h-3.5 text-stone-600" />
+                      <Lock className="w-3 h-3 text-amber-600" />
+                      <span>Edit (Admin)</span>
                     </button>
                   )}
                 </div>

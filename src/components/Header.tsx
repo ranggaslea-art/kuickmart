@@ -402,12 +402,13 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Promo / Ad Sign In & Sign Up Editor Button */}
             {onOpenPromoEditor && (
               <button
+                type="button"
                 onClick={onOpenPromoEditor}
-                title="Editor Iklan Sign In / Sign Up & Kustomisasi Bonus Poin Member"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 font-extrabold text-xs flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
+                title="Editor Iklan Sign In / Sign Up & Kustomisasi Bonus Poin Member (Wajib Login Admin)"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-amber-500/70"
               >
-                <Megaphone className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden xl:inline">Iklan Member</span>
+                <Megaphone className="w-3.5 h-3.5 text-stone-950" />
+                <span className="hidden sm:inline">Iklan Member</span>
               </button>
             )}
 

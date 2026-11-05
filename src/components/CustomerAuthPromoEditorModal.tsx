@@ -15,9 +15,10 @@ import {
   Coins,
   Stamp,
   Type,
-  FileText
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
-import { CustomerAuthPromoConfig } from '../types';
+import { CustomerAuthPromoConfig, StaffUser } from '../types';
 import { 
   DEFAULT_CUSTOMER_AUTH_PROMO, 
   loadCustomerAuthPromoConfig, 
@@ -29,6 +30,8 @@ interface CustomerAuthPromoEditorModalProps {
   onClose: () => void;
   currentSlug?: string;
   storeName?: string;
+  adminUser?: StaffUser | null;
+  onAdminLogout?: () => void;
   onSaved?: (newConfig: CustomerAuthPromoConfig) => void;
   onOpenCustomerAuthModal?: () => void;
 }
@@ -46,6 +49,8 @@ export const CustomerAuthPromoEditorModal: React.FC<CustomerAuthPromoEditorModal
   onClose,
   currentSlug,
   storeName = 'LapakOke',
+  adminUser,
+  onAdminLogout,
   onSaved,
   onOpenCustomerAuthModal
 }) => {
@@ -149,6 +154,27 @@ export const CustomerAuthPromoEditorModal: React.FC<CustomerAuthPromoEditorModal
                 <span>Live Preview</span>
               </button>
             </div>
+
+            {/* Admin Authenticated Session Badge */}
+            {adminUser && (
+              <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-amber-400/20 border border-amber-400/30 text-amber-300 rounded-xl text-xs font-bold shrink-0">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span className="truncate max-w-[140px]">{adminUser.name}</span>
+                <span className="text-[10px] bg-amber-400 text-stone-950 font-black px-1.5 py-0.2 rounded uppercase">
+                  {adminUser.role}
+                </span>
+                {onAdminLogout && (
+                  <button
+                    type="button"
+                    onClick={onAdminLogout}
+                    className="ml-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-stone-200 hover:text-white text-[10px] transition-colors cursor-pointer"
+                    title="Logout Akses Admin"
+                  >
+                    Logout
+                  </button>
+                )}
+              </div>
+            )}
 
             <button
               type="button"

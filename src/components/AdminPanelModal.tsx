@@ -237,6 +237,7 @@ interface AdminPanelModalProps {
   onUpdateBrands?: (brands: BrandItem[]) => void;
   initialTab?: AdminTab;
   onOpenChat?: () => void;
+  onOpenPromoEditor?: () => void;
 }
 
 export type AdminTab =
@@ -332,6 +333,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateBrands,
   initialTab,
   onOpenChat,
+  onOpenPromoEditor,
 }) => {
   // Tentukan slug subdomain yang aktif dikelola dengan presisi tinggi:
   // Memeriksa URL (?store=), currentStore prop, dan active tenant storage
@@ -2599,6 +2601,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'promos', group: 'marketing', moduleKey: 'promos' as SystemModuleKey, label: 'Promo & Banner Toko', icon: <Megaphone className="w-4 h-4 text-orange-600" />, count: (activeStorePromos || []).length },
                 { id: 'vouchers', group: 'marketing', moduleKey: 'vouchers' as SystemModuleKey, label: 'Voucher & Diskon', icon: <Ticket className="w-4 h-4 text-amber-600" />, count: (vouchers || []).length },
                 { id: 'points_rewards', group: 'marketing', moduleKey: 'points_rewards' as SystemModuleKey, label: 'Poin Belanja & Loyalitas', icon: <Coins className="w-4 h-4 text-amber-500" /> },
+                ...(onOpenPromoEditor ? [{
+                  id: 'customer_promo_editor' as any,
+                  group: 'marketing' as const,
+                  moduleKey: 'promos' as SystemModuleKey,
+                  label: 'Iklan Member (Sign In/Up)',
+                  icon: <Megaphone className="w-4 h-4 text-amber-600 animate-pulse" />,
+                  onClickAction: onOpenPromoEditor
+                }] : []),
                 { id: 'push_notifications', group: 'marketing', moduleKey: 'push_notifications' as SystemModuleKey, label: 'Push Notifikasi Promo', icon: <BellRing className="w-4 h-4 text-rose-500" /> },
 
                 // 5. CABANG & PENGATURAN TOKO
@@ -2634,6 +2644,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                       key={item.id}
                       data-active={isActive ? "true" : "false"}
                       onClick={() => {
+                        if ((item as any).onClickAction) {
+                          (item as any).onClickAction();
+                          return;
+                        }
                         setActiveTab(item.id as any);
                         setIsAddingProduct(false);
                         setIsAddingStore(false);
@@ -5539,6 +5553,39 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
           ) : (
             <div className="space-y-4">
               {!currentUserPermissions.points_rewards?.canEdit && renderReadOnlyBanner('Poin Belanja & Loyalitas')}
+              
+              {/* Banner Shortcut: Editor Iklan & Bonus Pendaftaran Member Baru */}
+              {onOpenPromoEditor && (
+                <div className="bg-gradient-to-r from-amber-50 via-amber-100/60 to-orange-50 border border-amber-300 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Megaphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-bold text-amber-950 text-sm sm:text-base">
+                          Editor Iklan & Bonus Pendaftaran Member Baru
+                        </h4>
+                        <span className="bg-amber-200 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Sign In / Sign Up
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-900/80 mt-1 max-w-2xl leading-relaxed">
+                        Atur bonus poin awal pendaftar baru (cth: 500 poin), bonus stamp, judul & rincian banner promosi, serta ganti kata-kata tombol &ldquo;Daftar Sekarang & Dapatkan Poin&rdquo;.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onOpenPromoEditor}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-stone-950 font-black text-xs rounded-xl shadow-xs cursor-pointer transition flex items-center justify-center gap-2 shrink-0 border border-amber-600/30"
+                  >
+                    <Megaphone className="w-4 h-4 text-stone-950" />
+                    <span>Buka Editor Iklan Member</span>
+                  </button>
+                </div>
+              )}
+
               <PointsLoyaltyManager
                 pointsConfig={activePointsConfig}
                 rewardItems={activeRewardItems}
