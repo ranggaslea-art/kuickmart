@@ -2426,6 +2426,7 @@ export default function App() {
           brands={brands}
           onUpdateBrands={handleUpdateBrands}
           initialTab={adminPanelInitialTab}
+          onOpenChat={() => setIsChatOpen(true)}
         />
       </ErrorBoundary>
 

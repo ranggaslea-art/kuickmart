@@ -236,6 +236,7 @@ interface AdminPanelModalProps {
   brands?: BrandItem[];
   onUpdateBrands?: (brands: BrandItem[]) => void;
   initialTab?: AdminTab;
+  onOpenChat?: () => void;
 }
 
 export type AdminTab =
@@ -330,6 +331,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   brands: propBrands,
   onUpdateBrands,
   initialTab,
+  onOpenChat,
 }) => {
   // Tentukan slug subdomain yang aktif dikelola dengan presisi tinggi:
   // Memeriksa URL (?store=), currentStore prop, dan active tenant storage
@@ -2647,6 +2649,20 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               <Rocket className="w-3.5 h-3.5 text-amber-300" />
               <span>Deploy VPS</span>
             </button>
+
+            {/* Tombol Chat Pelanggan Toko */}
+            {onOpenChat && (
+              <button
+                type="button"
+                onClick={onOpenChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 bg-amber-400 hover:bg-amber-300 text-stone-950 cursor-pointer transition-all shadow-xs"
+                title="Buka Chat Real-time Pelanggan Toko"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-stone-950" />
+                <span className="hidden sm:inline">Chat Pelanggan</span>
+                <span className="sm:hidden">Chat</span>
+              </button>
+            )}
 
             <button
               type="button"
