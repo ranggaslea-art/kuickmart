@@ -46,6 +46,9 @@ import {
   SplashScreenEditorModal 
 } from './components/SplashScreenEditorModal';
 import { 
+  CustomerAuthPromoEditorModal 
+} from './components/CustomerAuthPromoEditorModal';
+import { 
   ErrorBoundary 
 } from './components/ErrorBoundary';
 import { 
@@ -81,7 +84,8 @@ import {
   BrandHeaderFooterConfig,
   StaffUser,
   StoreTenantIdentity,
-  BrandItem
+  BrandItem,
+  CustomerAuthPromoConfig
 } from './types';
 import { 
   PRODUCTS, 
@@ -159,6 +163,10 @@ import {
 } from './utils/tenantCloudSync';
 import { updateAddressBarFavicon } from './utils/faviconHelper';
 import { loadAppSettingsFromDatabase, saveAppSettingsToDatabase } from './utils/appSettingsDatabase';
+import { 
+  loadCustomerAuthPromoConfig, 
+  fetchOnlineCustomerAuthPromoConfig 
+} from './utils/customerAuthPromoHelper';
 
 const STORAGE_CART_KEY = 'nusamart_cart';
 const STORAGE_ORDERS_KEY = 'nusamart_orders';
@@ -438,9 +446,26 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
-  // Customer Authentication Modal State
+  // Customer Authentication Modal & Loyalty Promo Config State
   const [isCustomerAuthOpen, setIsCustomerAuthOpen] = useState(false);
   const [customerAuthInitialMode, setCustomerAuthInitialMode] = useState<'signin' | 'signup'>('signin');
+  const [isCustomerPromoEditorOpen, setIsCustomerPromoEditorOpen] = useState(false);
+  const [customerPromoConfig, setCustomerPromoConfig] = useState<CustomerAuthPromoConfig>(() =>
+    loadCustomerAuthPromoConfig(currentSlug)
+  );
+
+  // Sync latest promo config from cloud whenever tenant slug changes
+  useEffect(() => {
+    let isMounted = true;
+    fetchOnlineCustomerAuthPromoConfig(currentSlug).then((onlineCfg) => {
+      if (isMounted && onlineCfg) {
+        setCustomerPromoConfig(onlineCfg);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [currentSlug]);
 
   const handleOpenCustomerAuth = (mode: 'signin' | 'signup' = 'signin') => {
     setCustomerAuthInitialMode(mode);
@@ -1822,6 +1847,8 @@ export default function App() {
         }}
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
         onOpenSplashScreenEditor={() => setIsSplashScreenEditorOpen(true)}
+        onOpenPromoEditor={() => setIsCustomerPromoEditorOpen(true)}
+        promoConfig={customerPromoConfig}
         onOpenSubdomains={() => {
           setAdminPanelInitialTab('subdomains');
           setIsAdminPanelOpen(true);
@@ -2439,6 +2466,22 @@ export default function App() {
         onSuccess={handleCustomerAuthSuccess}
         initialMode={customerAuthInitialMode}
         storeName={currentStore.name}
+        currentSlug={currentSlug}
+        promoConfig={customerPromoConfig}
+        onOpenPromoEditor={() => setIsCustomerPromoEditorOpen(true)}
+      />
+
+      {/* 5c. Customer Sign In / Sign Up Promo & Loyalty Bonus Editor Modal */}
+      <CustomerAuthPromoEditorModal
+        isOpen={isCustomerPromoEditorOpen}
+        onClose={() => setIsCustomerPromoEditorOpen(false)}
+        currentSlug={currentSlug}
+        storeName={currentStore.name}
+        onSaved={(newCfg) => setCustomerPromoConfig(newCfg)}
+        onOpenCustomerAuthModal={() => {
+          setIsCustomerPromoEditorOpen(false);
+          handleOpenCustomerAuth('signup');
+        }}
       />
 
       {/* 6. Store Selector Modal */}

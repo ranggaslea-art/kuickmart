@@ -23,10 +23,11 @@ import {
   Lock,
   MessageSquare,
   LogIn,
+  Megaphone
 } from 'lucide-react';
 import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { PromoNavigationTarget } from './HeroBanner';
-import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig } from '../types';
+import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig, CustomerAuthPromoConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 import { isSubdomainModuleEnabled, SUBDOMAIN_MODULE_POLICY_EVENT } from '../utils/subdomainModuleControl';
@@ -61,6 +62,8 @@ interface HeaderProps {
   onGoHome?: () => void;
   onNavigatePromo?: (target: PromoNavigationTarget) => void;
   onOpenSplashScreenEditor?: () => void;
+  onOpenPromoEditor?: () => void;
+  promoConfig?: CustomerAuthPromoConfig;
   onOpenChat?: () => void;
   unreadChatCount?: number;
   isChatOpen?: boolean;
@@ -95,6 +98,8 @@ export const Header: React.FC<HeaderProps> = ({
   onGoHome,
   onNavigatePromo,
   onOpenSplashScreenEditor,
+  onOpenPromoEditor,
+  promoConfig,
   onOpenChat,
   unreadChatCount = 0,
   isChatOpen = false,
@@ -394,6 +399,18 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Promo / Ad Sign In & Sign Up Editor Button */}
+            {onOpenPromoEditor && (
+              <button
+                onClick={onOpenPromoEditor}
+                title="Editor Iklan Sign In / Sign Up & Kustomisasi Bonus Poin Member"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 font-extrabold text-xs flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
+              >
+                <Megaphone className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden xl:inline">Iklan Member</span>
+              </button>
+            )}
+
             {/* Admin Panel Button */}
             <button
               onClick={onOpenAdminPanel}
@@ -420,13 +437,15 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <button
                 onClick={() => (onOpenCustomerAuth ? onOpenCustomerAuth('signin') : onOpenMemberModal())}
-                title="Masuk atau Daftar Akun Member untuk Poin Belanja & Diskon"
+                title={`Masuk atau Daftar Akun Member untuk Dapatkan Bonus ${promoConfig?.bonusPoints ? `${promoConfig.bonusPoints.toLocaleString('id-ID')} Poin` : 'Poin Belanja'}`}
                 className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer active:scale-95"
               >
                 <LogIn className="w-4 h-4 text-stone-950 shrink-0" />
                 <div className="text-left hidden sm:block leading-tight">
                   <div className="text-[9px] uppercase font-black tracking-wide text-amber-950">Masuk / Daftar</div>
-                  <div className="text-[11px] font-extrabold text-stone-950">Member & Poin</div>
+                  <div className="text-[11px] font-extrabold text-stone-950">
+                    {promoConfig?.bonusPoints ? `Bonus ${promoConfig.bonusPoints.toLocaleString('id-ID')} Poin` : 'Member & Poin'}
+                  </div>
                 </div>
               </button>
             )}

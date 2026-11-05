@@ -15,11 +15,13 @@ import {
   UserPlus,
   Eye,
   EyeOff,
-  ShoppingBag
+  ShoppingBag,
+  Sliders
 } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { MemberProfile } from '../types';
+import { MemberProfile, CustomerAuthPromoConfig } from '../types';
+import { loadCustomerAuthPromoConfig, DEFAULT_CUSTOMER_AUTH_PROMO } from '../utils/customerAuthPromoHelper';
 
 interface CustomerAuthModalProps {
   isOpen: boolean;
@@ -27,23 +29,48 @@ interface CustomerAuthModalProps {
   onSuccess: (member: MemberProfile) => void;
   initialMode?: 'signin' | 'signup';
   storeName?: string;
+  currentSlug?: string;
+  onOpenPromoEditor?: () => void;
+  promoConfig?: CustomerAuthPromoConfig;
 }
 
 const LOCAL_STORAGE_ACCOUNTS_KEY = 'lapakoke_customer_accounts';
 const LOCAL_STORAGE_SESSION_KEY = 'lapakoke_customer_session';
+
+const COLOR_THEMES = {
+  amber: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-950', subtext: 'text-amber-800', btn: 'from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950', icon: 'text-amber-600' },
+  emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-950', subtext: 'text-emerald-800', btn: 'from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white', icon: 'text-emerald-600' },
+  blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-950', subtext: 'text-blue-800', btn: 'from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white', icon: 'text-blue-600' },
+  purple: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-950', subtext: 'text-purple-800', btn: 'from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white', icon: 'text-purple-600' },
+  rose: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-950', subtext: 'text-rose-800', btn: 'from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white', icon: 'text-rose-600' }
+};
 
 export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
   initialMode = 'signin',
-  storeName = 'LapakOke'
+  storeName = 'LapakOke',
+  currentSlug,
+  onOpenPromoEditor,
+  promoConfig: propPromoConfig
 }) => {
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Active Promo Config
+  const [promoConfig, setPromoConfig] = useState<CustomerAuthPromoConfig>(() => 
+    propPromoConfig || loadCustomerAuthPromoConfig(currentSlug)
+  );
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setPromoConfig(propPromoConfig || loadCustomerAuthPromoConfig(currentSlug));
+    }
+  }, [isOpen, currentSlug, propPromoConfig]);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -197,8 +224,8 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
         email: cleanEmail || `${cleanPhone}@pelanggan.lapakoke.com`,
         memberNumber: memberCode,
         barcode: barcodeValue,
-        points: 500, // Starter bonus poin!
-        stamps: 1, // Starter stamp!
+        points: promoConfig.bonusPoints ?? 500, // Starter bonus poin fleksibel dari Editor Iklan!
+        stamps: promoConfig.bonusStamps ?? 1, // Starter stamp fleksibel dari Editor Iklan!
         tier: 'Bronze',
         joinedDate: new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
         address: cleanAddress,
@@ -237,7 +264,8 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
       // 3. Save Active Session
       localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(newMember));
 
-      setSuccessMessage(`Pendaftaran berhasil! Selamat datang, ${newMember.name}. Bonus 500 Poin telah ditambahkan ke akun Anda!`);
+      const pointsFormatted = (promoConfig.bonusPoints ?? 500).toLocaleString('id-ID');
+      setSuccessMessage(`Pendaftaran berhasil! Selamat datang, ${newMember.name}. Bonus ${pointsFormatted} Poin telah ditambahkan ke akun Anda!`);
 
       setTimeout(() => {
         onSuccess(newMember);
@@ -250,6 +278,8 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
       setLoading(false);
     }
   };
+
+  const activeTheme = COLOR_THEMES[promoConfig.accentColor || 'amber'] || COLOR_THEMES.amber;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
@@ -266,13 +296,26 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
               <p className="text-xs text-stone-300">Belanja & Layanan Chat di {storeName}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-            title="Tutup Modal"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenPromoEditor && (
+              <button
+                type="button"
+                onClick={onOpenPromoEditor}
+                className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 hover:text-amber-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Buka Editor Iklan & Bonus Poin Pendaftaran"
+              >
+                <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Editor Iklan</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Tutup Modal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Switcher */}
@@ -334,15 +377,31 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
             <form onSubmit={handleSignUp} className="space-y-3.5">
               
               {/* Member Perks Highlight */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5">
-                <Gift className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <span className="font-extrabold text-amber-950">Bonus Pendaftaran Gratis: </span>
-                  <span className="text-amber-800">
-                    Dapatkan langsung <strong>500 Poin Loyalitas</strong> + <strong>1 Stamp Belanja</strong> untuk diskon pesanan Anda!
-                  </span>
+              {promoConfig.showPromoBanner && (
+                <div className={`p-3 rounded-2xl border ${activeTheme.bg} ${activeTheme.border} flex items-start justify-between gap-2.5 relative group animate-in fade-in`}>
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <Gift className={`w-5 h-5 ${activeTheme.icon} shrink-0 mt-0.5`} />
+                    <div className="text-xs leading-relaxed">
+                      <span className={`font-black ${activeTheme.text}`}>
+                        {promoConfig.bannerTitle || 'Bonus Pendaftaran Gratis:'}{' '}
+                      </span>
+                      <span className={activeTheme.subtext}>
+                        {promoConfig.bannerDescription || `Dapatkan langsung ${(promoConfig.bonusPoints ?? 500).toLocaleString('id-ID')} Poin Loyalitas + ${promoConfig.bonusStamps ?? 1} Stamp Belanja untuk diskon pesanan Anda!`}
+                      </span>
+                    </div>
+                  </div>
+                  {onOpenPromoEditor && (
+                    <button
+                      type="button"
+                      onClick={onOpenPromoEditor}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-stone-400 hover:text-stone-700 bg-white/80 hover:bg-white rounded-lg transition-all shrink-0 cursor-pointer shadow-2xs"
+                      title="Edit Kata-Kata Iklan & Nominal Poin Ini"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-stone-600" />
+                    </button>
+                  )}
                 </div>
-              </div>
+              )}
 
               {/* Nama Lengkap */}
               <div>
@@ -446,14 +505,14 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                className={`w-full mt-2 py-3 rounded-xl bg-gradient-to-r ${activeTheme.btn} font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50`}
               >
                 {loading ? (
-                  <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Daftar Sekarang & Klaim 500 Poin</span>
+                    <span>{promoConfig.submitButtonText || `Daftar Sekarang & Klaim ${(promoConfig.bonusPoints ?? 500).toLocaleString('id-ID')} Poin`}</span>
                   </>
                 )}
               </button>
@@ -466,7 +525,11 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
               <div className="p-3 bg-stone-50 border border-stone-200 rounded-2xl flex items-center gap-2.5">
                 <ShieldCheck className="w-5 h-5 text-stone-700 shrink-0" />
                 <p className="text-xs text-stone-600">
-                  Masuk untuk menyinkronkan <strong>poin belanja</strong>, <strong>riwayat pesanan</strong>, dan <strong>pesan chat</strong> Anda.
+                  {promoConfig.signInNote || (
+                    <>
+                      Masuk untuk menyinkronkan <strong>poin belanja</strong>, <strong>riwayat pesanan</strong>, dan <strong>pesan chat</strong> Anda.
+                    </>
+                  )}
                 </p>
               </div>
 

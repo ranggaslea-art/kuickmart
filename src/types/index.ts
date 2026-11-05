@@ -264,6 +264,22 @@ export interface MemberProfile {
 export type CustomerProfile = MemberProfile;
 
 // ==========================================
+// EDITOR IKLAN & PROMO TOOLS SIGN IN / SIGN UP
+// ==========================================
+export interface CustomerAuthPromoConfig {
+  bonusPoints: number; // Jumlah poin bonus pendaftaran pelanggan baru (misal: 500, 1000, 250)
+  bonusStamps: number; // Jumlah stamp gratis pendaftaran (misal: 1)
+  bannerTitle: string; // Judul banner promo (misal: "Bonus Pendaftaran Gratis:")
+  bannerDescription: string; // Deskripsi promo (misal: "Dapatkan langsung 500 Poin Loyalitas + 1 Stamp Belanja untuk diskon pesanan Anda!")
+  submitButtonText: string; // Kata-kata tombol daftar (misal: "Daftar Sekarang & Klaim 500 Poin" atau "Daftar Sekarang & Dapatkan 500 Poin")
+  badgeText?: string; // Teks tombol header masuk / daftar (misal: "Member & Poin")
+  signInNote?: string; // Catatan tambahan di tab Masuk Akun
+  showPromoBanner: boolean; // Saklar tampilkan/sembunyikan banner promo
+  accentColor?: 'amber' | 'emerald' | 'blue' | 'purple' | 'rose';
+  lastUpdated?: string;
+}
+
+// ==========================================
 // SUPPLIER / PEMASOK BARANG
 // ==========================================
 export interface Supplier {
