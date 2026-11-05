@@ -16,16 +16,10 @@ import {
   Layers,
   Maximize,
   Minimize,
-  Activity,
-  ScanBarcode,
-  Globe,
-  RotateCcw,
   Lock,
   MessageSquare,
-  LogIn,
-  Megaphone
+  LogIn
 } from 'lucide-react';
-import { OfflineSyncBadge } from './OfflineSyncBadge';
 import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig, CustomerAuthPromoConfig } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -360,68 +354,6 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Kasir POS Minimarket Button */}
-            {onOpenPosCashier && (
-              isPosCashierEnabled ? (
-                <button
-                  onClick={onOpenPosCashier}
-                  title="Buka Modul Penjualan Kasir Minimarket (POS Display)"
-                  className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-emerald-500/50"
-                >
-                  <ScanBarcode className="w-3.5 h-3.5 text-emerald-200" />
-                  <span className="hidden md:inline">Kasir POS</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    alert(`Modul Penjualan Kasir (POS) saat ini dinonaktifkan / dikunci untuk cabang ${currentStore.name} oleh Administrator Domain Utama (${isDefaultStore(effectiveStoreSlug) ? 'lapakoke.com' : effectiveStoreSlug}).`);
-                  }}
-                  title={`Modul Penjualan Kasir (POS) dinonaktifkan di subdomain ${effectiveStoreSlug} oleh Domain Utama`}
-                  className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-500 font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-not-allowed shrink-0 border border-stone-300/80 opacity-75"
-                >
-                  <Lock className="w-3.5 h-3.5 text-rose-500" />
-                  <span className="hidden md:inline line-through opacity-70">Kasir POS</span>
-                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1 py-0.2 rounded font-mono font-bold">Kunci</span>
-                </button>
-              )
-            )}
-
-            {/* Splash Screen Editor Button */}
-            {onOpenSplashScreenEditor && (
-              <button
-                onClick={onOpenSplashScreenEditor}
-                title="Kustomisasi Gambar & Animasi Splash Screen LapakOke"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 font-extrabold text-xs flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-orange-600 animate-pulse" />
-                <span className="hidden xl:inline">Splash Screen</span>
-              </button>
-            )}
-
-            {/* Promo / Ad Sign In & Sign Up Editor Button */}
-            {onOpenPromoEditor && (
-              <button
-                type="button"
-                onClick={onOpenPromoEditor}
-                title="Editor Iklan Sign In / Sign Up & Kustomisasi Bonus Poin Member (Wajib Login Admin)"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-amber-500/70"
-              >
-                <Megaphone className="w-3.5 h-3.5 text-stone-950" />
-                <span className="hidden sm:inline">Iklan Member</span>
-              </button>
-            )}
-
-            {/* Admin Panel Button */}
-            <button
-              onClick={onOpenAdminPanel}
-              title="Masuk Panel Admin & Kasir Toko"
-              className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
-            >
-              <span className="text-sm">👑</span>
-              <span className="hidden md:inline">Admin Toko</span>
-            </button>
-
             {/* Member Card / Customer Auth Button */}
             {member.isRegistered ? (
               <button
@@ -514,7 +446,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Sub-bar: Baris Kedua (Outlet Selector, Antar/Ambil, Cloud Online, Traffic, Info Subdomain & Jam Operasional) */}
+        {/* Sub-bar: Baris Kedua (Outlet Selector & Antar/Ambil) */}
         <div className="w-full flex items-center justify-between gap-1.5 sm:gap-2 mt-2 pt-2 border-t border-stone-100 text-xs overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
@@ -528,7 +460,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-outlet-selector"
               onClick={onOpenStoreSelector}
-              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[105px] xs:max-w-[150px] sm:max-w-[220px] md:max-w-[280px] font-medium transition-colors cursor-pointer text-[11px] sm:text-xs"
+              className="flex items-center gap-1 text-stone-700 hover:text-blue-700 truncate max-w-[150px] xs:max-w-[200px] sm:max-w-[300px] md:max-w-[380px] font-medium transition-colors cursor-pointer text-[11px] sm:text-xs"
               title={currentStore.name}
             >
               <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
@@ -536,65 +468,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[10px] text-stone-500 hidden sm:inline">({currentStore.distanceKm} km)</span>
               <ChevronDown className="w-3 h-3 text-stone-400 shrink-0" />
             </button>
-          </div>
-
-          {/* Baris Kedua: Tombol Cloud Online, Segarkan, Traffic, & Info Subdomain Berdampingan */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Tombol Status Database MySQL & Sinkronisasi */}
-            <OfflineSyncBadge 
-              className="py-1 px-2 sm:px-2.5 text-[11px] sm:text-xs shrink-0" 
-              isDatabaseConnected={isDatabaseConnected}
-              onOpenDatabaseManager={onOpenDatabaseManager}
-            />
-
-            {/* Tombol Segarkan Data Real-time (Sangat berguna di HP untuk update instan) */}
-            {onRefreshData && (
-              <button
-                id="btn-header-refresh"
-                type="button"
-                onClick={onRefreshData}
-                disabled={isSyncing}
-                title="Segarkan data produk, banner & identitas subdomain dari Cloud"
-                className="px-1.5 sm:px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-700 font-bold text-[11px] sm:text-xs flex items-center gap-1 shrink-0 transition-all cursor-pointer border border-stone-200 disabled:opacity-50"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 text-stone-600 ${isSyncing ? 'animate-spin text-blue-600' : ''}`} />
-                <span className="hidden sm:inline">Segarkan</span>
-              </button>
-            )}
-
-            {/* Tombol Traffic (Live Traffic Analytics) */}
-            {onOpenLiveTrafficModal && (
-              <button
-                id="btn-header-traffic"
-                onClick={onOpenLiveTrafficModal}
-                title="Halaman Live Traffic Analytics (Wajib Login)"
-                className="px-1.5 sm:px-2.5 py-1 rounded-lg bg-blue-950 hover:bg-blue-900 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-blue-700/50 whitespace-nowrap"
-              >
-                <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
-                <span>Traffic</span>
-              </button>
-            )}
-
-            {/* Tombol Info Subdomain */}
-            {onOpenSubdomains && (
-              <button
-                id="btn-header-subdomain"
-                onClick={onOpenSubdomains}
-                title="Buka Modul Info Subdomain & Checklist Nonaktif"
-                className="px-1.5 sm:px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-cyan-500/50 whitespace-nowrap"
-              >
-                <Globe className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
-                <span className="hidden sm:inline">Info Subdomain</span>
-                <span className="sm:hidden">Subdomain</span>
-              </button>
-            )}
-
-            {(!brandConfig || brandConfig.showOperatingHoursBadge) && (
-              <span className="text-[11px] sm:text-xs text-emerald-600 font-semibold flex items-center gap-1 shrink-0 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60 hidden md:flex">
-                <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                {operatingHoursText}
-              </span>
-            )}
           </div>
         </div>
       </div>

@@ -537,6 +537,16 @@ export default function App() {
     setMember(GUEST_MEMBER);
   };
 
+  // Cek parameter ?admin=true atau hash #admin untuk membuka panel admin bagi staf / owner
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get('admin') === 'true' || searchParams.get('admin') === '1' || window.location.hash === '#admin') {
+        setIsAdminPanelOpen(true);
+      }
+    } catch {}
+  }, []);
+
   // Brand, Header & Footer Configurations State (Add, Edit, Delete Info Brand & Footer)
   const [brandConfig, setBrandConfig] = useState<BrandHeaderFooterConfig>(() => {
     try {
@@ -2383,6 +2393,16 @@ export default function App() {
         <div className="w-full mt-6 pt-4 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-400">
           <div>{brandConfig.copyrightText || '© 2026 lapakoke.com. All rights reserved.'}</div>
           <div className="flex items-center gap-4 mt-2 sm:mt-0 flex-wrap justify-center sm:justify-end">
+            <button
+              onClick={() => {
+                setAdminPanelInitialTab('products');
+                setIsAdminPanelOpen(true);
+              }}
+              className="text-stone-500 hover:text-stone-800 font-bold transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+              title="Portal Khusus Pengelola & Kasir Toko (Login Admin)"
+            >
+              <span>🔒 Portal Admin & Kasir</span>
+            </button>
             <button
               onClick={() => {
                 setAdminPanelInitialTab('store_doku_settings');
