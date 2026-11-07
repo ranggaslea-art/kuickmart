@@ -475,4 +475,46 @@ export async function fetchSuppliersFromMySql(tenantSlug: string = 'default'): P
   }
 }
 
+// ==========================================
+// MYSQL STORES (CABANG TOKO) API CLIENT
+// ==========================================
+
+/**
+ * Simpan daftar cabang toko ke MySQL Server dan Backend
+ */
+export async function saveStoresToMySql(stores: Store[], tenantSlug: string = 'default'): Promise<boolean> {
+  try {
+    if (!Array.isArray(stores)) return false;
+    const res = await fetch('/api/stores', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-slug': tenantSlug,
+      },
+      body: JSON.stringify({ stores, tenantSlug }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error saveStoresToMySql:', err);
+    return false;
+  }
+}
+
+/**
+ * Ambil seluruh cabang toko dari MySQL / Backend Server
+ */
+export async function fetchStoresFromMySql(tenantSlug: string = 'default'): Promise<Store[] | null> {
+  try {
+    const res = await fetch(`/api/stores?tenantSlug=${encodeURIComponent(tenantSlug)}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.stores || null;
+  } catch (err) {
+    console.error('Error fetchStoresFromMySql:', err);
+    return null;
+  }
+}
+
+
 

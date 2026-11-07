@@ -113,6 +113,130 @@
         }
       },
       "required": ["id", "name", "phone", "memberNumber"]
+    },
+    "StoreBranch": {
+      "title": "StoreBranch",
+      "description": "Data cabang toko / outlet fisik yang tersinkronisasi lintas perangkat (PC, HP, Tablet)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID cabang toko"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nama cabang toko"
+        },
+        "code": {
+          "type": "string",
+          "description": "Kode cabang toko"
+        },
+        "address": {
+          "type": "string",
+          "description": "Alamat lengkap cabang"
+        },
+        "city": {
+          "type": "string",
+          "description": "Kota cabang toko"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Nomor telepon cabang"
+        },
+        "whatsapp": {
+          "type": "string",
+          "description": "Nomor WhatsApp cabang"
+        },
+        "isOpen": {
+          "type": "boolean",
+          "description": "Status buka toko"
+        },
+        "is24Hours": {
+          "type": "boolean",
+          "description": "Status buka 24 jam"
+        },
+        "openHours": {
+          "type": "string",
+          "description": "Jam operasional cabang"
+        },
+        "deliveryFee": {
+          "type": "number",
+          "description": "Tarif pengiriman dari cabang ini"
+        },
+        "minOrder": {
+          "type": "number",
+          "description": "Minimum belanja untuk pengiriman"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Waktu pembaruan data cabang"
+        }
+      },
+      "required": ["id", "name", "address"]
+    },
+    "StoreTenant": {
+      "title": "StoreTenant",
+      "description": "Identitas subdomain dan data pengelola toko cabang di lapakoke.com",
+      "type": "object",
+      "properties": {
+        "storeId": {
+          "type": "string",
+          "description": "ID unik tenant"
+        },
+        "storeSlug": {
+          "type": "string",
+          "description": "Slug subdomain toko"
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Nama resmi toko"
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Slogan atau moto toko"
+        },
+        "ownerName": {
+          "type": "string",
+          "description": "Nama pemilik / penanggung jawab toko"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Nomor kontak telepon"
+        },
+        "whatsapp": {
+          "type": "string",
+          "description": "Nomor kontak WhatsApp"
+        },
+        "address": {
+          "type": "string",
+          "description": "Alamat fisik toko"
+        },
+        "city": {
+          "type": "string",
+          "description": "Kota domisili toko"
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "URL logo toko"
+        },
+        "logoText": {
+          "type": "string",
+          "description": "Inisial logo toko"
+        },
+        "primaryColor": {
+          "type": "string",
+          "description": "Warna tema utama toko"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Status aktif subdomain toko"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Waktu pembaruan tenant"
+        }
+      },
+      "required": ["storeId", "storeSlug", "storeName"]
     }
   },
   "firestore": {
@@ -123,6 +247,14 @@
     "/customer_accounts/{customerId}": {
       "schema": "CustomerAccount",
       "description": "Koleksi data pendaftaran dan profil akun pelanggan / member"
+    },
+    "/stores/{storeId}": {
+      "schema": "StoreBranch",
+      "description": "Koleksi cabang toko yang tersinkronisasi online di semua perangkat"
+    },
+    "/store_tenants/{tenantId}": {
+      "schema": "StoreTenant",
+      "description": "Koleksi pendaftaran subdomain toko cabang yang tersinkronisasi di semua perangkat"
     }
   }
 }

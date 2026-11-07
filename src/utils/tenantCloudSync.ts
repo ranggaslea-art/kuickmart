@@ -5,12 +5,16 @@ import {
   savePurchasesToMySql,
   saveSuppliersToMySql,
   saveProductsToMySql,
+  saveStoresToMySql,
   fetchCategoriesFromMySql,
   fetchBrandsFromMySql,
   fetchPurchasesFromMySql,
   fetchSuppliersFromMySql,
   fetchProductsFromMySql,
+  fetchStoresFromMySql,
 } from '../lib/mysqlClientApi';
+import { db } from '../lib/firebase';
+import { collection, doc, setDoc, onSnapshot, getDocs } from 'firebase/firestore';
 
 /**
  * Mapping nama key sinkronisasi dengan storage key localStorage
@@ -19,6 +23,7 @@ const STORAGE_KEY_MAPPING: Record<string, string> = {
   products: 'toko_online_products',
   categories: 'toko_online_categories',
   brands: 'toko_online_brands',
+  stores: 'toko_online_stores',
   identity: STORAGE_TENANT_PREFIX,
   brand: 'toko_online_brand_config',
   vouchers: 'toko_online_vouchers',
@@ -72,9 +77,24 @@ export async function saveTenantDataToCloud<T = any>(
     );
   }
 
-  // 3. Sinkronisasikan otomatis ke Server Database (MySQL / App Settings Database)
+  // 3. Sinkronisasikan otomatis ke Server Database (MySQL / App Settings Database / Firestore)
   try {
-    if (moduleKey === 'categories' && Array.isArray(data)) {
+    if (moduleKey === 'stores' && Array.isArray(data)) {
+      await saveStoresToMySql(data as any, effectiveSlug);
+      // Sinkronisasikan ke Firestore stores collection secara real-time
+      for (const st of (data as any[])) {
+        if (st && (st.id || st.slug)) {
+          const docId = st.id || st.slug;
+          try {
+            await setDoc(doc(db, 'stores', docId), {
+              ...st,
+              id: docId,
+              updatedAt: now,
+            }, { merge: true });
+          } catch (_) {}
+        }
+      }
+    } else if (moduleKey === 'categories' && Array.isArray(data)) {
       await saveCategoriesToMySql(data as any, effectiveSlug);
     } else if (moduleKey === 'brands' && Array.isArray(data)) {
       await saveBrandsToMySql(data as any, effectiveSlug);
@@ -123,7 +143,18 @@ export async function fetchTenantDataFromCloud<T = any>(
 
   // 1. Coba ambil dari Server Database terlebih dahulu sebagai patokan utama
   try {
-    if (['brand', 'identity', 'receipts', 'promos', 'couriers'].includes(moduleKey)) {
+    if (moduleKey === 'stores') {
+      const dbStores = await fetchStoresFromMySql(effectiveSlug);
+      if (dbStores && dbStores.length > 0) return dbStores as any;
+      try {
+        const snap = await getDocs(collection(db, 'stores'));
+        if (!snap.empty) {
+          const fsStores: any[] = [];
+          snap.forEach(d => fsStores.push({ id: d.id, ...d.data() }));
+          if (fsStores.length > 0) return fsStores as any;
+        }
+      } catch (_) {}
+    } else if (['brand', 'identity', 'receipts', 'promos', 'couriers'].includes(moduleKey)) {
       const res = await fetch(`/api/app-settings?slug=${encodeURIComponent(effectiveSlug)}`, {
         headers: { 'Accept': 'application/json', 'x-tenant-slug': effectiveSlug },
         cache: 'no-cache',
@@ -225,3 +256,35 @@ export function subscribeToTenantCloudChanges(
     window.removeEventListener('tenant_cloud_synced', handleSyncEvent);
   };
 }
+
+/**
+ * Real-time listener untuk perubahan Cabang Toko (Stores) & Subdomain di Firestore
+ * Memastikan PC, HP, dan Tablet langsung menerima cabang baru tanpa perlu refresh
+ */
+export function subscribeToStoresCloudChanges(
+  onStoresUpdate: (stores: any[]) => void
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  try {
+    const unsub = onSnapshot(collection(db, 'stores'), (snapshot) => {
+      if (!snapshot.empty) {
+        const list: any[] = [];
+        snapshot.forEach((d) => {
+          list.push({ id: d.id, ...d.data() });
+        });
+        if (list.length > 0) {
+          onStoresUpdate(list);
+        }
+      }
+    }, (err) => {
+      console.warn('[Firestore] Stores listener notice:', err);
+    });
+
+    return unsub;
+  } catch (e) {
+    console.warn('[Firestore] Could not attach stores snapshot listener:', e);
+    return () => {};
+  }
+}
+

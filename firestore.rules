@@ -20,6 +20,14 @@ service cloud.firestore {
     match /store_settings/{settingId} {
       allow read, write: if true;
     }
+    // Cabang Toko & Outlet Fisik (Sinkronisasi Multi-Perangkat PC, Tablet, HP)
+    match /stores/{storeId} {
+      allow read, write: if true;
+    }
+    // Subdomain Terdaftar & Identitas Tenant Cabang
+    match /store_tenants/{tenantId} {
+      allow read, write: if true;
+    }
     // Connection test document
     match /test/{docId} {
       allow read, write: if true;

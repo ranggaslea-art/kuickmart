@@ -116,8 +116,12 @@ import {
   saveProductToMySql,
   deleteProductFromMySql,
   saveCategoriesToMySql,
-  saveBrandsToMySql
+  saveBrandsToMySql,
+  fetchStoresFromMySql,
+  saveStoresToMySql
 } from './lib/mysqlClientApi';
+import { db } from './lib/firebase';
+import { collection, doc, setDoc, onSnapshot, getDocs } from 'firebase/firestore';
 import { 
   Zap, 
   Sparkles, 
@@ -157,12 +161,14 @@ import {
   isDefaultStore,
   getTenantStorageKey,
   getTenantStore,
-  STORAGE_TENANT_PREFIX
+  STORAGE_TENANT_PREFIX,
+  fetchRegisteredSubdomains
 } from './utils/tenantHelper';
 import { 
   saveTenantDataToCloud, 
   fetchTenantDataFromCloud, 
-  subscribeToTenantCloudChanges 
+  subscribeToTenantCloudChanges,
+  subscribeToStoresCloudChanges
 } from './utils/tenantCloudSync';
 import { updateAddressBarFavicon } from './utils/faviconHelper';
 import { loadAppSettingsFromDatabase, saveAppSettingsToDatabase } from './utils/appSettingsDatabase';
@@ -971,11 +977,13 @@ export default function App() {
       const statusRes = await fetchMySqlStatus();
       setIsDatabaseConnected(Boolean(statusRes.connected));
 
-      const [dbProducts, dbCategories, dbBrands, dbOrders] = await Promise.all([
+      const [dbProducts, dbCategories, dbBrands, dbOrders, dbStores, onlineSubdomains] = await Promise.all([
         fetchProductsFromMySql(currentSlug).catch(() => null),
         fetchCategoriesFromMySql(currentSlug).catch(() => null),
         fetchBrandsFromMySql(currentSlug).catch(() => null),
         fetchOrdersFromMySql(currentSlug).catch(() => null),
+        fetchStoresFromMySql(currentSlug).catch(() => null),
+        fetchRegisteredSubdomains().catch(() => []),
       ]);
 
       if (dbProducts && dbProducts.length > 0) {
@@ -1016,6 +1024,53 @@ export default function App() {
           localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(normalized));
         } catch {}
       }
+
+      // Sinkronisasi Cabang Toko (Stores) & Subdomain Terdaftar ke seluruh media (PC, Tablet, HP)
+      setStores((prevStores) => {
+        const storeMap = new Map<string, Store>();
+        // 1. Masukkan store yang ada saat ini
+        prevStores.forEach(s => storeMap.set(s.id, s));
+
+        // 2. Masukkan dari database MySQL / server
+        if (dbStores && Array.isArray(dbStores)) {
+          dbStores.forEach(s => storeMap.set(s.id, s));
+        }
+
+        // 3. Masukkan seluruh subdomain cabang terdaftar sebagai opsi cabang toko aktif
+        if (onlineSubdomains && Array.isArray(onlineSubdomains)) {
+          onlineSubdomains.forEach((t: any) => {
+            if (t && t.storeSlug && t.storeSlug !== 'default' && t.isActive !== false) {
+              const slug = t.storeSlug;
+              if (!storeMap.has(slug)) {
+                storeMap.set(slug, {
+                  id: slug,
+                  name: t.storeName || slug,
+                  code: (slug || 'TO').toUpperCase().slice(0, 10),
+                  address: t.address || `Cabang ${t.storeName || slug}`,
+                  city: t.city || 'Pangandaran',
+                  distanceKm: 1.5,
+                  is24Hours: false,
+                  isOpen: true,
+                  openHours: '08:00 - 22:00 WIB',
+                  phone: t.phone || t.whatsapp || '0812-3456-7890',
+                  whatsapp: t.whatsapp || t.phone || '6281234567890',
+                  readyForPickup: true,
+                  readyForDelivery: true,
+                  deliveryFee: 8000,
+                  minOrder: 20000,
+                });
+              }
+            }
+          });
+        }
+
+        const mergedStores = sanitizeStores(Array.from(storeMap.values()));
+        try {
+          const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+          localStorage.setItem(key, JSON.stringify(mergedStores));
+        } catch {}
+        return mergedStores;
+      });
 
       // Sinkronisasi Identitas Tenant
       const cloudTenant = await fetchTenantDataFromCloud<StoreTenantIdentity>('identity', currentSlug);
@@ -1092,9 +1147,79 @@ export default function App() {
         setCouriers(data);
       } else if (moduleKey === 'staff' && Array.isArray(data)) {
         setStaffUsers(data);
+      } else if (moduleKey === 'stores' && Array.isArray(data)) {
+        setStores((prevStores) => {
+          const map = new Map<string, Store>();
+          prevStores.forEach(s => map.set(s.id, s));
+          data.forEach(s => map.set(s.id, s));
+          const merged = sanitizeStores(Array.from(map.values()));
+          try {
+            const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+            localStorage.setItem(key, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       }
       loadAllFromMySql();
     });
+
+    // 3c. Real-time Firestore Cloud Stores Listener (Sinkronisasi Antar PC, Tablet, HP)
+    const unsubscribeStores = subscribeToStoresCloudChanges((cloudStores) => {
+      if (Array.isArray(cloudStores) && cloudStores.length > 0) {
+        setStores((prevStores) => {
+          const map = new Map<string, Store>();
+          prevStores.forEach(s => map.set(s.id, s));
+          cloudStores.forEach(s => map.set(s.id, s));
+          const merged = sanitizeStores(Array.from(map.values()));
+          try {
+            const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+            localStorage.setItem(key, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    });
+
+    // 3d. Real-time Firestore Subdomain Tenants Listener (Subdomain Baru Langsung Muncul Jadi Cabang)
+    const unsubscribeTenants = onSnapshot(collection(db, 'store_tenants'), (snapshot) => {
+      if (!snapshot.empty) {
+        setStores((prevStores) => {
+          const map = new Map<string, Store>();
+          prevStores.forEach(s => map.set(s.id, s));
+          snapshot.forEach((docSnap) => {
+            const t = docSnap.data();
+            const slug = t.storeSlug || docSnap.id;
+            if (slug && slug !== 'default' && t.isActive !== false) {
+              if (!map.has(slug)) {
+                map.set(slug, {
+                  id: slug,
+                  name: t.storeName || slug,
+                  code: (slug || 'TO').toUpperCase().slice(0, 10),
+                  address: t.address || `Cabang ${t.storeName || slug}`,
+                  city: t.city || 'Pangandaran',
+                  distanceKm: 1.5,
+                  is24Hours: false,
+                  isOpen: true,
+                  openHours: '08:00 - 22:00 WIB',
+                  phone: t.phone || t.whatsapp || '0812-3456-7890',
+                  whatsapp: t.whatsapp || t.phone || '6281234567890',
+                  readyForPickup: true,
+                  readyForDelivery: true,
+                  deliveryFee: 8000,
+                  minOrder: 20000,
+                });
+              }
+            }
+          });
+          const merged = sanitizeStores(Array.from(map.values()));
+          try {
+            const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+            localStorage.setItem(key, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    }, (err) => console.warn('Firestore store_tenants listener notice:', err));
 
     // 4. Auto sync when tab is focused / phone screen unlocked
     const handleFocus = () => {
@@ -1117,6 +1242,8 @@ export default function App() {
 
     return () => {
       unsubscribeTenant();
+      unsubscribeStores();
+      unsubscribeTenants();
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
@@ -1356,6 +1483,17 @@ export default function App() {
     try {
       const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
       localStorage.setItem(key, JSON.stringify(newStores));
+      saveTenantDataToCloud('stores', newStores, currentSlug);
+      saveStoresToMySql(newStores, currentSlug).catch(() => {});
+      // Simpan langsung ke Firestore stores collection
+      newStores.forEach((st) => {
+        if (st && st.id) {
+          setDoc(doc(db, 'stores', st.id), {
+            ...st,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }).catch(() => {});
+        }
+      });
     } catch {}
   };
 

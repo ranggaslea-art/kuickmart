@@ -198,6 +198,116 @@ function saveAppSettingsToFile() {
 
 loadAppSettingsFromFile();
 
+// File penyimpanan data seluruh Cabang Toko (Outlet Fisik & Subdomain Toko Cabang)
+const STORE_BRANCHES_FILE = path.join(process.cwd(), 'data', 'store_branches.json');
+let storeBranchesList: any[] = [];
+
+const DEFAULT_STORE_BRANCHES = [
+  {
+    id: 'str_01',
+    slug: 'sudirman',
+    name: 'LapakOke - Sudirman Thamrin',
+    code: 'TO-SDM01',
+    address: 'Jl. Jendral Sudirman No. 18, Menteng',
+    city: 'Jakarta Pusat',
+    distanceKm: 0.7,
+    is24Hours: true,
+    isOpen: true,
+    openHours: '24 Jam Nonstop',
+    phone: '0812-3456-7890',
+    whatsapp: '0812-3456-7890',
+    readyForPickup: true,
+    readyForDelivery: true,
+    deliveryFee: 6000,
+    minOrder: 15000,
+  },
+  {
+    id: 'str_02',
+    slug: 'senopati',
+    name: 'LapakOke - Senopati Raya',
+    code: 'TO-SNP02',
+    address: 'Jl. Senopati No. 88, Kebayoran Baru',
+    city: 'Jakarta Selatan',
+    distanceKm: 2.1,
+    is24Hours: false,
+    isOpen: true,
+    openHours: '06:00 - 23:00 WIB',
+    phone: '0857-1122-3344',
+    whatsapp: '0857-1122-3344',
+    readyForPickup: true,
+    readyForDelivery: true,
+    deliveryFee: 9000,
+    minOrder: 15000,
+  },
+  {
+    id: 'str_03',
+    slug: 'kemang',
+    name: 'LapakOke - Kemang Square',
+    code: 'TO-KMG03',
+    address: 'Jl. Kemang Raya No. 45, Mampang Prapatan',
+    city: 'Jakarta Selatan',
+    distanceKm: 3.5,
+    is24Hours: true,
+    isOpen: true,
+    openHours: '24 Jam Nonstop',
+    phone: '0878-9988-7766',
+    whatsapp: '0878-9988-7766',
+    readyForPickup: true,
+    readyForDelivery: true,
+    deliveryFee: 12000,
+    minOrder: 20000,
+  },
+  {
+    id: 'str_04',
+    slug: 'kelapa-gading',
+    name: 'LapakOke - Kelapa Gading Boulevard',
+    code: 'TO-KGB04',
+    address: 'Jl. Boulevard Raya Blok PA 19 No. 1, Kelapa Gading',
+    city: 'Jakarta Utara',
+    distanceKm: 4.8,
+    is24Hours: false,
+    isOpen: true,
+    openHours: '07:00 - 22:00 WIB',
+    phone: '0813-4455-6677',
+    whatsapp: '0813-4455-6677',
+    readyForPickup: true,
+    readyForDelivery: true,
+    deliveryFee: 15000,
+    minOrder: 25000,
+  }
+];
+
+function loadStoreBranchesFromFile() {
+  try {
+    if (fs.existsSync(STORE_BRANCHES_FILE)) {
+      const raw = fs.readFileSync(STORE_BRANCHES_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        storeBranchesList = parsed;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('[StoreBranches] Could not load store_branches.json:', e);
+  }
+  storeBranchesList = [...DEFAULT_STORE_BRANCHES];
+  saveStoreBranchesToFile();
+}
+
+function saveStoreBranchesToFile() {
+  try {
+    const dir = path.dirname(STORE_BRANCHES_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(STORE_BRANCHES_FILE, JSON.stringify(storeBranchesList, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[StoreBranches] Could not write store_branches.json:', e);
+  }
+}
+
+loadStoreBranchesFromFile();
+
 // Bank endpoint mapping in Jokul DOKU
 const DOKU_BANK_PATHS: Record<string, { path: string; prefix: string; name: string }> = {
   bca: { path: '/bca-virtual-account/v2/payment-code', prefix: '80777', name: 'BCA Virtual Account' },
@@ -572,15 +682,6 @@ async function startServer() {
 
   app.get('/api/tenants', (req, res) => {
     try {
-      const access = verifySubdomainModuleAccess(req);
-      if (!access.allowed) {
-        return res.status(403).json({
-          success: false,
-          error: access.reason || 'Akses Ditolak: Modul info subdomain hanya bisa diakses oleh domain resmi lapakoke.com.',
-          allowedDomains: ALLOWED_SUBDOMAIN_MODULE_DOMAINS,
-        });
-      }
-
       const rootDomain = 'lapakoke.com';
 
       // Pastikan domain utama selalu ada dalam daftar
@@ -942,6 +1043,48 @@ async function startServer() {
       appSettingsMap[slug].updatedAt = new Date().toISOString();
       saveAppSettingsToFile();
 
+      // Auto-sinkronisasi tenant / subdomain sebagai cabang toko di storeBranchesList & database MySQL
+      if (slug !== 'default') {
+        const branchIdx = storeBranchesList.findIndex((b: any) => b.id === slug || b.slug === slug);
+        const branchEntry = {
+          id: slug,
+          slug: slug,
+          name: updatedTenant.storeName || slug,
+          code: slug.toUpperCase().slice(0, 10),
+          address: updatedTenant.address || `Cabang ${updatedTenant.storeName || slug}`,
+          city: updatedTenant.city || 'Pangandaran',
+          distanceKm: 1.2,
+          is24Hours: false,
+          isOpen: updatedTenant.isActive !== false,
+          openHours: '08:00 - 22:00 WIB',
+          phone: updatedTenant.phone || updatedTenant.whatsapp || '0812-3456-7890',
+          whatsapp: updatedTenant.whatsapp || updatedTenant.phone || '0812-3456-7890',
+          readyForPickup: true,
+          readyForDelivery: true,
+          deliveryFee: 8000,
+          minOrder: 20000,
+        };
+        if (branchIdx >= 0) {
+          storeBranchesList[branchIdx] = { ...storeBranchesList[branchIdx], ...branchEntry };
+        } else {
+          storeBranchesList.push(branchEntry);
+        }
+        saveStoreBranchesToFile();
+
+        // Simpan langsung ke MySQL stores table jika pool aktif
+        try {
+          const pool = getMySqlPool();
+          if (pool) {
+            pool.query(
+              `INSERT INTO stores (id, slug, name, address, phone, is_active)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE name=VALUES(name), address=VALUES(address), phone=VALUES(phone), is_active=VALUES(is_active)`,
+              [branchEntry.id, branchEntry.slug, branchEntry.name, branchEntry.address, branchEntry.phone, branchEntry.isOpen ? 1 : 0]
+            ).catch(() => {});
+          }
+        } catch (_) {}
+      }
+
       const sanitizedResponse = {
         ...updatedTenant,
         dokuSettings: {
@@ -1025,6 +1168,192 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error('[TenantProducts Error] Failed saving tenant products:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ==========================================
+  // 1b-6. API CABANG TOKO / STORES PERSISTENCE (PC, HP, TABLET SINKRONISASI)
+  // ==========================================
+
+  // GET /api/stores & GET /api/mysql/stores
+  const handleGetStores = async (req: express.Request, res: express.Response) => {
+    try {
+      // 1. Coba baca dari MySQL stores table jika pool aktif
+      try {
+        const pool = getMySqlPool();
+        if (pool) {
+          const [rows]: any = await pool.query('SELECT * FROM stores WHERE is_active = 1 ORDER BY created_at ASC');
+          if (Array.isArray(rows) && rows.length > 0) {
+            const mergedFromDb = rows.map((r: any) => {
+              const existing = storeBranchesList.find((b: any) => b.id === r.id || b.slug === r.slug);
+              return {
+                id: r.id,
+                slug: r.slug || r.id,
+                name: r.name,
+                code: existing?.code || (r.slug || r.id).toUpperCase().slice(0, 10),
+                address: r.address || existing?.address || '',
+                city: existing?.city || 'Jakarta',
+                distanceKm: existing?.distanceKm || 1.2,
+                is24Hours: existing?.is24Hours || false,
+                isOpen: r.is_active === 1,
+                openHours: existing?.openHours || '08:00 - 22:00 WIB',
+                phone: r.phone || existing?.phone || '',
+                whatsapp: existing?.whatsapp || r.phone || '',
+                readyForPickup: existing?.readyForPickup !== false,
+                readyForDelivery: existing?.readyForDelivery !== false,
+                deliveryFee: existing?.deliveryFee || 8000,
+                minOrder: existing?.minOrder || 15000,
+              };
+            });
+            // Update cache memory server
+            storeBranchesList = mergedFromDb;
+            saveStoreBranchesToFile();
+            return res.json({ success: true, count: mergedFromDb.length, stores: mergedFromDb, source: 'mysql' });
+          }
+        }
+      } catch (_) {}
+
+      // 2. Gabungkan tenantStoreMap (subdomain terdaftar) ke dalam daftar cabang
+      const allStoresMap: Record<string, any> = {};
+      storeBranchesList.forEach((s: any) => {
+        allStoresMap[s.id] = { ...s };
+      });
+
+      Object.keys(tenantStoreMap).forEach((slug) => {
+        if (slug !== 'default') {
+          const t = tenantStoreMap[slug];
+          if (t && t.isActive !== false) {
+            if (!allStoresMap[slug]) {
+              allStoresMap[slug] = {
+                id: slug,
+                slug: slug,
+                name: t.storeName || slug,
+                code: slug.toUpperCase().slice(0, 10),
+                address: t.address || `Cabang ${t.storeName || slug}`,
+                city: t.city || 'Pangandaran',
+                distanceKm: 1.5,
+                is24Hours: false,
+                isOpen: true,
+                openHours: '08:00 - 22:00 WIB',
+                phone: t.phone || t.whatsapp || '0812-3456-7890',
+                whatsapp: t.whatsapp || t.phone || '0812-3456-7890',
+                readyForPickup: true,
+                readyForDelivery: true,
+                deliveryFee: 8000,
+                minOrder: 20000,
+              };
+            }
+          }
+        }
+      });
+
+      const finalStores = Object.values(allStoresMap);
+      return res.json({ success: true, count: finalStores.length, stores: finalStores, source: 'file' });
+    } catch (err: any) {
+      console.error('[Stores GET Error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  };
+
+  app.get('/api/stores', handleGetStores);
+  app.get('/api/mysql/stores', handleGetStores);
+
+  // POST /api/stores & POST /api/mysql/stores
+  const handleSaveStores = async (req: express.Request, res: express.Response) => {
+    try {
+      const incoming = req.body;
+      const rawList: any[] = Array.isArray(incoming) 
+        ? incoming 
+        : (Array.isArray(incoming?.stores) ? incoming.stores : (incoming?.store ? [incoming.store] : []));
+
+      if (!Array.isArray(rawList) || rawList.length === 0) {
+        return res.status(400).json({ success: false, error: 'Data cabang toko tidak boleh kosong' });
+      }
+
+      // Merge dengan daftar cabang saat ini
+      const updatedMap: Record<string, any> = {};
+      storeBranchesList.forEach((b: any) => {
+        updatedMap[b.id] = { ...b };
+      });
+
+      rawList.forEach((s: any) => {
+        const id = s.id || s.slug || `str_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        updatedMap[id] = {
+          ...(updatedMap[id] || {}),
+          ...s,
+          id,
+          slug: s.slug || s.code?.toLowerCase() || id,
+          name: s.name || 'Cabang Minimarket',
+          code: s.code || id.toUpperCase().slice(0, 10),
+          address: s.address || '',
+          city: s.city || 'Jakarta',
+          distanceKm: Number(s.distanceKm) || 1.2,
+          is24Hours: Boolean(s.is24Hours),
+          isOpen: s.isOpen !== false,
+          openHours: s.openHours || '08:00 - 22:00 WIB',
+          phone: s.phone || '',
+          whatsapp: s.whatsapp || s.phone || '',
+          readyForPickup: s.readyForPickup !== false,
+          readyForDelivery: s.readyForDelivery !== false,
+          deliveryFee: Number(s.deliveryFee) || 0,
+          minOrder: Number(s.minOrder) || 0,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+
+      storeBranchesList = Object.values(updatedMap);
+      saveStoreBranchesToFile();
+
+      // Sinkronisasi ke MySQL stores table jika pool aktif
+      try {
+        const pool = getMySqlPool();
+        if (pool) {
+          for (const s of storeBranchesList) {
+            await pool.query(
+              `INSERT INTO stores (id, slug, name, address, phone, is_active)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE name=VALUES(name), address=VALUES(address), phone=VALUES(phone), is_active=VALUES(is_active)`,
+              [s.id, s.slug, s.name, s.address, s.phone, s.isOpen ? 1 : 0]
+            );
+          }
+        }
+      } catch (_) {}
+
+      console.log(`[Stores] Berhasil menyimpan ${storeBranchesList.length} cabang toko secara permanen.`);
+      return res.json({
+        success: true,
+        message: 'Daftar cabang toko berhasil disimpan di server dan database MySQL.',
+        count: storeBranchesList.length,
+        stores: storeBranchesList,
+      });
+    } catch (err: any) {
+      console.error('[Stores POST Error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  };
+
+  app.post('/api/stores', handleSaveStores);
+  app.post('/api/mysql/stores', handleSaveStores);
+
+  // DELETE /api/stores/:id
+  app.delete('/api/stores/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!id) return res.status(400).json({ success: false, error: 'ID cabang wajib diisi' });
+
+      storeBranchesList = storeBranchesList.filter((b: any) => b.id !== id && b.slug !== id);
+      saveStoreBranchesToFile();
+
+      try {
+        const pool = getMySqlPool();
+        if (pool) {
+          await pool.query('UPDATE stores SET is_active = 0 WHERE id = ? OR slug = ?', [id, id]);
+        }
+      } catch (_) {}
+
+      return res.json({ success: true, message: `Cabang toko ${id} berhasil dihapus.` });
+    } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
   });
