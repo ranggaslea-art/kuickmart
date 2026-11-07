@@ -42,6 +42,7 @@ const STORAGE_KEY_MAPPING: Record<string, string> = {
   sales_returns: 'toko_online_sales_returns',
   purchase_returns: 'toko_online_purchase_returns',
   stock_mutations: 'toko_online_stock_mutations',
+  expeditions: 'toko_online_expeditions',
 };
 
 /**

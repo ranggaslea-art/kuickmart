@@ -173,6 +173,20 @@ export interface CourierInfo {
   updatedAt?: string;
 }
 
+export interface ExpeditionServiceOption {
+  id: string;
+  courierCode: string; // 'jne' | 'jnt' | 'sicepat' | 'pos' | 'anteraja' | custom
+  courierName: string; // 'JNE Express', 'J&T Express', dll.
+  serviceCode?: string; // 'REG', 'YES', 'EZ', dll.
+  serviceName: string; // 'REG (Reguler)'
+  etd: string; // '2 - 3 Hari', '1 Hari'
+  cost: number; // Tarif ongkir dlm Rupiah
+  badge?: string; // 'Rekomendasi', 'Kilat', 'Hemat'
+  color?: string; // class badge/logo
+  description?: string;
+  isActive?: boolean;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;

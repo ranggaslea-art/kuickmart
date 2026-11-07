@@ -102,7 +102,8 @@ import {
   RewardItem,
   PointsLedgerEntry,
   BrandItem,
-  Category
+  Category,
+  ExpeditionServiceOption
 } from '../types';
 import { 
   INITIAL_STAFF_USERS, 
@@ -110,6 +111,7 @@ import {
   INITIAL_STORE_PROMOS, 
   INITIAL_COURIERS, 
   INITIAL_BRAND_CONFIG,
+  INITIAL_EXPEDITION_SERVICES,
   CATEGORIES,
   INITIAL_BRANDS 
 } from '../data/mockData';
@@ -190,6 +192,7 @@ import {
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 import { SplashScreenManager } from './SplashScreenManager';
 import { triggerManualSplashScreen } from '../utils/splashScreenHelper';
+import { ExpeditionManager } from './ExpeditionManager';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -216,6 +219,8 @@ interface AdminPanelModalProps {
   onUpdateStorePromos?: (promos: StorePromoInfo[]) => void;
   couriers?: CourierInfo[];
   onUpdateCouriers?: (couriers: CourierInfo[]) => void;
+  expeditionServices?: ExpeditionServiceOption[];
+  onUpdateExpeditionServices?: (services: ExpeditionServiceOption[]) => void;
   brandConfig?: BrandHeaderFooterConfig;
   onUpdateBrandConfig?: (config: BrandHeaderFooterConfig) => void;
   staffUsers?: StaffUser[];
@@ -259,6 +264,7 @@ export type AdminTab =
   | 'receipts'
   | 'promos'
   | 'couriers'
+  | 'expeditions'
   | 'brand_info'
   | 'store_doku_settings'
   | 'push_notifications'
@@ -313,6 +319,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onUpdateStorePromos,
   couriers,
   onUpdateCouriers,
+  expeditionServices,
+  onUpdateExpeditionServices,
   brandConfig,
   onUpdateBrandConfig,
   staffUsers: propStaffUsers,
@@ -566,6 +574,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     try {
       const key = getTenantStorageKey('toko_online_couriers', currentSlug);
       localStorage.setItem(key, JSON.stringify(newCouriers));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Internal fallback for expedition services if not provided via props
+  const [internalExpeditionServices, setInternalExpeditionServices] = useState<ExpeditionServiceOption[]>(() => {
+    try {
+      const key = getTenantStorageKey('toko_online_expeditions', currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_expeditions', currentSlug));
+      if (saved) return JSON.parse(saved);
+      return INITIAL_EXPEDITION_SERVICES;
+    } catch {
+      return INITIAL_EXPEDITION_SERVICES;
+    }
+  });
+
+  const activeExpeditionServices = expeditionServices || internalExpeditionServices;
+  const handleUpdateExpeditionServices = (newServices: ExpeditionServiceOption[]) => {
+    if (onUpdateExpeditionServices) {
+      onUpdateExpeditionServices(newServices);
+    }
+    setInternalExpeditionServices(newServices);
+    try {
+      const key = getTenantStorageKey('toko_online_expeditions', currentSlug);
+      localStorage.setItem(key, JSON.stringify(newServices));
+      saveTenantDataToCloud('expeditions', newServices, currentSlug);
     } catch (e) {
       console.error(e);
     }

@@ -20,18 +20,23 @@ import {
   AlertTriangle,
   ExternalLink,
   Zap,
-  Clock
+  Clock,
+  Truck
 } from 'lucide-react';
-import { CourierInfo, Store } from '../types';
+import { CourierInfo, Store, ExpeditionServiceOption } from '../types';
 import { INITIAL_COURIERS } from '../data/mockData';
 import { compressImageFile } from '../utils/imageHelper';
 import { cleanPhoneNumber, openWhatsAppDirect, generateOrderWhatsAppMessage } from '../utils/whatsappHelper';
+import { ExpeditionManager } from './ExpeditionManager';
 
 interface CourierManagerProps {
   couriers: CourierInfo[];
   stores: Store[];
   onUpdateCouriers: (couriers: CourierInfo[]) => void;
   onSelectCourierForOrder?: (courier: CourierInfo) => void;
+  expeditionServices?: ExpeditionServiceOption[];
+  onUpdateExpeditionServices?: (services: ExpeditionServiceOption[]) => void;
+  initialSubTab?: 'local_couriers' | 'expeditions';
 }
 
 const PRESET_COURIER_AVATARS = [
@@ -47,7 +52,11 @@ export const CourierManager: React.FC<CourierManagerProps> = ({
   couriers,
   stores,
   onUpdateCouriers,
+  expeditionServices,
+  onUpdateExpeditionServices,
+  initialSubTab = 'local_couriers',
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'local_couriers' | 'expeditions'>(initialSubTab);
   const [searchTerm, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'delivering' | 'off'>('all');
   const [storeFilter, setStoreFilter] = useState<string>('all');
@@ -261,23 +270,62 @@ export const CourierManager: React.FC<CourierManagerProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-stone-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      {/* Sub-tab Switcher: Kurir Toko & Armada vs Ekspedisi Logistik */}
+      <div className="flex items-center gap-2 p-1 bg-stone-100 rounded-2xl border border-stone-200">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('local_couriers')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'local_couriers'
+              ? 'bg-white text-stone-900 shadow-xs border border-stone-200/80'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Bike className={`w-4 h-4 ${activeSubTab === 'local_couriers' ? 'text-blue-600' : 'text-stone-400'}`} />
+          <span>Kurir Toko &amp; Driver Armada ({couriers.length})</span>
+        </button>
 
-      {/* Top Action Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-stone-200 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-              <Bike className="w-4 h-4" />
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('expeditions')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'expeditions'
+              ? 'bg-white text-blue-900 shadow-xs border border-stone-200/80'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Truck className={`w-4 h-4 ${activeSubTab === 'expeditions' ? 'text-amber-500' : 'text-stone-400'}`} />
+          <span>Macam Pengiriman Ekspedisi &amp; Tarif ({expeditionServices?.length || 11})</span>
+          <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-md font-extrabold hidden sm:inline">
+            JNE, J&amp;T, SiCepat, dll.
+          </span>
+        </button>
+      </div>
+
+      {activeSubTab === 'expeditions' ? (
+        <ExpeditionManager
+          expeditionServices={expeditionServices || []}
+          onUpdateExpeditionServices={onUpdateExpeditionServices || (() => {})}
+        />
+      ) : (
+        <>
+          {/* Toast Notification */}
+          {toastMessage && (
+            <div className="fixed top-5 right-5 z-50 bg-stone-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>{toastMessage}</span>
             </div>
+          )}
+
+          {/* Top Action Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-stone-200 shadow-2xs">
             <div>
-              <h3 className="text-sm font-black text-stone-900">Manajemen Kurir & Armada Pengiriman</h3>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                  <Bike className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-stone-900">Manajemen Kurir & Armada Pengiriman</h3>
               <p className="text-[11px] text-stone-500">
                 Kelola data pengemudi, kontak WhatsApp, nomor telepon, armada kendaraan, dan status penugasan.
               </p>
@@ -819,6 +867,8 @@ export const CourierManager: React.FC<CourierManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
