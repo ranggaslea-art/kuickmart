@@ -72,6 +72,7 @@ export interface BrandItem {
 
 export interface Store {
   id: string;
+  slug?: string;
   name: string;
   code: string;
   address: string;

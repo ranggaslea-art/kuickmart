@@ -118,10 +118,11 @@ import {
   saveCategoriesToMySql,
   saveBrandsToMySql,
   fetchStoresFromMySql,
-  saveStoresToMySql
+  saveStoresToMySql,
+  deleteStoreFromMySql
 } from './lib/mysqlClientApi';
 import { db } from './lib/firebase';
-import { collection, doc, setDoc, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, getDocs, deleteDoc } from 'firebase/firestore';
 import { 
   Zap, 
   Sparkles, 
@@ -1027,19 +1028,37 @@ export default function App() {
 
       // Sinkronisasi Cabang Toko (Stores) & Subdomain Terdaftar ke seluruh media (PC, Tablet, HP)
       setStores((prevStores) => {
-        const storeMap = new Map<string, Store>();
-        // 1. Masukkan store yang ada saat ini
-        prevStores.forEach(s => storeMap.set(s.id, s));
+        let deletedSet = new Set<string>();
+        try {
+          const rawDel = localStorage.getItem('lapakoke_deleted_store_ids');
+          if (rawDel) {
+            const arr = JSON.parse(rawDel);
+            if (Array.isArray(arr)) arr.forEach((x: string) => deletedSet.add(x));
+          }
+        } catch {}
 
-        // 2. Masukkan dari database MySQL / server
-        if (dbStores && Array.isArray(dbStores)) {
-          dbStores.forEach(s => storeMap.set(s.id, s));
+        const storeMap = new Map<string, Store>();
+
+        if (dbStores && Array.isArray(dbStores) && dbStores.length > 0) {
+          // Jika MySQL / Backend memiliki data cabang aktif, gunakan sebagai sumber utama
+          dbStores.forEach(s => {
+            if (s && s.id && !deletedSet.has(s.id) && !deletedSet.has(s.slug || '')) {
+              storeMap.set(s.id, s);
+            }
+          });
+        } else {
+          // Fallback ke store saat ini yang belum dihapus
+          prevStores.forEach(s => {
+            if (s && s.id && !deletedSet.has(s.id) && !deletedSet.has(s.slug || '')) {
+              storeMap.set(s.id, s);
+            }
+          });
         }
 
-        // 3. Masukkan seluruh subdomain cabang terdaftar sebagai opsi cabang toko aktif
+        // Subdomain cabang aktif terdaftar jika ada
         if (onlineSubdomains && Array.isArray(onlineSubdomains)) {
           onlineSubdomains.forEach((t: any) => {
-            if (t && t.storeSlug && t.storeSlug !== 'default' && t.isActive !== false) {
+            if (t && t.storeSlug && t.storeSlug !== 'default' && t.isActive !== false && !deletedSet.has(t.storeSlug)) {
               const slug = t.storeSlug;
               if (!storeMap.has(slug)) {
                 storeMap.set(slug, {
@@ -1495,6 +1514,53 @@ export default function App() {
         }
       });
     } catch {}
+  };
+
+  const handleDeleteStore = async (storeId: string) => {
+    try {
+      // 1. Simpan ke blacklist deletedStoreIds di localStorage
+      try {
+        const raw = localStorage.getItem('lapakoke_deleted_store_ids');
+        const list: string[] = raw ? JSON.parse(raw) : [];
+        if (!list.includes(storeId)) {
+          list.push(storeId);
+          localStorage.setItem('lapakoke_deleted_store_ids', JSON.stringify(list));
+        }
+      } catch {}
+
+      // 2. Filter dari state React & localStorage
+      const remaining = stores.filter((s) => s.id !== storeId && s.slug !== storeId);
+      setStores(remaining);
+
+      // Jika toko yang sedang aktif dihapus, beralih ke toko pertama yang tersisa
+      if (currentStore.id === storeId || currentStore.slug === storeId) {
+        if (remaining.length > 0) {
+          setCurrentStore(remaining[0]);
+        }
+      }
+
+      const key = getTenantStorageKey(STORAGE_STORES_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(remaining));
+      saveTenantDataToCloud('stores', remaining, currentSlug);
+
+      // 3. Panggil API MySQL & Server Backend DELETE /api/stores/:id
+      await deleteStoreFromMySql(storeId);
+
+      // 4. Hapus dokumen di Cloud Firestore jika aktif
+      try {
+        await deleteDoc(doc(db, 'stores', storeId));
+      } catch (fsErr) {
+        console.warn('Gagal menghapus store dari Firestore:', fsErr);
+      }
+
+      // Hapus juga dari store_tenants di Firestore jika ada
+      try {
+        await deleteDoc(doc(db, 'store_tenants', storeId));
+      } catch {}
+    } catch (err) {
+      console.error('Error saat menghapus cabang toko:', err);
+      throw err;
+    }
   };
 
   const handleUpdateVouchers = (newVouchers: Voucher[]) => {
@@ -2727,6 +2793,7 @@ export default function App() {
           currentStore={currentStore}
           onSelectStore={setCurrentStore}
           onUpdateStores={handleUpdateStores}
+          onDeleteStore={handleDeleteStore}
           vouchers={vouchers}
           onUpdateVouchers={handleUpdateVouchers}
           isDatabaseConnected={isDatabaseConnected}

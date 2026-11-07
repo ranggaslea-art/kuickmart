@@ -516,5 +516,22 @@ export async function fetchStoresFromMySql(tenantSlug: string = 'default'): Prom
   }
 }
 
+/**
+ * Hapus cabang toko dari MySQL / Backend Server
+ */
+export async function deleteStoreFromMySql(storeId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/stores/${encodeURIComponent(storeId)}`, {
+      method: 'DELETE',
+    });
+    const json = await res.json().catch(() => ({}));
+    return Boolean(json.success);
+  } catch (err) {
+    console.error('Error deleteStoreFromMySql:', err);
+    return false;
+  }
+}
+
+
 
 

@@ -206,6 +206,7 @@ interface AdminPanelModalProps {
   currentStore: Store;
   onSelectStore: (store: Store) => void;
   onUpdateStores: (stores: Store[]) => void;
+  onDeleteStore?: (storeId: string) => Promise<void> | void;
   vouchers: Voucher[];
   onUpdateVouchers: (vouchers: Voucher[]) => void;
   isDatabaseConnected?: boolean;
@@ -302,6 +303,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   currentStore,
   onSelectStore,
   onUpdateStores,
+  onDeleteStore,
   vouchers,
   onUpdateVouchers,
   isDatabaseConnected = true,
@@ -1120,6 +1122,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [storeReadyForPickup, setStoreReadyForPickup] = useState(true);
   const [storeReadyForDelivery, setStoreReadyForDelivery] = useState(true);
   const [storeFeedback, setStoreFeedback] = useState<string | null>(null);
+  const [storeErrorMessage, setStoreErrorMessage] = useState<string | null>(null);
+  const [storeToDelete, setStoreToDelete] = useState<Store | null>(null);
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
 
   // User Management State
   const [isAddingUser, setIsAddingUser] = useState(false);
@@ -1814,19 +1819,41 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setEditingStore(null);
   };
 
-  const handleDeleteStore = (storeId: string, storeNameToDelete: string) => {
+  const handlePromptDeleteStore = (store: Store) => {
     if (stores.length <= 1) {
-      alert('Minimal harus ada 1 cabang toko aktif di sistem!');
+      setStoreErrorMessage('Minimal harus ada 1 cabang toko aktif di sistem!');
+      setTimeout(() => setStoreErrorMessage(null), 4000);
       return;
     }
-    if (window.confirm(`Yakin ingin menghapus cabang toko "${storeNameToDelete}"?`)) {
-      const remaining = stores.filter(s => s.id !== storeId);
-      onUpdateStores(remaining);
-      if (currentStore.id === storeId) {
-        onSelectStore(remaining[0]);
+    setStoreToDelete(store);
+  };
+
+  const handleConfirmDeleteStore = async () => {
+    if (!storeToDelete) return;
+    setIsDeletingStore(true);
+    const idToDelete = storeToDelete.id;
+    const nameToDelete = storeToDelete.name;
+
+    try {
+      if (onDeleteStore) {
+        await onDeleteStore(idToDelete);
+      } else {
+        const remaining = stores.filter(s => s.id !== idToDelete && s.slug !== idToDelete);
+        onUpdateStores(remaining);
+        if (currentStore.id === idToDelete || currentStore.slug === idToDelete) {
+          if (remaining.length > 0) {
+            onSelectStore(remaining[0]);
+          }
+        }
       }
-      setStoreFeedback(`Cabang "${storeNameToDelete}" berhasil dihapus.`);
+      setStoreFeedback(`Cabang "${nameToDelete}" berhasil dihapus.`);
       setTimeout(() => setStoreFeedback(null), 3500);
+    } catch (err: any) {
+      setStoreErrorMessage(`Gagal menghapus cabang: ${err?.message || 'Terjadi kesalahan sistem'}`);
+      setTimeout(() => setStoreErrorMessage(null), 4000);
+    } finally {
+      setIsDeletingStore(false);
+      setStoreToDelete(null);
     }
   };
 
@@ -3934,6 +3961,13 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 </div>
               )}
 
+              {storeErrorMessage && (
+                <div className="p-3 bg-red-50 border border-red-300 text-red-900 rounded-2xl text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{storeErrorMessage}</span>
+                </div>
+              )}
+
               {isAddingStore ? (
                 /* Form Edit / Tambah Cabang Toko */
                 <form onSubmit={handleSaveStore} className="bg-stone-50 border border-stone-200 rounded-3xl p-5 space-y-5">
@@ -4302,8 +4336,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                   ) : null}
 
                                   <button
-                                    onClick={() => handleDeleteStore(store.id, store.name)}
-                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl"
+                                    type="button"
+                                    onClick={() => handlePromptDeleteStore(store)}
+                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors cursor-pointer"
                                     title="Hapus Cabang"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -4370,6 +4405,58 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                     })}
                   </div>
                 </>
+              )}
+
+              {/* Custom In-Modal Confirmation for Store Deletion (Anti-block iframe) */}
+              {storeToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+                  <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                        <Trash2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-base text-stone-900">Hapus Cabang Toko</h4>
+                        <p className="text-xs text-stone-500">Tindakan ini akan menghapus cabang dari seluruh perangkat.</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-red-50/70 border border-red-200/60 rounded-2xl p-3.5 text-xs text-red-900 space-y-1.5">
+                      <p className="font-semibold text-stone-700">Apakah Anda yakin ingin menghapus cabang toko berikut?</p>
+                      <p className="font-bold text-sm text-stone-900">"{storeToDelete.name}"</p>
+                      <p className="text-[11px] text-stone-600">Alamat: {storeToDelete.address}, {storeToDelete.city}</p>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={isDeletingStore}
+                        onClick={() => setStoreToDelete(null)}
+                        className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 font-bold text-xs hover:bg-stone-100 transition-colors cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDeletingStore}
+                        onClick={handleConfirmDeleteStore}
+                        className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-red-600/20 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {isDeletingStore ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menghapus Cabang...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Ya, Hapus Cabang</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           ))}

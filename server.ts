@@ -1214,42 +1214,8 @@ async function startServer() {
         }
       } catch (_) {}
 
-      // 2. Gabungkan tenantStoreMap (subdomain terdaftar) ke dalam daftar cabang
-      const allStoresMap: Record<string, any> = {};
-      storeBranchesList.forEach((s: any) => {
-        allStoresMap[s.id] = { ...s };
-      });
-
-      Object.keys(tenantStoreMap).forEach((slug) => {
-        if (slug !== 'default') {
-          const t = tenantStoreMap[slug];
-          if (t && t.isActive !== false) {
-            if (!allStoresMap[slug]) {
-              allStoresMap[slug] = {
-                id: slug,
-                slug: slug,
-                name: t.storeName || slug,
-                code: slug.toUpperCase().slice(0, 10),
-                address: t.address || `Cabang ${t.storeName || slug}`,
-                city: t.city || 'Pangandaran',
-                distanceKm: 1.5,
-                is24Hours: false,
-                isOpen: true,
-                openHours: '08:00 - 22:00 WIB',
-                phone: t.phone || t.whatsapp || '0812-3456-7890',
-                whatsapp: t.whatsapp || t.phone || '0812-3456-7890',
-                readyForPickup: true,
-                readyForDelivery: true,
-                deliveryFee: 8000,
-                minOrder: 20000,
-              };
-            }
-          }
-        }
-      });
-
-      const finalStores = Object.values(allStoresMap);
-      return res.json({ success: true, count: finalStores.length, stores: finalStores, source: 'file' });
+      // 2. Gunakan storeBranchesList yang tersimpan di file server
+      return res.json({ success: true, count: storeBranchesList.length, stores: storeBranchesList, source: 'file' });
     } catch (err: any) {
       console.error('[Stores GET Error]:', err);
       return res.status(500).json({ success: false, error: err.message });
@@ -1271,11 +1237,14 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Data cabang toko tidak boleh kosong' });
       }
 
-      // Merge dengan daftar cabang saat ini
+      // Jika replaceAll diaktifkan, jangan merge dengan cabang lama
+      const isReplaceAll = Boolean(incoming?.replaceAll) || req.query.replace === 'true';
       const updatedMap: Record<string, any> = {};
-      storeBranchesList.forEach((b: any) => {
-        updatedMap[b.id] = { ...b };
-      });
+      if (!isReplaceAll) {
+        storeBranchesList.forEach((b: any) => {
+          updatedMap[b.id] = { ...b };
+        });
+      }
 
       rawList.forEach((s: any) => {
         const id = s.id || s.slug || `str_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -1336,14 +1305,19 @@ async function startServer() {
   app.post('/api/stores', handleSaveStores);
   app.post('/api/mysql/stores', handleSaveStores);
 
-  // DELETE /api/stores/:id
-  app.delete('/api/stores/:id', async (req, res) => {
+  // DELETE /api/stores/:id & DELETE /api/mysql/stores/:id
+  const handleDeleteStoreEndpoint = async (req: express.Request, res: express.Response) => {
     try {
       const { id } = req.params;
       if (!id) return res.status(400).json({ success: false, error: 'ID cabang wajib diisi' });
 
       storeBranchesList = storeBranchesList.filter((b: any) => b.id !== id && b.slug !== id);
       saveStoreBranchesToFile();
+
+      if (tenantStoreMap[id]) {
+        delete tenantStoreMap[id];
+        saveTenantsToFile();
+      }
 
       try {
         const pool = getMySqlPool();
@@ -1352,11 +1326,16 @@ async function startServer() {
         }
       } catch (_) {}
 
+      console.log(`[Stores] Cabang ${id} berhasil dihapus dari file dan dinonaktifkan di MySQL.`);
       return res.json({ success: true, message: `Cabang toko ${id} berhasil dihapus.` });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
-  });
+  };
+
+  app.delete('/api/stores/:id', handleDeleteStoreEndpoint);
+  app.delete('/api/mysql/stores/:id', handleDeleteStoreEndpoint);
+
 
   // 1c. Test DOKU Credentials Endpoint
   app.post('/api/doku/test-credentials', (req, res) => {
