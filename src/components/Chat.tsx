@@ -138,24 +138,15 @@ export const Chat: React.FC<ChatProps> = ({
   const [deleteThreadTargetId, setDeleteThreadTargetId] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Hak Akses Admin Chat State & Authorization
+  // Hak Akses Admin Chat: Selalu default ke Mode Pelanggan dan WAJIB verifikasi Pop Up Admin Login
   const [isAdminAuthDialogOpen, setIsAdminAuthDialogOpen] = useState(false);
   const [adminAuthUsername, setAdminAuthUsername] = useState('');
   const [adminAuthPin, setAdminAuthPin] = useState('');
   const [showAdminAuthPassword, setShowAdminAuthPassword] = useState(false);
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
-  const [authenticatedStaffUser, setAuthenticatedStaffUser] = useState<StaffUser | null>(() => {
-    try {
-      const activeAdminRaw = sessionStorage.getItem('lapakoke_chat_admin_user') || sessionStorage.getItem('toko_online_admin_active_user');
-      if (activeAdminRaw) {
-        const parsed = JSON.parse(activeAdminRaw);
-        if (parsed && typeof parsed === 'object') return parsed;
-      }
-    } catch {}
-    return null;
-  });
+  const [authenticatedStaffUser, setAuthenticatedStaffUser] = useState<StaffUser | null>(null);
 
-  // Verify credentials for Mode Admin Chat
+  // Verifikasi Kredensial Admin untuk Masuk ke Mode Admin Chat di Semua Domain & Subdomain
   const handleVerifyAndEnterAdminMode = (usernameInput: string, pinInput: string) => {
     const cleanUser = usernameInput.trim().toLowerCase();
     const cleanPin = pinInput.trim();
@@ -164,7 +155,7 @@ export const Chat: React.FC<ChatProps> = ({
       return false;
     }
 
-    let staffList: StaffUser[] = INITIAL_STAFF_USERS;
+    let staffList: StaffUser[] = [];
     try {
       const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
       const saved = localStorage.getItem(key) || localStorage.getItem(getTenantStorageKey('kuickmart_staff_users', currentSlug));
@@ -176,19 +167,22 @@ export const Chat: React.FC<ChatProps> = ({
       }
     } catch {}
 
+    // Pastikan seluruh akun staf bawaan (admin, spv, kasir, gudang) selalu tersedia sebagai baseline di semua domain & subdomain
+    INITIAL_STAFF_USERS.forEach(def => {
+      if (!staffList.some(u => (u?.username || '').toLowerCase() === def.username.toLowerCase())) {
+        staffList.push(def);
+      }
+    });
+
     const matched = staffList.find(
       u => u && u.isActive !== false && (
-        u.username?.toLowerCase() === cleanUser || 
+        (u.username || '').toLowerCase() === cleanUser || 
         (u.phone && u.phone.replace(/\D/g, '') === cleanUser.replace(/\D/g, ''))
       )
     );
 
-    if (matched && (matched.pin === cleanPin || (cleanPin === 'admin123' && matched.role === 'admin'))) {
+    if (matched && String(matched.pin).trim() === cleanPin) {
       setAuthenticatedStaffUser(matched);
-      try {
-        sessionStorage.setItem('lapakoke_chat_admin_authenticated', 'true');
-        sessionStorage.setItem('lapakoke_chat_admin_user', JSON.stringify(matched));
-      } catch {}
       setIsAdminAuthDialogOpen(false);
       setActiveRole('admin');
       setAdminViewMode('chat_thread');
@@ -196,63 +190,38 @@ export const Chat: React.FC<ChatProps> = ({
       return true;
     }
 
-    setAdminAuthError('ID Pengguna atau Password/PIN salah. Anda tidak memiliki hak akses admin chat.');
+    setAdminAuthError('ID Pengguna atau Password / PIN salah. Anda tidak memiliki hak akses admin chat.');
     return false;
   };
 
-  // Button to request Admin Mode with security gate
+  // Tombol Masuk ke Mode Admin Chat - WAJIB MENGGUNAKAN POP UP LOGIN ADMIN di semua domain & subdomain
   const handleRequestAdminAccess = () => {
-    // 1. Check if already authenticated staff in this session
-    if (authenticatedStaffUser) {
-      setActiveRole('admin');
-      setAdminViewMode('chat_thread');
-      return;
-    }
-
-    // 2. Check active admin session from sessionStorage
-    try {
-      const activeAdminRaw = sessionStorage.getItem('lapakoke_chat_admin_user') || sessionStorage.getItem('toko_online_admin_active_user');
-      if (activeAdminRaw) {
-        const parsed = JSON.parse(activeAdminRaw);
-        if (parsed && (parsed.role === 'admin' || parsed.role === 'supervisor' || parsed.role === 'kasir' || parsed.role === 'gudang')) {
-          setAuthenticatedStaffUser(parsed);
-          setActiveRole('admin');
-          setAdminViewMode('chat_thread');
-          return;
-        }
-      }
-    } catch {}
-
-    // 3. Not authenticated -> Open verification gate dialog
     setAdminAuthUsername('');
     setAdminAuthPin('');
+    setShowAdminAuthPassword(false);
     setAdminAuthError(null);
     setIsAdminAuthDialogOpen(true);
   };
 
-  // Button to exit Admin Mode and safely return to customer mode
+  // Tombol Keluar dari Mode Admin dan Kembali Aman ke Mode Pelanggan
   const handleExitAdminMode = () => {
-    try {
-      sessionStorage.removeItem('lapakoke_chat_admin_authenticated');
-      sessionStorage.removeItem('lapakoke_chat_admin_user');
-    } catch {}
     setAuthenticatedStaffUser(null);
     setActiveRole('customer');
   };
 
-  // Enforce security: if activeRole is 'admin' but not authenticated, fallback to 'customer'
+  // Reset sesi saat jendela chat ditutup atau berganti toko/subdomain
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveRole('customer');
+      setAuthenticatedStaffUser(null);
+      setIsAdminAuthDialogOpen(false);
+      setAdminAuthError(null);
+    }
+  }, [isOpen, currentSlug]);
+
+  // Keamanan ketat: Jika role adalah 'admin' tanpa staf terverifikasi, otomatis kembalikan ke 'customer'
   useEffect(() => {
     if (activeRole === 'admin' && !authenticatedStaffUser) {
-      try {
-        const activeAdminRaw = sessionStorage.getItem('lapakoke_chat_admin_user') || sessionStorage.getItem('toko_online_admin_active_user');
-        if (activeAdminRaw) {
-          const parsed = JSON.parse(activeAdminRaw);
-          if (parsed && typeof parsed === 'object') {
-            setAuthenticatedStaffUser(parsed);
-            return;
-          }
-        }
-      } catch {}
       setActiveRole('customer');
     }
   }, [activeRole, authenticatedStaffUser]);
@@ -873,14 +842,13 @@ export const Chat: React.FC<ChatProps> = ({
                 <button
                   type="button"
                   onClick={handleRequestAdminAccess}
-                  title="Masuk ke Mode Admin Chat (Khusus Staf & Admin Toko)"
-                  className="text-[10px] font-bold px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-2xs"
+                  title="Masuk ke Mode Admin Chat (Wajib Login Pop Up Admin)"
+                  className="text-[10px] font-black px-2.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 border border-amber-300 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-xs"
                 >
-                  <Lock className="w-3 h-3 text-amber-300 shrink-0" />
-                  <span className="hidden sm:inline">Akses Admin</span>
-                  <span className="sm:hidden">Admin</span>
+                  <Lock className="w-3.5 h-3.5 text-stone-950 shrink-0" />
+                  <span>Mode Admin</span>
                   {totalAdminUnreadCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+                    <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
                   )}
                 </button>
               ) : (
@@ -1377,8 +1345,10 @@ export const Chat: React.FC<ChatProps> = ({
                     <ShieldCheck className="w-5 h-5 text-amber-700" />
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-sm text-stone-900 leading-tight">Hak Akses Admin Chat</h4>
-                    <p className="text-[10px] text-stone-500 mt-0.5">Khusus Pengelola & Kasir {effectiveStoreName}</p>
+                    <h4 className="font-extrabold text-sm text-stone-900 leading-tight">Pop Up Login Mode Admin</h4>
+                    <p className="text-[10px] text-stone-500 mt-0.5 truncate max-w-[200px]">
+                      {effectiveStoreName} • {currentSlug && currentSlug !== 'default' ? `${currentSlug}.lapakoke.com` : 'lapakoke.com'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1395,7 +1365,7 @@ export const Chat: React.FC<ChatProps> = ({
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-950 flex items-start gap-2.5">
                 <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div className="leading-snug">
-                  Mode Admin Chat dilindungi hak akses resmi. Pelanggan biasa tidak diperbolehkan masuk. Silakan verifikasi akun staf Anda di bawah ini:
+                  Untuk keamanan di domain utama maupun seluruh subdomain, masuk ke <strong>Mode Admin</strong> wajib melakukan verifikasi melalui pop-up ini. Silakan masukkan akun staf Anda:
                 </div>
               </div>
 
