@@ -121,6 +121,7 @@ export interface Address {
   fullAddress: string;
   city: string;
   detailNote?: string;
+  notes?: string;
   isDefault: boolean;
   latitude?: number;
   longitude?: number;
@@ -179,9 +180,17 @@ export interface Order {
   items: CartItem[];
   store: Store;
   pickupStoreName?: string;
-  deliveryType: 'delivery' | 'pickup';
+  deliveryType: 'delivery' | 'pickup' | 'expedition';
   deliverySlot?: string;
   pickupTime?: string;
+  expeditionService?: {
+    courierCode: string;
+    courierName: string;
+    serviceName: string;
+    etd: string;
+    cost: number;
+    trackingNumber?: string;
+  };
   address?: Address;
   customerId?: string;
   customerName?: string;

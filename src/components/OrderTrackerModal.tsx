@@ -21,7 +21,8 @@ import {
   Edit3,
   Copy,
   ExternalLink,
-  Check
+  Check,
+  Truck
 } from 'lucide-react';
 import { Order, OrderStatus, ReceiptInfo, CourierInfo } from '../types';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
@@ -69,6 +70,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [copiedStorePhone, setCopiedStorePhone] = useState(false);
+  const [copiedResi, setCopiedResi] = useState(false);
 
   // WhatsApp Toko Cabang handlers (baik pesanan diambil maupun diantar kurir)
   const handleOpenStoreWhatsApp = () => {
@@ -184,6 +186,9 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       case 'picking':
         return 'Pengecekan Kualitas & Packing';
       case 'delivering':
+        if (order.deliveryType === 'expedition') {
+          return `Dalam Pengiriman (${order.expeditionService?.courierName || 'Ekspedisi'})`;
+        }
         return order.deliveryType === 'delivery' ? 'Kurir Sedang Mengantar' : 'Siap Diambil di Kasir Toko';
       case 'ready_for_pickup':
         return 'Siap Diambil di Outlet';
@@ -300,24 +305,48 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1">
-                      <Navigation className="w-3 h-3 text-blue-300" />
-                      {order.deliveryType === 'delivery' ? 'Live Courier Dispatch' : 'Express Store Pickup'}
+                      {order.deliveryType === 'expedition' ? (
+                        <>
+                          <Truck className="w-3 h-3 text-amber-300" />
+                          <span>Ekspedisi {order.expeditionService?.courierName || 'Paket'}</span>
+                        </>
+                      ) : order.deliveryType === 'delivery' ? (
+                        <>
+                          <Navigation className="w-3 h-3 text-blue-300" />
+                          <span>Live Courier Dispatch</span>
+                        </>
+                      ) : (
+                        <>
+                          <StoreIcon className="w-3 h-3 text-blue-300" />
+                          <span>Express Store Pickup</span>
+                        </>
+                      )}
                     </span>
                     <span className="text-xs font-mono font-bold bg-white/10 px-2 py-0.5 rounded">
-                      {order.status === 'completed' ? 'Tiba di Tujuan' : 'Estimasi: 12 Menit'}
+                      {order.status === 'completed'
+                        ? 'Tiba di Tujuan'
+                        : order.deliveryType === 'expedition'
+                        ? `Estimasi: ${order.expeditionService?.etd || '1-3 Hari'}`
+                        : order.deliveryType === 'delivery'
+                        ? 'Estimasi: 15-30 Menit'
+                        : 'Siap Diambil'}
                     </span>
                   </div>
 
                   <h3 className="text-lg font-black tracking-tight mb-1">
                     {order.status === 'completed'
                       ? 'Pesanan Berhasil Diterima'
+                      : order.deliveryType === 'expedition'
+                      ? `Paket Dikirim via ${order.expeditionService?.courierName || 'Ekspedisi'}`
                       : order.deliveryType === 'delivery'
                       ? 'Kurir Sedang Menuju Rumahmu'
                       : 'Barang Siap Diambil di Outlet Minimarket'}
                   </h3>
 
                   <p className="text-xs text-stone-300">
-                    {order.deliveryType === 'delivery'
+                    {order.deliveryType === 'expedition'
+                      ? `Kirim ke: ${order.address?.fullAddress || '-'} • Resi: ${order.expeditionService?.trackingNumber || '-'}`
+                      : order.deliveryType === 'delivery'
                       ? `Dikirim ke: ${order.address?.fullAddress || '-'}`
                       : `Lokasi: ${order.store?.address || 'Outlet Toko'}`}
                   </p>
@@ -355,7 +384,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                           Cabang Toko Pemroses
                         </span>
                         <span className="text-[11px] font-bold text-emerald-800">
-                          {order.deliveryType === 'delivery' ? '🛵 Pesanan Diantar Kurir' : '🛍️ Pesanan Ambil di Toko'}
+                          {order.deliveryType === 'delivery' 
+                            ? '🛵 Pesanan Diantar Kurir' 
+                            : order.deliveryType === 'expedition'
+                            ? `📦 Dikirim via Ekspedisi (${order.expeditionService?.courierName || 'Paket'})`
+                            : '🛍️ Pesanan Ambil di Toko'}
                         </span>
                       </div>
                       <h4 className="text-sm font-black text-stone-900 mt-1">{order.store?.name || 'Cabang Toko'}</h4>
@@ -408,7 +441,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                     <span>
-                      Rincian pesanan #{order.orderNumber} ({order.deliveryType === 'delivery' ? 'Antar Kurir' : 'Ambil di Kasir'}) otomatis diteruskan ke WhatsApp cabang toko.
+                      Rincian pesanan #{order.orderNumber} ({order.deliveryType === 'delivery' ? 'Antar Kurir' : order.deliveryType === 'expedition' ? `Ekspedisi ${order.expeditionService?.courierName || 'Paket'}` : 'Ambil di Kasir'}) otomatis diteruskan ke WhatsApp cabang toko.
                     </span>
                   </div>
                   <span className="font-bold text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
@@ -417,8 +450,72 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 </div>
               </div>
 
+              {/* DEDICATED EXPEDITION TRACKING & AWB CARD */}
+              {order.deliveryType === 'expedition' && (
+                <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-2xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-amber-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+                        <Truck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-amber-600 text-white px-2 py-0.5 rounded-full">
+                            Ekspedisi Nasional
+                          </span>
+                          <span className="text-xs font-black text-amber-950">
+                            {order.expeditionService?.courierName || 'Ekspedisi'} • {order.expeditionService?.serviceName || 'Layanan Standar'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-stone-600 mt-0.5">
+                          Estimasi Tiba: <strong className="text-stone-900 font-bold">{order.expeditionService?.etd || '1-3 Hari'}</strong> • Ongkir: <strong className="text-stone-900 font-bold">{formatRupiah(order.expeditionService?.cost || order.deliveryFee)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800">
+                      Resi Terbit
+                    </span>
+                  </div>
+
+                  {/* Kotak Nomor Resi / AWB */}
+                  <div className="bg-white border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-2 shadow-2xs">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-stone-400">Nomor Resi / AWB Tracking</div>
+                      <div className="font-mono text-base font-black text-stone-900 tracking-wide flex items-center gap-1.5 mt-0.5">
+                        <Barcode className="w-4 h-4 text-stone-400" />
+                        <span>{order.expeditionService?.trackingNumber || 'JP-EXP-99281'}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const resi = order.expeditionService?.trackingNumber || '';
+                        if (resi) {
+                          navigator.clipboard.writeText(resi);
+                          setCopiedResi(true);
+                          setTimeout(() => setCopiedResi(false), 2000);
+                        }
+                      }}
+                      className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+                      title="Salin Nomor Resi Ekspedisi"
+                    >
+                      {copiedResi ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedResi ? 'Tersalin' : 'Salin Resi'}</span>
+                    </button>
+                  </div>
+
+                  {/* Alamat Pengiriman Ekspedisi */}
+                  <div className="text-[11px] text-stone-700 bg-amber-100/70 p-2.5 rounded-xl border border-amber-200/80 flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Alamat Tujuan Penerima:</strong> {order.address?.fullAddress || '-'}{(order.address?.detailNote || order.address?.notes) ? ` (${order.address?.detailNote || order.address?.notes})` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Google Maps Recorded Location Card (if available) */}
-              {order.deliveryType === 'delivery' && (order.customerLocation || order.address?.latitude) && (
+              {(order.deliveryType === 'delivery' || order.deliveryType === 'expedition') && (order.customerLocation || order.address?.latitude) && (
                 <div className="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-2xs space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
@@ -702,11 +799,17 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                     </div>
                     <div>
                       <h5 className="text-xs font-bold text-stone-900">
-                        {order.deliveryType === 'delivery' ? 'Kurir Dalam Perjalanan' : 'Siap Diambil di Kasir Toko'}
+                        {order.deliveryType === 'delivery' 
+                          ? 'Kurir Dalam Perjalanan' 
+                          : order.deliveryType === 'expedition'
+                          ? `Paket Dikirim via ${order.expeditionService?.courierName || 'Ekspedisi'}`
+                          : 'Siap Diambil di Kasir Toko'}
                       </h5>
                       <p className="text-[11px] text-stone-500">
                         {order.deliveryType === 'delivery'
                           ? 'Driver membawa pesanan menggunakan tas pendingin khusus.'
+                          : order.deliveryType === 'expedition'
+                          ? `Paket telah diproses dan diserahkan ke gerai ${order.expeditionService?.courierName || 'ekspedisi'}. Nomor resi ${order.expeditionService?.trackingNumber || '-'} telah aktif.`
                           : 'Tunjukkan nomor pesanan ke kasir saat mengambil.'}
                       </p>
                     </div>
@@ -862,9 +965,9 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                     <span>Subtotal</span>
                     <span>{formatRupiah(order.subtotal)}</span>
                   </div>
-                  {order.deliveryType === 'delivery' && (
+                  {(order.deliveryType === 'delivery' || order.deliveryType === 'expedition') && (
                     <div className="flex justify-between">
-                      <span>Biaya Ongkir</span>
+                      <span>Biaya Ongkir {order.deliveryType === 'expedition' ? `(${order.expeditionService?.courierName || 'Ekspedisi'})` : ''}</span>
                       <span>{formatRupiah(order.deliveryFee)}</span>
                     </div>
                   )}
@@ -898,7 +1001,13 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span>Layanan:</span>
-                    <span className="font-semibold text-stone-800">{order.deliveryType === 'delivery' ? 'Antar Kurir Instan' : 'Ambil di Toko'}</span>
+                    <span className="font-semibold text-stone-800">
+                      {order.deliveryType === 'delivery' 
+                        ? 'Antar Kurir Instan' 
+                        : order.deliveryType === 'expedition'
+                        ? `Ekspedisi (${order.expeditionService?.courierName || 'Paket'} - ${order.expeditionService?.serviceName || 'Reguler'})`
+                        : 'Ambil di Toko'}
+                    </span>
                   </div>
                 </div>
 

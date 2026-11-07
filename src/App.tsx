@@ -238,7 +238,8 @@ const normalizeOrder = (ord: any, fallbackStore?: Store): Order => {
     orderNumber: ord.orderNumber || ord.id || `KM-${Date.now()}`,
     createdAt: ord.createdAt || ord.date || new Date().toISOString(),
     store,
-    deliveryType: ord.deliveryType === 'pickup' ? 'pickup' : 'delivery',
+    deliveryType: ord.deliveryType === 'pickup' ? 'pickup' : (ord.deliveryType === 'expedition' ? 'expedition' : 'delivery'),
+    expeditionService: ord.expeditionService,
     status: ord.status || 'processing',
     subtotal: Number(ord.subtotal) || Number(ord.total) || 0,
     total: Number(ord.total) || Number(ord.finalTotal) || 0,
@@ -365,7 +366,7 @@ export default function App() {
   });
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [currentAddress, setCurrentAddress] = useState<Address>(INITIAL_ADDRESSES[0]);
-  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
+  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup' | 'expedition'>('delivery');
 
   // Member & Loyalty (Guest by default until customer signs in or registers)
   const [member, setMember] = useState<MemberProfile>(() => {
@@ -2308,7 +2309,11 @@ export default function App() {
                     <div className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                       <span>Pesanan Aktif ({myActiveOrders[0].orderNumber})</span>
                       <span className="bg-amber-400 text-amber-950 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
-                        {myActiveOrders[0].deliveryType === 'delivery' ? 'Sedang Diantar' : 'Siap Diambil'}
+                        {myActiveOrders[0].deliveryType === 'delivery'
+                          ? 'Sedang Diantar'
+                          : myActiveOrders[0].deliveryType === 'expedition'
+                          ? `Ekspedisi (${myActiveOrders[0].expeditionService?.courierName || 'Paket'})`
+                          : 'Siap Diambil'}
                       </span>
                     </div>
                     <p className="text-[11px] text-blue-100 mt-0.5">

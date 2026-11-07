@@ -18,7 +18,8 @@ import {
   Minimize,
   Lock,
   MessageSquare,
-  LogIn
+  LogIn,
+  Truck
 } from 'lucide-react';
 import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig, CustomerAuthPromoConfig } from '../types';
@@ -29,8 +30,8 @@ import { getStoreSlugFromUrl, isDefaultStore, isRootDomain, normalizeTenantSlug,
 
 interface HeaderProps {
   currentStore: Store;
-  deliveryType: 'delivery' | 'pickup';
-  onToggleDeliveryType: (type: 'delivery' | 'pickup') => void;
+  deliveryType: 'delivery' | 'pickup' | 'expedition';
+  onToggleDeliveryType: (type: 'delivery' | 'pickup' | 'expedition') => void;
   onOpenStoreSelector: () => void;
   member: MemberProfile;
   onOpenMemberModal: () => void;
@@ -454,8 +455,14 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => onToggleDeliveryType(deliveryType === 'delivery' ? 'pickup' : 'delivery')}
               className="px-2 py-1 sm:px-2.5 rounded-lg bg-stone-100 hover:bg-stone-200 font-semibold text-stone-700 flex items-center gap-1 shrink-0 transition-colors cursor-pointer text-[11px] sm:text-xs"
             >
-              {deliveryType === 'delivery' ? <Bike className="w-3.5 h-3.5 text-blue-600" /> : <StoreIcon className="w-3.5 h-3.5 text-red-600" />}
-              <span>{deliveryType === 'delivery' ? 'Antar' : 'Ambil'}</span>
+              {deliveryType === 'delivery' ? (
+                <Bike className="w-3.5 h-3.5 text-blue-600" />
+              ) : deliveryType === 'expedition' ? (
+                <Truck className="w-3.5 h-3.5 text-amber-600" />
+              ) : (
+                <StoreIcon className="w-3.5 h-3.5 text-red-600" />
+              )}
+              <span>{deliveryType === 'delivery' ? 'Antar' : deliveryType === 'expedition' ? 'Ekspedisi' : 'Ambil'}</span>
             </button>
             <button
               id="btn-outlet-selector"

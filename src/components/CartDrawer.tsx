@@ -33,8 +33,8 @@ interface CartDrawerProps {
   onToggleUsePoints: (use: boolean) => void;
   onProceedToCheckout: () => void;
   store: Store;
-  deliveryType: 'delivery' | 'pickup';
-  onSelectDeliveryType?: (type: 'delivery' | 'pickup') => void;
+  deliveryType: 'delivery' | 'pickup' | 'expedition';
+  onSelectDeliveryType?: (type: 'delivery' | 'pickup' | 'expedition') => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
