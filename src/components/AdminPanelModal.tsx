@@ -204,6 +204,7 @@ interface AdminPanelModalProps {
   onDeleteProduct?: (productId: string) => Promise<{ success: boolean; error?: string }>;
   orders: Order[];
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  onUpdateOrder?: (order: Order) => void;
   onAddOrder?: (order: Order) => void;
   stores: Store[];
   currentStore: Store;
@@ -304,6 +305,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onDeleteProduct,
   orders,
   onUpdateOrderStatus,
+  onUpdateOrder,
   onAddOrder,
   stores,
   currentStore,
@@ -930,7 +932,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         const masterTabs = ['products', 'categories_brands', 'customers', 'suppliers', 'bulk_import'];
         const inventoryTabs = ['stock_card', 'stock_opname', 'stock_mutations', 'purchase_orders', 'purchases'];
         const marketingTabs = ['promos', 'vouchers', 'points_rewards', 'push_notifications'];
-        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'brand_info'];
+        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'expeditions', 'brand_info'];
         const systemTabs = ['users', 'permissions', 'mysql_db', 'vps_deploy', 'seo_google'];
 
         if (posTabs.includes(initialTab)) setSelectedGroup('pos');
@@ -2686,6 +2688,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'store_doku_settings', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Identitas Toko & Toko Bebas', icon: <CreditCard className="w-4 h-4 text-red-500" /> },
                 { id: 'receipts', group: 'settings', moduleKey: 'receipts' as SystemModuleKey, label: 'Struk Info Toko', icon: <Receipt className="w-4 h-4 text-blue-600" />, count: (activeReceiptConfigs || []).length },
                 { id: 'couriers', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Kurir & Armada', icon: <Bike className="w-4 h-4 text-blue-600" />, count: (activeCouriers || []).length },
+                { id: 'expeditions', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Ekspedisi & Tarif Ongkir', icon: <Truck className="w-4 h-4 text-amber-500" />, count: (activeExpeditionServices || []).length },
                 { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Header & Identitas Toko', icon: <Palette className="w-4 h-4 text-amber-500" /> },
                 { id: 'splash_screen', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Splash Screen Editor', icon: <Sparkles className="w-4 h-4 text-orange-500" /> },
 
@@ -3929,7 +3932,14 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         </div>
                         <div className="text-[11px] text-stone-600 bg-stone-50 p-2.5 rounded-xl space-y-1">
                           <div><strong>Metode:</strong> {order.paymentMethod.toUpperCase()} ({order.paymentStatus})</div>
-                          <div><strong>Tipe:</strong> {order.deliveryType === 'delivery' ? 'Antar ke Rumah' : 'Ambil di Toko'}</div>
+                          <div>
+                            <strong>Tipe:</strong>{' '}
+                            {order.deliveryType === 'delivery'
+                              ? 'Antar ke Rumah'
+                              : order.deliveryType === 'expedition'
+                              ? `Ekspedisi (${order.expeditionService?.courierName || 'Paket'})`
+                              : 'Ambil di Toko'}
+                          </div>
                           <div>
                             <strong>Cabang Toko:</strong> <span className="font-semibold text-emerald-800">{order.store?.name || 'Cabang Toko'}</span>
                           </div>
@@ -3937,7 +3947,73 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                             <strong>No. Telepon / WA Toko:</strong> <span className="font-mono font-bold text-stone-900 bg-white border border-stone-200 px-1.5 py-0.5 rounded text-[10px]">{order.store?.phone || order.store?.whatsapp || '-'}</span>
                           </div>
                           {order.address && (
-                            <div><strong>Alamat:</strong> {order.address.fullAddress}</div>
+                            <div>
+                              <strong>Alamat:</strong> {order.address.fullAddress}
+                              {order.address.recipientName && (
+                                <span className="text-[10px] text-stone-500 ml-1">
+                                  ({order.address.recipientName} - {order.address.phone})
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Detail Ekspedisi & Input No Resi Resmi */}
+                          {order.deliveryType === 'expedition' && (
+                            <div className="mt-2 p-2.5 bg-indigo-50/80 border border-indigo-200 rounded-xl space-y-1.5">
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span className="text-[10px] font-extrabold text-indigo-950 uppercase flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-indigo-600" />
+                                  <span>{order.expeditionService?.courierName || 'Ekspedisi'} ({order.expeditionService?.serviceName})</span>
+                                </span>
+                                <span className="text-[10px] font-bold text-indigo-800 bg-white border border-indigo-200 px-1.5 py-0.2 rounded">
+                                  Ongkir: {formatRupiah(order.expeditionService?.cost || order.deliveryFee)}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-indigo-100">
+                                <div className="text-[10px]">
+                                  <span className="text-stone-500">No. Resi Resmi: </span>
+                                  {order.expeditionService?.trackingNumber ? (
+                                    <span className="font-mono font-black text-indigo-900 bg-white border border-indigo-300 px-1.5 py-0.5 rounded">
+                                      {order.expeditionService.trackingNumber}
+                                    </span>
+                                  ) : (
+                                    <span className="font-semibold text-amber-800 bg-amber-100/70 border border-amber-200 px-1.5 py-0.2 rounded">
+                                      Belum diinput (dikeluarkan agen ekspedisi)
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentResi = order.expeditionService?.trackingNumber || '';
+                                    const resiPrompt = window.prompt(
+                                      `Masukkan Nomor Resi Resmi yang dikeluarkan pihak ekspedisi (${order.expeditionService?.courierName || 'Ekspedisi'}):`,
+                                      currentResi
+                                    );
+                                    if (resiPrompt !== null) {
+                                      const trimmed = resiPrompt.trim();
+                                      const updated: Order = {
+                                        ...order,
+                                        expeditionService: order.expeditionService
+                                          ? {
+                                              ...order.expeditionService,
+                                              trackingNumber: trimmed || undefined,
+                                            }
+                                          : undefined,
+                                      };
+                                      if (onUpdateOrder) {
+                                        onUpdateOrder(updated);
+                                      }
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                                  title="Input Nomor Resi Resmi dari Pihak Ekspedisi"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                  <span>{order.expeditionService?.trackingNumber ? 'Ubah No. Resi' : '+ Input No. Resi Ekspedisi'}</span>
+                                </button>
+                              </div>
+                            </div>
                           )}
                           <div className="pt-1.5 flex items-center gap-2">
                             <button
@@ -5427,6 +5503,22 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 couriers={activeCouriers}
                 stores={stores}
                 onUpdateCouriers={handleUpdateCouriers}
+                expeditionServices={activeExpeditionServices}
+                onUpdateExpeditionServices={handleUpdateExpeditionServices}
+                initialSubTab="local_couriers"
+              />
+            </div>
+          ))}
+
+          {/* TAB: EKSPEDISI & TARIF ONGKIR (JNE, J&T, SICEPAT, POS, ANTERAJA) */}
+          {activeTab === 'expeditions' && (!currentUserPermissions.couriers?.canView ? (
+            renderAccessDenied('Ekspedisi & Tarif Ongkir')
+          ) : (
+            <div className="space-y-4">
+              {!currentUserPermissions.couriers?.canEdit && renderReadOnlyBanner('Ekspedisi & Tarif Ongkir')}
+              <ExpeditionManager
+                expeditionServices={activeExpeditionServices}
+                onUpdateExpeditionServices={handleUpdateExpeditionServices}
               />
             </div>
           ))}

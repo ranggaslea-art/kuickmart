@@ -88,7 +88,8 @@ import {
   StaffUser,
   StoreTenantIdentity,
   BrandItem,
-  CustomerAuthPromoConfig
+  CustomerAuthPromoConfig,
+  ExpeditionServiceOption
 } from './types';
 import { 
   PRODUCTS, 
@@ -103,7 +104,8 @@ import {
   INITIAL_COURIERS,
   INITIAL_BRAND_CONFIG,
   INITIAL_STAFF_USERS,
-  INITIAL_BRANDS
+  INITIAL_BRANDS,
+  INITIAL_EXPEDITION_SERVICES
 } from './data/mockData';
 import { INITIAL_SAMPLE_ORDERS } from './data/mockOrders';
 import { 
@@ -187,6 +189,7 @@ const STORAGE_STORES_KEY = 'toko_online_stores';
 const STORAGE_RECEIPT_CONFIGS_KEY = 'nusamart_receipt_configs';
 const STORAGE_STORE_PROMOS_KEY = 'nusamart_store_promos';
 const STORAGE_COURIERS_KEY = 'toko_online_couriers';
+const STORAGE_EXPEDITIONS_KEY = 'toko_online_expeditions';
 const STORAGE_BRAND_CONFIG_KEY = 'toko_online_brand_config';
 const STORAGE_STAFF_USERS_KEY = 'toko_online_staff_users';
 const STORAGE_MY_ORDER_IDS_KEY = 'nusamart_my_order_ids';
@@ -913,6 +916,35 @@ export default function App() {
     const key = getTenantStorageKey(STORAGE_COURIERS_KEY, currentSlug);
     localStorage.setItem(key, JSON.stringify(couriers));
   }, [couriers, currentSlug]);
+
+  // Ekspedisi Management State (Add, Edit, Delete Macam Pengiriman Ekspedisi & Tarif Ongkir)
+  const [expeditionServices, setExpeditionServices] = useState<ExpeditionServiceOption[]>(() => {
+    try {
+      const key = getTenantStorageKey(STORAGE_EXPEDITIONS_KEY, currentSlug);
+      const saved = localStorage.getItem(key) || localStorage.getItem(key.replace('toko_online', 'kuickmart'));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return INITIAL_EXPEDITION_SERVICES;
+    } catch {
+      return INITIAL_EXPEDITION_SERVICES;
+    }
+  });
+
+  useEffect(() => {
+    const key = getTenantStorageKey(STORAGE_EXPEDITIONS_KEY, currentSlug);
+    localStorage.setItem(key, JSON.stringify(expeditionServices));
+  }, [expeditionServices, currentSlug]);
+
+  const handleUpdateExpeditionServices = (newServices: ExpeditionServiceOption[]) => {
+    setExpeditionServices(newServices);
+    try {
+      const key = getTenantStorageKey(STORAGE_EXPEDITIONS_KEY, currentSlug);
+      localStorage.setItem(key, JSON.stringify(newServices));
+      saveTenantDataToCloud('expeditions', newServices, currentSlug);
+    } catch {}
+  };
 
   // Staff Users Management State (Admin, Supervisor, Kasir, Gudang)
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
@@ -1916,6 +1948,18 @@ export default function App() {
     );
   };
 
+  const handleUpdateOrder = (updatedOrder: Order) => {
+    setOrders((prev) =>
+      prev.map((ord) => (ord.id === updatedOrder.id ? updatedOrder : ord))
+    );
+    if (trackedOrder?.id === updatedOrder.id) {
+      setTrackedOrder(updatedOrder);
+    }
+    saveOrderToMySql(updatedOrder, currentSlug).catch((err) => {
+      console.warn('Gagal sinkronisasi update pesanan ke MySQL:', err);
+    });
+  };
+
   const handleReorder = (order: Order) => {
     order.items.forEach((item) => {
       handleAddToCart(item.product, item.quantity, item.notes);
@@ -2699,6 +2743,7 @@ export default function App() {
         member={member}
         onOrderCreated={handleOrderCreated}
         couriers={couriers}
+        expeditionServices={expeditionServices}
         visitorId={visitorId}
         onOpenCustomerAuth={handleOpenCustomerAuth}
       />
@@ -2793,6 +2838,7 @@ export default function App() {
           onDeleteProduct={handleDeleteProduct}
           orders={orders}
           onUpdateOrderStatus={handleUpdateOrderStatus}
+          onUpdateOrder={handleUpdateOrder}
           onAddOrder={handleAddOrder}
           stores={stores}
           currentStore={currentStore}
@@ -2808,6 +2854,8 @@ export default function App() {
           onUpdateStorePromos={handleUpdateStorePromos}
           couriers={couriers}
           onUpdateCouriers={handleUpdateCouriers}
+          expeditionServices={expeditionServices}
+          onUpdateExpeditionServices={handleUpdateExpeditionServices}
           brandConfig={brandConfig}
           onUpdateBrandConfig={handleUpdateBrandConfig}
           staffUsers={staffUsers}

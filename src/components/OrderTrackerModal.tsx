@@ -345,7 +345,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
                   <p className="text-xs text-stone-300">
                     {order.deliveryType === 'expedition'
-                      ? `Kirim ke: ${order.address?.fullAddress || '-'} • Resi: ${order.expeditionService?.trackingNumber || '-'}`
+                      ? `Kirim ke: ${order.address?.fullAddress || '-'} • Resi: ${order.expeditionService?.trackingNumber || 'Menunggu pihak agen ekspedisi'}`
                       : order.deliveryType === 'delivery'
                       ? `Dikirim ke: ${order.address?.fullAddress || '-'}`
                       : `Lokasi: ${order.store?.address || 'Outlet Toko'}`}
@@ -472,36 +472,59 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                         </div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800">
-                      Resi Terbit
-                    </span>
+                    {order.expeditionService?.trackingNumber ? (
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Resi Resmi Terbit</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-900">
+                        Menunggu Penyerahan ke Agen Ekspedisi
+                      </span>
+                    )}
                   </div>
 
-                  {/* Kotak Nomor Resi / AWB */}
-                  <div className="bg-white border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-2 shadow-2xs">
+                  {/* Kotak Nomor Resi Resmi dari Ekspedisi */}
+                  <div className="bg-white border border-amber-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
                     <div>
-                      <div className="text-[10px] uppercase font-bold text-stone-400">Nomor Resi / AWB Tracking</div>
-                      <div className="font-mono text-base font-black text-stone-900 tracking-wide flex items-center gap-1.5 mt-0.5">
-                        <Barcode className="w-4 h-4 text-stone-400" />
-                        <span>{order.expeditionService?.trackingNumber || 'JP-EXP-99281'}</span>
+                      <div className="text-[10px] uppercase font-bold text-stone-500">
+                        Nomor Resi Resmi dari {order.expeditionService?.courierName || 'Ekspedisi'}
                       </div>
+                      {order.expeditionService?.trackingNumber ? (
+                        <div className="font-mono text-base font-black text-stone-900 tracking-wide flex items-center gap-1.5 mt-0.5">
+                          <Barcode className="w-4 h-4 text-stone-400" />
+                          <span>{order.expeditionService.trackingNumber}</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs font-semibold text-stone-600 mt-0.5 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Belum Terbit (Dikeluarkan oleh pihak agen ekspedisi saat paket diserahkan)</span>
+                        </div>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const resi = order.expeditionService?.trackingNumber || '';
-                        if (resi) {
-                          navigator.clipboard.writeText(resi);
-                          setCopiedResi(true);
-                          setTimeout(() => setCopiedResi(false), 2000);
-                        }
-                      }}
-                      className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
-                      title="Salin Nomor Resi Ekspedisi"
-                    >
-                      {copiedResi ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedResi ? 'Tersalin' : 'Salin Resi'}</span>
-                    </button>
+
+                    {order.expeditionService?.trackingNumber ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const resi = order.expeditionService?.trackingNumber || '';
+                          if (resi) {
+                            navigator.clipboard.writeText(resi);
+                            setCopiedResi(true);
+                            setTimeout(() => setCopiedResi(false), 2000);
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+                        title="Salin Nomor Resi Ekspedisi"
+                      >
+                        {copiedResi ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedResi ? 'Tersalin' : 'Salin Resi'}</span>
+                      </button>
+                    ) : (
+                      <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg max-w-xs leading-tight">
+                        Paket sedang disiapkan toko. Resi resmi dari counter {order.expeditionService?.courierName || 'ekspedisi'} akan otomatis diperbarui setelah paket diproses agen.
+                      </div>
+                    )}
                   </div>
 
                   {/* Alamat Pengiriman Ekspedisi */}
