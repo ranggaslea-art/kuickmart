@@ -93,7 +93,7 @@ export const ExpeditionManager: React.FC<ExpeditionManagerProps> = ({
   });
 
   // Unique couriers for filter tabs
-  const courierCodesInUse = Array.from(new Set(expeditionServices.map((s) => s.courierCode)));
+  const courierCodesInUse = Array.from(new Set(expeditionServices.map((s) => s.courierCode || (s.courierName ? s.courierName.toLowerCase().replace(/\s+/g, '') : 'custom')).filter(Boolean)));
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -368,7 +368,7 @@ export const ExpeditionManager: React.FC<ExpeditionManagerProps> = ({
           </button>
           {courierCodesInUse.map((code) => {
             const count = expeditionServices.filter((s) => s.courierCode === code).length;
-            const courierName = expeditionServices.find((s) => s.courierCode === code)?.courierName || code.toUpperCase();
+            const courierName = expeditionServices.find((s) => (s.courierCode || 'custom') === code)?.courierName || (code ? String(code).toUpperCase() : 'EKSPEDISI');
             return (
               <button
                 key={code}

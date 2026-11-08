@@ -91,11 +91,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Dynamic active expedition list configured via Admin Tools (synced across devices & MySQL)
   const activeExpeditions: ExpeditionServiceOption[] = React.useMemo(() => {
-    if (expeditionServices && expeditionServices.length > 0) {
-      const activeOnly = expeditionServices.filter((s) => s.isActive !== false);
-      if (activeOnly.length > 0) return activeOnly;
-    }
-    return INITIAL_EXPEDITION_SERVICES;
+    const rawList = expeditionServices && expeditionServices.length > 0
+      ? expeditionServices
+      : INITIAL_EXPEDITION_SERVICES;
+
+    // Filter active and sanitize items so none have undefined fields
+    const sanitized = rawList
+      .filter((s) => Boolean(s && s.isActive !== false))
+      .map((s, idx) => ({
+        id: s.id || `exp_${idx}`,
+        courierCode: s.courierCode || (s.courierName ? s.courierName.toLowerCase().replace(/\s+/g, '') : 'custom'),
+        courierName: s.courierName || 'Ekspedisi',
+        serviceCode: s.serviceCode || 'REG',
+        serviceName: s.serviceName || 'Layanan Standar',
+        etd: s.etd || '2 - 3 Hari',
+        cost: typeof s.cost === 'number' ? s.cost : 11000,
+        badge: s.badge || undefined,
+        color: s.color || 'bg-indigo-600',
+        description: s.description || '',
+        isActive: s.isActive !== false,
+      }));
+
+    return sanitized.length > 0 ? sanitized : INITIAL_EXPEDITION_SERVICES;
   }, [expeditionServices]);
 
   const [selectedExpedition, setSelectedExpedition] = useState<ExpeditionServiceOption>(
@@ -105,7 +122,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Keep selectedExpedition synced with active list if config updates
   useEffect(() => {
-    if (!activeExpeditions.some((e) => e.id === selectedExpedition?.id)) {
+    if (!selectedExpedition || !activeExpeditions.some((e) => e.id === selectedExpedition.id)) {
       if (activeExpeditions.length > 0) {
         setSelectedExpedition(activeExpeditions[0]);
       }
@@ -116,8 +133,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const courierFilterTabs = React.useMemo(() => {
     const courierMap = new Map<string, string>();
     activeExpeditions.forEach((s) => {
-      if (!courierMap.has(s.courierCode)) {
-        courierMap.set(s.courierCode, s.courierName);
+      const code = s.courierCode || 'custom';
+      if (!courierMap.has(code)) {
+        courierMap.set(code, s.courierName || 'Ekspedisi');
       }
     });
     return [
@@ -301,15 +319,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const subtotal = cartItems.reduce((acc, item) => acc + (item.unitPrice || item.product.price) * item.quantity, 0);
   const isBelowMinOrder = Boolean(store.minOrder && store.minOrder > 0 && subtotal < store.minOrder);
   const effectiveDeliveryType = (isBelowMinOrder && deliveryType === 'delivery') ? 'pickup' : deliveryType;
+  const safeSelectedExpedition = selectedExpedition || activeExpeditions[0] || INITIAL_EXPEDITION_SERVICES[0];
+
   const rawDeliveryFee = effectiveDeliveryType === 'delivery'
     ? store.deliveryFee
     : effectiveDeliveryType === 'expedition'
-    ? (selectedExpedition?.cost || 11000)
+    ? (safeSelectedExpedition?.cost || 11000)
     : 0;
 
   const filteredExpeditions = activeExpeditions.filter((opt) => {
     if (expeditionFilter === 'all') return true;
-    return opt.courierCode === expeditionFilter;
+    return (opt.courierCode || 'custom') === expeditionFilter;
   });
 
   // Auto-switch to pickup if below minimum and was on delivery
@@ -487,11 +507,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliverySlot: effectiveDeliveryType === 'delivery' ? deliverySlot : undefined,
         pickupTime: effectiveDeliveryType === 'pickup' ? pickupSlot : undefined,
         expeditionService: effectiveDeliveryType === 'expedition' ? {
-          courierCode: selectedExpedition.courierCode,
-          courierName: selectedExpedition.courierName,
-          serviceName: selectedExpedition.serviceName,
-          etd: selectedExpedition.etd,
-          cost: selectedExpedition.cost,
+          courierCode: safeSelectedExpedition.courierCode || 'custom',
+          courierName: safeSelectedExpedition.courierName || 'Ekspedisi',
+          serviceName: safeSelectedExpedition.serviceName || 'Layanan Standar',
+          etd: safeSelectedExpedition.etd || '2 - 3 Hari',
+          cost: safeSelectedExpedition.cost || 11000,
           trackingNumber: undefined, // Resi resmi diterbitkan oleh pihak agen ekspedisi saat paket diserahkan, bukan auto-generate dari sistem lapakoke.com
         } : undefined,
         customerId: member?.isRegistered ? member.id : (visitorId || 'guest'),
@@ -574,9 +594,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               })()
             : effectiveDeliveryType === 'expedition'
             ? {
-                name: `Kurir ${selectedExpedition.courierName}`,
+                name: `Kurir ${safeSelectedExpedition.courierName || 'Ekspedisi'}`,
                 phone: '0812-3456-7890',
-                vehiclePlate: selectedExpedition.serviceCode,
+                vehiclePlate: safeSelectedExpedition.serviceCode || 'EXP',
                 vehicleType: 'mobil' as const,
                 photo: 'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?w=200&auto=format&fit=crop&q=60',
               }
@@ -585,7 +605,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           {
             status: 'pending_payment',
             title: 'Pembayaran Dikonfirmasi',
-            description: `Pembayaran ${paymentMethod.toUpperCase()} senilai ${formatRupiah(total)} berhasil diverifikasi.`,
+            description: `Pembayaran ${paymentMethod ? paymentMethod.toUpperCase() : 'PEMBAYARAN'} senilai ${formatRupiah(total)} berhasil diverifikasi.`,
             timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
             isCompleted: true,
           },
@@ -598,16 +618,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           },
           {
             status: 'picking',
-            title: `Diserahkan ke Agen ${selectedExpedition.courierName}`,
-            description: `Paket diserahkan ke agen/gerai ${selectedExpedition.courierName} (${selectedExpedition.serviceCode}). Nomor resi resmi dari pihak ekspedisi akan diinput setelah paket diterima oleh agen.`,
+            title: `Diserahkan ke Agen ${safeSelectedExpedition.courierName || 'Ekspedisi'}`,
+            description: `Paket diserahkan ke agen/gerai ${safeSelectedExpedition.courierName || 'Ekspedisi'} (${safeSelectedExpedition.serviceCode || 'REG'}). Nomor resi resmi dari pihak ekspedisi akan diinput setelah paket diterima oleh agen.`,
             timestamp: 'Estimasi Hari Ini',
             isCompleted: false,
           },
           {
             status: 'delivering',
             title: 'Dalam Pengiriman Ekspedisi',
-            description: `Paket dalam perjalanan via ${selectedExpedition.courierName} menuju alamat tujuan (Estimasi tiba: ${selectedExpedition.etd}).`,
-            timestamp: `Estimasi ${selectedExpedition.etd}`,
+            description: `Paket dalam perjalanan via ${safeSelectedExpedition.courierName || 'Ekspedisi'} menuju alamat tujuan (Estimasi tiba: ${safeSelectedExpedition.etd || '1-3 Hari'}).`,
+            timestamp: `Estimasi ${safeSelectedExpedition.etd || '1-3 Hari'}`,
             isCompleted: false,
           },
           {
@@ -879,7 +899,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {/* List of Courier Services */}
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {filteredExpeditions.map((option) => {
-                    const isSelected = selectedExpedition.id === option.id;
+                    const isSelected = (selectedExpedition?.id || safeSelectedExpedition.id) === option.id;
+                    const courierCodeDisplay = String(option.courierCode || option.courierName || 'EXP')
+                      .toUpperCase()
+                      .slice(0, 3);
                     return (
                       <div
                         key={option.id}
@@ -891,15 +914,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-black shrink-0 shadow-2xs ${option.color}`}>
-                            {option.courierCode.toUpperCase().slice(0, 3)}
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-black shrink-0 shadow-2xs ${option.color || 'bg-indigo-600'}`}>
+                            {courierCodeDisplay}
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-black text-xs text-stone-900">{option.courierName}</span>
-                              <span className="bg-stone-100 text-stone-700 font-mono text-[10px] font-bold px-1.5 py-0.2 rounded border border-stone-200">
-                                {option.serviceCode}
-                              </span>
+                              <span className="font-black text-xs text-stone-900">{option.courierName || 'Ekspedisi'}</span>
+                              {option.serviceCode && (
+                                <span className="bg-stone-100 text-stone-700 font-mono text-[10px] font-bold px-1.5 py-0.2 rounded border border-stone-200">
+                                  {option.serviceCode}
+                                </span>
+                              )}
                               {option.badge && (
                                 <span className="bg-amber-100 text-amber-900 text-[9px] font-black px-1.5 py-0.2 rounded-full border border-amber-200">
                                   {option.badge}
@@ -907,10 +932,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                               )}
                             </div>
                             <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2">
-                              <span>{option.serviceName}</span>
+                              <span>{option.serviceName || 'Layanan Standar'}</span>
                               <span>•</span>
                               <span className="flex items-center gap-1 text-stone-700 font-semibold">
-                                <Clock className="w-3 h-3 text-stone-400" /> {option.etd}
+                                <Clock className="w-3 h-3 text-stone-400" /> {option.etd || '1-3 Hari'}
                               </span>
                             </div>
                           </div>
@@ -918,7 +943,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                         <div className="text-right shrink-0">
                           <div className="font-black text-sm text-indigo-700">
-                            {formatRupiah(option.cost)}
+                            {formatRupiah(option.cost || 0)}
                           </div>
                           <div className="text-[9px] text-stone-400">Ongkir Ekspedisi</div>
                         </div>
@@ -983,7 +1008,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </div>
                     <div>
                       <h5 className="text-xs font-black text-indigo-950">
-                        Alamat Tujuan Paket ({selectedExpedition.courierName})
+                        Alamat Tujuan Paket ({safeSelectedExpedition?.courierName || 'Ekspedisi'})
                       </h5>
                       <p className="text-[10px] text-stone-500">
                         Silakan lengkapi atau ubah data alamat penerima di bawah ini untuk pencetakan label kirim ekspedisi:
@@ -1659,7 +1684,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider">
-                            Nomor Virtual Account {dokuPaymentData?.bankName || paymentMethod.replace('_va', '').toUpperCase()}:
+                            Nomor Virtual Account {dokuPaymentData?.bankName || String(paymentMethod || '').replace('_va', '').toUpperCase()}:
                           </span>
                           {isLoadingDoku && <Loader2 className="w-3 h-3 animate-spin text-blue-600" />}
                         </div>
