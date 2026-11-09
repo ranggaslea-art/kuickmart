@@ -198,83 +198,126 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
         )}
       </div>
 
-      {/* Main Center Stage: 3D Glossy Logo & Typographic Branding */}
-      <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 my-auto max-w-md w-full">
-        {/* Logo Container with 3D Pop & Hover Float Animation */}
-        <div className="relative mb-6">
-          {/* Animated Glow Aura */}
-          <div className="absolute -inset-4 bg-gradient-to-tr from-blue-600/40 via-orange-500/40 to-amber-400/30 rounded-full blur-xl animate-pulse opacity-80" />
-
-          {/* Logo Frame */}
+      {/* Main Center Stage: Shopee Clean Model or Classic Model */}
+      {config.styleMode !== 'classic' ? (
+        /* Model Shopee.com: Cukup Logo Lapakoke.com di tengah (750 x 500 px) */
+        <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 sm:px-6 my-auto w-full max-w-4xl">
+          {/* Logo Container 750 x 500 px */}
           <div
-            className={`relative w-36 h-36 sm:w-44 sm:h-44 rounded-full p-2.5 bg-gradient-to-b from-white/30 via-white/10 to-transparent backdrop-blur-xl border border-white/30 shadow-2xl flex items-center justify-center transform transition-transform duration-700 ${
-              config.pulseAnimation ? 'hover:scale-105 active:scale-95' : ''
+            className={`relative flex items-center justify-center transition-all duration-700 ${
+              config.pulseAnimation ? 'hover:scale-105' : ''
             }`}
+            style={{
+              maxWidth: `${config.imageWidth || 750}px`,
+              width: '100%',
+            }}
           >
+            {/* Subtle glow aura behind the 3D logo */}
+            <div className="absolute inset-0 bg-white/20 rounded-full blur-3xl pointer-events-none scale-75" />
+
             <img
-              src={config.logoUrl || '/lapakoke-logo-3d.svg'}
+              src={config.logoUrl || '/assets/aistudio/logo_lapakoke_403ac6ed.png'}
               alt={config.appName || 'LapakOke.com'}
-              className="w-full h-full object-contain filter drop-shadow-xl"
+              className="relative z-10 w-full h-auto object-contain filter drop-shadow-2xl transition-all duration-500 max-h-[65vh] sm:max-h-[500px]"
+              style={{
+                aspectRatio: `${config.imageWidth || 750} / ${config.imageHeight || 500}`,
+                maxWidth: `${config.imageWidth || 750}px`,
+                maxHeight: `${config.imageHeight || 500}px`,
+              }}
               onError={(e) => {
-                // Fallback jika url eksternal gagal dimuat
-                (e.target as HTMLImageElement).src = '/lapakoke-logo-3d.svg';
+                (e.target as HTMLImageElement).src = '/assets/aistudio/logo_lapakoke_403ac6ed.png';
               }}
             />
           </div>
-        </div>
 
-        {/* Brand App Name */}
-        <div className="relative">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight drop-shadow-md">
-            {config.appName === 'LapakOke.com' ? (
-              <span className="inline-flex items-center">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-sky-200 to-white">
-                  Lapak
+          {/* Optional Loading Progress Bar (if explicitly enabled) */}
+          {config.showProgressBar && (
+            <div className="w-full max-w-xs mt-6 flex flex-col items-center">
+              <div className="w-full h-2 bg-white/25 backdrop-blur-md rounded-full overflow-hidden p-0.5 border border-white/30 shadow-inner">
+                <div
+                  className="h-full rounded-full bg-white transition-all duration-100 ease-out relative overflow-hidden"
+                  style={{ width: `${progress}%` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-300 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+                </div>
+              </div>
+              <div className="w-full flex items-center justify-between mt-2 text-[11px] text-white/90 font-mono">
+                <span className="truncate max-w-[200px] font-sans font-medium text-white/95">
+                  {LOADING_STATUS_STEPS[statusTextIndex] || 'Memuat...'}
                 </span>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200">
-                  Oke
-                </span>
-                <span className="text-sm sm:text-base font-bold ml-1 px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-sm border border-white/20">
-                  .com
-                </span>
-              </span>
-            ) : (
-              <span className="text-white drop-shadow-lg">{config.appName}</span>
-            )}
-          </h1>
-        </div>
-
-        {/* Tagline / Subtitle */}
-        {config.tagline && (
-          <p className="mt-3 text-xs sm:text-sm font-medium text-white/80 max-w-xs sm:max-w-sm line-clamp-2 leading-relaxed">
-            {config.tagline}
-          </p>
-        )}
-
-        {/* Loading Progress Bar Container */}
-        {config.showProgressBar && (
-          <div className="w-full max-w-xs mt-8 flex flex-col items-center">
-            {/* Progress Bar Track */}
-            <div className="w-full h-2.5 bg-white/20 backdrop-blur-md rounded-full overflow-hidden p-0.5 border border-white/25 shadow-inner">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-amber-400 to-orange-500 transition-all duration-100 ease-out relative overflow-hidden"
-                style={{ width: `${progress}%` }}
-              >
-                {/* Shimmer light sweep */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+                <span className="font-bold">{progress}%</span>
               </div>
             </div>
-
-            {/* Progress Percentage & Status Message */}
-            <div className="w-full flex items-center justify-between mt-2.5 text-[11px] text-white/85 font-mono">
-              <span className="truncate max-w-[220px] font-sans font-medium text-white/90 animate-pulse">
-                {LOADING_STATUS_STEPS[statusTextIndex] || 'Memuat...'}
-              </span>
-              <span className="font-bold">{progress}%</span>
+          )}
+        </div>
+      ) : (
+        /* Model Klasik: Logo Lingkaran + Teks Judul Terpisah */
+        <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 my-auto max-w-md w-full">
+          <div className="relative mb-6">
+            <div className="absolute -inset-4 bg-gradient-to-tr from-blue-600/40 via-orange-500/40 to-amber-400/30 rounded-full blur-xl animate-pulse opacity-80" />
+            <div
+              className={`relative w-36 h-36 sm:w-44 sm:h-44 rounded-full p-2.5 bg-gradient-to-b from-white/30 via-white/10 to-transparent backdrop-blur-xl border border-white/30 shadow-2xl flex items-center justify-center transform transition-transform duration-700 ${
+                config.pulseAnimation ? 'hover:scale-105 active:scale-95' : ''
+              }`}
+            >
+              <img
+                src={config.logoUrl || '/assets/aistudio/logo_lapakoke_403ac6ed.png'}
+                alt={config.appName || 'LapakOke.com'}
+                className="w-full h-full object-contain filter drop-shadow-xl"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/assets/aistudio/logo_lapakoke_403ac6ed.png';
+                }}
+              />
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="relative">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight drop-shadow-md">
+              {config.appName === 'LapakOke.com' ? (
+                <span className="inline-flex items-center">
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-sky-200 to-white">
+                    Lapak
+                  </span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200">
+                    Oke
+                  </span>
+                  <span className="text-sm sm:text-base font-bold ml-1 px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-sm border border-white/20">
+                    .com
+                  </span>
+                </span>
+              ) : (
+                <span className="text-white drop-shadow-lg">{config.appName}</span>
+              )}
+            </h1>
+          </div>
+
+          {config.tagline && (
+            <p className="mt-3 text-xs sm:text-sm font-medium text-white/80 max-w-xs sm:max-w-sm line-clamp-2 leading-relaxed">
+              {config.tagline}
+            </p>
+          )}
+
+          {config.showProgressBar && (
+            <div className="w-full max-w-xs mt-8 flex flex-col items-center">
+              <div className="w-full h-2.5 bg-white/20 backdrop-blur-md rounded-full overflow-hidden p-0.5 border border-white/25 shadow-inner">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-amber-400 to-orange-500 transition-all duration-100 ease-out relative overflow-hidden"
+                  style={{ width: `${progress}%` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+                </div>
+              </div>
+
+              <div className="w-full flex items-center justify-between mt-2.5 text-[11px] text-white/85 font-mono">
+                <span className="truncate max-w-[220px] font-sans font-medium text-white/90 animate-pulse">
+                  {LOADING_STATUS_STEPS[statusTextIndex] || 'Memuat...'}
+                </span>
+                <span className="font-bold">{progress}%</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer Info: Version & Trust Badge */}
       <div className="relative z-10 w-full max-w-md px-6 pb-6 flex flex-col items-center text-center gap-1.5 text-xs text-white/60">

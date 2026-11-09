@@ -174,24 +174,171 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
               </span>
             </div>
 
+            {/* Pilihan Model Tampilan (Shopee vs Klasik) */}
+            <div className="p-3.5 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-orange-950 dark:text-orange-200 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Model Splash Screen:</span>
+                </span>
+                <span className="text-[10px] font-semibold text-orange-700 dark:text-orange-300">
+                  Sesuai Desain Shopee.com
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      styleMode: 'shopee',
+                      imageWidth: 750,
+                      imageHeight: 500,
+                    }))
+                  }
+                  className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
+                    config.styleMode !== 'classic'
+                      ? 'bg-white dark:bg-slate-900 border-orange-500 shadow-sm ring-2 ring-orange-500/20 text-orange-950 dark:text-orange-200'
+                      : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-xs">
+                    <span>🛍️ Model Shopee.com (750x500)</span>
+                    {config.styleMode !== 'classic' && (
+                      <Check className="w-3.5 h-3.5 text-orange-600" />
+                    )}
+                  </div>
+                  <p className="text-[10px] opacity-80 mt-1">
+                    Cukup logo 3D LapakOke.com yang muncul di tengah (750 x 500 px), bersih tanpa teks duplikat.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      styleMode: 'classic',
+                    }))
+                  }
+                  className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
+                    config.styleMode === 'classic'
+                      ? 'bg-white dark:bg-slate-900 border-blue-500 shadow-sm ring-2 ring-blue-500/20 text-blue-950 dark:text-blue-200'
+                      : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-xs">
+                    <span>⭕ Model Klasik</span>
+                    {config.styleMode === 'classic' && (
+                      <Check className="w-3.5 h-3.5 text-blue-600" />
+                    )}
+                  </div>
+                  <p className="text-[10px] opacity-80 mt-1">
+                    Logo lingkaran dengan judul teks dan tagline terpisah di bawahnya.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Ukuran Dimensi Gambar (750 x 500 px) */}
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  Dimensi Logo Tampil (Lebar x Tinggi):
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        imageWidth: 750,
+                        imageHeight: 500,
+                      }))
+                    }
+                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 hover:bg-orange-200 text-orange-800 dark:bg-orange-950 dark:text-orange-300 transition-colors"
+                  >
+                    Set 750 x 500 px (Standar)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        imageWidth: 500,
+                        imageHeight: 500,
+                      }))
+                    }
+                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 hover:bg-slate-300 text-slate-700 dark:bg-slate-700 dark:text-slate-300 transition-colors"
+                  >
+                    500 x 500 px
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                    Lebar Gambar (Pixel):
+                  </span>
+                  <input
+                    type="number"
+                    min="200"
+                    max="1200"
+                    value={config.imageWidth || 750}
+                    onChange={(e) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        imageWidth: Number(e.target.value) || 750,
+                      }))
+                    }
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                    Tinggi Gambar (Pixel):
+                  </span>
+                  <input
+                    type="number"
+                    min="150"
+                    max="1000"
+                    value={config.imageHeight || 500}
+                    onChange={(e) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        imageHeight: Number(e.target.value) || 500,
+                      }))
+                    }
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Logo Preview Card */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-blue-900 via-slate-900 to-orange-950 p-2.5 flex items-center justify-center border border-white/10 shadow-md shrink-0">
+              <div className="w-24 h-20 rounded-2xl bg-gradient-to-tr from-blue-900 via-slate-900 to-orange-950 p-2 flex items-center justify-center border border-white/10 shadow-md shrink-0">
                 <img
-                  src={config.logoUrl || '/lapakoke-logo-3d.svg'}
+                  src={config.logoUrl || '/assets/aistudio/logo_lapakoke_403ac6ed.png'}
                   alt="Logo Splash"
                   className="w-full h-full object-contain filter drop-shadow-md"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/lapakoke-logo-3d.svg';
+                    (e.target as HTMLImageElement).src = '/assets/aistudio/logo_lapakoke_403ac6ed.png';
                   }}
                 />
               </div>
 
               <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                    Logo Aktif Saat Ini
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Logo Aktif Saat Ini
+                    </h4>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 font-mono">
+                      {config.imageWidth || 750} x {config.imageHeight || 500} px
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                     {config.logoUrl.startsWith('data:')
                       ? 'Gambar Kustom (File Base64 Unggahan)'
@@ -218,11 +365,18 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setConfig((prev) => ({ ...prev, logoUrl: '/lapakoke-logo-3d.svg' }))}
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        logoUrl: '/assets/aistudio/logo_lapakoke_403ac6ed.png',
+                        imageWidth: 750,
+                        imageHeight: 500,
+                      }))
+                    }
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   >
                     <RotateCcw className="w-3 h-3" />
-                    <span>Logo 3D Asli</span>
+                    <span>Logo Resmi 750x500</span>
                   </button>
                 </div>
               </div>
@@ -610,31 +764,63 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
 
                 {/* Center Content Mockup */}
                 <div className="flex flex-col items-center my-auto relative z-10 w-full px-2">
-                  <div className="relative mb-3">
-                    <div className="w-24 h-24 rounded-full p-2 bg-gradient-to-b from-white/30 to-transparent backdrop-blur-md border border-white/30 shadow-lg flex items-center justify-center">
-                      <img
-                        src={config.logoUrl || '/lapakoke-logo-3d.svg'}
-                        alt="Splash Logo"
-                        className="w-full h-full object-contain filter drop-shadow"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/lapakoke-logo-3d.svg';
+                  {config.styleMode !== 'classic' ? (
+                    /* Model Shopee: Cukup Logo 750x500 di Tengah */
+                    <div className="w-full flex flex-col items-center my-auto">
+                      <div
+                        className="relative flex items-center justify-center w-full transition-all"
+                        style={{
+                          maxWidth: '240px',
                         }}
-                      />
+                      >
+                        <img
+                          src={config.logoUrl || '/assets/aistudio/logo_lapakoke_403ac6ed.png'}
+                          alt="Splash Logo"
+                          className="w-full h-auto object-contain filter drop-shadow-xl"
+                          style={{
+                            aspectRatio: `${config.imageWidth || 750} / ${config.imageHeight || 500}`,
+                            maxHeight: '160px',
+                          }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/assets/aistudio/logo_lapakoke_403ac6ed.png';
+                          }}
+                        />
+                      </div>
+                      <span className="mt-2 text-[9px] px-2 py-0.5 rounded-full bg-black/20 text-white/90 font-mono">
+                        {config.imageWidth || 750} x {config.imageHeight || 500} px
+                      </span>
                     </div>
-                  </div>
+                  ) : (
+                    /* Model Klasik */
+                    <>
+                      <div className="relative mb-3">
+                        <div className="w-24 h-24 rounded-full p-2 bg-gradient-to-b from-white/30 to-transparent backdrop-blur-md border border-white/30 shadow-lg flex items-center justify-center">
+                          <img
+                            src={config.logoUrl || '/assets/aistudio/logo_lapakoke_403ac6ed.png'}
+                            alt="Splash Logo"
+                            className="w-full h-full object-contain filter drop-shadow"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/assets/aistudio/logo_lapakoke_403ac6ed.png';
+                            }}
+                          />
+                        </div>
+                      </div>
 
-                  <h4 className="text-xl font-black tracking-tight text-white drop-shadow">
-                    {config.appName}
-                  </h4>
+                      <h4 className="text-xl font-black tracking-tight text-white drop-shadow">
+                        {config.appName}
+                      </h4>
 
-                  {config.tagline && (
-                    <p className="mt-1 text-[10px] text-white/80 line-clamp-2 leading-tight">
-                      {config.tagline}
-                    </p>
+                      {config.tagline && (
+                        <p className="mt-1 text-[10px] text-white/80 line-clamp-2 leading-tight">
+                          {config.tagline}
+                        </p>
+                      )}
+                    </>
                   )}
 
+                  {/* Loading Progress Bar in Mockup */}
                   {config.showProgressBar && (
-                    <div className="w-full max-w-[180px] mt-5">
+                    <div className="w-full max-w-[180px] mt-4">
                       <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden p-0.5">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-blue-500 to-orange-500"
