@@ -153,9 +153,70 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
   if (!isVisible) return null;
 
-  // Tentukan styling tema
+  // Tentukan apakah mode Hanya Logo Tanpa Background
+  const isLogoOnly =
+    Boolean(config.noBackground) ||
+    config.theme === 'transparent' ||
+    config.styleMode === 'logo_only';
+
   const activeTheme = SPLASH_THEME_OPTIONS.find((t) => t.id === config.theme) || SPLASH_THEME_OPTIONS[0];
 
+  // 1. Tampilan Utama: Model Hanya Logo Asli (Tanpa Background Full Screen)
+  if (isLogoOnly) {
+    return (
+      <div
+        aria-label="LapakOke Loading Logo"
+        className={`fixed inset-0 z-[99999] flex items-center justify-center select-none transition-all duration-500 ease-out pointer-events-none bg-transparent ${
+          isFadingOut ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+        }`}
+        style={{
+          touchAction: 'none',
+        }}
+      >
+        {/* Kontainer Logo Asli Melayang di Tengah */}
+        <div
+          onClick={handleSkip}
+          className={`relative pointer-events-auto cursor-pointer flex items-center justify-center p-4 transition-all duration-500 ${
+            config.pulseAnimation ? 'hover:scale-105 active:scale-95' : ''
+          }`}
+          style={{
+            maxWidth: `${config.imageWidth || 750}px`,
+            maxHeight: `${config.imageHeight || 500}px`,
+            width: '90vw',
+          }}
+          title="LapakOke.com • Klik untuk lewati"
+        >
+          <img
+            src={config.logoUrl || '/assets/aistudio/logo_lapakoke_403ac6ed.png'}
+            alt={config.appName || 'LapakOke.com'}
+            className="w-full h-auto object-contain filter drop-shadow-[0_20px_40px_rgba(0,0,0,0.35)] transition-all duration-300 max-h-[80vh]"
+            style={{
+              aspectRatio: `${config.imageWidth || 750} / ${config.imageHeight || 500}`,
+              maxWidth: `${config.imageWidth || 750}px`,
+              maxHeight: `${config.imageHeight || 500}px`,
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/assets/aistudio/logo_lapakoke_403ac6ed.png';
+            }}
+          />
+
+          {/* Optional Minimalist Progress Bar if user explicitly turned it on */}
+          {config.showProgressBar && (
+            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-48 max-w-[80vw]">
+              <div className="w-full h-1.5 bg-black/20 rounded-full overflow-hidden p-0.5 backdrop-blur-xs">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-100 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Tampilan Alternatif: Full Splash Screen jika pengguna memilih tema warna penuh
   return (
     <div
       aria-label="LapakOke Loading Splash Screen"
@@ -200,7 +261,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
       {/* Main Center Stage: Shopee Clean Model or Classic Model */}
       {config.styleMode !== 'classic' ? (
-        /* Model Shopee.com: Cukup Logo Lapakoke.com di tengah (750 x 500 px) */
+        /* Model Shopee: Cukup Logo Lapakoke.com di tengah (750 x 500 px) */
         <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 sm:px-6 my-auto w-full max-w-4xl">
           {/* Logo Container 750 x 500 px */}
           <div

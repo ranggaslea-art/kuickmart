@@ -190,54 +190,90 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
                 </span>
               </div>
 
-              {/* Pilihan Model Tampilan (Shopee vs Klasik) */}
-              <div className="p-3 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 space-y-2">
+              {/* Pilihan Model Tampilan (Logo Asli vs Shopee Full vs Klasik) */}
+              <div className="p-3.5 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-orange-950 dark:text-orange-200 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-orange-600" />
                     <span>Model Splash Screen:</span>
                   </span>
                   <span className="text-[10px] font-semibold text-orange-700 dark:text-orange-300">
-                    Sesuai Permintaan Shopee.com
+                    Sesuai Permintaan: Cukup Logo Tanpa Background
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* Mode 1: Hanya Logo Asli (Rekomendasi Utama) */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        styleMode: 'logo_only',
+                        noBackground: true,
+                        theme: 'transparent',
+                        imageWidth: 750,
+                        imageHeight: 500,
+                      }))
+                    }
+                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
+                      config.styleMode === 'logo_only' || config.noBackground || config.theme === 'transparent'
+                        ? 'bg-white dark:bg-slate-900 border-orange-500 shadow-sm ring-2 ring-orange-500/20 text-orange-950 dark:text-orange-200'
+                        : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <span>✨ Hanya Logo Asli</span>
+                      {(config.styleMode === 'logo_only' || config.noBackground || config.theme === 'transparent') && (
+                        <Check className="w-3.5 h-3.5 text-orange-600" />
+                      )}
+                    </div>
+                    <p className="text-[10px] opacity-80 mt-1">
+                      Cukup logonya saja tanpa background warna penuh, melayang di ukuran aslinya.
+                    </p>
+                  </button>
+
+                  {/* Mode 2: Model Shopee Full Screen */}
                   <button
                     type="button"
                     onClick={() =>
                       setConfig((prev) => ({
                         ...prev,
                         styleMode: 'shopee',
+                        noBackground: false,
+                        theme: prev.theme === 'transparent' ? 'shopee_orange' : prev.theme,
                         imageWidth: 750,
                         imageHeight: 500,
                       }))
                     }
-                    className={`flex flex-col items-start p-2.5 rounded-lg border text-left transition-all ${
-                      config.styleMode !== 'classic'
+                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
+                      config.styleMode === 'shopee' && !config.noBackground && config.theme !== 'transparent'
                         ? 'bg-white dark:bg-slate-900 border-orange-500 shadow-sm ring-2 ring-orange-500/20 text-orange-950 dark:text-orange-200'
                         : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-1.5 font-bold text-xs">
-                      <span>🛍️ Model Shopee.com (750x500)</span>
-                      {config.styleMode !== 'classic' && (
+                      <span>🛍️ Shopee Full Screen</span>
+                      {config.styleMode === 'shopee' && !config.noBackground && config.theme !== 'transparent' && (
                         <Check className="w-3.5 h-3.5 text-orange-600" />
                       )}
                     </div>
                     <p className="text-[10px] opacity-80 mt-1">
-                      Cukup logo 3D LapakOke.com yang muncul di tengah (750 x 500 px), bersih & elegan tanpa teks duplikat.
+                      Layar penuh dengan latar belakang warna oranye dan logo di tengah.
                     </p>
                   </button>
 
+                  {/* Mode 3: Model Klasik */}
                   <button
                     type="button"
                     onClick={() =>
                       setConfig((prev) => ({
                         ...prev,
                         styleMode: 'classic',
+                        noBackground: false,
+                        theme: prev.theme === 'transparent' ? 'gradient' : prev.theme,
                       }))
                     }
-                    className={`flex flex-col items-start p-2.5 rounded-lg border text-left transition-all ${
+                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
                       config.styleMode === 'classic'
                         ? 'bg-white dark:bg-slate-900 border-blue-500 shadow-sm ring-2 ring-blue-500/20 text-blue-950 dark:text-blue-200'
                         : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -250,7 +286,7 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
                       )}
                     </div>
                     <p className="text-[10px] opacity-80 mt-1">
-                      Logo di dalam bingkai lingkaran + judul teks & tagline terpisah di bawahnya.
+                      Bingkai logo lingkaran dengan teks judul dan tagline terpisah di bawahnya.
                     </p>
                   </button>
                 </div>
@@ -631,6 +667,29 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
 
               {/* Toggles */}
               <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 space-y-2">
+                <label className="flex items-center justify-between text-xs cursor-pointer py-1.5 px-2 rounded-lg bg-orange-100/60 dark:bg-orange-950/40 text-orange-950 dark:text-orange-200 border border-orange-200 dark:border-orange-800">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-xs">Tanpa Background (Cukup Logo Melayang)</span>
+                    <span className="text-[10px] text-orange-700 dark:text-orange-300">
+                      Tidak menggunakan layar penuh, hanya logo transparan asli
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={config.noBackground ?? true}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setConfig((prev) => ({
+                        ...prev,
+                        noBackground: val,
+                        theme: val ? 'transparent' : (prev.theme === 'transparent' ? 'shopee_orange' : prev.theme),
+                        styleMode: val ? 'logo_only' : 'shopee',
+                      }));
+                    }}
+                    className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 accent-orange-600 cursor-pointer"
+                  />
+                </label>
+
                 <label className="flex items-center justify-between text-xs cursor-pointer py-1">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">
                     Tampilkan Progress Bar Animasi Loading
@@ -710,16 +769,22 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
 
                 {/* Splash Screen Mockup Screen Canvas */}
                 <div
-                  className={`w-full h-full rounded-[28px] overflow-hidden flex flex-col justify-between items-center p-4 relative text-center select-none ${activeThemeObj.bgClass}`}
+                  className={`w-full h-full rounded-[28px] overflow-hidden flex flex-col justify-between items-center p-4 relative text-center select-none ${
+                    config.noBackground || config.theme === 'transparent' || config.styleMode === 'logo_only'
+                      ? 'bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-white'
+                      : activeThemeObj.bgClass
+                  }`}
                 >
-                  {/* Subtle Background Glow inside Phone */}
-                  <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-orange-500/20 rounded-full blur-2xl" />
-                  </div>
+                  {/* Subtle Background Glow inside Phone (only if not transparent) */}
+                  {!(config.noBackground || config.theme === 'transparent' || config.styleMode === 'logo_only') && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-orange-500/20 rounded-full blur-2xl" />
+                    </div>
+                  )}
 
                   {/* Top Bar inside mockup */}
                   <div className="w-full flex items-center justify-between pt-3 relative z-10">
-                    {config.showSubdomainInfo ? (
+                    {config.showSubdomainInfo && !(config.noBackground || config.theme === 'transparent') ? (
                       <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 truncate max-w-[130px] text-white">
                         📍 {currentStoreName}
                       </span>
@@ -727,7 +792,7 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
                       <div />
                     )}
 
-                    {config.showSkipButton && (
+                    {config.showSkipButton && !(config.noBackground || config.theme === 'transparent') && (
                       <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-white flex items-center gap-0.5">
                         Lewati <ChevronRight className="w-2.5 h-2.5" />
                       </span>

@@ -9,15 +9,16 @@ export interface SplashScreenConfig {
   appName: string;
   tagline: string;
   versionText: string;
-  theme: 'shopee_orange' | 'white' | 'gradient' | 'dark' | 'glass';
+  theme: 'transparent' | 'shopee_orange' | 'white' | 'gradient' | 'dark' | 'glass';
   durationMs: number; // 1000 to 6000 ms
   triggerMode: 'every_reload' | 'session_once';
   showProgressBar: boolean;
   showSubdomainInfo: boolean;
   showSkipButton: boolean;
   pulseAnimation: boolean;
-  // Fitur Model Shopee (Cukup logo 750x500 px yang muncul di tengah)
-  styleMode?: 'shopee' | 'classic';
+  // Fitur Model Logo Transparan (Cukup logo aslinya tanpa background full)
+  styleMode?: 'logo_only' | 'shopee' | 'classic';
+  noBackground?: boolean;
   imageWidth?: number; // 750 px
   imageHeight?: number; // 500 px
 }
@@ -28,14 +29,15 @@ export const DEFAULT_SPLASH_SCREEN_CONFIG: SplashScreenConfig = {
   appName: 'LapakOke.com',
   tagline: '',
   versionText: '',
-  theme: 'shopee_orange', // Warna oranye Shopee khas yang segar & eye-catching
-  durationMs: 2400,
-  triggerMode: 'every_reload', // Setiap loading pertama halaman index sesuai permintaan user
-  showProgressBar: false, // Model Shopee: bersih & fokus pada logo 750x500
+  theme: 'transparent', // Tanpa background penuh sesuai permintaan user
+  durationMs: 2000,
+  triggerMode: 'every_reload', // Setiap reload halaman index
+  showProgressBar: false,
   showSubdomainInfo: false,
-  showSkipButton: true,
+  showSkipButton: false, // Tidak butuh tombol skip jika hanya logo transparan melayang sekejap
   pulseAnimation: true,
-  styleMode: 'shopee',
+  styleMode: 'logo_only',
+  noBackground: true,
   imageWidth: 750,
   imageHeight: 500,
 };
@@ -43,9 +45,9 @@ export const DEFAULT_SPLASH_SCREEN_CONFIG: SplashScreenConfig = {
 export const SPLASH_PRESET_LOGOS = [
   {
     id: 'lapakoke_shopee_3d',
-    name: 'Logo Resmi 3D LapakOke 750x500px (Model Shopee)',
+    name: 'Logo Resmi 3D LapakOke (750 x 500 px)',
     url: '/assets/aistudio/logo_lapakoke_403ac6ed.png',
-    description: 'Logo resmi 3D Glossy Lapakoke.com keranjang oranye & biru ukuran standar 750 x 500 pixel',
+    description: 'Logo resmi 3D Glossy Lapakoke.com keranjang oranye & biru ukuran standar 750 x 500 pixel transparan',
     width: 750,
     height: 500,
   },
@@ -77,8 +79,15 @@ export const SPLASH_PRESET_LOGOS = [
 
 export const SPLASH_THEME_OPTIONS = [
   {
+    id: 'transparent',
+    name: 'Tanpa Background (Logo Melayang - Rekomendasi)',
+    description: 'Hanya logo asli transparan yang muncul melayang tanpa latar belakang warna penuh',
+    bgClass: 'bg-transparent text-slate-800',
+    accentColor: '#FF5722',
+  },
+  {
     id: 'shopee_orange',
-    name: 'Oranye Shopee Khas (Rekomendasi)',
+    name: 'Oranye Shopee Khas',
     description: 'Warna oranye cerah & energik identitas marketplace Shopee & LapakOke',
     bgClass: 'bg-gradient-to-b from-[#FF5722] via-[#FF5023] to-[#E64A19] text-white',
     accentColor: '#FF5722',
@@ -136,14 +145,19 @@ export function loadSplashScreenConfig(slug?: string): SplashScreenConfig {
           ? '/assets/aistudio/logo_lapakoke_403ac6ed.png'
           : parsed.logoUrl;
 
+      // Jika user belum atur noBackground atau ingin logo_only, utamakan logo_only
+      const styleMode = parsed.styleMode === 'classic' ? 'classic' : (parsed.styleMode || 'logo_only');
+      const noBackground = parsed.noBackground !== undefined ? parsed.noBackground : (styleMode === 'logo_only');
+
       return {
         ...DEFAULT_SPLASH_SCREEN_CONFIG,
         ...parsed,
         logoUrl,
-        styleMode: parsed.styleMode || 'shopee',
+        styleMode,
+        noBackground,
         imageWidth: parsed.imageWidth || 750,
         imageHeight: parsed.imageHeight || 500,
-        theme: parsed.theme || 'shopee_orange',
+        theme: parsed.theme || (noBackground ? 'transparent' : 'shopee_orange'),
       };
     }
   } catch (e) {
