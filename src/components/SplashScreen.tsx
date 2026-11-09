@@ -11,6 +11,7 @@ import { Sparkles, X, ChevronRight, CheckCircle2, ShoppingBag } from 'lucide-rea
 interface SplashScreenProps {
   activeTenantSlug?: string;
   currentStoreName?: string;
+  storeLogoUrl?: string;
   onFinished?: () => void;
   forceShow?: boolean;
 }
@@ -22,27 +23,30 @@ const LOADING_STATUS_STEPS = [
   'Menyiapkan promo & diskon hari ini...',
   'Menghubungkan sistem kasir & pembayaran DOKU...',
   'Memeriksa status subdomain cabang...',
-  'Selamat Datang di LapakOke!',
+  'Selamat Datang!',
 ];
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   activeTenantSlug = 'default',
   currentStoreName = 'LapakOke Pusat',
+  storeLogoUrl,
   onFinished,
   forceShow = false,
 }) => {
-  const [config, setConfig] = useState<SplashScreenConfig>(() => loadSplashScreenConfig(activeTenantSlug));
+  const [config, setConfig] = useState<SplashScreenConfig>(() =>
+    loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl)
+  );
   const [isVisible, setIsVisible] = useState<boolean>(() => {
     if (forceShow) return true;
     if (typeof window === 'undefined') return false;
 
     // Cek apakah diizinkan aktif
-    const cfg = loadSplashScreenConfig(activeTenantSlug);
+    const cfg = loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl);
     if (!cfg.enabled) return false;
 
     // Jika mode 'session_once', periksa apakah sudah pernah tampil di tab ini
     if (cfg.triggerMode === 'session_once') {
-      const alreadyShown = sessionStorage.getItem(SESSION_SPLASH_KEY);
+      const alreadyShown = sessionStorage.getItem(`${SESSION_SPLASH_KEY}_${activeTenantSlug}`);
       if (alreadyShown) return false;
     }
 
@@ -55,13 +59,41 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Muat config saat tenant berganti & fetch dari database backend
+  useEffect(() => {
+    setConfig(loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl));
+
+    // Cek apakah ada konfigurasi tersimpan di server database MySQL/Cloud untuk subdomain ini
+    fetch(`/api/splash-config?slug=${encodeURIComponent(activeTenantSlug)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.splashConfig) {
+          const cfg = data.splashConfig;
+          try {
+            localStorage.setItem(`lapakoke_splash_config_${activeTenantSlug.toLowerCase().trim()}`, JSON.stringify(cfg));
+          } catch {}
+          setConfig(cfg);
+        }
+      })
+      .catch(() => {});
+  }, [activeTenantSlug, currentStoreName, storeLogoUrl]);
+
   // Perbarui config jika ada event penyimpanan dari editor
   useEffect(() => {
     const handleConfigUpdate = (e: any) => {
-      if (e.detail) {
-        setConfig(e.detail);
-      } else {
-        setConfig(loadSplashScreenConfig(activeTenantSlug));
+      const detail = e.detail;
+      if (!detail) {
+        setConfig(loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl));
+        return;
+      }
+      // Pastikan event ini milik subdomain aktif yang sama
+      if (detail.slug && detail.slug.toLowerCase().trim() !== activeTenantSlug.toLowerCase().trim()) {
+        return;
+      }
+      if (detail.config) {
+        setConfig(detail.config);
+      } else if (!detail.slug) {
+        setConfig(detail);
       }
     };
 
@@ -79,7 +111,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       window.removeEventListener(SPLASH_CONFIG_UPDATED_EVENT, handleConfigUpdate);
       window.removeEventListener(TRIGGER_SPLASH_SCREEN_EVENT, handleManualTrigger);
     };
-  }, [activeTenantSlug]);
+  }, [activeTenantSlug, currentStoreName, storeLogoUrl]);
 
   // Efek jika forceShow berubah
   useEffect(() => {
@@ -97,7 +129,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
     if (config.triggerMode === 'session_once') {
       try {
-        sessionStorage.setItem(SESSION_SPLASH_KEY, 'true');
+        sessionStorage.setItem(`${SESSION_SPLASH_KEY}_${activeTenantSlug.toLowerCase().trim()}`, 'true');
       } catch {}
     }
 

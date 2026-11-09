@@ -2130,6 +2130,7 @@ export default function App() {
       <SplashScreen
         activeTenantSlug={currentSlug}
         currentStoreName={currentStore.name}
+        storeLogoUrl={brandConfig.brandLogoImageUrl}
       />
 
       {/* Sticky Header */}

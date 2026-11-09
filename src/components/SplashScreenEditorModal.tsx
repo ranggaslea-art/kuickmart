@@ -5,6 +5,7 @@ import {
   saveSplashScreenConfig,
   resetSplashScreenConfig,
   triggerManualSplashScreen,
+  isMainDomain,
   DEFAULT_SPLASH_SCREEN_CONFIG,
   SPLASH_PRESET_LOGOS,
   SPLASH_THEME_OPTIONS,
@@ -45,20 +46,22 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
   currentStoreName = 'LapakOke Pusat',
   storeLogoUrl,
 }) => {
-  const [config, setConfig] = useState<SplashScreenConfig>(() => loadSplashScreenConfig(activeTenantSlug));
+  const [config, setConfig] = useState<SplashScreenConfig>(() =>
+    loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl)
+  );
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [imageUrlInput, setImageUrlInput] = useState<string>('');
   const [previewProgress, setPreviewProgress] = useState<number>(65);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Muat ulang config ketika modal dibuka
+  // Muat ulang config ketika modal dibuka atau tenant berganti
   useEffect(() => {
     if (isOpen) {
-      setConfig(loadSplashScreenConfig(activeTenantSlug));
+      setConfig(loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl));
       setSavedSuccess(false);
       setImageUrlInput('');
     }
-  }, [isOpen, activeTenantSlug]);
+  }, [isOpen, activeTenantSlug, currentStoreName, storeLogoUrl]);
 
   if (!isOpen) return null;
 
@@ -111,8 +114,12 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
 
   // Reset ke bawaan
   const handleReset = () => {
-    if (window.confirm('Kembalikan seluruh pengaturan splash screen ke desain awal LapakOke?')) {
-      const def = resetSplashScreenConfig(activeTenantSlug);
+    const isMain = isMainDomain(activeTenantSlug);
+    const msg = isMain
+      ? 'Kembalikan seluruh pengaturan splash screen ke desain awal LapakOke.com?'
+      : `Kembalikan pengaturan splash screen khusus cabang '${currentStoreName}' (${activeTenantSlug}) ke desain awal cabang?`;
+    if (window.confirm(msg)) {
+      const def = resetSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl);
       setConfig(def);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2000);
@@ -142,14 +149,22 @@ export const SplashScreenEditorModal: React.FC<SplashScreenEditorModalProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Modul Editor Splash Screen
+                  {isMainDomain(activeTenantSlug)
+                    ? 'Modul Editor Splash Screen'
+                    : 'Editor Splash Screen Subdomain'}
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
-                  LapakOke.com
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                  isMainDomain(activeTenantSlug)
+                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200 dark:border-orange-800'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300'
+                }`}>
+                  {isMainDomain(activeTenantSlug) ? 'LapakOke.com' : `Cabang: ${activeTenantSlug}`}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Ubah gambar, logo, teks pembuka, durasi animasi, dan tema layar loading awal
+                {isMainDomain(activeTenantSlug)
+                  ? 'Pengaturan layar pembuka untuk domain utama lapakoke.com'
+                  : `Khusus toko ${currentStoreName} (${activeTenantSlug}). Mandiri & terpisah dari domain utama.`}
               </p>
             </div>
           </div>

@@ -126,33 +126,99 @@ const STORAGE_KEY_PREFIX = 'lapakoke_splash_config_';
 export const SPLASH_CONFIG_UPDATED_EVENT = 'lapakoke_splash_config_updated';
 export const TRIGGER_SPLASH_SCREEN_EVENT = 'lapakoke_trigger_splash_screen';
 
+/**
+ * Cek apakah sebuah slug merupakan domain utama LapakOke
+ */
+export function isMainDomain(slug?: string): boolean {
+  if (!slug) return true;
+  const clean = slug.toLowerCase().trim();
+  return (
+    clean === 'default' ||
+    clean === 'lapakoke' ||
+    clean === 'lapakoke.com' ||
+    clean === 'toko-online' ||
+    clean === 'toko-online.online' ||
+    clean === 'www.lapakoke.com'
+  );
+}
+
 export function getSplashStorageKey(slug?: string): string {
   const clean = (slug || 'default').toLowerCase().trim();
   return `${STORAGE_KEY_PREFIX}${clean}`;
 }
 
-export function loadSplashScreenConfig(slug?: string): SplashScreenConfig {
-  if (typeof window === 'undefined') return DEFAULT_SPLASH_SCREEN_CONFIG;
+/**
+ * Konfigurasi bawaan khusus untuk Subdomain Toko Cabang:
+ * Disesuaikan otomatis dengan identitas & nama cabang masing-masing,
+ * TIDAK MENGIKUTI logo atau judul LapakOke domain utama!
+ */
+export function getDefaultSubdomainSplashConfig(
+  slug: string,
+  storeName?: string,
+  storeLogoUrl?: string
+): SplashScreenConfig {
+  const cleanSlug = slug.toLowerCase().trim();
+  const displayName = storeName || cleanSlug.toUpperCase();
+  // Gunakan logo khusus subdomain jika ada, atau icon PWA toko
+  const logo = storeLogoUrl || '/pwa-512x512.png';
+
+  return {
+    enabled: true,
+    logoUrl: logo,
+    appName: displayName,
+    tagline: '',
+    versionText: '',
+    theme: 'transparent',
+    durationMs: 2000,
+    triggerMode: 'every_reload',
+    showProgressBar: false,
+    showSubdomainInfo: false,
+    showSkipButton: false,
+    pulseAnimation: true,
+    styleMode: 'logo_only',
+    noBackground: true,
+    imageWidth: 750,
+    imageHeight: 500,
+  };
+}
+
+/**
+ * Muat konfigurasi Splash Screen untuk domain utama atau subdomain tertentu.
+ * ATURAN ISOLASI:
+ * Subdomain TIDAK BOLEH meminjam/menimpa config milik 'default' (domain utama)!
+ */
+export function loadSplashScreenConfig(
+  slug?: string,
+  storeName?: string,
+  storeLogoUrl?: string
+): SplashScreenConfig {
+  const cleanSlug = (slug || 'default').toLowerCase().trim();
+  const isMain = isMainDomain(cleanSlug);
+
+  if (typeof window === 'undefined') {
+    return isMain
+      ? DEFAULT_SPLASH_SCREEN_CONFIG
+      : getDefaultSubdomainSplashConfig(cleanSlug, storeName, storeLogoUrl);
+  }
 
   try {
-    const key = getSplashStorageKey(slug);
-    const saved = localStorage.getItem(key) || localStorage.getItem(getSplashStorageKey('default'));
+    const key = getSplashStorageKey(cleanSlug);
+    // HANYA ambil key spesifik milik slug ini.
+    // DILARANG keras fallback ke 'default' jika sedang di subdomain cabang!
+    const saved = localStorage.getItem(key);
+
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migrasikan logo lama ke logo resmi 3D 750x500px jika masih pakai svg lama
-      const logoUrl =
-        !parsed.logoUrl || parsed.logoUrl === '/lapakoke-logo-3d.svg'
-          ? '/assets/aistudio/logo_lapakoke_403ac6ed.png'
-          : parsed.logoUrl;
-
-      // Jika user belum atur noBackground atau ingin logo_only, utamakan logo_only
       const styleMode = parsed.styleMode === 'classic' ? 'classic' : (parsed.styleMode || 'logo_only');
       const noBackground = parsed.noBackground !== undefined ? parsed.noBackground : (styleMode === 'logo_only');
 
       return {
-        ...DEFAULT_SPLASH_SCREEN_CONFIG,
+        ...(isMain
+          ? DEFAULT_SPLASH_SCREEN_CONFIG
+          : getDefaultSubdomainSplashConfig(cleanSlug, storeName, storeLogoUrl)),
         ...parsed,
-        logoUrl,
+        logoUrl: parsed.logoUrl || (isMain ? DEFAULT_SPLASH_SCREEN_CONFIG.logoUrl : (storeLogoUrl || '/pwa-512x512.png')),
+        appName: parsed.appName || (isMain ? 'LapakOke.com' : (storeName || cleanSlug.toUpperCase())),
         styleMode,
         noBackground,
         imageWidth: parsed.imageWidth || 750,
@@ -161,38 +227,99 @@ export function loadSplashScreenConfig(slug?: string): SplashScreenConfig {
       };
     }
   } catch (e) {
-    console.warn('Gagal memuat splash screen config:', e);
+    console.warn(`[SplashScreen] Gagal memuat splash config untuk '${cleanSlug}':`, e);
   }
 
-  return DEFAULT_SPLASH_SCREEN_CONFIG;
+  // Jika belum pernah disimpan di localStorage:
+  return isMain
+    ? DEFAULT_SPLASH_SCREEN_CONFIG
+    : getDefaultSubdomainSplashConfig(cleanSlug, storeName, storeLogoUrl);
 }
 
+/**
+ * Simpan konfigurasi Splash Screen secara independen per subdomain.
+ * Otomatis sync ke backend Express API & MySQL agar sinkron di semua media (PC, HP, Tablet).
+ */
 export function saveSplashScreenConfig(config: SplashScreenConfig, slug?: string): void {
   if (typeof window === 'undefined') return;
 
   try {
-    const key = getSplashStorageKey(slug);
+    const cleanSlug = (slug || 'default').toLowerCase().trim();
+    const isMain = isMainDomain(cleanSlug);
+    const key = getSplashStorageKey(cleanSlug);
+
+    // Simpan ke storage lokal khusus subdomain ini
     localStorage.setItem(key, JSON.stringify(config));
-    // Simpan juga ke key default jika sedang di domain utama
-    if (!slug || slug === 'default' || slug === 'lapakoke' || slug === 'lapakoke.com') {
+
+    // Simpan juga ke key default HANYA jika memang sedang di domain utama
+    if (isMain) {
       localStorage.setItem(getSplashStorageKey('default'), JSON.stringify(config));
     }
-    window.dispatchEvent(new CustomEvent(SPLASH_CONFIG_UPDATED_EVENT, { detail: config }));
+
+    // Broadcast event dengan menyertakan slug agar tab/komponen tahu pemiliknya
+    window.dispatchEvent(
+      new CustomEvent(SPLASH_CONFIG_UPDATED_EVENT, {
+        detail: { config, slug: cleanSlug },
+      })
+    );
+
+    // Kirim sinkronisasi ke server Database agar tersimpan di MySQL & multi-device
+    fetch('/api/splash-config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-slug': cleanSlug,
+      },
+      body: JSON.stringify({ slug: cleanSlug, config }),
+    }).catch((err) => {
+      console.warn(`[SplashScreen] Gagal sinkronisasi ke server database untuk '${cleanSlug}':`, err);
+    });
   } catch (e) {
     console.warn('Gagal menyimpan splash screen config:', e);
   }
 }
 
-export function resetSplashScreenConfig(slug?: string): SplashScreenConfig {
-  if (typeof window === 'undefined') return DEFAULT_SPLASH_SCREEN_CONFIG;
+/**
+ * Kembalikan pengaturan ke desain awal khusus domain/subdomain terkait
+ */
+export function resetSplashScreenConfig(
+  slug?: string,
+  storeName?: string,
+  storeLogoUrl?: string
+): SplashScreenConfig {
+  const cleanSlug = (slug || 'default').toLowerCase().trim();
+  const isMain = isMainDomain(cleanSlug);
+  const def = isMain
+    ? DEFAULT_SPLASH_SCREEN_CONFIG
+    : getDefaultSubdomainSplashConfig(cleanSlug, storeName, storeLogoUrl);
+
+  if (typeof window === 'undefined') return def;
 
   try {
-    const key = getSplashStorageKey(slug);
+    const key = getSplashStorageKey(cleanSlug);
     localStorage.removeItem(key);
-    window.dispatchEvent(new CustomEvent(SPLASH_CONFIG_UPDATED_EVENT, { detail: DEFAULT_SPLASH_SCREEN_CONFIG }));
+    if (isMain) {
+      localStorage.removeItem(getSplashStorageKey('default'));
+    }
+
+    window.dispatchEvent(
+      new CustomEvent(SPLASH_CONFIG_UPDATED_EVENT, {
+        detail: { config: def, slug: cleanSlug },
+      })
+    );
+
+    // Sync reset ke server
+    fetch('/api/splash-config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-slug': cleanSlug,
+      },
+      body: JSON.stringify({ slug: cleanSlug, config: def }),
+    }).catch(() => {});
   } catch (e) {}
 
-  return DEFAULT_SPLASH_SCREEN_CONFIG;
+  return def;
 }
 
 export function triggerManualSplashScreen(): void {

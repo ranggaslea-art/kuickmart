@@ -502,6 +502,7 @@ async function startServer() {
         receiptConfigs: settings.receiptConfigs || null,
         storePromos: settings.storePromos || null,
         couriers: settings.couriers || null,
+        splashConfig: settings.splashConfig || null,
         updatedAt: settings.updatedAt || new Date().toISOString(),
       },
       source: 'database',
@@ -552,6 +553,9 @@ async function startServer() {
       if (incoming.couriers) {
         appSettingsMap[slug].couriers = incoming.couriers;
       }
+      if (incoming.splashConfig) {
+        appSettingsMap[slug].splashConfig = incoming.splashConfig;
+      }
 
       appSettingsMap[slug].updatedAt = new Date().toISOString();
 
@@ -583,6 +587,12 @@ async function startServer() {
               [slug, JSON.stringify(incoming.tenant)]
             );
           }
+          if (incoming.splashConfig) {
+            await pool.query(
+              `INSERT INTO store_settings (tenant_slug, module_key, config_data) VALUES (?, 'splash_config', ?) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data)`,
+              [slug, JSON.stringify(incoming.splashConfig)]
+            );
+          }
         }
       } catch (_) {}
 
@@ -595,6 +605,53 @@ async function startServer() {
     } catch (err: any) {
       console.error('[AppSettings] Gagal menyimpan ke database:', err);
       return res.status(500).json({ success: false, error: err.message || 'Gagal menyimpan pengaturan' });
+    }
+  });
+
+  // 1b-0b. Endpoint Khusus Splash Screen Per Subdomain
+  app.get('/api/splash-config', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const settings = appSettingsMap[slug] || {};
+    return res.json({
+      success: true,
+      slug,
+      splashConfig: settings.splashConfig || null,
+    });
+  });
+
+  app.post('/api/splash-config', async (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+      const splashConfig = incoming.config || incoming.splashConfig || incoming;
+
+      if (!appSettingsMap[slug]) {
+        appSettingsMap[slug] = {};
+      }
+      appSettingsMap[slug].splashConfig = splashConfig;
+      appSettingsMap[slug].updatedAt = new Date().toISOString();
+
+      saveAppSettingsToFile();
+
+      // Simpan ke MySQL jika tersedia
+      try {
+        const pool = getMySqlPool();
+        if (pool) {
+          await pool.query(
+            `INSERT INTO store_settings (tenant_slug, module_key, config_data) VALUES (?, 'splash_config', ?) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data)`,
+            [slug, JSON.stringify(splashConfig)]
+          );
+        }
+      } catch (_) {}
+
+      return res.json({
+        success: true,
+        slug,
+        message: `Splash screen untuk '${slug}' berhasil disimpan.`,
+        splashConfig,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
     }
   });
 

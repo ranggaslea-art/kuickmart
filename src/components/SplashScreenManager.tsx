@@ -5,6 +5,7 @@ import {
   saveSplashScreenConfig,
   resetSplashScreenConfig,
   triggerManualSplashScreen,
+  isMainDomain,
   SPLASH_PRESET_LOGOS,
   SPLASH_THEME_OPTIONS,
 } from '../utils/splashScreenHelper';
@@ -39,15 +40,17 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
   storeLogoUrl,
   onOpenFullScreenTest,
 }) => {
-  const [config, setConfig] = useState<SplashScreenConfig>(() => loadSplashScreenConfig(activeTenantSlug));
+  const [config, setConfig] = useState<SplashScreenConfig>(() =>
+    loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl)
+  );
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [imageUrlInput, setImageUrlInput] = useState<string>('');
   const [previewProgress, setPreviewProgress] = useState<number>(65);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setConfig(loadSplashScreenConfig(activeTenantSlug));
-  }, [activeTenantSlug]);
+    setConfig(loadSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl));
+  }, [activeTenantSlug, currentStoreName, storeLogoUrl]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -94,8 +97,12 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
   };
 
   const handleReset = () => {
-    if (window.confirm('Kembalikan seluruh pengaturan splash screen ke desain awal LapakOke?')) {
-      const def = resetSplashScreenConfig(activeTenantSlug);
+    const isMain = isMainDomain(activeTenantSlug);
+    const msg = isMain
+      ? 'Kembalikan seluruh pengaturan splash screen ke desain awal LapakOke?'
+      : `Kembalikan pengaturan splash screen khusus cabang '${currentStoreName}' (${activeTenantSlug}) ke desain awal cabang?`;
+    if (window.confirm(msg)) {
+      const def = resetSplashScreenConfig(activeTenantSlug, currentStoreName, storeLogoUrl);
       setConfig(def);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2000);
@@ -124,14 +131,22 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                Editor Splash Screen & Loading Awal
+                {isMainDomain(activeTenantSlug)
+                  ? 'Editor Splash Screen & Loading Awal'
+                  : `Editor Splash Screen: ${currentStoreName}`}
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/30 text-orange-300 border border-orange-400/40">
-                Index Page
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                isMainDomain(activeTenantSlug)
+                  ? 'bg-orange-500/30 text-orange-300 border-orange-400/40'
+                  : 'bg-blue-500/30 text-blue-300 border-blue-400/40'
+              }`}>
+                {isMainDomain(activeTenantSlug) ? 'Domain Utama LapakOke' : `Subdomain: ${activeTenantSlug}`}
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-0.5">
-              Kustomisasi logo pembuka, gambar glossy 3D, teks branding, durasi animasi, dan tema warna saat website pertama kali dimuat.
+              {isMainDomain(activeTenantSlug)
+                ? 'Kustomisasi logo pembuka, durasi animasi, dan tema warna lapakoke.com saat website pertama kali dimuat.'
+                : `Kustomisasi splash screen khusus cabang ${currentStoreName} (${activeTenantSlug}). Mandiri dan terpisah dari domain utama.`}
             </p>
           </div>
         </div>
@@ -401,18 +416,21 @@ export const SplashScreenManager: React.FC<SplashScreenManagerProps> = ({
 
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      const isMain = isMainDomain(activeTenantSlug);
                       setConfig((prev) => ({
                         ...prev,
-                        logoUrl: '/assets/aistudio/logo_lapakoke_403ac6ed.png',
+                        logoUrl: isMain
+                          ? '/assets/aistudio/logo_lapakoke_403ac6ed.png'
+                          : (storeLogoUrl || '/pwa-512x512.png'),
                         imageWidth: 750,
                         imageHeight: 500,
-                      }))
-                    }
+                      }));
+                    }}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   >
                     <RotateCcw className="w-3 h-3" />
-                    <span>Logo Resmi 750x500</span>
+                    <span>{isMainDomain(activeTenantSlug) ? 'Logo Resmi LapakOke' : 'Logo Cabang'}</span>
                   </button>
                 </div>
               </div>
