@@ -40,6 +40,7 @@ interface HeroBannerProps {
   storePromos?: StorePromoInfo[];
   onOpenPromoManager?: () => void;
   onNavigatePromo?: (target: PromoNavigationTarget) => void;
+  isLiveActive?: boolean;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ 
@@ -47,7 +48,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   onOpenMemberModal,
   storePromos,
   onOpenPromoManager,
-  onNavigatePromo
+  onNavigatePromo,
+  isLiveActive = false,
 }) => {
   const [activeSlide, setActiveSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -295,34 +297,58 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       )}
 
       {/* Live Stream Spotlight Strip (TikTok & Shopee Live Style) */}
-      <div className="mb-3 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-600 text-white shadow-md flex items-center justify-between gap-3 animate-in fade-in">
+      <div className={`mb-3 p-2.5 sm:p-3 rounded-2xl flex items-center justify-between gap-3 transition-all duration-300 ${
+        isLiveActive
+          ? 'bg-gradient-to-r from-red-600 via-rose-600 to-orange-600 text-white shadow-md'
+          : 'bg-stone-100 dark:bg-stone-850 border border-stone-200 dark:border-stone-750 text-stone-700 dark:text-stone-300'
+      }`}>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30">
-            <Radio className="w-4 h-4 text-white animate-pulse" />
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+            isLiveActive
+              ? 'bg-white/20 backdrop-blur-md border-white/30 text-white'
+              : 'bg-stone-200 dark:bg-stone-700 border-stone-300 dark:border-stone-600 text-stone-400'
+          }`}>
+            <Radio className={`w-4 h-4 ${isLiveActive ? 'text-white animate-pulse' : 'text-stone-400'}`} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="px-1.5 py-0.2 rounded-full bg-black/30 text-[9px] font-black uppercase tracking-wider text-white">
-                🔴 SEDANG LIVE
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                isLiveActive
+                  ? 'bg-black/30 text-white'
+                  : 'bg-stone-200 dark:bg-stone-700 text-stone-500 dark:text-stone-400'
+              }`}>
+                {isLiveActive ? '🔴 SEDANG LIVE' : 'LIVE OFFLINE'}
               </span>
-              <span className="text-xs font-black text-white truncate">
-                Toko Sedang Siaran Langsung Jualan Produk!
+              <span className={`text-xs font-black truncate ${isLiveActive ? 'text-white' : 'text-stone-700 dark:text-stone-200'}`}>
+                {isLiveActive ? 'Toko Sedang Siaran Langsung Jualan Produk!' : 'Saat Ini Tidak Ada Siaran Langsung'}
               </span>
             </div>
-            <p className="text-[11px] text-white/90 truncate hidden sm:block">
-              Tonton live streaming interaktif (bisa layar penuh & melayang), klaim diskon belanja sembako & snack di keranjang kuning!
+            <p className={`text-[11px] truncate hidden sm:block ${isLiveActive ? 'text-white/90' : 'text-stone-500 dark:text-stone-400'}`}>
+              {isLiveActive
+                ? 'Tonton live streaming interaktif (bisa layar penuh & melayang), klaim diskon belanja sembako & snack di keranjang kuning!'
+                : 'Siaran live streaming toko sedang nonaktif. Nantikan jadwal siaran langsung dan promo berikutnya!'}
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => triggerOpenLiveStream('fullscreen')}
-          className="px-3.5 py-1.5 rounded-xl bg-white text-red-700 hover:bg-red-50 text-xs font-black shadow-sm shrink-0 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <Play className="w-3.5 h-3.5 fill-current text-red-600" />
-          <span>Tonton Live 🛍️</span>
-        </button>
+        {isLiveActive ? (
+          <button
+            type="button"
+            onClick={() => triggerOpenLiveStream('fullscreen')}
+            className="px-3.5 py-1.5 rounded-xl bg-white text-red-700 hover:bg-red-50 text-xs font-black shadow-sm shrink-0 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Play className="w-3.5 h-3.5 fill-current text-red-600" />
+            <span>Tonton Live 🛍️</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="px-3.5 py-1.5 rounded-xl bg-stone-200 dark:bg-stone-700 text-stone-400 dark:text-stone-500 text-xs font-bold shrink-0 cursor-not-allowed opacity-75 flex items-center gap-1.5"
+          >
+            <span>Live Selesai</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

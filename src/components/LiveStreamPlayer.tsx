@@ -33,13 +33,19 @@ import {
   Flame,
   Award,
   Video,
+  User,
+  Edit2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
+import { MemberProfile } from '../types';
 
 interface LiveStreamPlayerProps {
   currentStore: Store;
   activeTenantSlug?: string;
   storeLogoUrl?: string;
   products: Product[];
+  member?: MemberProfile;
   onAddToCart: (product: Product, quantity?: number, notes?: string, unitOption?: any) => void;
   onOpenProductDetail?: (product: Product) => void;
   onOpenCart?: () => void;
@@ -56,6 +62,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   activeTenantSlug = 'default',
   storeLogoUrl,
   products = [],
+  member,
   onAddToCart,
   onOpenProductDetail,
   onOpenCart,
@@ -74,6 +81,36 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [isEtalaseOpen, setIsEtalaseOpen] = useState<boolean>(false);
   const [addedSuccessToast, setAddedSuccessToast] = useState<string | null>(null);
   const [shareSuccessToast, setShareSuccessToast] = useState<boolean>(false);
+
+  // Visitor Name for live comments (Persisten di localStorage & sync dengan akun member)
+  const [visitorName, setVisitorName] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('lapakoke_live_visitor_name');
+      if (saved && saved.trim()) return saved.trim();
+    } catch {}
+    if (member?.name && member.name.trim()) return member.name.trim();
+    return 'Pengunjung ' + Math.floor(100 + Math.random() * 900);
+  });
+  const [isEditingVisitorName, setIsEditingVisitorName] = useState<boolean>(false);
+  const [tempVisitorName, setTempVisitorName] = useState<string>('');
+
+  // Sinkronkan nama member jika login
+  useEffect(() => {
+    if (member?.name && member.name.trim()) {
+      setVisitorName((prev) => {
+        if (!prev || prev.startsWith('Pengunjung ')) {
+          try {
+            localStorage.setItem('lapakoke_live_visitor_name', member.name.trim());
+          } catch {}
+          return member.name.trim();
+        }
+        return prev;
+      });
+    }
+  }, [member?.name]);
+
+  // Index produk promo live yang sedang aktif ditampilkan di kartu spill
+  const [activePromotedIndex, setActivePromotedIndex] = useState<number>(0);
 
   // Chat comments
   const [comments, setComments] = useState<LiveStreamComment[]>([
@@ -231,25 +268,79 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     return null;
   }
 
-  // Cari produk yang disematkan (pinned product / keranjang kuning)
-  const pinnedProduct: Product | undefined =
-    products.find((p) => p.id === config.pinnedProductId) || (products.length > 0 ? products[0] : undefined);
+  // Multiple Promoted Products (Daftar barang yang dipromokan host/admin)
+  const promotedProducts: Product[] = React.useMemo(() => {
+    const ids: string[] = [];
+    if (Array.isArray(config.pinnedProductIds) && config.pinnedProductIds.length > 0) {
+      ids.push(...config.pinnedProductIds);
+    } else if (config.pinnedProductId) {
+      ids.push(config.pinnedProductId);
+    }
 
-  // Handle kirim komentar manual oleh pengunjung
-  const handleSendComment = (e?: React.FormEvent) => {
+    const uniqueIds = Array.from(new Set(ids));
+    const matched = uniqueIds
+      .map((id) => products.find((p) => p.id === id))
+      .filter((p): p is Product => Boolean(p));
+
+    if (matched.length > 0) return matched;
+    return products.length > 0 ? [products[0]] : [];
+  }, [config.pinnedProductIds, config.pinnedProductId, products]);
+
+  // Produk aktif saat ini yang sedang ditampilkan di pin
+  const safePromotedIndex = Math.min(activePromotedIndex, Math.max(0, promotedProducts.length - 1));
+  const pinnedProduct: Product | undefined = promotedProducts[safePromotedIndex];
+
+  const handleNextPromoted = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (promotedProducts.length <= 1) return;
+    setActivePromotedIndex((prev) => (prev + 1) % promotedProducts.length);
+  };
+
+  const handlePrevPromoted = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (promotedProducts.length <= 1) return;
+    setActivePromotedIndex((prev) => (prev - 1 + promotedProducts.length) % promotedProducts.length);
+  };
+
+  // Simpan nama pengunjung
+  const handleSaveVisitorName = (newName: string) => {
+    const clean = newName.trim() || member?.name || 'Pengunjung';
+    setVisitorName(clean);
+    setIsEditingVisitorName(false);
+    try {
+      localStorage.setItem('lapakoke_live_visitor_name', clean);
+    } catch {}
+  };
+
+  // Quick Chips Rekomendasi Chat
+  const QUICK_COMMENT_CHIPS = [
+    'Spill no 1 min! 🔥',
+    'Bisa COD gak min?',
+    'Ada diskon tambahan?',
+    'Ready kirim sekarang?',
+    'Barang original min? 👍',
+  ];
+
+  // Handle kirim komentar manual oleh pengunjung (Nama Pengunjung Muncul)
+  const handleSendComment = (e?: React.FormEvent, directText?: string) => {
     if (e) e.preventDefault();
-    if (!myCommentText.trim()) return;
+    const textToSend = (directText !== undefined ? directText : myCommentText).trim();
+    if (!textToSend) return;
+
+    const currentSender = (visitorName || member?.name || 'Pengunjung').trim();
 
     const myComment: LiveStreamComment = {
-      id: 'my_' + Date.now(),
-      senderName: 'Anda (Pengunjung)',
-      message: myCommentText.trim(),
+      id: 'my_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+      senderName: currentSender,
+      message: textToSend,
       timestamp: 'Baru saja',
       isBuyer: true,
     };
 
     setComments((prev) => [...prev, myComment]);
-    setMyCommentText('');
+    if (directText === undefined) {
+      setMyCommentText('');
+    }
 
     // Tambah heart animasi otomatis saat mengirim pesan
     triggerHeart();
@@ -681,34 +772,45 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               ref={chatScrollRef}
               className="max-h-[140px] overflow-y-auto space-y-1.5 pointer-events-auto pr-1 text-left scrollbar-none"
             >
-              {comments.slice(-6).map((c) => (
-                <div
-                  key={c.id}
-                  className="inline-flex flex-wrap items-baseline gap-1.5 px-2.5 py-1 rounded-xl bg-black/55 backdrop-blur-md border border-white/10 text-[11px] text-white shadow-xs max-w-full"
-                >
-                  <span
-                    className={`font-bold ${
-                      c.isHost ? 'text-amber-400' : 'text-rose-300'
+              {comments.slice(-8).map((c) => {
+                const isMe = c.id.startsWith('my_') || c.senderName === visitorName;
+                return (
+                  <div
+                    key={c.id}
+                    className={`inline-flex flex-wrap items-baseline gap-1 px-2.5 py-1 rounded-xl backdrop-blur-md border text-[11px] text-white shadow-xs max-w-full ${
+                      isMe ? 'bg-cyan-950/75 border-cyan-400/50 ring-1 ring-cyan-400/30' : 'bg-black/55 border-white/10'
                     }`}
                   >
-                    {c.senderName}:
-                  </span>
-                  <span className="text-white/90 break-words">{c.message}</span>
-                </div>
-              ))}
+                    <span
+                      className={`font-bold flex items-center gap-0.5 ${
+                        c.isHost ? 'text-amber-400' : isMe ? 'text-cyan-300 font-black' : 'text-rose-300'
+                      }`}
+                    >
+                      {isMe && <User className="w-2.5 h-2.5 text-cyan-400 shrink-0" />}
+                      {c.senderName}:
+                    </span>
+                    {isMe && (
+                      <span className="text-[8px] px-1 py-0.1 rounded bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 font-bold shrink-0">
+                        Kamu
+                      </span>
+                    )}
+                    <span className="text-white/90 break-words font-medium">{c.message}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Bottom Area: Pinned Product & Actions in Medium Mode */}
-          <div className="relative z-30 p-3 space-y-2">
-            {/* Pinned Product Card */}
+          <div className="relative z-30 p-2.5 space-y-2">
+            {/* Pinned Product Card (Multi-Item Support) */}
             {pinnedProduct && (
               <div
                 onClick={() => handleBuyPinned(pinnedProduct)}
-                className="p-2 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-orange-500/40 text-white flex items-center justify-between gap-2 cursor-pointer hover:border-orange-400 transition-all shadow-lg group"
+                className="p-2 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-amber-400/60 text-white flex items-center justify-between gap-2 cursor-pointer hover:border-amber-400 transition-all shadow-lg group relative"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="relative w-10 h-10 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20">
                     <img
                       src={formatImageUrl(pinnedProduct.image)}
                       alt={pinnedProduct.name}
@@ -717,12 +819,37 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                         (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(pinnedProduct.name, pinnedProduct.category);
                       }}
                     />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-orange-400" />
-                      Pin No. 1 • Diskon Live
+                    <span className="absolute top-0 left-0 px-1 py-0.2 rounded-br-md bg-red-600 text-[8px] font-black text-white">
+                      #{safePromotedIndex + 1}
                     </span>
+                  </div>
+                  <div className="min-w-0 text-left flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                        <Flame className="w-3 h-3 text-orange-400" />
+                        Promo Live {promotedProducts.length > 1 ? `(${safePromotedIndex + 1}/${promotedProducts.length})` : ''}
+                      </span>
+                      {promotedProducts.length > 1 && (
+                        <div className="flex items-center gap-0.5 bg-black/40 rounded-md p-0.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={handlePrevPromoted}
+                            className="p-0.5 hover:bg-white/20 rounded text-white"
+                            title="Produk Promo Sebelumnya"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleNextPromoted}
+                            className="p-0.5 hover:bg-white/20 rounded text-white"
+                            title="Produk Promo Berikutnya"
+                          >
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <h5 className="text-xs font-bold text-white truncate leading-tight">
                       {pinnedProduct.name}
                     </h5>
@@ -735,26 +862,75 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 <button
                   type="button"
                   onClick={(e) => handleBuyPinned(pinnedProduct, e)}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold shrink-0 shadow-md active:scale-95 transition-all"
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shrink-0 shadow-md active:scale-95 transition-all"
                 >
                   + Beli
                 </button>
               </div>
             )}
 
+            {/* Visitor Name Status Bar in Medium Mode */}
+            <div className="flex items-center justify-between text-[10px] text-white/80 px-1">
+              {isEditingVisitorName ? (
+                <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="text"
+                    value={tempVisitorName}
+                    onChange={(e) => setTempVisitorName(e.target.value)}
+                    placeholder="Nama Anda..."
+                    className="flex-1 px-2 py-0.5 rounded-lg bg-black/60 border border-cyan-400 text-white text-[10px] focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveVisitorName(tempVisitorName)}
+                    className="px-2 py-0.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[9px]"
+                  >
+                    Simpan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingVisitorName(false)}
+                    className="px-1.5 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[9px]"
+                  >
+                    Batal
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <span className="flex items-center gap-1 truncate text-white/90">
+                    <User className="w-3 h-3 text-cyan-300" />
+                    <span>Nama:</span>
+                    <strong className="text-cyan-300 truncate max-w-[130px]">{visitorName}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempVisitorName(visitorName);
+                      setIsEditingVisitorName(true);
+                    }}
+                    className="text-[9px] text-amber-300 hover:text-amber-200 underline font-semibold shrink-0 ml-1"
+                  >
+                    Ganti Nama
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Quick Action Input & Heart Button */}
-            <div className="flex items-center gap-2">
-              <form onSubmit={handleSendComment} className="flex-1 flex gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <form onSubmit={handleSendComment} className="flex-1 flex gap-1">
                 <input
                   type="text"
                   value={myCommentText}
                   onChange={(e) => setMyCommentText(e.target.value)}
-                  placeholder="Ketik komentar..."
-                  className="w-full px-3 py-1.5 rounded-xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  placeholder={`Ketik pesan (${visitorName})...`}
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
                 <button
                   type="submit"
-                  className="p-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors"
+                  className="p-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold transition-colors shrink-0"
+                  title="Kirim Komentar"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
@@ -763,7 +939,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               <button
                 type="button"
                 onClick={() => triggerHeart()}
-                className="p-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-md transition-all flex items-center gap-1"
+                className="p-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-md transition-all flex items-center gap-1 shrink-0"
                 title="Beri Hati Like"
               >
                 <Heart className="w-4 h-4 fill-current text-white animate-pulse" />
@@ -938,33 +1114,46 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             ref={chatScrollRef}
             className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto pr-1 text-left scrollbar-none"
           >
-            {comments.map((c) => (
-              <div
-                key={c.id}
-                className="inline-flex flex-wrap items-baseline gap-1.5 px-3 py-1.5 rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 text-xs text-white shadow-sm max-w-[92%]"
-              >
-                <span
-                  className={`font-black ${
-                    c.isHost ? 'text-amber-400' : 'text-rose-300'
+            {comments.map((c) => {
+              const isMe = c.id.startsWith('my_') || c.senderName === visitorName;
+              return (
+                <div
+                  key={c.id}
+                  className={`inline-flex flex-wrap items-baseline gap-1.5 px-3 py-1.5 rounded-2xl backdrop-blur-md border text-xs text-white shadow-sm max-w-[92%] transition-all ${
+                    isMe
+                      ? 'bg-cyan-950/80 border-cyan-400/60 ring-1 ring-cyan-400/30'
+                      : 'bg-black/50 border-white/10'
                   }`}
                 >
-                  {c.senderName}:
-                </span>
-                <span className="text-white/95 break-words font-medium">{c.message}</span>
-              </div>
-            ))}
+                  <span
+                    className={`font-black flex items-center gap-1 ${
+                      c.isHost ? 'text-amber-400' : isMe ? 'text-cyan-300' : 'text-rose-300'
+                    }`}
+                  >
+                    {isMe && <User className="w-3 h-3 text-cyan-400 shrink-0" />}
+                    {c.senderName}:
+                  </span>
+                  {isMe && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 font-bold shrink-0">
+                      Kamu
+                    </span>
+                  )}
+                  <span className="text-white/95 break-words font-medium">{c.message}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* ================= BOTTOM BAR INTERACTIVE ================= */}
-        <div className="relative z-30 p-3 sm:p-4 space-y-3 bg-gradient-to-t from-black via-black/80 to-transparent">
-          {/* Pinned Product Card (Keranjang Kuning No. 1) */}
+        <div className="relative z-30 p-3 sm:p-4 space-y-2.5 bg-gradient-to-t from-black via-black/85 to-transparent">
+          {/* Pinned Product Card (Multi-Item Promo Support) */}
           {pinnedProduct && (
             <div
               onClick={() => handleBuyPinned(pinnedProduct)}
-              className="p-2.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border-2 border-amber-400 text-white flex items-center justify-between gap-3 shadow-2xl cursor-pointer hover:border-amber-300 transition-all group"
+              className="p-2.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border-2 border-amber-400 text-white flex items-center justify-between gap-3 shadow-2xl cursor-pointer hover:border-amber-300 transition-all group relative"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <div className="relative w-12 h-12 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20 shadow-xs">
                   <img
                     src={formatImageUrl(pinnedProduct.image)}
@@ -975,15 +1164,43 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                     }}
                   />
                   <span className="absolute top-0 left-0 px-1 py-0.2 rounded-br-md bg-red-600 text-[8px] font-black text-white">
-                    #1
+                    #{safePromotedIndex + 1}
                   </span>
                 </div>
 
-                <div className="min-w-0 text-left">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                    <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
-                    Sedang Dijual Live!
-                  </span>
+                <div className="min-w-0 text-left flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
+                      Promo Live {promotedProducts.length > 1 ? `(${safePromotedIndex + 1}/${promotedProducts.length})` : ''}
+                    </span>
+                    {promotedProducts.length > 1 && (
+                      <div
+                        className="flex items-center gap-1 bg-black/50 px-1.5 py-0.5 rounded-lg border border-white/20"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={handlePrevPromoted}
+                          className="p-0.5 hover:bg-white/20 rounded text-white cursor-pointer"
+                          title="Promo Sebelumnya"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-[9px] font-bold text-white/80">
+                          {safePromotedIndex + 1}/{promotedProducts.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleNextPromoted}
+                          className="p-0.5 hover:bg-white/20 rounded text-white cursor-pointer"
+                          title="Promo Berikutnya"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <h5 className="text-xs font-bold text-white truncate leading-tight">
                     {pinnedProduct.name}
                   </h5>
@@ -1009,13 +1226,81 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </div>
           )}
 
+          {/* Visitor Name & Quick Suggestion Chips */}
+          <div className="space-y-1.5">
+            {/* Bar Nama Pengunjung */}
+            <div className="flex items-center justify-between text-[11px] text-white/90 px-0.5">
+              {isEditingVisitorName ? (
+                <div className="flex items-center gap-1.5 w-full bg-black/70 p-1.5 rounded-xl border border-cyan-400" onClick={(e) => e.stopPropagation()}>
+                  <User className="w-3.5 h-3.5 text-cyan-400 shrink-0 ml-1" />
+                  <input
+                    type="text"
+                    value={tempVisitorName}
+                    onChange={(e) => setTempVisitorName(e.target.value)}
+                    placeholder="Tulis nama Anda..."
+                    className="flex-1 px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs border-0 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveVisitorName(tempVisitorName)}
+                    className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs cursor-pointer"
+                  >
+                    Simpan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingVisitorName(false)}
+                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <span className="flex items-center gap-1.5 truncate">
+                    <User className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                    <span className="text-white/70">Nama Pengunjung:</span>
+                    <strong className="text-cyan-300 font-bold truncate max-w-[160px]">{visitorName}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempVisitorName(visitorName);
+                      setIsEditingVisitorName(true);
+                    }}
+                    className="text-[10px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-1 shrink-0 ml-1 cursor-pointer"
+                    title="Ganti nama yang tampil saat kirim pesan"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span>Ganti Nama</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Chips Rekomendasi Chat */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {QUICK_COMMENT_CHIPS.map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSendComment(undefined, chip)}
+                  className="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-[10px] text-white font-medium border border-white/20 shrink-0 transition-all cursor-pointer"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Bar Kontrol & Komentar */}
           <div className="flex items-center gap-2">
             {/* Tombol Etalase Keranjang Kuning */}
             <button
               type="button"
               onClick={() => setIsEtalaseOpen(!isEtalaseOpen)}
-              className="relative p-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-lg shadow-amber-400/25 active:scale-95 transition-all flex items-center justify-center shrink-0"
+              className="relative p-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-lg shadow-amber-400/25 active:scale-95 transition-all flex items-center justify-center shrink-0 cursor-pointer"
               title="Buka Etalase Produk Live (Keranjang Kuning)"
             >
               <ShoppingBag className="w-5 h-5 fill-slate-950" />
@@ -1030,13 +1315,13 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 type="text"
                 value={myCommentText}
                 onChange={(e) => setMyCommentText(e.target.value)}
-                placeholder="Tanya penjual atau spill barang..."
+                placeholder={`Tulis pesan sebagai ${visitorName}...`}
                 className="w-full px-3.5 py-2.5 rounded-2xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
               <button
                 type="submit"
-                className="p-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 active:scale-95 transition-all"
-                title="Kirim Komentar"
+                className="p-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 active:scale-95 transition-all cursor-pointer shrink-0"
+                title="Kirim Pesan Live"
               >
                 <Send className="w-4 h-4 fill-slate-950" />
               </button>
@@ -1046,7 +1331,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               type="button"
               onClick={handleShare}
-              className="p-2.5 rounded-2xl bg-white/20 hover:bg-white/30 text-white active:scale-95 transition-all shrink-0"
+              className="p-2.5 rounded-2xl bg-white/20 hover:bg-white/30 text-white active:scale-95 transition-all shrink-0 cursor-pointer"
               title="Bagikan Siaran Live"
             >
               <Share2 className="w-4 h-4" />
@@ -1056,7 +1341,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               type="button"
               onClick={() => triggerHeart()}
-              className="relative p-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-lg shadow-rose-600/30 transition-all shrink-0"
+              className="relative p-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-lg shadow-rose-600/30 transition-all shrink-0 cursor-pointer"
               title="Beri Suka / Hati ❤️"
             >
               <Heart className="w-5 h-5 fill-current text-white animate-pulse" />
@@ -1069,7 +1354,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
         {/* ================= ETALASE DRAWER LENGKAP ================= */}
         {isEtalaseOpen && (
-          <div className="absolute inset-x-0 bottom-0 top-24 z-50 bg-slate-900/98 backdrop-blur-xl rounded-t-3xl border-t border-white/20 flex flex-col p-4 shadow-2xl animate-in slide-in-from-bottom duration-300 text-white">
+          <div className="absolute inset-x-0 bottom-0 top-20 z-50 bg-slate-900/98 backdrop-blur-xl rounded-t-3xl border-t border-white/20 flex flex-col p-4 shadow-2xl animate-in slide-in-from-bottom duration-300 text-white">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center text-slate-950 font-black">
@@ -1080,7 +1365,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                     Etalase Produk Live ({products.length})
                   </h3>
                   <p className="text-[11px] text-amber-300">
-                    Diskon & promo khusus belanja saat live berlangsung
+                    {promotedProducts.length > 0
+                      ? `${promotedProducts.length} Produk khusus di-spill & dipromosikan host`
+                      : 'Diskon & promo khusus belanja saat live berlangsung'}
                   </p>
                 </div>
               </div>
@@ -1088,91 +1375,179 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsEtalaseOpen(false)}
-                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Daftar Produk di Etalase */}
-            <div className="flex-1 overflow-y-auto py-3 space-y-2.5 pr-1">
-              {products.map((prod, index) => {
-                const isSelectedPinned = prod.id === pinnedProduct?.id;
-                return (
-                  <div
-                    key={prod.id}
-                    className={`p-2.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                      isSelectedPinned
-                        ? 'bg-amber-950/40 border-amber-400 ring-1 ring-amber-400/40'
-                        : 'bg-white/5 border-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="relative w-14 h-14 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20">
-                        <img
-                          src={formatImageUrl(prod.image)}
-                          alt={prod.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(prod.name, prod.category);
-                          }}
-                        />
-                        <span className="absolute top-0 left-0 px-1.5 py-0.2 rounded-br-md bg-slate-950/90 text-[9px] font-black text-amber-300">
-                          #{index + 1}
-                        </span>
-                      </div>
+            <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1">
+              {/* Bagian 1: Produk Promo Pilihan Host */}
+              {promotedProducts.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
+                      Produk Pilihan Promo Live ({promotedProducts.length})
+                    </span>
+                    <span className="text-[10px] text-amber-300 font-bold">Diskon Khusus Siaran</span>
+                  </div>
 
-                      <div className="min-w-0 text-left">
-                        {isSelectedPinned && (
-                          <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider block mb-0.5">
-                            Sedang Di-Spill Host
-                          </span>
-                        )}
-                        <h4 className="text-xs font-bold text-white truncate leading-tight">
-                          {prod.name}
-                        </h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs font-black text-amber-400">
-                            {formatRupiah(prod.price)}
-                          </span>
-                          <span className="text-[10px] text-white/50 line-through">
-                            {formatRupiah(Math.round(prod.price * 1.25))}
+                  {promotedProducts.map((prod, index) => {
+                    const isSelected = prod.id === pinnedProduct?.id;
+                    return (
+                      <div
+                        key={'promoted_' + prod.id}
+                        className={`p-2.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                          isSelected
+                            ? 'bg-amber-950/50 border-amber-400 ring-2 ring-amber-400/40'
+                            : 'bg-white/8 border-amber-400/40 hover:border-amber-400'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative w-14 h-14 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20">
+                            <img
+                              src={formatImageUrl(prod.image)}
+                              alt={prod.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(prod.name, prod.category);
+                              }}
+                            />
+                            <span className="absolute top-0 left-0 px-1.5 py-0.2 rounded-br-md bg-red-600 text-[9px] font-black text-white">
+                              #{index + 1}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0 text-left">
+                            <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider block mb-0.5">
+                              {index === 0 ? '⭐ SPILL UTAMA' : `PROMO LIVE #${index + 1}`}
+                            </span>
+                            <h4 className="text-xs font-bold text-white truncate leading-tight">
+                              {prod.name}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs font-black text-amber-400">
+                                {formatRupiah(prod.price)}
+                              </span>
+                              <span className="text-[10px] text-white/50 line-through">
+                                {formatRupiah(Math.round(prod.price * 1.25))}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-emerald-400 font-semibold block mt-0.5">
+                              ✓ Siap Kirim Hari Ini
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleBuyPinned(prod);
+                              setIsEtalaseOpen(false);
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shadow-md active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3 stroke-[3]" />
+                            <span>Beli</span>
+                          </button>
+                          {onOpenProductDetail && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDisplayMode('pip');
+                                onOpenProductDetail(prod);
+                              }}
+                              className="text-[10px] text-white/70 hover:text-white underline pt-0.5 cursor-pointer"
+                            >
+                              Detail
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Bagian 2: Semua Katalog Produk Toko Lainnya */}
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider">
+                    Semua Katalog Produk ({products.length})
+                  </span>
+                </div>
+
+                {products
+                  .filter((p) => !promotedProducts.some((prom) => prom.id === p.id))
+                  .map((prod, index) => (
+                    <div
+                      key={'all_' + prod.id}
+                      className="p-2.5 rounded-2xl border bg-white/5 border-white/10 hover:border-white/20 transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="relative w-14 h-14 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20">
+                          <img
+                            src={formatImageUrl(prod.image)}
+                            alt={prod.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(prod.name, prod.category);
+                            }}
+                          />
+                          <span className="absolute top-0 left-0 px-1.5 py-0.2 rounded-br-md bg-slate-950/90 text-[9px] font-black text-white/70">
+                            #{promotedProducts.length + index + 1}
                           </span>
                         </div>
-                        <span className="text-[10px] text-emerald-400 font-semibold block mt-0.5">
-                          ✓ Siap Kirim Hari Ini
-                        </span>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleBuyPinned(prod);
-                          setIsEtalaseOpen(false);
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold shadow-md active:scale-95 transition-all flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3 stroke-[3]" />
-                        <span>Beli</span>
-                      </button>
-                      {onOpenProductDetail && (
+                        <div className="min-w-0 text-left">
+                          <h4 className="text-xs font-bold text-white truncate leading-tight">
+                            {prod.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-black text-amber-400">
+                              {formatRupiah(prod.price)}
+                            </span>
+                            <span className="text-[10px] text-white/50 line-through">
+                              {formatRupiah(Math.round(prod.price * 1.25))}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-emerald-400 font-semibold block mt-0.5">
+                            ✓ Siap Kirim Hari Ini
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
-                            setDisplayMode('pip');
-                            onOpenProductDetail(prod);
+                            handleBuyPinned(prod);
+                            setIsEtalaseOpen(false);
                           }}
-                          className="text-[10px] text-white/70 hover:text-white underline pt-0.5"
+                          className="px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold shadow-md active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
                         >
-                          Detail
+                          <Plus className="w-3 h-3 stroke-[3]" />
+                          <span>Beli</span>
                         </button>
-                      )}
+                        {onOpenProductDetail && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDisplayMode('pip');
+                              onOpenProductDetail(prod);
+                            }}
+                            className="text-[10px] text-white/70 hover:text-white underline pt-0.5 cursor-pointer"
+                          >
+                            Detail
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+              </div>
             </div>
           </div>
         )}

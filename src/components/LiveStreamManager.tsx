@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Store } from '../types';
 import {
   LiveStreamConfig,
@@ -7,6 +7,7 @@ import {
   triggerOpenLiveStream,
   PRESET_STREAM_VIDEOS,
 } from '../utils/liveStreamHelper';
+import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 import {
   Radio,
   Play,
@@ -22,6 +23,12 @@ import {
   Link,
   Flame,
   MessageSquare,
+  Search,
+  Check,
+  Plus,
+  Trash2,
+  Star,
+  Tag,
 } from 'lucide-react';
 
 interface LiveStreamManagerProps {
@@ -44,6 +51,8 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
   );
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [customUrlInput, setCustomUrlInput] = useState<string>('');
+  const [productSearch, setProductSearch] = useState<string>('');
+  const [selectedFilterCategory, setSelectedFilterCategory] = useState<string>('all');
 
   useEffect(() => {
     setConfig(loadLiveStreamConfig(activeTenantSlug, currentStore.name, storeLogoUrl, products));
@@ -74,6 +83,84 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
       videoUrl: customUrlInput.trim(),
     }));
     setCustomUrlInput('');
+  };
+
+  const selectedProductIds: string[] = useMemo(() => {
+    if (Array.isArray(config.pinnedProductIds) && config.pinnedProductIds.length > 0) {
+      return config.pinnedProductIds;
+    }
+    return config.pinnedProductId ? [config.pinnedProductId] : [];
+  }, [config.pinnedProductIds, config.pinnedProductId]);
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p) => {
+      if (p.category) set.add(p.category);
+    });
+    return Array.from(set);
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchSearch =
+        !productSearch.trim() ||
+        p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+        (p.brand && p.brand.toLowerCase().includes(productSearch.toLowerCase())) ||
+        (p.category && p.category.toLowerCase().includes(productSearch.toLowerCase()));
+      const matchCat = selectedFilterCategory === 'all' || p.category === selectedFilterCategory;
+      return matchSearch && matchCat;
+    });
+  }, [products, productSearch, selectedFilterCategory]);
+
+  const handleToggleProduct = (productId: string) => {
+    const isCurrentlySelected = selectedProductIds.includes(productId);
+    let updatedIds: string[];
+
+    if (isCurrentlySelected) {
+      updatedIds = selectedProductIds.filter((id) => id !== productId);
+    } else {
+      updatedIds = [...selectedProductIds, productId];
+    }
+
+    const updatedPrimary =
+      config.pinnedProductId === productId && isCurrentlySelected
+        ? updatedIds[0] || undefined
+        : config.pinnedProductId || updatedIds[0] || undefined;
+
+    setConfig((prev) => ({
+      ...prev,
+      pinnedProductIds: updatedIds,
+      pinnedProductId: updatedPrimary,
+    }));
+  };
+
+  const handleSetPrimaryProduct = (productId: string) => {
+    let updatedIds = selectedProductIds;
+    if (!updatedIds.includes(productId)) {
+      updatedIds = [productId, ...updatedIds];
+    }
+    setConfig((prev) => ({
+      ...prev,
+      pinnedProductId: productId,
+      pinnedProductIds: updatedIds,
+    }));
+  };
+
+  const handleSelectTop = (count: number) => {
+    const topIds = products.slice(0, count).map((p) => p.id);
+    setConfig((prev) => ({
+      ...prev,
+      pinnedProductIds: topIds,
+      pinnedProductId: topIds[0] || undefined,
+    }));
+  };
+
+  const handleClearAllSelected = () => {
+    setConfig((prev) => ({
+      ...prev,
+      pinnedProductIds: [],
+      pinnedProductId: undefined,
+    }));
   };
 
   return (
@@ -313,39 +400,240 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
             )}
           </div>
 
-          {/* 3. Produk Pinned / Keranjang Kuning */}
+          {/* 3. Produk Pinned Multi-Item / Keranjang Kuning */}
           <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-amber-500" />
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  3. Sematkan Produk Unggulan ("Keranjang Kuning" 🛍️)
+                  3. Barang & Produk Promosi Live Streaming ("Keranjang Kuning" 🛍️)
                 </h3>
               </div>
-              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                Pin No. 1 di Layar Siaran
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300">
+                  {selectedProductIds.length} Produk Dipilih
+                </span>
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
-                Pilih Produk dari Katalog Toko:
-              </label>
-              <select
-                value={config.pinnedProductId || (products.length > 0 ? products[0].id : '')}
-                onChange={(e) => setConfig((prev) => ({ ...prev, pinnedProductId: e.target.value }))}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Admin dapat bebas memilih beberapa produk untuk dipromosikan sekaligus dalam siaran live. Pengunjung dapat melihat seluruh item ini di etalase live dan carousel produk tersemat.
+            </p>
+
+            {/* Quick Action Preset Buttons */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Pilihan Cepat:</span>
+              <button
+                type="button"
+                onClick={() => handleSelectTop(3)}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors"
               >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} - Rp {p.price.toLocaleString('id-ID')} (Kategori: {p.category})
-                  </option>
-                ))}
-              </select>
+                + 3 Produk Teratas
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTop(5)}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 transition-colors"
+              >
+                + 5 Produk Teratas
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTop(products.length)}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 transition-colors"
+              >
+                Pilih Semua ({products.length})
+              </button>
+              {selectedProductIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllSelected}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors ml-auto"
+                >
+                  Kosongkan Pilihan
+                </button>
+              )}
+            </div>
+
+            {/* Daftar Produk Terpilih Saat Ini (Selected Promo Items) */}
+            {selectedProductIds.length > 0 && (
+              <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-950 dark:text-amber-200">
+                  <span className="flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                    <span>Daftar Produk Live Aktif ({selectedProductIds.length} item):</span>
+                  </span>
+                  <span className="text-[10px] font-normal text-amber-800 dark:text-amber-300">
+                    Bintang emas (⭐) = Pin Utama #1 di Layar
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+                  {selectedProductIds.map((id, idx) => {
+                    const prod = products.find((p) => p.id === id);
+                    if (!prod) return null;
+                    const isPrimary = config.pinnedProductId === id || (!config.pinnedProductId && idx === 0);
+                    return (
+                      <div
+                        key={id}
+                        className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                          isPrimary
+                            ? 'bg-white dark:bg-slate-900 border-amber-400 ring-2 ring-amber-400/30 shadow-xs'
+                            : 'bg-white/80 dark:bg-slate-900/80 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
+                            <img
+                              src={formatImageUrl(prod.image)}
+                              alt={prod.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(prod.name, prod.category);
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0 text-left">
+                            <div className="flex items-center gap-1">
+                              <span
+                                className={`text-[8px] font-black px-1.5 py-0.2 rounded-md ${
+                                  isPrimary
+                                    ? 'bg-red-600 text-white'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                }`}
+                              >
+                                #{idx + 1} {isPrimary ? 'SPILL UTAMA' : 'PROMO LIVE'}
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white truncate mt-0.5">
+                              {prod.name}
+                            </p>
+                            <p className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
+                              Rp {prod.price.toLocaleString('id-ID')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isPrimary && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryProduct(id)}
+                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold flex items-center gap-0.5"
+                              title="Jadikan produk utama yang pertama di-spill host"
+                            >
+                              <Star className="w-3 h-3" />
+                              <span className="hidden sm:inline">Set #1</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleProduct(id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                            title="Hapus dari siaran live"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Filter & Pencarian Katalog untuk Ditambahkan */}
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                Tambah / Hapus Produk dari Katalog Toko:
+              </label>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Cari nama barang atau merk..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+
+                <select
+                  value={selectedFilterCategory}
+                  onChange={(e) => setSelectedFilterCategory(e.target.value)}
+                  className="px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                >
+                  <option value="all">Semua Kategori</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Grid Katalog Produk */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                {filteredProducts.map((p) => {
+                  const isSelected = selectedProductIds.includes(p.id);
+                  const isPrimary = config.pinnedProductId === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => handleToggleProduct(p.id)}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-400 ring-1 ring-amber-400/40'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
+                          <img
+                            src={formatImageUrl(p.image)}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(p.name, p.category);
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0 text-left">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {p.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] font-black text-amber-600 dark:text-amber-400">
+                              Rp {p.price.toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-[9px] text-slate-400 truncate">
+                              {p.unit}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <div
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+                            isSelected
+                              ? 'bg-amber-500 text-white font-bold shadow-xs'
+                              : 'border border-slate-300 dark:border-slate-600 text-transparent'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Voucher Diskon Khusus Live */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
               <div>
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                   Kode Kupon Diskon Live:

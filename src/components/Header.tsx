@@ -64,6 +64,7 @@ interface HeaderProps {
   unreadChatCount?: number;
   isChatOpen?: boolean;
   onOpenLiveStream?: () => void;
+  isLiveActive?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -101,6 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
   unreadChatCount = 0,
   isChatOpen = false,
   onOpenLiveStream,
+  isLiveActive = false,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -405,15 +407,23 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Live Streaming Toko Button */}
             {onOpenLiveStream && (
               <button
-                onClick={onOpenLiveStream}
-                title="Tonton Siaran Langsung Toko (Live Streaming Shopee & TikTok Style)"
-                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl border border-red-300 bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 text-red-700 font-bold text-xs flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95"
+                onClick={isLiveActive ? onOpenLiveStream : () => alert('Saat ini toko sedang tidak ada siaran langsung (Live Streaming Offline).')}
+                title={isLiveActive ? "Tonton Siaran Langsung Toko (Live Streaming Shopee & TikTok Style)" : "Siaran Live Streaming Sedang Offline"}
+                className={`p-1.5 sm:px-2.5 sm:py-2 rounded-xl border font-bold text-xs flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95 ${
+                  isLiveActive
+                    ? 'border-red-300 bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 text-red-700'
+                    : 'border-stone-200 bg-stone-100/90 hover:bg-stone-200 text-stone-500 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-400 opacity-65'
+                }`}
               >
                 <div className="relative flex items-center justify-center">
-                  <Radio className="w-4 h-4 text-red-600 animate-pulse shrink-0" />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <Radio className={`w-4 h-4 shrink-0 ${isLiveActive ? 'text-red-600 animate-pulse' : 'text-stone-400'}`} />
+                  {isLiveActive && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  )}
                 </div>
-                <span className="text-xs font-black text-red-700 hidden sm:inline">Live Toko</span>
+                <span className={`text-xs font-black hidden sm:inline ${isLiveActive ? 'text-red-700' : 'text-stone-500'}`}>
+                  {isLiveActive ? 'Live Toko' : 'Live Off'}
+                </span>
               </button>
             )}
 

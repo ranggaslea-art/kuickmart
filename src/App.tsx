@@ -70,7 +70,12 @@ import {
   Chat 
 } from './components/Chat';
 import { LiveStreamPlayer } from './components/LiveStreamPlayer';
-import { triggerOpenLiveStream } from './utils/liveStreamHelper';
+import { 
+  triggerOpenLiveStream,
+  loadLiveStreamConfig,
+  LiveStreamConfig,
+  LIVE_STREAM_UPDATED_EVENT,
+} from './utils/liveStreamHelper';
 import { cleanReceiptText } from './utils/sanitizeReceipt';
 import { DEFAULT_ROLE_PERMISSIONS } from './utils/permissions';
 import { 
@@ -584,6 +589,46 @@ export default function App() {
       return INITIAL_BRAND_CONFIG;
     }
   });
+
+  // Live Stream Configuration & Active Status (Toko Sedang Live / Offline)
+  const [liveStreamConfig, setLiveStreamConfig] = useState<LiveStreamConfig>(() =>
+    loadLiveStreamConfig(currentSlug, currentStore.name, brandConfig.brandLogoImageUrl, products)
+  );
+
+  // Sync config saat tenant, toko, atau data cloud berubah
+  useEffect(() => {
+    let isMounted = true;
+    const initialConfig = loadLiveStreamConfig(currentSlug, currentStore.name, brandConfig.brandLogoImageUrl, products);
+    if (isMounted) setLiveStreamConfig(initialConfig);
+
+    fetch(`/api/live-stream-config?slug=${encodeURIComponent(currentSlug)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data?.success && data?.liveStreamConfig) {
+          setLiveStreamConfig(data.liveStreamConfig);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentSlug, currentStore.name, brandConfig.brandLogoImageUrl]);
+
+  // Listener event real-time pembaruan siaran live dari admin tools
+  useEffect(() => {
+    const handleLiveConfigUpdated = (e: any) => {
+      if (e.detail?.config) {
+        setLiveStreamConfig(e.detail.config);
+      }
+    };
+    window.addEventListener(LIVE_STREAM_UPDATED_EVENT, handleLiveConfigUpdated);
+    return () => {
+      window.removeEventListener(LIVE_STREAM_UPDATED_EVENT, handleLiveConfigUpdated);
+    };
+  }, []);
+
+  const isLiveActive = Boolean(liveStreamConfig?.enabled);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -2180,6 +2225,7 @@ export default function App() {
         unreadChatCount={unreadChatCount}
         isChatOpen={isChatOpen}
         onOpenLiveStream={() => triggerOpenLiveStream('fullscreen')}
+        isLiveActive={isLiveActive}
       />
 
       {/* Main View Container */}
@@ -2248,6 +2294,7 @@ export default function App() {
               setIsAdminPanelOpen(true);
             }}
             onNavigatePromo={handleNavigatePromo}
+            isLiveActive={isLiveActive}
           />
 
           {/* Quick Category Bar */}
@@ -2913,6 +2960,7 @@ export default function App() {
         activeTenantSlug={currentSlug}
         storeLogoUrl={brandConfig.brandLogoImageUrl}
         products={products}
+        member={member}
         onAddToCart={handleAddToCart}
         onOpenProductDetail={(p) => setSelectedProductDetail(p)}
         onOpenCart={() => setIsCartOpen(true)}

@@ -17,7 +17,8 @@ export interface LiveStreamConfig {
   streamerAvatar?: string;
   viewersCount: number;
   likesCount: number;
-  pinnedProductId?: string;
+  pinnedProductId?: string; // Produk utama yang sedang di-spill host
+  pinnedProductIds?: string[]; // Daftar multi-item produk yang dipromosikan di live
   streamType: 'preset_video' | 'custom_url' | 'webcam';
   videoUrl: string;
   promoVoucherCode?: string;
@@ -95,7 +96,9 @@ export function getDefaultLiveStreamConfig(
   storeLogoUrl?: string,
   sampleProducts?: Product[]
 ): LiveStreamConfig {
-  const firstProductId = sampleProducts && sampleProducts.length > 0 ? sampleProducts[0].id : undefined;
+  const initialProducts = sampleProducts && sampleProducts.length > 0 ? sampleProducts.slice(0, 4) : [];
+  const firstProductId = initialProducts.length > 0 ? initialProducts[0].id : undefined;
+  const initialProductIds = initialProducts.map((p) => p.id);
 
   return {
     enabled: true,
@@ -105,6 +108,7 @@ export function getDefaultLiveStreamConfig(
     viewersCount: 1450,
     likesCount: 28400,
     pinnedProductId: firstProductId,
+    pinnedProductIds: initialProductIds,
     streamType: 'preset_video',
     videoUrl: PRESET_STREAM_VIDEOS[0].videoUrl,
     promoVoucherCode: 'LIVEHEMAT20',
@@ -123,15 +127,22 @@ export function loadLiveStreamConfig(
 ): LiveStreamConfig {
   const normSlug = slug.toLowerCase().trim() || 'default';
   const key = `${LIVE_STREAM_STORAGE_PREFIX}${normSlug}`;
+  const def = getDefaultLiveStreamConfig(normSlug, storeName, storeLogoUrl, sampleProducts);
 
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const resolvedPinnedIds = Array.isArray(parsed.pinnedProductIds) && parsed.pinnedProductIds.length > 0
+          ? parsed.pinnedProductIds
+          : (parsed.pinnedProductId ? [parsed.pinnedProductId] : def.pinnedProductIds || []);
+
         return {
-          ...getDefaultLiveStreamConfig(normSlug, storeName, storeLogoUrl, sampleProducts),
+          ...def,
           ...parsed,
+          pinnedProductIds: resolvedPinnedIds,
+          pinnedProductId: parsed.pinnedProductId || resolvedPinnedIds[0] || def.pinnedProductId,
         };
       }
     } catch (e) {
@@ -139,7 +150,7 @@ export function loadLiveStreamConfig(
     }
   }
 
-  return getDefaultLiveStreamConfig(normSlug, storeName, storeLogoUrl, sampleProducts);
+  return def;
 }
 
 export function saveLiveStreamConfig(config: LiveStreamConfig, slug: string = 'default') {
