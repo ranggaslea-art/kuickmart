@@ -139,9 +139,16 @@ export function loadLiveStreamConfig(
           ? parsed.pinnedProductIds
           : (parsed.pinnedProductId ? [parsed.pinnedProductId] : def.pinnedProductIds || []);
 
+        const validStreamType = parsed.streamType === 'webcam' ? 'preset_video' : (parsed.streamType || 'preset_video');
+        const validVideoUrl = parsed.videoUrl && parsed.videoUrl.trim() && parsed.streamType !== 'webcam'
+          ? parsed.videoUrl
+          : PRESET_STREAM_VIDEOS[0].videoUrl;
+
         return {
           ...def,
           ...parsed,
+          streamType: validStreamType,
+          videoUrl: validVideoUrl,
           pinnedProductIds: resolvedPinnedIds,
           pinnedProductId: parsed.pinnedProductId || resolvedPinnedIds[0] || def.pinnedProductId,
         };

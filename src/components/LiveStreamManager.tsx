@@ -271,59 +271,51 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
               </h3>
             </div>
 
-            {/* Pilihan Tipe Sumber */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* Pilihan Tipe Sumber Video Toko */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setConfig((prev) => ({ ...prev, streamType: 'preset_video' }))}
-                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                  config.streamType === 'preset_video'
-                    ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  config.streamType === 'preset_video' || (config.streamType as any) === 'webcam'
+                    ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20 shadow-xs'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
                 }`}
               >
-                <span className="font-bold text-xs flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-red-600" />
-                  Preset Video Toko
-                </span>
-                <span className="text-[10px] opacity-75 mt-1">
-                  Video host e-commerce berkualitas jernih yang otomatis berputar looping.
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setConfig((prev) => ({ ...prev, streamType: 'webcam' }))}
-                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                  config.streamType === 'webcam'
-                    ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <span className="font-bold text-xs flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 text-orange-600" />
-                  Kamera Laptop / HP
-                </span>
-                <span className="text-[10px] opacity-75 mt-1">
-                  Siaran langsung menggunakan webcam atau kamera perangkat Anda.
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-bold text-xs flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-red-600" />
+                    Klip Host Siaran Toko (Rekomendasi)
+                  </span>
+                  {(config.streamType === 'preset_video' || (config.streamType as any) === 'webcam') && (
+                    <span className="text-[10px] font-bold text-red-600 dark:text-red-400">Aktif ✓</span>
+                  )}
+                </div>
+                <span className="text-[10px] opacity-80 mt-1">
+                  Video host e-commerce jualan sembako & snack otomatis looping yang ditonton oleh semua pengunjung di HP maupun Laptop.
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setConfig((prev) => ({ ...prev, streamType: 'custom_url' }))}
-                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   config.streamType === 'custom_url'
-                    ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20 shadow-xs'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
                 }`}
               >
-                <span className="font-bold text-xs flex items-center gap-1.5">
-                  <Link className="w-3.5 h-3.5 text-blue-600" />
-                  Tautan URL Kustom
-                </span>
-                <span className="text-[10px] opacity-75 mt-1">
-                  Gunakan video URL MP4, WebM, HLS streaming langsung.
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-bold text-xs flex items-center gap-1.5">
+                    <Link className="w-3.5 h-3.5 text-blue-600" />
+                    Tautan URL Video / Stream Langsung
+                  </span>
+                  {config.streamType === 'custom_url' && (
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">Aktif ✓</span>
+                  )}
+                </div>
+                <span className="text-[10px] opacity-80 mt-1">
+                  Gunakan video URL kustom toko Anda (format MP4, WebM, atau link siaran langsung HLS/m3u8).
                 </span>
               </button>
             </div>

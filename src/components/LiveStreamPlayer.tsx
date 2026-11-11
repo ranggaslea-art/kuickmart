@@ -167,7 +167,6 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const heartCounterRef = useRef<number>(0);
-  const webcamStreamRef = useRef<MediaStream | null>(null);
 
   // Real-time Firestore Sync Komentar Live (Multi-Perangkat: HP, Tablet, Laptop)
   useEffect(() => {
@@ -343,39 +342,6 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [comments, displayMode]);
-
-  // 3. Setup Webcam jika mode streamType === 'webcam'
-  useEffect(() => {
-    if (config.streamType === 'webcam' && displayMode !== 'hidden') {
-      navigator.mediaDevices
-        ?.getUserMedia({ video: true, audio: false })
-        .then((stream) => {
-          webcamStreamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.play().catch(() => {});
-          }
-        })
-        .catch((err) => {
-          console.warn('Webcam permission not granted or available:', err);
-        });
-    } else {
-      if (webcamStreamRef.current) {
-        webcamStreamRef.current.getTracks().forEach((track) => track.stop());
-        webcamStreamRef.current = null;
-      }
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject = null;
-      }
-    }
-
-    return () => {
-      if (webcamStreamRef.current) {
-        webcamStreamRef.current.getTracks().forEach((track) => track.stop());
-        webcamStreamRef.current = null;
-      }
-    };
-  }, [config.streamType, displayMode]);
 
   // Jika live streaming dinonaktifkan di admin
   if (!config.enabled) {
@@ -554,10 +520,19 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }
   };
 
+  // Video Siaran Langsung Toko yang sedang live streaming (Selalu menampilkan host jualan produk, bukan kamera pengunjung)
   const activeVideoUrl =
-    config.streamType === 'preset_video'
-      ? config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl
-      : config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl;
+    config.videoUrl && config.videoUrl.trim() && config.streamType !== 'webcam'
+      ? config.videoUrl.trim()
+      : PRESET_STREAM_VIDEOS[0].videoUrl;
+
+  const activePoster =
+    PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === activeVideoUrl)?.poster ||
+    PRESET_STREAM_VIDEOS[0].poster;
+
+  const activeFallbackUrl =
+    PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === activeVideoUrl)?.fallbackVideoUrl ||
+    PRESET_STREAM_VIDEOS[0].fallbackVideoUrl;
 
   // FORMAT RUPIAH
   const formatRupiah = (val: number) => {
@@ -620,35 +595,25 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
   // =========================================================================
   // 2. VIDEO ELEMENT REUSABLE (Dapat dirender di PIP, Medium, maupun Fullscreen)
+  // Menampilkan siaran langsung video toko/host yang sedang live streaming (Shopee & TikTok Live)
   // =========================================================================
   const renderVideoElement = () => {
-    if (config.streamType === 'webcam') {
-      return (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isMuted}
-          className="w-full h-full object-cover select-none pointer-events-none"
-        />
-      );
-    }
-
     return (
       <video
         ref={videoRef}
+        key={activeVideoUrl}
         src={activeVideoUrl}
         autoPlay
         loop
         playsInline
         muted={isMuted}
         className="w-full h-full object-cover select-none pointer-events-none"
-        poster={PRESET_STREAM_VIDEOS[0].poster}
+        poster={activePoster}
         onError={(e) => {
           // Fallback jika URL video utama gagal memuat
           const target = e.currentTarget;
-          if (target.src !== PRESET_STREAM_VIDEOS[0].fallbackVideoUrl) {
-            target.src = PRESET_STREAM_VIDEOS[0].fallbackVideoUrl;
+          if (target.src !== activeFallbackUrl) {
+            target.src = activeFallbackUrl;
             target.play().catch(() => {});
           }
         }}
