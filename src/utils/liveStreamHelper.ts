@@ -29,31 +29,31 @@ export interface LiveStreamConfig {
   lastUpdated?: string;
 }
 
-// Preset video streaming e-commerce live shopping (video responsif berkualitas tinggi)
+// Preset video streaming e-commerce live shopping (video lokal MP4 berkualitas tinggi & jernih)
 export const PRESET_STREAM_VIDEOS = [
   {
     id: 'store_host_1',
     name: 'Host Toko Sembako & Minimarket (Interaktif)',
     description: 'Host sedang mendemonstrasikan produk kebutuhan harian, sembako, dan snack segar.',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-seller-in-a-clothing-and-grocery-store-welcoming-customers-42436-large.mp4',
+    videoUrl: '/videos/live_host_sembako.mp4',
     poster: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=600&q=80',
-    fallbackVideoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    fallbackVideoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   },
   {
     id: 'store_host_2',
     name: 'Review Snack & Minuman Segar Beli 2 Gratis 1',
     description: 'Spill produk aneka camilan, biskuit, dan minuman segar siap kirim hari ini.',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-supermarket-aisle-with-products-and-customers-42429-large.mp4',
+    videoUrl: '/videos/live_host_snack.mp4',
     poster: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?auto=format&fit=crop&w=600&q=80',
-    fallbackVideoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+    fallbackVideoUrl: 'https://res.cloudinary.com/demo/video/upload/dog.mp4',
   },
   {
     id: 'store_host_3',
     name: 'Packing & Kirim Sembako Murah',
     description: 'Aktivitas pengemasan cepat dan promo kilat sembako minyak goreng & beras.',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-cashier-scanning-products-in-a-supermarket-42438-large.mp4',
+    videoUrl: '/videos/live_host_kasir.mp4',
     poster: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=600&q=80',
-    fallbackVideoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    fallbackVideoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   },
 ];
 
@@ -140,9 +140,18 @@ export function loadLiveStreamConfig(
           : (parsed.pinnedProductId ? [parsed.pinnedProductId] : def.pinnedProductIds || []);
 
         const validStreamType = parsed.streamType === 'webcam' ? 'preset_video' : (parsed.streamType || 'preset_video');
-        const validVideoUrl = parsed.videoUrl && parsed.videoUrl.trim() && parsed.streamType !== 'webcam'
+        let validVideoUrl = parsed.videoUrl && parsed.videoUrl.trim() && parsed.streamType !== 'webcam'
           ? parsed.videoUrl
           : PRESET_STREAM_VIDEOS[0].videoUrl;
+
+        // Auto-migrate legacy 403 / blocked URLs
+        if (
+          validVideoUrl.includes('assets.mixkit.co') ||
+          validVideoUrl.includes('gtv-videos-bucket') ||
+          validVideoUrl.includes('commondatastorage.googleapis.com')
+        ) {
+          validVideoUrl = PRESET_STREAM_VIDEOS[0].videoUrl;
+        }
 
         return {
           ...def,

@@ -521,8 +521,17 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   };
 
   // Video Siaran Langsung Toko yang sedang live streaming (Selalu menampilkan host jualan produk, bukan kamera pengunjung)
+  const isBlockedLegacyUrl = (url?: string) => {
+    if (!url) return true;
+    return (
+      url.includes('assets.mixkit.co') ||
+      url.includes('gtv-videos-bucket') ||
+      url.includes('commondatastorage.googleapis.com')
+    );
+  };
+
   const activeVideoUrl =
-    config.videoUrl && config.videoUrl.trim() && config.streamType !== 'webcam'
+    config.videoUrl && config.videoUrl.trim() && config.streamType !== 'webcam' && !isBlockedLegacyUrl(config.videoUrl)
       ? config.videoUrl.trim()
       : PRESET_STREAM_VIDEOS[0].videoUrl;
 
@@ -533,6 +542,19 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const activeFallbackUrl =
     PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === activeVideoUrl)?.fallbackVideoUrl ||
     PRESET_STREAM_VIDEOS[0].fallbackVideoUrl;
+
+  // Pastikan video selalu berputar otomatis (Autoplay with sound or muted fallback)
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+      videoRef.current.play().catch(() => {
+        if (videoRef.current) {
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(() => {});
+        }
+      });
+    }
+  }, [activeVideoUrl, displayMode, isMuted]);
 
   // FORMAT RUPIAH
   const formatRupiah = (val: number) => {
@@ -599,25 +621,42 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   // =========================================================================
   const renderVideoElement = () => {
     return (
-      <video
-        ref={videoRef}
-        key={activeVideoUrl}
-        src={activeVideoUrl}
-        autoPlay
-        loop
-        playsInline
-        muted={isMuted}
-        className="w-full h-full object-cover select-none pointer-events-none"
-        poster={activePoster}
-        onError={(e) => {
-          // Fallback jika URL video utama gagal memuat
-          const target = e.currentTarget;
-          if (target.src !== activeFallbackUrl) {
-            target.src = activeFallbackUrl;
-            target.play().catch(() => {});
-          }
-        }}
-      />
+      <div className="relative w-full h-full overflow-hidden bg-slate-950 select-none">
+        {/* Poster Image Always in Background so screen is never dark/blank */}
+        <img
+          src={activePoster}
+          alt="Host Live Siaran Toko"
+          className="absolute inset-0 w-full h-full object-cover filter brightness-95"
+          loading="eager"
+        />
+        {/* Real-time Broadcast Video Player */}
+        <video
+          ref={videoRef}
+          key={`${activeVideoUrl}_${displayMode}`}
+          src={activeVideoUrl}
+          autoPlay
+          loop
+          playsInline
+          muted={isMuted}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          poster={activePoster}
+          onLoadedMetadata={(e) => {
+            const vid = e.currentTarget;
+            vid.muted = isMuted;
+            vid.play().catch(() => {
+              vid.muted = true;
+              vid.play().catch(() => {});
+            });
+          }}
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (target.src !== activeFallbackUrl && !target.src.endsWith(activeFallbackUrl)) {
+              target.src = activeFallbackUrl;
+              target.play().catch(() => {});
+            }
+          }}
+        />
+      </div>
     );
   };
 

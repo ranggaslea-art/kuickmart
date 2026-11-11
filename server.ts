@@ -662,10 +662,22 @@ async function startServer() {
   app.get('/api/live-stream-config', (req, res) => {
     const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
     const settings = appSettingsMap[slug] || {};
+    let config = settings.liveStreamConfig ? { ...settings.liveStreamConfig } : null;
+    if (config && config.videoUrl) {
+      if (
+        config.videoUrl.includes('assets.mixkit.co') ||
+        config.videoUrl.includes('gtv-videos-bucket') ||
+        config.videoUrl.includes('commondatastorage.googleapis.com') ||
+        config.streamType === 'webcam'
+      ) {
+        config.videoUrl = '/videos/live_host_sembako.mp4';
+        config.streamType = 'preset_video';
+      }
+    }
     return res.json({
       success: true,
       slug,
-      liveStreamConfig: settings.liveStreamConfig || null,
+      liveStreamConfig: config,
     });
   });
 

@@ -725,14 +725,22 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
 
               {/* Display Mockup */}
               <div className="w-full h-full rounded-[26px] overflow-hidden relative flex flex-col justify-between p-3 text-white bg-slate-900">
-                {/* Background Image / Video Poster */}
+                {/* Background Video Player in Admin Phone Mockup */}
                 <div className="absolute inset-0">
-                  <img
-                    src={PRESET_STREAM_VIDEOS[0].poster}
-                    alt="Live Poster"
+                  <video
+                    key={config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl}
+                    src={config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
                     className="w-full h-full object-cover filter brightness-90"
+                    poster={
+                      PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === config.videoUrl)?.poster ||
+                      PRESET_STREAM_VIDEOS[0].poster
+                    }
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80 pointer-events-none" />
                 </div>
 
                 {/* Mockup Header */}
