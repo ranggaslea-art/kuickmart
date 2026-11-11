@@ -2961,6 +2961,7 @@ export default function App() {
         storeLogoUrl={brandConfig.brandLogoImageUrl}
         products={products}
         member={member}
+        visitorId={visitorId}
         onAddToCart={handleAddToCart}
         onOpenProductDetail={(p) => setSelectedProductDetail(p)}
         onOpenCart={() => setIsCartOpen(true)}

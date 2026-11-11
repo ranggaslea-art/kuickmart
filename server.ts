@@ -705,6 +705,60 @@ async function startServer() {
     }
   });
 
+  // 1b-0d. Endpoint Realtime Komentar Live Streaming (Sinkronisasi HP & Laptop)
+  const liveStreamCommentsMap: Record<string, any[]> = {};
+
+  app.get('/api/live-stream-comments', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const list = liveStreamCommentsMap[slug] || [];
+    return res.json({
+      success: true,
+      slug,
+      comments: list.slice(-50),
+    });
+  });
+
+  app.post('/api/live-stream-comments', (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+      const comment = incoming.comment || incoming;
+      if (!comment || !comment.message) {
+        return res.status(400).json({ success: false, error: 'Pesan komentar tidak boleh kosong' });
+      }
+
+      if (!liveStreamCommentsMap[slug]) {
+        liveStreamCommentsMap[slug] = [];
+      }
+
+      const formatted = {
+        id: comment.id || `live_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        storeSlug: slug,
+        storeName: comment.storeName || '',
+        senderName: comment.senderName || 'Pengunjung',
+        senderId: comment.senderId || '',
+        message: String(comment.message).trim(),
+        timestamp: Number(comment.timestamp) || Date.now(),
+        isBuyer: comment.isBuyer !== false,
+        isHost: Boolean(comment.isHost),
+        createdAt: new Date().toISOString(),
+      };
+
+      liveStreamCommentsMap[slug].push(formatted);
+      if (liveStreamCommentsMap[slug].length > 100) {
+        liveStreamCommentsMap[slug] = liveStreamCommentsMap[slug].slice(-100);
+      }
+
+      return res.json({
+        success: true,
+        slug,
+        comment: formatted,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // 1b-1. List All Registered Subdomains under lapakoke.com & toko-online.online
   const ALLOWED_SUBDOMAIN_MODULE_DOMAINS = [
     'lapakoke.com',

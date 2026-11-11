@@ -237,12 +237,60 @@
         }
       },
       "required": ["storeId", "storeSlug", "storeName"]
+    },
+    "LiveStreamComment": {
+      "title": "LiveStreamComment",
+      "description": "Komentar chat siaran langsung (live streaming) tersinkronisasi real-time antar perangkat (HP & Laptop)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik komentar"
+        },
+        "storeSlug": {
+          "type": "string",
+          "description": "Slug atau ID toko siaran live"
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Nama toko yang menyiarkan live"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Nama pengunjung atau penonton yang mengirim komentar"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "ID pengunjung / device"
+        },
+        "message": {
+          "type": "string",
+          "description": "Isi komentar obrolan siaran live"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Waktu kirim unix epoch timestamp"
+        },
+        "isBuyer": {
+          "type": "boolean",
+          "description": "Apakah pengirim adalah pembeli / penonton"
+        },
+        "isHost": {
+          "type": "boolean",
+          "description": "Apakah pengirim adalah host / streamer toko"
+        }
+      },
+      "required": ["storeSlug", "senderName", "message", "timestamp"]
     }
   },
   "firestore": {
     "/chat_messages/{messageId}": {
       "schema": "ChatMessage",
       "description": "Koleksi seluruh pesan chat real-time antara pelanggan dan admin toko"
+    },
+    "/live_stream_comments/{commentId}": {
+      "schema": "LiveStreamComment",
+      "description": "Koleksi komentar siaran langsung (live streaming) real-time multi-perangkat"
     },
     "/customer_accounts/{customerId}": {
       "schema": "CustomerAccount",

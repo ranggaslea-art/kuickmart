@@ -39,6 +39,16 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { MemberProfile } from '../types';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 interface LiveStreamPlayerProps {
   currentStore: Store;
@@ -46,6 +56,7 @@ interface LiveStreamPlayerProps {
   storeLogoUrl?: string;
   products: Product[];
   member?: MemberProfile;
+  visitorId?: string;
   onAddToCart: (product: Product, quantity?: number, notes?: string, unitOption?: any) => void;
   onOpenProductDetail?: (product: Product) => void;
   onOpenCart?: () => void;
@@ -63,6 +74,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   storeLogoUrl,
   products = [],
   member,
+  visitorId,
   onAddToCart,
   onOpenProductDetail,
   onOpenCart,
@@ -112,6 +124,20 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   // Index produk promo live yang sedang aktif ditampilkan di kartu spill
   const [activePromotedIndex, setActivePromotedIndex] = useState<number>(0);
 
+  // Device / Visitor ID unik untuk membedakan perangkat pengirim (HP vs Laptop)
+  const effectiveVisitorId = React.useMemo(() => {
+    if (visitorId && visitorId.trim()) return visitorId.trim();
+    try {
+      const saved = localStorage.getItem('lapakoke_live_device_id') || localStorage.getItem('nusamart_visitor_id');
+      if (saved) return saved;
+      const gen = 'dev_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('lapakoke_live_device_id', gen);
+      return gen;
+    } catch {
+      return 'dev_' + Math.random().toString(36).substring(2, 10);
+    }
+  }, [visitorId]);
+
   // Chat comments
   const [comments, setComments] = useState<LiveStreamComment[]>([
     {
@@ -142,6 +168,94 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const heartCounterRef = useRef<number>(0);
   const webcamStreamRef = useRef<MediaStream | null>(null);
+
+  // Real-time Firestore Sync Komentar Live (Multi-Perangkat: HP, Tablet, Laptop)
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    try {
+      const commentsCol = collection(db, 'live_stream_comments');
+      const q = query(commentsCol, orderBy('timestamp', 'asc'), limit(80));
+
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const incoming: LiveStreamComment[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            const msgSlug = (data.storeSlug || 'default').toLowerCase().trim();
+            const mySlug = (activeTenantSlug || 'default').toLowerCase().trim();
+
+            if (!data.storeSlug || msgSlug === mySlug || msgSlug === 'default' || mySlug === 'default') {
+              incoming.push({
+                id: docSnap.id,
+                senderName: data.senderName || 'Pengunjung',
+                senderId: data.senderId,
+                message: data.message || '',
+                timestamp: data.timestamp
+                  ? new Date(data.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                  : 'Baru saja',
+                isBuyer: data.isBuyer !== false,
+                isHost: Boolean(data.isHost),
+              });
+            }
+          });
+
+          if (incoming.length > 0) {
+            setComments((prev) => {
+              const map = new Map<string, LiveStreamComment>();
+              // Simpan komentar awal default
+              prev.forEach((c) => map.set(c.id, c));
+              // Masukkan komentar real-time dari pengunjung lain di HP / Laptop
+              incoming.forEach((c) => map.set(c.id, c));
+              return Array.from(map.values()).slice(-60);
+            });
+          }
+        },
+        (err) => {
+          console.warn('Live stream firestore comment listener warning:', err);
+        }
+      );
+    } catch (err) {
+      console.warn('Failed to listen to live_stream_comments in Firestore:', err);
+    }
+
+    // Polling sekunder ke Server API sebagai cadangan
+    const fetchServerComments = () => {
+      fetch(`/api/live-stream-comments?slug=${encodeURIComponent(activeTenantSlug)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.success && Array.isArray(data.comments) && data.comments.length > 0) {
+            setComments((prev) => {
+              const map = new Map<string, LiveStreamComment>();
+              prev.forEach((c) => map.set(c.id, c));
+              data.comments.forEach((c: any) => {
+                map.set(c.id, {
+                  id: c.id,
+                  senderName: c.senderName || 'Pengunjung',
+                  senderId: c.senderId,
+                  message: c.message || '',
+                  timestamp: c.timestamp
+                    ? new Date(c.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                    : 'Baru saja',
+                  isBuyer: c.isBuyer !== false,
+                  isHost: Boolean(c.isHost),
+                });
+              });
+              return Array.from(map.values()).slice(-60);
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchServerComments();
+    const pollInterval = setInterval(fetchServerComments, 3000);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      clearInterval(pollInterval);
+    };
+  }, [activeTenantSlug, currentStore.name]);
 
   // 1. Sync config saat tenant berganti atau ada pembaruan event
   useEffect(() => {
@@ -321,22 +435,25 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     'Barang original min? 👍',
   ];
 
-  // Handle kirim komentar manual oleh pengunjung (Nama Pengunjung Muncul)
-  const handleSendComment = (e?: React.FormEvent, directText?: string) => {
+  // Handle kirim komentar manual oleh pengunjung (Sinkron Real-time HP & Laptop via Firestore & Server)
+  const handleSendComment = async (e?: React.FormEvent, directText?: string) => {
     if (e) e.preventDefault();
     const textToSend = (directText !== undefined ? directText : myCommentText).trim();
     if (!textToSend) return;
 
     const currentSender = (visitorName || member?.name || 'Pengunjung').trim();
+    const uniqueCommentId = 'live_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
     const myComment: LiveStreamComment = {
-      id: 'my_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+      id: uniqueCommentId,
       senderName: currentSender,
+      senderId: effectiveVisitorId,
       message: textToSend,
       timestamp: 'Baru saja',
       isBuyer: true,
     };
 
+    // 1. Tampilkan komentar di layar pengirim secara instan (Optimistic UI)
     setComments((prev) => [...prev, myComment]);
     if (directText === undefined) {
       setMyCommentText('');
@@ -344,6 +461,47 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
     // Tambah heart animasi otomatis saat mengirim pesan
     triggerHeart();
+
+    // 2. Broadcast ke Firebase Firestore agar muncul di semua perangkat (HP, Laptop, PC) secara real-time
+    try {
+      await addDoc(collection(db, 'live_stream_comments'), {
+        id: uniqueCommentId,
+        storeSlug: (activeTenantSlug || 'default').toLowerCase().trim(),
+        storeName: currentStore.name,
+        senderName: currentSender,
+        senderId: effectiveVisitorId,
+        message: textToSend,
+        timestamp: Date.now(),
+        createdAt: serverTimestamp(),
+        isBuyer: true,
+        isHost: false,
+      });
+    } catch (fsErr) {
+      console.warn('Gagal sinkron komentar live ke Firestore:', fsErr);
+    }
+
+    // 3. Cadangan broadcast via HTTP API Server
+    try {
+      await fetch('/api/live-stream-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: (activeTenantSlug || 'default').toLowerCase().trim(),
+          comment: {
+            id: uniqueCommentId,
+            storeName: currentStore.name,
+            senderName: currentSender,
+            senderId: effectiveVisitorId,
+            message: textToSend,
+            timestamp: Date.now(),
+            isBuyer: true,
+            isHost: false,
+          },
+        }),
+      });
+    } catch (apiErr) {
+      console.warn('Gagal POST komentar live ke server:', apiErr);
+    }
   };
 
   // Efek Floating Hearts (Tap layar atau klik Like)
@@ -773,7 +931,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               className="max-h-[140px] overflow-y-auto space-y-1.5 pointer-events-auto pr-1 text-left scrollbar-none"
             >
               {comments.slice(-8).map((c) => {
-                const isMe = c.id.startsWith('my_') || c.senderName === visitorName;
+                const isMe =
+                  Boolean(c.senderId && c.senderId === effectiveVisitorId) ||
+                  c.id.startsWith('my_') ||
+                  Boolean(visitorName && c.senderName && c.senderName.trim().toLowerCase() === visitorName.trim().toLowerCase());
                 return (
                   <div
                     key={c.id}
@@ -1115,7 +1276,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto pr-1 text-left scrollbar-none"
           >
             {comments.map((c) => {
-              const isMe = c.id.startsWith('my_') || c.senderName === visitorName;
+              const isMe =
+                Boolean(c.senderId && c.senderId === effectiveVisitorId) ||
+                c.id.startsWith('my_') ||
+                Boolean(visitorName && c.senderName && c.senderName.trim().toLowerCase() === visitorName.trim().toLowerCase());
               return (
                 <div
                   key={c.id}

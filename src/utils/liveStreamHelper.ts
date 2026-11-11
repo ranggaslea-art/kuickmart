@@ -3,6 +3,7 @@ import { Product } from '../types';
 export interface LiveStreamComment {
   id: string;
   senderName: string;
+  senderId?: string;
   senderAvatar?: string;
   message: string;
   timestamp: string;

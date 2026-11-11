@@ -5,6 +5,10 @@ service cloud.firestore {
     match /chat_messages/{messageId} {
       allow read, write: if true;
     }
+    // Komentar dan obrolan siaran Live Streaming (Sinkronisasi Realtime HP, Laptop, PC)
+    match /live_stream_comments/{commentId} {
+      allow read, write: if true;
+    }
     // Room chat per session
     match /chats/{chatId} {
       allow read, write: if true;
