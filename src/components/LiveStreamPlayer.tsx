@@ -285,6 +285,16 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
     const handleTrigger = (e: any) => {
       const mode = e.detail?.mode || 'fullscreen';
+      setConfig((prev) => {
+        if (!prev.enabled) {
+          const updated = { ...prev, enabled: true };
+          try {
+            saveLiveStreamConfig(updated, activeTenantSlug);
+          } catch {}
+          return updated;
+        }
+        return prev;
+      });
       setDisplayMode(mode);
     };
 

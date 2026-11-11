@@ -343,10 +343,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         ) : (
           <button
             type="button"
-            disabled
-            className="px-3.5 py-1.5 rounded-xl bg-stone-200 dark:bg-stone-700 text-stone-400 dark:text-stone-500 text-xs font-bold shrink-0 cursor-not-allowed opacity-75 flex items-center gap-1.5"
+            onClick={() => triggerOpenLiveStream('fullscreen')}
+            className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-stone-700 text-red-600 dark:text-red-400 hover:bg-red-50 text-xs font-black shadow-sm shrink-0 transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Klik untuk menyalakan dan membuka siaran live streaming"
           >
-            <span>Live Selesai</span>
+            <Play className="w-3.5 h-3.5 fill-current text-red-600" />
+            <span>Buka Live 🛍️</span>
           </button>
         )}
       </div>

@@ -662,7 +662,23 @@ async function startServer() {
   app.get('/api/live-stream-config', (req, res) => {
     const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
     const settings = appSettingsMap[slug] || {};
-    let config = settings.liveStreamConfig ? { ...settings.liveStreamConfig } : null;
+    let config = settings.liveStreamConfig
+      ? { ...settings.liveStreamConfig }
+      : {
+          enabled: true,
+          title: '🔥 LIVE HEBOH: Banting Harga Sembako & Snack Murah!',
+          streamerName: 'Host Live • Toko LapakOke',
+          streamerAvatar: '/pwa-192x192.png',
+          viewersCount: 1450,
+          likesCount: 28400,
+          streamType: 'preset_video',
+          videoUrl: '/videos/live_host_sembako.mp4',
+          promoVoucherCode: 'LIVEHEMAT20',
+          promoVoucherText: 'Klaim Diskon 20% Khusus Penonton Live Streaming!',
+          autoChatEnabled: true,
+          storeSlug: slug,
+        };
+
     if (config && config.videoUrl) {
       if (
         config.videoUrl.includes('assets.mixkit.co') ||
@@ -674,6 +690,13 @@ async function startServer() {
         config.streamType = 'preset_video';
       }
     }
+
+    if (!settings.liveStreamConfig) {
+      if (!appSettingsMap[slug]) appSettingsMap[slug] = {};
+      appSettingsMap[slug].liveStreamConfig = config;
+      saveAppSettingsToFile();
+    }
+
     return res.json({
       success: true,
       slug,

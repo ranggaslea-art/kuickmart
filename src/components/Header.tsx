@@ -407,8 +407,8 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Live Streaming Toko Button */}
             {onOpenLiveStream && (
               <button
-                onClick={isLiveActive ? onOpenLiveStream : () => alert('Saat ini toko sedang tidak ada siaran langsung (Live Streaming Offline).')}
-                title={isLiveActive ? "Tonton Siaran Langsung Toko (Live Streaming Shopee & TikTok Style)" : "Siaran Live Streaming Sedang Offline"}
+                onClick={onOpenLiveStream}
+                title="Tonton Siaran Langsung Toko (Live Streaming Shopee & TikTok Style)"
                 className={`p-1.5 sm:px-2.5 sm:py-2 rounded-xl border font-bold text-xs flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95 ${
                   isLiveActive
                     ? 'border-red-300 bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 text-red-700'
