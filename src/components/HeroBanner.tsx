@@ -17,10 +17,12 @@ import {
   Video,
   Film,
   Play,
-  HardDrive
+  HardDrive,
+  Radio,
 } from 'lucide-react';
 import { StorePromoInfo } from '../types';
 import { resolvePromoMediaUrl, formatImageUrl } from '../utils/imageHelper';
+import { triggerOpenLiveStream } from '../utils/liveStreamHelper';
 
 export interface PromoNavigationTarget {
   targetCategory?: string;
@@ -291,6 +293,37 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           </button>
         </div>
       )}
+
+      {/* Live Stream Spotlight Strip (TikTok & Shopee Live Style) */}
+      <div className="mb-3 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-600 text-white shadow-md flex items-center justify-between gap-3 animate-in fade-in">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30">
+            <Radio className="w-4 h-4 text-white animate-pulse" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="px-1.5 py-0.2 rounded-full bg-black/30 text-[9px] font-black uppercase tracking-wider text-white">
+                🔴 SEDANG LIVE
+              </span>
+              <span className="text-xs font-black text-white truncate">
+                Toko Sedang Siaran Langsung Jualan Produk!
+              </span>
+            </div>
+            <p className="text-[11px] text-white/90 truncate hidden sm:block">
+              Tonton live streaming interaktif (bisa layar penuh & melayang), klaim diskon belanja sembako & snack di keranjang kuning!
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => triggerOpenLiveStream('fullscreen')}
+          className="px-3.5 py-1.5 rounded-xl bg-white text-red-700 hover:bg-red-50 text-xs font-black shadow-sm shrink-0 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+        >
+          <Play className="w-3.5 h-3.5 fill-current text-red-600" />
+          <span>Tonton Live 🛍️</span>
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main Hero Slider with full swipe and drag support */}

@@ -19,7 +19,8 @@ import {
   Lock,
   MessageSquare,
   LogIn,
-  Truck
+  Truck,
+  Radio,
 } from 'lucide-react';
 import { PromoNavigationTarget } from './HeroBanner';
 import { Store, MemberProfile, CartItem, Product, StorePromoInfo, BrandHeaderFooterConfig, CustomerAuthPromoConfig } from '../types';
@@ -62,6 +63,7 @@ interface HeaderProps {
   onOpenChat?: () => void;
   unreadChatCount?: number;
   isChatOpen?: boolean;
+  onOpenLiveStream?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -98,6 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenChat,
   unreadChatCount = 0,
   isChatOpen = false,
+  onOpenLiveStream,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -398,6 +401,21 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
+
+            {/* Live Streaming Toko Button */}
+            {onOpenLiveStream && (
+              <button
+                onClick={onOpenLiveStream}
+                title="Tonton Siaran Langsung Toko (Live Streaming Shopee & TikTok Style)"
+                className="p-1.5 sm:px-2.5 sm:py-2 rounded-xl border border-red-300 bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 text-red-700 font-bold text-xs flex items-center gap-1.5 relative transition-all shrink-0 cursor-pointer shadow-2xs active:scale-95"
+              >
+                <div className="relative flex items-center justify-center">
+                  <Radio className="w-4 h-4 text-red-600 animate-pulse shrink-0" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                </div>
+                <span className="text-xs font-black text-red-700 hidden sm:inline">Live Toko</span>
+              </button>
+            )}
 
             {/* Real-time Customer & Store Admin Chat Button */}
             {onOpenChat && (

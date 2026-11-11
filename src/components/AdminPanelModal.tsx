@@ -16,6 +16,7 @@ import {
   Save, 
   UploadCloud, 
   Sparkles,
+  Radio,
   DollarSign,
   Boxes,
   ClipboardList,
@@ -192,6 +193,8 @@ import {
 import { saveTenantDataToCloud, fetchTenantDataFromCloud } from '../utils/tenantCloudSync';
 import { SplashScreenManager } from './SplashScreenManager';
 import { triggerManualSplashScreen } from '../utils/splashScreenHelper';
+import { LiveStreamManager } from './LiveStreamManager';
+import { triggerOpenLiveStream } from '../utils/liveStreamHelper';
 import { ExpeditionManager } from './ExpeditionManager';
 
 interface AdminPanelModalProps {
@@ -279,7 +282,8 @@ export type AdminTab =
   | 'vps_deploy'
   | 'seo_google'
   | 'mysql_db'
-  | 'splash_screen';
+  | 'splash_screen'
+  | 'live_stream';
 
 interface AdminUser {
   username: string;
@@ -2691,6 +2695,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                 { id: 'expeditions', group: 'settings', moduleKey: 'couriers' as SystemModuleKey, label: 'Ekspedisi & Tarif Ongkir', icon: <Truck className="w-4 h-4 text-amber-500" />, count: (activeExpeditionServices || []).length },
                 { id: 'brand_info', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Header & Identitas Toko', icon: <Palette className="w-4 h-4 text-amber-500" /> },
                 { id: 'splash_screen', group: 'settings', moduleKey: 'brand_info' as SystemModuleKey, label: 'Splash Screen Editor', icon: <Sparkles className="w-4 h-4 text-orange-500" /> },
+                { id: 'live_stream', group: 'settings', moduleKey: 'promos' as SystemModuleKey, label: 'Live Streaming Toko (TikTok/Shopee)', icon: <Radio className="w-4 h-4 text-red-500 animate-pulse" /> },
 
                 // 6. USER, KEAMANAN & SERVER
                 { id: 'users', group: 'system', moduleKey: 'users' as SystemModuleKey, label: 'Manajemen User', icon: <Users className="w-4 h-4 text-emerald-600" />, count: (staffUsers || []).length },
@@ -5555,6 +5560,24 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
               />
             </div>
           ))}
+
+          {/* TAB: LIVE STREAMING TOKO ONLINE (TIKTOK & SHOPEE LIVE) */}
+          {activeTab === 'live_stream' && (
+            <div className="space-y-4">
+              <LiveStreamManager
+                currentStore={currentStore}
+                activeTenantSlug={currentSlug}
+                storeLogoUrl={activeBrandConfig?.brandLogoImageUrl}
+                products={products}
+                onOpenLiveTest={() => {
+                  onClose();
+                  setTimeout(() => {
+                    triggerOpenLiveStream('fullscreen');
+                  }, 150);
+                }}
+              />
+            </div>
+          )}
 
           {/* TAB: IDENTITAS TOKO BEBAS & DOKU PAYMENT GATEWAY */}
           {activeTab === 'store_doku_settings' && (!currentUserPermissions.brand_info?.canView ? (

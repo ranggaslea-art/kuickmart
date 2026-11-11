@@ -556,6 +556,9 @@ async function startServer() {
       if (incoming.splashConfig) {
         appSettingsMap[slug].splashConfig = incoming.splashConfig;
       }
+      if (incoming.liveStreamConfig) {
+        appSettingsMap[slug].liveStreamConfig = incoming.liveStreamConfig;
+      }
 
       appSettingsMap[slug].updatedAt = new Date().toISOString();
 
@@ -649,6 +652,53 @@ async function startServer() {
         slug,
         message: `Splash screen untuk '${slug}' berhasil disimpan.`,
         splashConfig,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 1b-0c. Endpoint Khusus Live Streaming Toko Online Per Subdomain / Domain Utama
+  app.get('/api/live-stream-config', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const settings = appSettingsMap[slug] || {};
+    return res.json({
+      success: true,
+      slug,
+      liveStreamConfig: settings.liveStreamConfig || null,
+    });
+  });
+
+  app.post('/api/live-stream-config', async (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+      const liveStreamConfig = incoming.config || incoming.liveStreamConfig || incoming;
+
+      if (!appSettingsMap[slug]) {
+        appSettingsMap[slug] = {};
+      }
+      appSettingsMap[slug].liveStreamConfig = liveStreamConfig;
+      appSettingsMap[slug].updatedAt = new Date().toISOString();
+
+      saveAppSettingsToFile();
+
+      // Simpan ke MySQL jika tersedia
+      try {
+        const pool = getMySqlPool();
+        if (pool) {
+          await pool.query(
+            `INSERT INTO store_settings (tenant_slug, module_key, config_data) VALUES (?, 'live_stream_config', ?) ON DUPLICATE KEY UPDATE config_data = VALUES(config_data)`,
+            [slug, JSON.stringify(liveStreamConfig)]
+          );
+        }
+      } catch (_) {}
+
+      return res.json({
+        success: true,
+        slug,
+        message: `Pengaturan Live Streaming untuk '${slug}' berhasil disimpan.`,
+        liveStreamConfig,
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
