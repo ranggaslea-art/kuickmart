@@ -9,6 +9,14 @@ service cloud.firestore {
     match /live_stream_comments/{commentId} {
       allow read, write: if true;
     }
+    // Hadiah virtual (gift) dan saweran live streaming
+    match /live_stream_gifts/{giftId} {
+      allow read, write: if true;
+    }
+    // Likes dan interaksi siaran live streaming
+    match /live_stream_likes/{likeId} {
+      allow read, write: if true;
+    }
     // Room chat per session
     match /chats/{chatId} {
       allow read, write: if true;

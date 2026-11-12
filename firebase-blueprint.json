@@ -281,6 +281,54 @@
         }
       },
       "required": ["storeSlug", "senderName", "message", "timestamp"]
+    },
+    "LiveStreamGift": {
+      "title": "LiveStreamGift",
+      "description": "Data hadiah virtual (gift) yang dikirim pengunjung ke host toko saat siaran live streaming",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik transaksi gift"
+        },
+        "giftId": {
+          "type": "string",
+          "description": "Identifier tipe gift"
+        },
+        "giftName": {
+          "type": "string",
+          "description": "Nama hadiah virtual"
+        },
+        "giftIcon": {
+          "type": "string",
+          "description": "Emoji atau ikon hadiah"
+        },
+        "giftPrice": {
+          "type": "number",
+          "description": "Nilai nominal gift dalam rupiah"
+        },
+        "storeSlug": {
+          "type": "string",
+          "description": "Slug toko penerima gift"
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Nama toko penerima gift"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Nama pengirim gift"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "ID device pengirim gift"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Waktu pengiriman gift"
+        }
+      },
+      "required": ["giftId", "giftName", "giftPrice", "storeSlug", "senderName", "timestamp"]
     }
   },
   "firestore": {
@@ -291,6 +339,10 @@
     "/live_stream_comments/{commentId}": {
       "schema": "LiveStreamComment",
       "description": "Koleksi komentar siaran langsung (live streaming) real-time multi-perangkat"
+    },
+    "/live_stream_gifts/{giftId}": {
+      "schema": "LiveStreamGift",
+      "description": "Koleksi data gift virtual yang dikirim penonton ke host toko saat live streaming"
     },
     "/customer_accounts/{customerId}": {
       "schema": "CustomerAccount",

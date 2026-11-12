@@ -261,3 +261,39 @@ body {
   }
 }
 
+/* Animasi Hadiah Virtual (Gift Celebration) */
+@keyframes giftCelebration {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-15deg);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.2) rotate(8deg);
+  }
+  40% {
+    transform: scale(0.95) rotate(-4deg);
+  }
+  60% {
+    transform: scale(1.05) rotate(2deg);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1) translateY(-10px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-40px);
+  }
+}
+
+@keyframes pulseGlowGreen {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.4), inset 0 0 10px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.8), inset 0 0 15px rgba(16, 185, 129, 0.4);
+  }
+}
+
+

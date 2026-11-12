@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import { Product, Store } from '../types';
 import {
   LiveStreamConfig,
   LiveStreamComment,
+  LiveStreamGiftItem,
+  LIVE_GIFTS,
+  sendLiveGiftApi,
+  sendLiveLikeApi,
   loadLiveStreamConfig,
   saveLiveStreamConfig,
   LIVE_STREAM_UPDATED_EVENT,
@@ -33,10 +38,20 @@ import {
   Flame,
   Award,
   Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  PhoneCall,
+  PhoneOff,
+  Camera,
+  RefreshCw,
+  Gift,
   User,
   Edit2,
   ChevronLeft,
   ChevronRight,
+  Smile,
+  ThumbsUp,
 } from 'lucide-react';
 import { MemberProfile } from '../types';
 import { db } from '../lib/firebase';
@@ -93,6 +108,31 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [isEtalaseOpen, setIsEtalaseOpen] = useState<boolean>(false);
   const [addedSuccessToast, setAddedSuccessToast] = useState<string | null>(null);
   const [shareSuccessToast, setShareSuccessToast] = useState<boolean>(false);
+
+  // ================= INTERAKSI LIVE VIDEO PENGUNJUNG & HOST =================
+  const [isGuestVideoActive, setIsGuestVideoActive] = useState<boolean>(false);
+  const [isGuestConnecting, setIsGuestConnecting] = useState<boolean>(false);
+  const [guestStream, setGuestStream] = useState<MediaStream | null>(null);
+  const [isGuestVideoPromptOpen, setIsGuestVideoPromptOpen] = useState<boolean>(false);
+  const [isGuestCameraMuted, setIsGuestCameraMuted] = useState<boolean>(false);
+  const [isGuestMicMuted, setIsGuestMicMuted] = useState<boolean>(false);
+  const [guestFacingMode, setGuestFacingMode] = useState<'user' | 'environment'>('user');
+  const [guestVideoLayout, setGuestVideoLayout] = useState<'pip' | 'split'>('pip');
+  const [guestVideoError, setGuestVideoError] = useState<string | null>(null);
+  const guestVideoRef = useRef<HTMLVideoElement>(null);
+
+  // ================= HADIAH VIRTUAL (GIFT) & DUKUNGAN TOKO =================
+  const [isGiftDrawerOpen, setIsGiftDrawerOpen] = useState<boolean>(false);
+  const [activeGiftCelebration, setActiveGiftCelebration] = useState<{
+    id: string;
+    senderName: string;
+    gift: LiveStreamGiftItem;
+  } | null>(null);
+  const [totalGiftsValue, setTotalGiftsValue] = useState<number>(() => config.totalGiftsValue || 0);
+
+  // ================= LIKE COMBO MULTIPLIER =================
+  const [likeCombo, setLikeCombo] = useState<number>(0);
+  const likeComboTimerRef = useRef<any>(null);
 
   // Visitor Name for live comments (Persisten di localStorage & sync dengan akun member)
   const [visitorName, setVisitorName] = useState<string>(() => {
@@ -195,6 +235,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   : 'Baru saja',
                 isBuyer: data.isBuyer !== false,
                 isHost: Boolean(data.isHost),
+                isGift: Boolean(data.isGift),
+                giftInfo: data.giftInfo || null,
+                isGuestVideo: Boolean(data.isGuestVideo),
               });
             }
           });
@@ -238,6 +281,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                     : 'Baru saja',
                   isBuyer: c.isBuyer !== false,
                   isHost: Boolean(c.isHost),
+                  isGift: Boolean(c.isGift),
+                  giftInfo: c.giftInfo || null,
+                  isGuestVideo: Boolean(c.isGuestVideo),
                 });
               });
               return Array.from(map.values()).slice(-60);
@@ -246,6 +292,25 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         })
         .catch(() => {});
     };
+
+    // Ambil total gifts & likes dari server API
+    fetch(`/api/live-stream-gifts?slug=${encodeURIComponent(activeTenantSlug)}`)
+      .then((res) => res.json())
+      .then((d) => {
+        if (d?.success && typeof d.totalValue === 'number') {
+          setTotalGiftsValue(d.totalValue);
+        }
+      })
+      .catch(() => {});
+
+    fetch(`/api/live-stream-likes?slug=${encodeURIComponent(activeTenantSlug)}`)
+      .then((res) => res.json())
+      .then((d) => {
+        if (d?.success && typeof d.likesCount === 'number') {
+          setLikes((prev) => Math.max(prev, d.likesCount));
+        }
+      })
+      .catch(() => {});
 
     fetchServerComments();
     const pollInterval = setInterval(fetchServerComments, 3000);
@@ -480,7 +545,250 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }
   };
 
-  // Efek Floating Hearts (Tap layar atau klik Like)
+  // ================= LIFECYCLE & HANDLER INTERAKSI VIDEO PENGUNJUNG =================
+  useEffect(() => {
+    if (guestVideoRef.current && guestStream) {
+      guestVideoRef.current.srcObject = guestStream;
+      guestVideoRef.current.play().catch(() => {});
+    }
+  }, [guestStream, isGuestVideoActive, guestVideoLayout]);
+
+  useEffect(() => {
+    return () => {
+      if (guestStream) {
+        guestStream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, [guestStream]);
+
+  const handleStartGuestVideo = async () => {
+    setIsGuestConnecting(true);
+    setGuestVideoError(null);
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: guestFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: true,
+        });
+      } catch (_) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: guestFacingMode },
+          audio: false,
+        });
+      }
+
+      setGuestStream(stream);
+      setIsGuestVideoActive(true);
+      setIsGuestVideoPromptOpen(false);
+      setIsGuestCameraMuted(false);
+      setIsGuestMicMuted(false);
+
+      if (guestVideoRef.current) {
+        guestVideoRef.current.srcObject = stream;
+        guestVideoRef.current.play().catch(() => {});
+      }
+
+      const currentSender = (visitorName || member?.name || 'Pengunjung').trim();
+      const guestJoinMsg: LiveStreamComment = {
+        id: 'join_video_' + Date.now(),
+        senderName: currentSender,
+        senderId: effectiveVisitorId,
+        message: '🟢 Telah terhubung dalam bincang video langsung dengan Host Toko!',
+        timestamp: 'Baru saja',
+        isBuyer: true,
+        isGuestVideo: true,
+      };
+      setComments((prev) => [...prev, guestJoinMsg]);
+
+      // Host sapaan otomatis
+      setTimeout(() => {
+        const hostWelcome: LiveStreamComment = {
+          id: 'host_reply_' + Date.now(),
+          senderName: 'Host • ' + currentStore.name,
+          message: `Halo kak ${currentSender}! Wajah dan videonya sudah tampil jelas di siaran live kami. Silakan mau tanya sembako atau produk apa kak? 😊`,
+          timestamp: 'Baru saja',
+          isHost: true,
+        };
+        setComments((prev) => [...prev, hostWelcome]);
+      }, 1400);
+
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.5 },
+      });
+    } catch (err: any) {
+      console.warn('Gagal mengakses kamera:', err);
+      setGuestVideoError('Izin kamera belum aktif. Silakan izinkan akses kamera di browser Anda untuk bincang video langsung.');
+    } finally {
+      setIsGuestConnecting(false);
+    }
+  };
+
+  const handleStopGuestVideo = () => {
+    if (guestStream) {
+      guestStream.getTracks().forEach((t) => t.stop());
+      setGuestStream(null);
+    }
+    setIsGuestVideoActive(false);
+    setIsGuestVideoPromptOpen(false);
+
+    const currentSender = (visitorName || member?.name || 'Pengunjung').trim();
+    const leaveMsg: LiveStreamComment = {
+      id: 'leave_video_' + Date.now(),
+      senderName: currentSender,
+      senderId: effectiveVisitorId,
+      message: '🔴 Mengakhiri sesi bincang video langsung.',
+      timestamp: 'Baru saja',
+      isBuyer: true,
+      isGuestVideo: true,
+    };
+    setComments((prev) => [...prev, leaveMsg]);
+  };
+
+  const handleToggleGuestCamera = () => {
+    if (guestStream) {
+      const vidTracks = guestStream.getVideoTracks();
+      vidTracks.forEach((t) => {
+        t.enabled = !t.enabled;
+      });
+      setIsGuestCameraMuted((prev) => !prev);
+    }
+  };
+
+  const handleToggleGuestMic = () => {
+    if (guestStream) {
+      const audioTracks = guestStream.getAudioTracks();
+      audioTracks.forEach((t) => {
+        t.enabled = !t.enabled;
+      });
+      setIsGuestMicMuted((prev) => !prev);
+    }
+  };
+
+  const handleFlipGuestCamera = async () => {
+    if (!guestStream) return;
+    const newFacing = guestFacingMode === 'user' ? 'environment' : 'user';
+    setGuestFacingMode(newFacing);
+    try {
+      guestStream.getTracks().forEach((t) => t.stop());
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newFacing },
+        audio: !isGuestMicMuted,
+      });
+      setGuestStream(newStream);
+      if (guestVideoRef.current) {
+        guestVideoRef.current.srcObject = newStream;
+        guestVideoRef.current.play().catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Gagal membalik kamera:', e);
+    }
+  };
+
+  // ================= HANDLER KIRIM HADIAH VIRTUAL (GIFT) =================
+  const handleSendGift = async (gift: LiveStreamGiftItem) => {
+    const currentSender = (visitorName || member?.name || 'Pengunjung').trim();
+    const giftTransactionId = 'gift_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+
+    // 1. Confetti burst kembang api
+    confetti({
+      particleCount: gift.price >= 50000 ? 120 : 70,
+      spread: 75,
+      origin: { y: 0.6 },
+      colors: [gift.badgeColor, '#f43f5e', '#ec4899', '#eab308', '#06b6d4', '#8b5cf6'],
+    });
+
+    // 2. Banner perayaan di layar
+    setActiveGiftCelebration({
+      id: giftTransactionId,
+      senderName: currentSender,
+      gift,
+    });
+    setTimeout(() => {
+      setActiveGiftCelebration(null);
+    }, 3800);
+
+    // 3. Tambahkan ke total gifts
+    setTotalGiftsValue((prev) => prev + gift.price);
+
+    // 4. Komentar gift di chat stream (Optimistic)
+    const giftComment: LiveStreamComment = {
+      id: giftTransactionId,
+      senderName: currentSender,
+      senderId: effectiveVisitorId,
+      message: `🎁 Mengirimkan Hadiah ${gift.icon} ${gift.name} (${formatRupiah(gift.price)}) untuk Toko!`,
+      timestamp: 'Baru saja',
+      isBuyer: true,
+      isGift: true,
+      giftInfo: {
+        id: giftTransactionId,
+        giftId: gift.id,
+        giftName: gift.name,
+        giftIcon: gift.icon,
+        giftPrice: gift.price,
+      },
+    };
+    setComments((prev) => [...prev, giftComment]);
+
+    // 5. Host auto-respond terima kasih
+    setTimeout(() => {
+      const hostThanks: LiveStreamComment = {
+        id: 'thanks_' + Date.now(),
+        senderName: 'Host • ' + currentStore.name,
+        message: `Wah terima kasih banyak kak ${currentSender} atas hadiah ${gift.icon} ${gift.name}-nya! Semoga rezeki kakak sekeluarga makin melimpah & berkah selalu! ❤️🙏`,
+        timestamp: 'Baru saja',
+        isHost: true,
+      };
+      setComments((prev) => [...prev, hostThanks]);
+    }, 1500);
+
+    // 6. Broadcast ke Firestore
+    try {
+      await addDoc(collection(db, 'live_stream_gifts'), {
+        giftId: gift.id,
+        giftName: gift.name,
+        giftIcon: gift.icon,
+        giftPrice: gift.price,
+        storeSlug: (activeTenantSlug || 'default').toLowerCase().trim(),
+        storeName: currentStore.name,
+        senderName: currentSender,
+        senderId: effectiveVisitorId,
+        timestamp: Date.now(),
+        createdAt: serverTimestamp(),
+      });
+      await addDoc(collection(db, 'live_stream_comments'), {
+        id: giftTransactionId,
+        storeSlug: (activeTenantSlug || 'default').toLowerCase().trim(),
+        storeName: currentStore.name,
+        senderName: currentSender,
+        senderId: effectiveVisitorId,
+        message: `🎁 Mengirimkan Hadiah ${gift.icon} ${gift.name} (${formatRupiah(gift.price)}) untuk Toko!`,
+        timestamp: Date.now(),
+        createdAt: serverTimestamp(),
+        isBuyer: true,
+        isHost: false,
+        isGift: true,
+        giftInfo: {
+          id: giftTransactionId,
+          giftId: gift.id,
+          giftName: gift.name,
+          giftIcon: gift.icon,
+          giftPrice: gift.price,
+        },
+      });
+    } catch (fsErr) {
+      console.warn('Gagal simpan gift ke Firestore:', fsErr);
+    }
+
+    // 7. Simpan ke Backend API
+    sendLiveGiftApi(activeTenantSlug, gift, currentSender, effectiveVisitorId, currentStore.name);
+
+    setIsGiftDrawerOpen(false);
+  };
+
+  // Efek Floating Hearts (Tap layar atau klik Like) dengan Like Combo Multiplier
   const triggerHeart = (customX?: number) => {
     heartCounterRef.current += 1;
     const colors = ['#f43f5e', '#ec4899', '#f97316', '#eab308', '#8b5cf6', '#3b82f6'];
@@ -493,8 +801,22 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       color: randomColor,
     };
 
-    setFloatingHearts((prev) => [...prev.slice(-15), newHeart]);
+    setFloatingHearts((prev) => [...prev.slice(-20), newHeart]);
     setLikes((prev) => prev + 1);
+
+    // Combo multiplier
+    setLikeCombo((prev) => {
+      const next = prev + 1;
+      if (likeComboTimerRef.current) clearTimeout(likeComboTimerRef.current);
+      likeComboTimerRef.current = setTimeout(() => {
+        setLikeCombo(0);
+      }, 2200);
+      return next;
+    });
+
+    if (heartCounterRef.current % 5 === 0) {
+      sendLiveLikeApi(activeTenantSlug, 5);
+    }
 
     setTimeout(() => {
       setFloatingHearts((prev) => prev.filter((h) => h.id !== newHeart.id));
@@ -938,6 +1260,21 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </div>
           </div>
 
+          {/* Active Gift Banner in Medium Mode */}
+          {activeGiftCelebration && (
+            <div className="relative z-30 mx-2 mt-1 py-1 px-2.5 rounded-xl bg-gradient-to-r from-amber-500/90 to-yellow-400/90 text-slate-950 font-black flex items-center justify-between text-[10px] shadow-lg border border-amber-300 animate-in slide-in-from-top duration-200">
+              <span className="flex items-center gap-1.5 truncate">
+                <span className="text-base animate-bounce">{activeGiftCelebration.gift.icon}</span>
+                <span className="truncate">
+                  <strong>{activeGiftCelebration.senderName}</strong> kirim <strong>{activeGiftCelebration.gift.name}</strong>!
+                </span>
+              </span>
+              <span className="text-[9px] bg-slate-950/20 px-1.5 py-0.5 rounded-md shrink-0">
+                {formatRupiah(activeGiftCelebration.gift.price)}
+              </span>
+            </div>
+          )}
+
           {/* Middle Live Chat Stream in Medium Mode */}
           <div className="relative z-30 flex-1 flex flex-col justify-end px-3 py-1 overflow-hidden pointer-events-none">
             <div
@@ -949,6 +1286,33 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   Boolean(c.senderId && c.senderId === effectiveVisitorId) ||
                   c.id.startsWith('my_') ||
                   Boolean(visitorName && c.senderName && c.senderName.trim().toLowerCase() === visitorName.trim().toLowerCase());
+                
+                if (c.isGift) {
+                  return (
+                    <div
+                      key={c.id}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/80 via-yellow-400/85 to-orange-500/80 text-slate-950 font-bold border border-amber-200 text-[11px] shadow-sm max-w-full"
+                    >
+                      <span className="text-sm shrink-0">{c.giftInfo?.giftIcon || '🎁'}</span>
+                      <span className="truncate">
+                        <strong>{c.senderName}</strong> kirim {c.giftInfo?.giftName || 'Hadiah'} ({formatRupiah(c.giftInfo?.giftPrice || 0)})
+                      </span>
+                    </div>
+                  );
+                }
+
+                if (c.isGuestVideo) {
+                  return (
+                    <div
+                      key={c.id}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-900/85 border border-emerald-400/60 text-emerald-200 font-bold text-[11px] shadow-sm max-w-full"
+                    >
+                      <Video className="w-3 h-3 text-emerald-300 shrink-0 animate-pulse" />
+                      <span className="truncate">{c.message}</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={c.id}
@@ -1092,15 +1456,15 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               )}
             </div>
 
-            {/* Quick Action Input & Heart Button */}
+            {/* Quick Action Input, Gift, Video & Heart Button */}
             <div className="flex items-center gap-1.5">
               <form onSubmit={handleSendComment} className="flex-1 flex gap-1">
                 <input
                   type="text"
                   value={myCommentText}
                   onChange={(e) => setMyCommentText(e.target.value)}
-                  placeholder={`Ketik pesan (${visitorName})...`}
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  placeholder={`Pesan (${visitorName})...`}
+                  className="w-full px-2 py-1.5 rounded-xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
                 <button
                   type="submit"
@@ -1111,13 +1475,47 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 </button>
               </form>
 
+              {/* Buka Layar Penuh untuk Bincang Video atau Gift */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDisplayMode('fullscreen');
+                  setIsGiftDrawerOpen(true);
+                }}
+                className="p-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-md font-bold text-xs shrink-0 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center"
+                title="Kirim Hadiah / Gift ke Toko"
+              >
+                <Gift className="w-4 h-4 fill-slate-950" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDisplayMode('fullscreen');
+                  if (!isGuestVideoActive) {
+                    setIsGuestVideoPromptOpen(true);
+                  }
+                }}
+                className={`p-1.5 rounded-xl text-white shadow-md text-xs shrink-0 active:scale-95 transition-all flex items-center justify-center ${
+                  isGuestVideoActive ? 'bg-emerald-600 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-500'
+                }`}
+                title={isGuestVideoActive ? 'Video Kamu Sedang Live' : 'Bincang Video Live dengan Toko'}
+              >
+                <Video className="w-4 h-4" />
+              </button>
+
               <button
                 type="button"
                 onClick={() => triggerHeart()}
-                className="p-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-md transition-all flex items-center gap-1 shrink-0"
+                className="relative p-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-md transition-all flex items-center gap-1 shrink-0"
                 title="Beri Hati Like"
               >
                 <Heart className="w-4 h-4 fill-current text-white animate-pulse" />
+                {likeCombo > 1 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 rounded-full bg-yellow-400 text-slate-950 font-black text-[8px] shadow-sm animate-bounce">
+                    {likeCombo}x
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1159,6 +1557,106 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </div>
           ))}
         </div>
+
+        {/* ================= GUEST LIVE INTERACTIVE 2-WAY VIDEO WINDOW ================= */}
+        {isGuestVideoActive && (
+          <div
+            className={`absolute z-35 transition-all duration-300 shadow-2xl border-2 border-emerald-400 bg-slate-950 overflow-hidden ring-4 ring-emerald-500/25 ${
+              guestVideoLayout === 'pip'
+                ? 'top-20 right-3.5 w-36 sm:w-40 h-48 rounded-2xl'
+                : 'top-16 inset-x-3.5 h-52 rounded-2xl'
+            }`}
+          >
+            <video
+              ref={guestVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${guestFacingMode === 'user' ? '-scale-x-100' : ''}`}
+            />
+
+            {/* Guest Live Status Bar */}
+            <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between px-2 py-0.5 rounded-full bg-black/65 backdrop-blur-xs text-[9px] text-white">
+              <span className="flex items-center gap-1 font-bold text-emerald-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                Live Anda
+              </span>
+              <button
+                type="button"
+                onClick={() => setGuestVideoLayout(guestVideoLayout === 'pip' ? 'split' : 'pip')}
+                className="text-[9px] text-white/90 hover:text-white underline font-medium cursor-pointer"
+              >
+                {guestVideoLayout === 'pip' ? 'Perbesar' : 'Kecilkan'}
+              </button>
+            </div>
+
+            {/* Guest Camera / Mic Quick Controls */}
+            <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-center gap-1.5 bg-black/75 backdrop-blur-xs py-1 px-1 rounded-xl">
+              <button
+                type="button"
+                onClick={handleToggleGuestMic}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isGuestMicMuted ? 'bg-red-600 text-white' : 'bg-white/20 hover:bg-white/30 text-white'
+                }`}
+                title={isGuestMicMuted ? 'Nyalakan Mic' : 'Bisukan Mic'}
+              >
+                {isGuestMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleGuestCamera}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isGuestCameraMuted ? 'bg-red-600 text-white' : 'bg-white/20 hover:bg-white/30 text-white'
+                }`}
+                title={isGuestCameraMuted ? 'Nyalakan Kamera' : 'Matikan Kamera'}
+              >
+                {isGuestCameraMuted ? <VideoOff className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={handleFlipGuestCamera}
+                className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer"
+                title="Putar Kamera Depan/Belakang"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleStopGuestVideo}
+                className="p-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer"
+                title="Akhiri Live Video Bersama Host"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= ACTIVE GIFT CELEBRATION BANNER ================= */}
+        {activeGiftCelebration && (
+          <div className="absolute top-20 inset-x-3.5 z-40 p-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-slate-950 shadow-2xl border-2 border-yellow-100 flex items-center justify-between animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-3xl shrink-0 animate-bounce drop-shadow">
+                {activeGiftCelebration.gift.icon}
+              </span>
+              <div className="min-w-0">
+                <div className="text-[9px] uppercase font-black tracking-wider text-amber-950 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-950 fill-amber-950" />
+                  SAWERAN GIFT SPESIAL LIVE!
+                </div>
+                <h4 className="text-xs font-black truncate leading-tight text-slate-950">
+                  {activeGiftCelebration.senderName} mengirim {activeGiftCelebration.gift.name}
+                </h4>
+                <p className="text-[10px] font-bold text-amber-950">
+                  {formatRupiah(activeGiftCelebration.gift.price)} untuk Host Toko
+                </p>
+              </div>
+            </div>
+            <div className="px-2 py-1 rounded-xl bg-slate-950 text-amber-300 text-[10px] font-black shrink-0 shadow-xs">
+              BERKAH! ✨
+            </div>
+          </div>
+        )}
 
         {/* ================= HEADER SIARAN LIVE ================= */}
         <div className="relative z-30 p-3.5 pt-4 sm:pt-3.5 flex items-center justify-between text-white">
@@ -1294,6 +1792,33 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 Boolean(c.senderId && c.senderId === effectiveVisitorId) ||
                 c.id.startsWith('my_') ||
                 Boolean(visitorName && c.senderName && c.senderName.trim().toLowerCase() === visitorName.trim().toLowerCase());
+
+              if (c.isGift) {
+                return (
+                  <div
+                    key={c.id}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500/90 via-yellow-400/90 to-orange-500/90 text-slate-950 font-black border border-amber-200 text-xs shadow-md max-w-[94%] animate-in slide-in-from-left duration-200"
+                  >
+                    <span className="text-base shrink-0">{c.giftInfo?.giftIcon || '🎁'}</span>
+                    <span className="truncate">
+                      <strong>{c.senderName}</strong> mengirim <strong>{c.giftInfo?.giftName || 'Hadiah'}</strong> ({formatRupiah(c.giftInfo?.giftPrice || 0)})
+                    </span>
+                  </div>
+                );
+              }
+
+              if (c.isGuestVideo) {
+                return (
+                  <div
+                    key={c.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-950/90 border border-emerald-400/70 text-emerald-200 font-bold text-xs shadow-md max-w-[94%] animate-in slide-in-from-left duration-200"
+                  >
+                    <Video className="w-3.5 h-3.5 text-emerald-300 shrink-0 animate-pulse" />
+                    <span className="truncate">{c.message}</span>
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={c.id}
@@ -1473,7 +1998,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           </div>
 
           {/* Bar Kontrol & Komentar */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Tombol Etalase Keranjang Kuning */}
             <button
               type="button"
@@ -1488,13 +2013,13 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </button>
 
             {/* Input Komentar Pengunjung */}
-            <form onSubmit={handleSendComment} className="flex-1 flex items-center gap-1">
+            <form onSubmit={handleSendComment} className="flex-1 flex items-center gap-1 min-w-0">
               <input
                 type="text"
                 value={myCommentText}
                 onChange={(e) => setMyCommentText(e.target.value)}
-                placeholder={`Tulis pesan sebagai ${visitorName}...`}
-                className="w-full px-3.5 py-2.5 rounded-2xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                placeholder={`Pesan (${visitorName})...`}
+                className="w-full px-3 py-2.5 rounded-2xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
               <button
                 type="submit"
@@ -1504,6 +2029,36 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 <Send className="w-4 h-4 fill-slate-950" />
               </button>
             </form>
+
+            {/* Tombol Kirim Gift / Saweran ke Host */}
+            <button
+              type="button"
+              onClick={() => setIsGiftDrawerOpen(true)}
+              className="p-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 shadow-lg shadow-amber-500/30 active:scale-95 transition-all shrink-0 cursor-pointer flex items-center justify-center"
+              title="Kirim Hadiah Virtual (Gift) ke Host Toko"
+            >
+              <Gift className="w-5 h-5 fill-slate-950" />
+            </button>
+
+            {/* Tombol Interaksi Live Video Bersama Host */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isGuestVideoActive) {
+                  setGuestVideoLayout(guestVideoLayout === 'pip' ? 'split' : 'pip');
+                } else {
+                  setIsGuestVideoPromptOpen(true);
+                }
+              }}
+              className={`p-2.5 rounded-2xl text-white shadow-lg active:scale-95 transition-all shrink-0 cursor-pointer flex items-center justify-center ${
+                isGuestVideoActive
+                  ? 'bg-emerald-600 hover:bg-emerald-500 ring-2 ring-emerald-300 animate-pulse'
+                  : 'bg-indigo-600 hover:bg-indigo-500 ring-1 ring-indigo-400/50'
+              }`}
+              title={isGuestVideoActive ? 'Video Anda Aktif (Klik untuk ubah tampilan)' : 'Mulai Interaksi Video Live dengan Host Toko'}
+            >
+              <Video className="w-5 h-5" />
+            </button>
 
             {/* Tombol Bagikan */}
             <button
@@ -1515,7 +2070,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               <Share2 className="w-4 h-4" />
             </button>
 
-            {/* Tombol Like Hati */}
+            {/* Tombol Like Hati dengan Combo Counter */}
             <button
               type="button"
               onClick={() => triggerHeart()}
@@ -1523,9 +2078,15 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               title="Beri Suka / Hati ❤️"
             >
               <Heart className="w-5 h-5 fill-current text-white animate-pulse" />
-              <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 rounded-full bg-white text-rose-600 text-[8px] font-black border border-rose-600">
-                ❤️
-              </span>
+              {likeCombo > 1 ? (
+                <span className="absolute -top-2 -right-1 px-1.5 py-0.2 rounded-full bg-yellow-400 text-slate-950 text-[9px] font-black border border-slate-900 shadow-md animate-bounce">
+                  {likeCombo}x
+                </span>
+              ) : (
+                <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 rounded-full bg-white text-rose-600 text-[8px] font-black border border-rose-600">
+                  ❤️
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -1725,6 +2286,146 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                       </div>
                     </div>
                   ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= MODAL DRAWER HADIAH VIRTUAL (GIFT SAWERAN) ================= */}
+        {isGiftDrawerOpen && (
+          <div className="absolute inset-x-0 bottom-0 top-24 z-50 bg-slate-900/98 backdrop-blur-2xl rounded-t-3xl border-t border-amber-400/40 flex flex-col p-4 shadow-2xl animate-in slide-in-from-bottom duration-300 text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/20">
+                  <Gift className="w-5 h-5 fill-slate-950" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-1.5">
+                    <span>Sawer Hadiah (Gift) ke Host</span>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  </h3>
+                  <p className="text-[11px] text-amber-300 font-medium">
+                    Apresiasi & berikan semangat live untuk Host Toko!
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsGiftDrawerOpen(false)}
+                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Total Saweran Terkumpul Mini Banner */}
+            <div className="mt-3 px-3 py-2 rounded-2xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-yellow-950/60 border border-amber-500/30 flex items-center justify-between text-xs">
+              <span className="text-white/80 font-medium flex items-center gap-1.5">
+                <span>Total Saweran Live:</span>
+                <strong className="text-amber-400 font-black">{formatRupiah(totalGiftsValue)}</strong>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
+                Respon Cepat Host ⚡
+              </span>
+            </div>
+
+            {/* Grid Hadiah Virtual (Gifts) */}
+            <div className="flex-1 overflow-y-auto py-3 grid grid-cols-2 sm:grid-cols-3 gap-2.5 pr-1">
+              {LIVE_GIFTS.map((gift) => (
+                <div
+                  key={gift.id}
+                  onClick={() => handleSendGift(gift)}
+                  className="p-3 rounded-2xl bg-white/5 hover:bg-amber-950/40 border border-white/10 hover:border-amber-400/80 active:scale-95 transition-all flex flex-col items-center justify-between text-center cursor-pointer group shadow-sm hover:shadow-amber-500/10"
+                >
+                  <div className="text-3xl sm:text-4xl my-1 group-hover:scale-125 transition-transform duration-200">
+                    {gift.icon}
+                  </div>
+                  <h4 className="text-xs font-black text-white group-hover:text-amber-300 transition-colors">
+                    {gift.name}
+                  </h4>
+                  <p className="text-[10px] text-white/60 mb-2 line-clamp-1">
+                    {gift.description}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSendGift(gift);
+                    }}
+                    className="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 text-xs font-black shadow-md active:scale-90 transition-all flex items-center justify-center gap-1"
+                  >
+                    <span>Kirim</span>
+                    <span>{formatRupiah(gift.price)}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer Notice */}
+            <div className="pt-2 border-t border-white/10 text-center text-[10px] text-white/60">
+              Setiap gift langsung dirayakan dengan animasi layar & direspon otomatis oleh host toko.
+            </div>
+          </div>
+        )}
+
+        {/* ================= MODAL PROMPT GABUNG INTERAKSI LIVE VIDEO ================= */}
+        {isGuestVideoPromptOpen && (
+          <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-emerald-400/50 p-5 shadow-2xl text-white text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-3xl bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
+                <Video className="w-7 h-7" />
+              </div>
+
+              <div>
+                <h3 className="text-base font-black text-white">
+                  Bincang Live Video dengan Host Toko
+                </h3>
+                <p className="text-xs text-white/70 mt-1 leading-relaxed">
+                  Gabung siaran langsung menggunakan kamera perangkat Anda untuk tanya jawab seputar produk atau konsultasi belanja dengan host.
+                </p>
+              </div>
+
+              {/* Fitur Interaksi */}
+              <div className="p-3 rounded-2xl bg-white/5 border border-white/10 text-left space-y-1.5 text-xs text-white/80">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <span>Kamera & suara Anda akan tampil di layar bersama Host.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <span>Bisa matikan mic atau kamera kapan saja.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <span>Mendukung kamera depan & belakang ponsel.</span>
+                </div>
+              </div>
+
+              {/* Pesan Error Jika Izin Ditolak */}
+              {guestVideoError && (
+                <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs font-semibold text-left">
+                  ⚠️ {guestVideoError}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsGuestVideoPromptOpen(false)}
+                  className="flex-1 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartGuestVideo}
+                  className="flex-1 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  <span>Mulai Live Video</span>
+                </button>
               </div>
             </div>
           </div>

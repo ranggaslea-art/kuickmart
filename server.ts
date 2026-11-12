@@ -794,6 +794,116 @@ async function startServer() {
     }
   });
 
+  // 1b-0e. Endpoint Realtime Hadiah Virtual (Gifts) Live Streaming
+  const liveStreamGiftsMap: Record<string, { gifts: any[]; totalValue: number }> = {};
+
+  app.get('/api/live-stream-gifts', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const entry = liveStreamGiftsMap[slug] || { gifts: [], totalValue: 0 };
+    return res.json({
+      success: true,
+      slug,
+      gifts: entry.gifts.slice(-30),
+      totalValue: entry.totalValue || 0,
+    });
+  });
+
+  app.post('/api/live-stream-gifts', (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+      const gift = incoming.gift || incoming;
+      if (!gift || !gift.giftName) {
+        return res.status(400).json({ success: false, error: 'Data gift tidak valid' });
+      }
+
+      if (!liveStreamGiftsMap[slug]) {
+        liveStreamGiftsMap[slug] = { gifts: [], totalValue: 0 };
+      }
+
+      const formatted = {
+        id: gift.id || `gift_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        giftId: gift.giftId || 'gift_rose',
+        giftName: String(gift.giftName || 'Gift').trim(),
+        giftIcon: gift.giftIcon || '🎁',
+        giftPrice: Number(gift.giftPrice) || 0,
+        storeSlug: slug,
+        storeName: gift.storeName || '',
+        senderName: gift.senderName || 'Pengunjung',
+        senderId: gift.senderId || '',
+        timestamp: Number(gift.timestamp) || Date.now(),
+        createdAt: new Date().toISOString(),
+      };
+
+      liveStreamGiftsMap[slug].gifts.push(formatted);
+      liveStreamGiftsMap[slug].totalValue += formatted.giftPrice;
+      if (liveStreamGiftsMap[slug].gifts.length > 50) {
+        liveStreamGiftsMap[slug].gifts = liveStreamGiftsMap[slug].gifts.slice(-50);
+      }
+
+      // Juga masukkan notifikasi gift ke list komentar live streaming
+      if (!liveStreamCommentsMap[slug]) {
+        liveStreamCommentsMap[slug] = [];
+      }
+      liveStreamCommentsMap[slug].push({
+        id: `c_gift_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        storeSlug: slug,
+        storeName: gift.storeName || '',
+        senderName: formatted.senderName,
+        senderId: formatted.senderId,
+        message: `🎁 Mengirimkan Hadiah ${formatted.giftIcon} ${formatted.giftName} (Rp ${formatted.giftPrice.toLocaleString('id-ID')})!`,
+        timestamp: formatted.timestamp,
+        isBuyer: true,
+        isGift: true,
+        giftInfo: formatted,
+        createdAt: new Date().toISOString(),
+      });
+
+      return res.json({
+        success: true,
+        slug,
+        gift: formatted,
+        totalValue: liveStreamGiftsMap[slug].totalValue,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 1b-0f. Endpoint Realtime Likes Live Streaming
+  const liveStreamLikesMap: Record<string, number> = {};
+
+  app.get('/api/live-stream-likes', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const count = liveStreamLikesMap[slug] || 28400;
+    return res.json({
+      success: true,
+      slug,
+      likesCount: count,
+    });
+  });
+
+  app.post('/api/live-stream-likes', (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+      const delta = Math.max(1, Math.min(100, Number(incoming.delta || 1)));
+
+      if (liveStreamLikesMap[slug] === undefined) {
+        liveStreamLikesMap[slug] = 28400;
+      }
+      liveStreamLikesMap[slug] += delta;
+
+      return res.json({
+        success: true,
+        slug,
+        likesCount: liveStreamLikesMap[slug],
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // 1b-1. List All Registered Subdomains under lapakoke.com & toko-online.online
   const ALLOWED_SUBDOMAIN_MODULE_DOMAINS = [
     'lapakoke.com',

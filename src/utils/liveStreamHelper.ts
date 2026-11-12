@@ -1,5 +1,89 @@
 import { Product } from '../types';
 
+export interface LiveStreamGiftItem {
+  id: string;
+  name: string;
+  icon: string;
+  price: number;
+  description: string;
+  category: 'popular' | 'vip' | 'special';
+  badgeColor: string;
+  animationType: 'rose' | 'coffee' | 'rocket' | 'crown' | 'diamond' | 'cake';
+}
+
+export const LIVE_GIFTS: LiveStreamGiftItem[] = [
+  {
+    id: 'gift_rose',
+    name: 'Mawar Harum',
+    icon: '🌹',
+    price: 1000,
+    description: 'Apresiasi manis & kasih sayang untuk host',
+    category: 'popular',
+    badgeColor: '#f43f5e',
+    animationType: 'rose',
+  },
+  {
+    id: 'gift_coffee',
+    name: 'Kopi Semangat',
+    icon: '☕',
+    price: 5000,
+    description: 'Biar host makin bertenaga spill sembako',
+    category: 'popular',
+    badgeColor: '#d97706',
+    animationType: 'coffee',
+  },
+  {
+    id: 'gift_icecream',
+    name: 'Es Krim Segar',
+    icon: '🍦',
+    price: 10000,
+    description: 'Manisnya diskon sembako murah meriah',
+    category: 'popular',
+    badgeColor: '#ec4899',
+    animationType: 'rose',
+  },
+  {
+    id: 'gift_cake',
+    name: 'Kue Belanja Berkah',
+    icon: '🎂',
+    price: 25000,
+    description: 'Rayakan belanja hemat bersama pelanggan',
+    category: 'special',
+    badgeColor: '#8b5cf6',
+    animationType: 'cake',
+  },
+  {
+    id: 'gift_rocket',
+    name: 'Roket Belanja Kilat',
+    icon: '🚀',
+    price: 50000,
+    description: 'Pengiriman sembako instan secepat kilat',
+    category: 'special',
+    badgeColor: '#0ea5e9',
+    animationType: 'rocket',
+  },
+  {
+    id: 'gift_crown',
+    name: 'Mahkota Sultan Toko',
+    icon: '👑',
+    price: 100000,
+    description: 'Gelar pembeli terbaik siaran langsung',
+    category: 'vip',
+    badgeColor: '#eab308',
+    animationType: 'crown',
+  },
+  {
+    id: 'gift_diamond',
+    name: 'Berlian Barokah',
+    icon: '💎',
+    price: 250000,
+    description: 'Dukungan tertinggi & doa berkah untuk toko',
+    category: 'vip',
+    badgeColor: '#06b6d4',
+    animationType: 'diamond',
+  },
+];
+
 export interface LiveStreamComment {
   id: string;
   senderName: string;
@@ -9,6 +93,15 @@ export interface LiveStreamComment {
   timestamp: string;
   isHost?: boolean;
   isBuyer?: boolean;
+  isGift?: boolean;
+  giftInfo?: {
+    id: string;
+    giftId: string;
+    giftName: string;
+    giftIcon: string;
+    giftPrice: number;
+  };
+  isGuestVideo?: boolean;
 }
 
 export interface LiveStreamConfig {
@@ -26,6 +119,7 @@ export interface LiveStreamConfig {
   promoVoucherText?: string;
   autoChatEnabled: boolean;
   storeSlug?: string;
+  totalGiftsValue?: number;
   lastUpdated?: string;
 }
 
@@ -213,5 +307,53 @@ export function triggerOpenLiveStream(mode: 'fullscreen' | 'pip' | 'medium' = 'f
         detail: { mode },
       })
     );
+  }
+}
+
+export async function sendLiveGiftApi(
+  slug: string,
+  gift: LiveStreamGiftItem,
+  senderName: string,
+  senderId: string,
+  storeName: string
+) {
+  try {
+    const res = await fetch('/api/live-stream-gifts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug: slug.toLowerCase().trim(),
+        gift: {
+          giftId: gift.id,
+          giftName: gift.name,
+          giftIcon: gift.icon,
+          giftPrice: gift.price,
+          storeName,
+          senderName,
+          senderId,
+          timestamp: Date.now(),
+        },
+      }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('Gagal POST gift ke server API:', e);
+    return null;
+  }
+}
+
+export async function sendLiveLikeApi(slug: string, delta: number = 1) {
+  try {
+    const res = await fetch('/api/live-stream-likes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug: slug.toLowerCase().trim(),
+        delta,
+      }),
+    });
+    return await res.json();
+  } catch (e) {
+    return null;
   }
 }
