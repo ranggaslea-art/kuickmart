@@ -272,12 +272,12 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
             </div>
 
             {/* Pilihan Tipe Sumber Video Toko */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 type="button"
-                onClick={() => setConfig((prev) => ({ ...prev, streamType: 'preset_video' }))}
+                onClick={() => setConfig((prev) => ({ ...prev, streamType: 'preset_video', videoUrl: PRESET_STREAM_VIDEOS[0].videoUrl }))}
                 className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  config.streamType === 'preset_video' || (config.streamType as any) === 'webcam'
+                  config.streamType === 'preset_video'
                     ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20 shadow-xs'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
                 }`}
@@ -287,12 +287,35 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                     <Sparkles className="w-3.5 h-3.5 text-red-600" />
                     Klip Host Siaran Toko (Rekomendasi)
                   </span>
-                  {(config.streamType === 'preset_video' || (config.streamType as any) === 'webcam') && (
+                  {config.streamType === 'preset_video' && (
                     <span className="text-[10px] font-bold text-red-600 dark:text-red-400">Aktif ✓</span>
                   )}
                 </div>
                 <span className="text-[10px] opacity-80 mt-1">
-                  Video host e-commerce jualan sembako & snack otomatis looping yang ditonton oleh semua pengunjung di HP maupun Laptop.
+                  Video host e-commerce nyata (Sari, Dimas, Kasir) jualan sembako & snack otomatis looping di HP & Laptop.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConfig((prev) => ({ ...prev, streamType: 'webcam' }))}
+                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  config.streamType === 'webcam'
+                    ? 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-200 ring-2 ring-red-500/20 shadow-xs'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-bold text-xs flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                    Kamera Live Toko (Webcam / HP)
+                  </span>
+                  {config.streamType === 'webcam' && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Aktif ✓</span>
+                  )}
+                </div>
+                <span className="text-[10px] opacity-80 mt-1">
+                  Siarkan langsung dari kamera HP atau laptop Anda untuk spill dan menunjukkan toko secara live.
                 </span>
               </button>
 
@@ -308,7 +331,7 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                 <div className="flex items-center justify-between w-full">
                   <span className="font-bold text-xs flex items-center gap-1.5">
                     <Link className="w-3.5 h-3.5 text-blue-600" />
-                    Tautan URL Video / Stream Langsung
+                    Tautan URL Video Kustom
                   </span>
                   {config.streamType === 'custom_url' && (
                     <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">Aktif ✓</span>
@@ -319,6 +342,19 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                 </span>
               </button>
             </div>
+
+            {/* Jika mode webcam / kamera */}
+            {config.streamType === 'webcam' && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                  Mode Siaran Langsung dari Kamera Toko Aktif
+                </p>
+                <p className="text-[11px] opacity-90">
+                  Saat Anda membuka siaran live, aplikasi akan meminta izin kamera dan mikrofon perangkat Anda untuk mulai menyiarkan langsung toko Anda.
+                </p>
+              </div>
+            )}
 
             {/* Jika mode preset video: Daftar Pilihan Video Preset */}
             {config.streamType === 'preset_video' && (

@@ -18,6 +18,7 @@ import {
 } from '../utils/liveStreamHelper';
 import { formatImageUrl, getProductFallbackImage } from '../utils/imageHelper';
 import {
+  Play,
   Maximize2,
   Minimize2,
   Volume2,
@@ -108,6 +109,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [isEtalaseOpen, setIsEtalaseOpen] = useState<boolean>(false);
   const [addedSuccessToast, setAddedSuccessToast] = useState<string | null>(null);
   const [shareSuccessToast, setShareSuccessToast] = useState<boolean>(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(true);
 
   // ================= INTERAKSI LIVE VIDEO PENGUNJUNG & HOST =================
   const [isGuestVideoActive, setIsGuestVideoActive] = useState<boolean>(false);
@@ -877,16 +879,53 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
   // Pastikan video selalu berputar otomatis (Autoplay with sound or muted fallback)
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = isMuted;
-      videoRef.current.play().catch(() => {
-        if (videoRef.current) {
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(() => {});
-        }
-      });
-    }
+    const vid = videoRef.current;
+    if (!vid) return;
+
+    // Explicitly set DOM properties for mobile browser compatibility
+    vid.defaultMuted = true;
+    vid.muted = isMuted;
+
+    const startPlayback = () => {
+      const playPromise = vid.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsVideoPlaying(true);
+          })
+          .catch(() => {
+            // Browser blocked unmuted autoplay, retry with muted
+            vid.muted = true;
+            vid.play()
+              .then(() => setIsVideoPlaying(true))
+              .catch(() => {
+                // Autoplay blocked on mobile until user taps
+                setIsVideoPlaying(false);
+              });
+          });
+      }
+    };
+
+    startPlayback();
   }, [activeVideoUrl, displayMode, isMuted]);
+
+  const handleTogglePlayVideo = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (vid.paused) {
+      vid.muted = isMuted;
+      vid.play()
+        .then(() => setIsVideoPlaying(true))
+        .catch(() => {
+          vid.muted = true;
+          vid.play().then(() => setIsVideoPlaying(true)).catch(() => {});
+        });
+    } else {
+      vid.pause();
+      setIsVideoPlaying(false);
+    }
+  };
 
   // FORMAT RUPIAH
   const formatRupiah = (val: number) => {
@@ -953,7 +992,14 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   // =========================================================================
   const renderVideoElement = () => {
     return (
-      <div className="relative w-full h-full overflow-hidden bg-slate-950 select-none">
+      <div 
+        className="relative w-full h-full overflow-hidden bg-slate-950 select-none cursor-pointer"
+        onClick={() => {
+          if (videoRef.current && videoRef.current.paused) {
+            handleTogglePlayVideo();
+          }
+        }}
+      >
         {/* Poster Image Always in Background so screen is never dark/blank */}
         <img
           src={activePoster}
@@ -970,14 +1016,18 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           loop
           playsInline
           muted={isMuted}
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover"
           poster={activePoster}
-          onLoadedMetadata={(e) => {
+          onPlay={() => setIsVideoPlaying(true)}
+          onPlaying={() => setIsVideoPlaying(true)}
+          onPause={() => setIsVideoPlaying(false)}
+          onLoadedData={(e) => {
             const vid = e.currentTarget;
+            vid.defaultMuted = true;
             vid.muted = isMuted;
-            vid.play().catch(() => {
+            vid.play().then(() => setIsVideoPlaying(true)).catch(() => {
               vid.muted = true;
-              vid.play().catch(() => {});
+              vid.play().then(() => setIsVideoPlaying(true)).catch(() => setIsVideoPlaying(false));
             });
           }}
           onError={(e) => {
@@ -988,6 +1038,21 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             }
           }}
         />
+
+        {/* Play Overlay if browser data saver/autoplay restriction paused playback */}
+        {!isVideoPlaying && (
+          <div
+            onClick={handleTogglePlayVideo}
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/45 backdrop-blur-xs transition-opacity animate-in fade-in cursor-pointer"
+          >
+            <div className="w-16 h-16 rounded-full bg-red-600/90 hover:bg-red-500 text-white flex items-center justify-center shadow-2xl border-2 border-white/60 animate-pulse active:scale-90 transition-transform">
+              <Play className="w-8 h-8 fill-current ml-1" />
+            </div>
+            <span className="mt-3 px-3.5 py-1 rounded-full bg-black/75 text-white text-xs font-bold border border-white/25 shadow-lg">
+              ▶️ Ketuk untuk Memutar Siaran Live
+            </span>
+          </div>
+        )}
       </div>
     );
   };

@@ -127,27 +127,27 @@ export interface LiveStreamConfig {
 export const PRESET_STREAM_VIDEOS = [
   {
     id: 'store_host_1',
-    name: 'Host Toko Sembako & Minimarket (Interaktif)',
-    description: 'Host sedang mendemonstrasikan produk kebutuhan harian, sembako, dan snack segar.',
+    name: 'Host Sari • Live Sembako & Minyak Goreng Murah',
+    description: 'Host sedang mendemonstrasikan promo minyak goreng, beras, dan sembako segar di rak toko.',
     videoUrl: '/videos/live_host_sembako.mp4',
-    poster: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=600&q=80',
-    fallbackVideoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    poster: '/assets/host_live_sembako.jpg',
+    fallbackVideoUrl: '/videos/live_host_sembako.mp4',
   },
   {
     id: 'store_host_2',
-    name: 'Review Snack & Minuman Segar Beli 2 Gratis 1',
+    name: 'Host Dimas • Review Snack & Minuman Beli 2 Gratis 1',
     description: 'Spill produk aneka camilan, biskuit, dan minuman segar siap kirim hari ini.',
     videoUrl: '/videos/live_host_snack.mp4',
-    poster: 'https://images.unsplash.com/photo-1534723452862-4c874018d66d?auto=format&fit=crop&w=600&q=80',
-    fallbackVideoUrl: 'https://res.cloudinary.com/demo/video/upload/dog.mp4',
+    poster: '/assets/host_live_snack.jpg',
+    fallbackVideoUrl: '/videos/live_host_snack.mp4',
   },
   {
     id: 'store_host_3',
-    name: 'Packing & Kirim Sembako Murah',
-    description: 'Aktivitas pengemasan cepat dan promo kilat sembako minyak goreng & beras.',
+    name: 'Kasir Toko • Packing Sembako & Pesanan Kilat',
+    description: 'Aktivitas pengemasan cepat dan promo kilat sembako langsung dari meja kasir toko.',
     videoUrl: '/videos/live_host_kasir.mp4',
-    poster: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=600&q=80',
-    fallbackVideoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    poster: '/assets/host_live_kasir.jpg',
+    fallbackVideoUrl: '/videos/live_host_kasir.mp4',
   },
 ];
 
