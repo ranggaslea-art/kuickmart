@@ -1,4 +1,6 @@
 import { Product } from '../types';
+import { db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 export interface LiveStreamGiftItem {
   id: string;
@@ -233,16 +235,22 @@ export function loadLiveStreamConfig(
           ? parsed.pinnedProductIds
           : (parsed.pinnedProductId ? [parsed.pinnedProductId] : def.pinnedProductIds || []);
 
-        const validStreamType = parsed.streamType === 'webcam' ? 'preset_video' : (parsed.streamType || 'preset_video');
-        let validVideoUrl = parsed.videoUrl && parsed.videoUrl.trim() && parsed.streamType !== 'webcam'
+        const validStreamType: LiveStreamConfig['streamType'] =
+          parsed.streamType === 'webcam' || parsed.streamType === 'custom_url' || parsed.streamType === 'preset_video'
+            ? parsed.streamType
+            : 'preset_video';
+        let validVideoUrl = parsed.videoUrl && parsed.videoUrl.trim()
           ? parsed.videoUrl
           : PRESET_STREAM_VIDEOS[0].videoUrl;
 
-        // Auto-migrate legacy 403 / blocked URLs
+        // Auto-migrate legacy 403 / blocked URLs when not in webcam mode
         if (
-          validVideoUrl.includes('assets.mixkit.co') ||
-          validVideoUrl.includes('gtv-videos-bucket') ||
-          validVideoUrl.includes('commondatastorage.googleapis.com')
+          validStreamType !== 'webcam' &&
+          (
+            validVideoUrl.includes('assets.mixkit.co') ||
+            validVideoUrl.includes('gtv-videos-bucket') ||
+            validVideoUrl.includes('commondatastorage.googleapis.com')
+          )
         ) {
           validVideoUrl = PRESET_STREAM_VIDEOS[0].videoUrl;
         }
@@ -295,6 +303,22 @@ export function saveLiveStreamConfig(config: LiveStreamConfig, slug: string = 'd
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slug: normSlug, config: updated }),
     }).catch(() => {});
+
+    // Sinkronisasi ke Firestore agar langsung diterima HP pengunjung secara real-time
+    try {
+      const safeDocId = `live_stream_${normSlug.replace(/[^a-z0-9_-]/g, '_')}`;
+      setDoc(
+        doc(db, 'store_settings', safeDocId),
+        {
+          ...updated,
+          storeSlug: normSlug,
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      ).catch((fsErr) => {
+        console.warn('Sinkronisasi liveStreamConfig ke Firestore warning:', fsErr);
+      });
+    } catch {}
   }
 
   return updated;

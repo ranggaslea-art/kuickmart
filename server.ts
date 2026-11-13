@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -7,6 +8,7 @@ import dotenv from 'dotenv';
 import webpush from 'web-push';
 import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+import { WebSocketServer, WebSocket } from 'ws';
 // Optional sharp loader with safe fallback so server runs even without native sharp binary
 let sharp: any = null;
 try {
@@ -349,6 +351,7 @@ function generateDokuSignature({
 
 async function startServer() {
   const app = express();
+  const httpServer = http.createServer(app);
 
   // Cross-browser CORS & Security headers (Firefox, Chrome, Safari, Edge)
   app.use((req, res, next) => {
@@ -679,12 +682,11 @@ async function startServer() {
           storeSlug: slug,
         };
 
-    if (config && config.videoUrl) {
+    if (config && config.videoUrl && config.streamType !== 'webcam') {
       if (
         config.videoUrl.includes('assets.mixkit.co') ||
         config.videoUrl.includes('gtv-videos-bucket') ||
-        config.videoUrl.includes('commondatastorage.googleapis.com') ||
-        config.streamType === 'webcam'
+        config.videoUrl.includes('commondatastorage.googleapis.com')
       ) {
         config.videoUrl = '/videos/live_host_sembako.mp4';
         config.streamType = 'preset_video';
@@ -738,6 +740,328 @@ async function startServer() {
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // 1b-0c2. Realtime Live Camera Broadcast Room Relay (WebRTC Signaling + WebSocket Frame Relay + HTTP Fallback)
+  interface LiveBroadcastRoom {
+    slug: string;
+    hostSocket: WebSocket | null;
+    hostId: string;
+    isLive: boolean;
+    facingMode: 'user' | 'environment';
+    isCameraMuted: boolean;
+    isMicMuted: boolean;
+    updatedAt: number;
+    latestFrame: string | null;
+    viewers: Map<string, WebSocket>;
+  }
+
+  const liveRooms = new Map<string, LiveBroadcastRoom>();
+
+  const getOrCreateLiveRoom = (rawSlug?: string): LiveBroadcastRoom => {
+    const slug = (rawSlug || 'default').toLowerCase().trim() || 'default';
+    let room = liveRooms.get(slug);
+    if (!room) {
+      room = {
+        slug,
+        hostSocket: null,
+        hostId: '',
+        isLive: false,
+        facingMode: 'user',
+        isCameraMuted: false,
+        isMicMuted: false,
+        updatedAt: 0,
+        latestFrame: null,
+        viewers: new Map<string, WebSocket>(),
+      };
+      liveRooms.set(slug, room);
+    }
+    return room;
+  };
+
+  const isRoomCurrentlyLive = (room: LiveBroadcastRoom): boolean => {
+    if (!room.isLive) return false;
+    // Consider room live if host WS is open OR heartbeat/HTTP frame received within last 15s
+    const hostWsOpen = room.hostSocket !== null && room.hostSocket.readyState === WebSocket.OPEN;
+    const freshHttp = Date.now() - room.updatedAt < 15000;
+    if (!hostWsOpen && !freshHttp) {
+      room.isLive = false;
+      room.latestFrame = null;
+      return false;
+    }
+    return true;
+  };
+
+  const sendWsJson = (ws: WebSocket | null | undefined, payload: any) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify(payload));
+    } catch {}
+  };
+
+  const broadcastToRoomViewers = (room: LiveBroadcastRoom, payload: any, dropIfBackpressure = false) => {
+    const serialized = JSON.stringify(payload);
+    room.viewers.forEach((viewerWs, viewerId) => {
+      if (viewerWs.readyState !== WebSocket.OPEN) {
+        room.viewers.delete(viewerId);
+        return;
+      }
+      if (dropIfBackpressure && viewerWs.bufferedAmount > 512 * 1024) {
+        return;
+      }
+      try {
+        viewerWs.send(serialized);
+      } catch {}
+    });
+  };
+
+  const buildHostStatusPayload = (room: LiveBroadcastRoom) => ({
+    type: 'host:status',
+    slug: room.slug,
+    isLive: isRoomCurrentlyLive(room),
+    hostId: room.hostId,
+    facingMode: room.facingMode,
+    isCameraMuted: room.isCameraMuted,
+    isMicMuted: room.isMicMuted,
+    viewersCount: room.viewers.size,
+    updatedAt: room.updatedAt,
+  });
+
+  const liveWsServer = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+
+  httpServer.on('upgrade', (request, socket, head) => {
+    try {
+      const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+      if (url.pathname !== '/ws/live-stream') {
+        socket.destroy();
+        return;
+      }
+      liveWsServer.handleUpgrade(request, socket, head, (ws) => {
+        liveWsServer.emit('connection', ws, request, url);
+      });
+    } catch {
+      socket.destroy();
+    }
+  });
+
+  liveWsServer.on('connection', (ws: WebSocket, _req: http.IncomingMessage, url: URL) => {
+    const slug = (url.searchParams.get('slug') || 'default').toLowerCase().trim() || 'default';
+    const role = url.searchParams.get('role') === 'host' ? 'host' : 'viewer';
+    const clientId = (url.searchParams.get('clientId') || `cli_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`).trim();
+    const room = getOrCreateLiveRoom(slug);
+
+    if (role === 'host') {
+      if (room.hostSocket && room.hostSocket !== ws && room.hostSocket.readyState === WebSocket.OPEN) {
+        try {
+          room.hostSocket.close(1000, 'Replaced by new host session');
+        } catch {}
+      }
+      room.hostSocket = ws;
+      room.hostId = clientId;
+      room.isLive = true;
+      room.updatedAt = Date.now();
+      broadcastToRoomViewers(room, buildHostStatusPayload(room));
+    } else {
+      room.viewers.set(clientId, ws);
+      const statusPayload = buildHostStatusPayload(room);
+      sendWsJson(ws, statusPayload);
+      if (statusPayload.isLive && room.latestFrame) {
+        sendWsJson(ws, { type: 'live:frame', frame: room.latestFrame, ts: room.updatedAt });
+      }
+      if (room.hostSocket && room.hostSocket.readyState === WebSocket.OPEN) {
+        sendWsJson(room.hostSocket, {
+          type: 'viewer:join',
+          viewerId: clientId,
+          viewersCount: room.viewers.size,
+        });
+      }
+    }
+
+    ws.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (!msg || typeof msg.type !== 'string') return;
+
+        if (role === 'host') {
+          if (msg.type === 'host:start') {
+            room.hostSocket = ws;
+            room.hostId = msg.hostId || clientId;
+            room.isLive = true;
+            room.facingMode = msg.facingMode === 'environment' ? 'environment' : 'user';
+            room.isCameraMuted = Boolean(msg.isCameraMuted);
+            room.isMicMuted = Boolean(msg.isMicMuted);
+            room.updatedAt = Date.now();
+            broadcastToRoomViewers(room, buildHostStatusPayload(room));
+            room.viewers.forEach((viewerWs, viewerId) => {
+              if (viewerWs.readyState === WebSocket.OPEN) {
+                sendWsJson(ws, { type: 'viewer:join', viewerId, viewersCount: room.viewers.size });
+              }
+            });
+          } else if (msg.type === 'host:ping') {
+            room.updatedAt = Date.now();
+            if (!room.isLive) {
+              room.isLive = true;
+              broadcastToRoomViewers(room, buildHostStatusPayload(room));
+            }
+          } else if (msg.type === 'host:state') {
+            if (msg.facingMode === 'user' || msg.facingMode === 'environment') {
+              room.facingMode = msg.facingMode;
+            }
+            if (typeof msg.isCameraMuted === 'boolean') room.isCameraMuted = msg.isCameraMuted;
+            if (typeof msg.isMicMuted === 'boolean') room.isMicMuted = msg.isMicMuted;
+            room.updatedAt = Date.now();
+            broadcastToRoomViewers(room, buildHostStatusPayload(room));
+          } else if (msg.type === 'host:stop') {
+            room.isLive = false;
+            room.latestFrame = null;
+            room.updatedAt = Date.now();
+            broadcastToRoomViewers(room, buildHostStatusPayload(room));
+          } else if (msg.type === 'live:frame' && typeof msg.frame === 'string') {
+            room.isLive = true;
+            room.updatedAt = Date.now();
+            room.latestFrame = msg.frame;
+            broadcastToRoomViewers(
+              room,
+              { type: 'live:frame', frame: msg.frame, ts: msg.ts || room.updatedAt },
+              true
+            );
+          } else if (
+            (msg.type === 'rtc:offer' || msg.type === 'rtc:ice') &&
+            typeof msg.viewerId === 'string'
+          ) {
+            const targetViewer = room.viewers.get(msg.viewerId);
+            sendWsJson(targetViewer, { ...msg, hostId: room.hostId });
+          }
+        } else {
+          if (msg.type === 'viewer:join') {
+            const statusPayload = buildHostStatusPayload(room);
+            sendWsJson(ws, statusPayload);
+            if (statusPayload.isLive && room.latestFrame) {
+              sendWsJson(ws, { type: 'live:frame', frame: room.latestFrame, ts: room.updatedAt });
+            }
+            if (room.hostSocket && room.hostSocket.readyState === WebSocket.OPEN) {
+              sendWsJson(room.hostSocket, {
+                type: 'viewer:join',
+                viewerId: clientId,
+                viewersCount: room.viewers.size,
+              });
+            }
+          } else if (msg.type === 'rtc:answer' || msg.type === 'rtc:ice') {
+            if (room.hostSocket && room.hostSocket.readyState === WebSocket.OPEN) {
+              sendWsJson(room.hostSocket, { ...msg, viewerId: clientId });
+            }
+          }
+        }
+      } catch {}
+    });
+
+    ws.on('close', () => {
+      if (role === 'host') {
+        if (room.hostSocket === ws) {
+          room.hostSocket = null;
+          room.isLive = false;
+          room.latestFrame = null;
+          room.updatedAt = Date.now();
+          broadcastToRoomViewers(room, buildHostStatusPayload(room));
+        }
+      } else {
+        if (room.viewers.get(clientId) === ws) {
+          room.viewers.delete(clientId);
+          if (room.hostSocket && room.hostSocket.readyState === WebSocket.OPEN) {
+            sendWsJson(room.hostSocket, {
+              type: 'viewer:leave',
+              viewerId: clientId,
+              viewersCount: room.viewers.size,
+            });
+          }
+        }
+      }
+    });
+  });
+
+  app.get('/api/live-stream-broadcast-status', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const room = getOrCreateLiveRoom(slug);
+    const isLive = isRoomCurrentlyLive(room);
+    return res.json({
+      success: true,
+      slug: room.slug,
+      isLive,
+      viewersCount: room.viewers.size,
+      facingMode: room.facingMode,
+      isCameraMuted: room.isCameraMuted,
+      isMicMuted: room.isMicMuted,
+      updatedAt: room.updatedAt,
+      hasFrame: Boolean(room.latestFrame),
+    });
+  });
+
+  app.post('/api/live-stream-frame', (req, res) => {
+    try {
+      const incoming = req.body || {};
+      const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+      const room = getOrCreateLiveRoom(slug);
+      const wasLive = isRoomCurrentlyLive(room);
+
+      room.isLive = true;
+      room.hostId = incoming.hostId || room.hostId || 'http_host';
+      if (incoming.facingMode === 'user' || incoming.facingMode === 'environment') {
+        room.facingMode = incoming.facingMode;
+      }
+      if (typeof incoming.isCameraMuted === 'boolean') room.isCameraMuted = incoming.isCameraMuted;
+      if (typeof incoming.isMicMuted === 'boolean') room.isMicMuted = incoming.isMicMuted;
+      room.updatedAt = Date.now();
+
+      if (typeof incoming.frame === 'string' && incoming.frame.startsWith('data:image/')) {
+        room.latestFrame = incoming.frame;
+        broadcastToRoomViewers(
+          room,
+          { type: 'live:frame', frame: incoming.frame, ts: room.updatedAt },
+          true
+        );
+      }
+
+      if (!wasLive) {
+        broadcastToRoomViewers(room, buildHostStatusPayload(room));
+      }
+
+      return res.json({
+        success: true,
+        slug: room.slug,
+        isLive: true,
+        viewersCount: room.viewers.size,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/live-stream-frame', (req, res) => {
+    const slug = ((req.query.slug as string) || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const room = getOrCreateLiveRoom(slug);
+    const isLive = isRoomCurrentlyLive(room);
+    return res.json({
+      success: true,
+      slug: room.slug,
+      isLive,
+      frame: isLive ? room.latestFrame : null,
+      updatedAt: room.updatedAt,
+      viewersCount: room.viewers.size,
+      facingMode: room.facingMode,
+      isCameraMuted: room.isCameraMuted,
+      isMicMuted: room.isMicMuted,
+    });
+  });
+
+  app.post('/api/live-stream-broadcast-stop', (req, res) => {
+    const incoming = req.body || {};
+    const slug = (incoming.slug || (req.headers['x-tenant-slug'] as string) || 'default').toLowerCase().trim();
+    const room = getOrCreateLiveRoom(slug);
+    room.isLive = false;
+    room.latestFrame = null;
+    room.updatedAt = Date.now();
+    broadcastToRoomViewers(room, buildHostStatusPayload(room));
+    return res.json({ success: true, slug: room.slug, isLive: false });
   });
 
   // 1b-0d. Endpoint Realtime Komentar Live Streaming (Sinkronisasi HP & Laptop)
@@ -4634,7 +4958,7 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`lapakoke.com Full-Stack Server running on http://0.0.0.0:${PORT}`);
     console.log(`DOKU Client ID configured: ${DOKU_CLIENT_ID}`);
   });

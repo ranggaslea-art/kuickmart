@@ -58,6 +58,7 @@ import { MemberProfile } from '../types';
 import { db } from '../lib/firebase';
 import {
   collection,
+  doc,
   addDoc,
   onSnapshot,
   query,
@@ -65,6 +66,13 @@ import {
   limit,
   serverTimestamp,
 } from 'firebase/firestore';
+import { useHostBroadcast, startHostBroadcast } from '../utils/liveBroadcastManager';
+
+const VIEWER_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+];
 
 interface LiveStreamPlayerProps {
   currentStore: Store;
@@ -207,8 +215,32 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [myCommentText, setMyCommentText] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const remoteWebcamVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteWebcamStreamRef = useRef<MediaStream | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const heartCounterRef = useRef<number>(0);
+
+  // ================= WEBCAM / KAMERA LIVE TOKO RECEIVER (PENGUNJUNG) =================
+  const hostBroadcastState = useHostBroadcast();
+  const normSlug = (activeTenantSlug || 'default').toLowerCase().trim() || 'default';
+  const isLocalHostBroadcasting =
+    hostBroadcastState.isBroadcasting && hostBroadcastState.slug === normSlug;
+
+  const [isHostOnline, setIsHostOnline] = useState<boolean>(false);
+  const [hostBroadcastMeta, setHostBroadcastMeta] = useState<{
+    isCameraMuted: boolean;
+    isMicMuted: boolean;
+    facingMode: 'user' | 'environment';
+    viewersCount: number;
+  }>({
+    isCameraMuted: false,
+    isMicMuted: false,
+    facingMode: 'user',
+    viewersCount: 0,
+  });
+  const [liveFrameDataUrl, setLiveFrameDataUrl] = useState<string | null>(null);
+  const [isWebrtcPlaying, setIsWebrtcPlaying] = useState<boolean>(false);
+  const [viewerWsConnected, setViewerWsConnected] = useState<boolean>(false);
 
   // Real-time Firestore Sync Komentar Live (Multi-Perangkat: HP, Tablet, Laptop)
   useEffect(() => {
@@ -323,24 +355,333 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     };
   }, [activeTenantSlug, currentStore.name]);
 
-  // 1. Sync config saat tenant berganti atau ada pembaruan event
+  // 1. Sync config saat tenant berganti, real-time via Firestore + polling Server API
   useEffect(() => {
     setConfig(loadLiveStreamConfig(activeTenantSlug, currentStore.name, storeLogoUrl, products));
 
-    // Fetch config dari backend server
-    fetch(`/api/live-stream-config?slug=${encodeURIComponent(activeTenantSlug)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.success && data?.liveStreamConfig) {
-          const cfg = data.liveStreamConfig;
-          setConfig(cfg);
-          try {
-            localStorage.setItem(`lapakoke_livestream_config_${activeTenantSlug.toLowerCase().trim()}`, JSON.stringify(cfg));
-          } catch {}
+    const fetchLatestConfig = () => {
+      fetch(`/api/live-stream-config?slug=${encodeURIComponent(activeTenantSlug)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.success && data?.liveStreamConfig) {
+            const cfg = data.liveStreamConfig;
+            setConfig((prev) => {
+              if (
+                prev.streamType === cfg.streamType &&
+                prev.videoUrl === cfg.videoUrl &&
+                prev.enabled === cfg.enabled &&
+                prev.title === cfg.title &&
+                prev.lastUpdated === cfg.lastUpdated
+              ) {
+                return prev;
+              }
+              return cfg;
+            });
+            try {
+              localStorage.setItem(
+                `lapakoke_livestream_config_${activeTenantSlug.toLowerCase().trim()}`,
+                JSON.stringify(cfg)
+              );
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchLatestConfig();
+    const cfgPoll = setInterval(fetchLatestConfig, 4000);
+
+    let unsubSettings: (() => void) | null = null;
+    try {
+      const safeDocId = `live_stream_${normSlug.replace(/[^a-z0-9_-]/g, '_')}`;
+      unsubSettings = onSnapshot(
+        doc(db, 'store_settings', safeDocId),
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as LiveStreamConfig;
+            if (data && data.streamType) {
+              setConfig((prev) => ({ ...prev, ...data }));
+              try {
+                localStorage.setItem(
+                  `lapakoke_livestream_config_${activeTenantSlug.toLowerCase().trim()}`,
+                  JSON.stringify(data)
+                );
+              } catch {}
+            }
+          }
+        },
+        (err) => {
+          console.warn('Firestore store_settings live stream listener warning:', err);
         }
-      })
-      .catch(() => {});
-  }, [activeTenantSlug, currentStore.name, storeLogoUrl]);
+      );
+    } catch {}
+
+    return () => {
+      clearInterval(cfgPoll);
+      if (unsubSettings) unsubSettings();
+    };
+  }, [activeTenantSlug, currentStore.name, storeLogoUrl, normSlug]);
+
+  // 1b. Koneksi Penerima Siaran Kamera Host (WebRTC P2P + WebSocket Frame Relay + HTTP Fallback)
+  useEffect(() => {
+    if (!config.enabled || config.streamType !== 'webcam') {
+      setIsHostOnline(false);
+      setLiveFrameDataUrl(null);
+      setIsWebrtcPlaying(false);
+      setViewerWsConnected(false);
+      return;
+    }
+
+    // Jika perangkat ini sendiri yang sedang menjadi host
+    if (isLocalHostBroadcasting) {
+      setIsHostOnline(true);
+      setViewerWsConnected(false);
+      if (remoteWebcamVideoRef.current && hostBroadcastState.stream) {
+        remoteWebcamVideoRef.current.srcObject = hostBroadcastState.stream;
+        remoteWebcamVideoRef.current.muted = true;
+        remoteWebcamVideoRef.current.play().catch(() => {});
+      }
+      return;
+    }
+
+    let disposed = false;
+    let ws: WebSocket | null = null;
+    let pc: RTCPeerConnection | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingIce: RTCIceCandidateInit[] = [];
+
+    const cleanupPeer = () => {
+      if (pc) {
+        try {
+          pc.ontrack = null;
+          pc.onicecandidate = null;
+          pc.onconnectionstatechange = null;
+          pc.close();
+        } catch {}
+        pc = null;
+      }
+      pendingIce = [];
+      remoteWebcamStreamRef.current = null;
+      setIsWebrtcPlaying(false);
+    };
+
+    const sendWsMsg = (payload: any) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify(payload));
+        } catch {}
+      }
+    };
+
+    const handleHostOffer = async (sdp: RTCSessionDescriptionInit) => {
+      cleanupPeer();
+      try {
+        pc = new RTCPeerConnection({ iceServers: VIEWER_ICE_SERVERS });
+        pc.ontrack = (event) => {
+          const stream = event.streams?.[0] || new MediaStream([event.track]);
+          remoteWebcamStreamRef.current = stream;
+          const vid = remoteWebcamVideoRef.current;
+          if (vid) {
+            vid.srcObject = stream;
+            vid.muted = isMuted;
+            vid.play()
+              .then(() => {
+                if (!disposed) setIsWebrtcPlaying(true);
+              })
+              .catch(() => {
+                vid.muted = true;
+                vid.play()
+                  .then(() => {
+                    if (!disposed) setIsWebrtcPlaying(true);
+                  })
+                  .catch(() => {});
+              });
+          }
+        };
+
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendWsMsg({
+              type: 'rtc:ice',
+              viewerId: effectiveVisitorId,
+              candidate: event.candidate.toJSON(),
+            });
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) {
+            if (!disposed) setIsWebrtcPlaying(false);
+          }
+        };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        if (pendingIce.length > 0) {
+          for (const cand of pendingIce) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch {}
+          }
+          pendingIce = [];
+        }
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendWsMsg({
+          type: 'rtc:answer',
+          viewerId: effectiveVisitorId,
+          sdp: pc.localDescription,
+        });
+      } catch (err) {
+        console.warn('[LiveViewer] WebRTC error, menggunakan frame relay:', err);
+      }
+    };
+
+    const handleHostIce = async (candidate: RTCIceCandidateInit) => {
+      if (!pc || !pc.remoteDescription) {
+        pendingIce.push(candidate);
+        return;
+      }
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch {}
+    };
+
+    const connectViewerWs = () => {
+      if (disposed || typeof window === 'undefined') return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/live-stream?slug=${encodeURIComponent(
+        normSlug
+      )}&role=viewer&clientId=${encodeURIComponent(effectiveVisitorId)}`;
+
+      try {
+        const socket = new WebSocket(wsUrl);
+        ws = socket;
+
+        socket.onopen = () => {
+          if (disposed) return;
+          setViewerWsConnected(true);
+          sendWsMsg({ type: 'viewer:join', viewerId: effectiveVisitorId });
+        };
+
+        socket.onmessage = (event) => {
+          if (disposed) return;
+          try {
+            const msg = JSON.parse(event.data);
+            if (!msg || typeof msg.type !== 'string') return;
+
+            if (msg.type === 'host:status') {
+              const online = Boolean(msg.isLive);
+              setIsHostOnline(online);
+              setHostBroadcastMeta({
+                isCameraMuted: Boolean(msg.isCameraMuted),
+                isMicMuted: Boolean(msg.isMicMuted),
+                facingMode: msg.facingMode === 'environment' ? 'environment' : 'user',
+                viewersCount: Number(msg.viewersCount) || 0,
+              });
+              if (!online) {
+                setLiveFrameDataUrl(null);
+                cleanupPeer();
+              }
+            } else if (msg.type === 'live:frame' && typeof msg.frame === 'string') {
+              setIsHostOnline(true);
+              setLiveFrameDataUrl(msg.frame);
+            } else if (msg.type === 'rtc:offer' && msg.sdp) {
+              setIsHostOnline(true);
+              handleHostOffer(msg.sdp);
+            } else if (msg.type === 'rtc:ice' && msg.candidate) {
+              handleHostIce(msg.candidate);
+            }
+          } catch {}
+        };
+
+        socket.onerror = () => {
+          if (!disposed) setViewerWsConnected(false);
+        };
+
+        socket.onclose = () => {
+          if (!disposed) {
+            setViewerWsConnected(false);
+            reconnectTimer = setTimeout(connectViewerWs, 3000);
+          }
+        };
+      } catch {
+        setViewerWsConnected(false);
+      }
+    };
+
+    connectViewerWs();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        try {
+          ws.close(1000, 'Viewer unmount');
+        } catch {}
+      }
+      cleanupPeer();
+    };
+  }, [config.enabled, config.streamType, normSlug, effectiveVisitorId, isLocalHostBroadcasting, hostBroadcastState.stream]);
+
+  // 1c. Fallback HTTP Polling untuk kamera live apabila WebSocket terblokir jaringan/proxy
+  useEffect(() => {
+    if (!config.enabled || config.streamType !== 'webcam' || isLocalHostBroadcasting) return;
+    if (viewerWsConnected && isWebrtcPlaying) return;
+
+    let cancelled = false;
+    const intervalMs = !viewerWsConnected ? (isHostOnline ? 300 : 2500) : 5000;
+
+    const pollFrameOrStatus = () => {
+      const endpoint = !viewerWsConnected
+        ? `/api/live-stream-frame?slug=${encodeURIComponent(normSlug)}`
+        : `/api/live-stream-broadcast-status?slug=${encodeURIComponent(normSlug)}`;
+
+      fetch(endpoint)
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled || !d?.success) return;
+          const online = Boolean(d.isLive);
+          setIsHostOnline(online);
+          setHostBroadcastMeta((prev) => ({
+            isCameraMuted: Boolean(d.isCameraMuted),
+            isMicMuted: Boolean(d.isMicMuted),
+            facingMode: d.facingMode === 'environment' ? 'environment' : prev.facingMode,
+            viewersCount: Number(d.viewersCount) || prev.viewersCount,
+          }));
+          if (!online) {
+            setLiveFrameDataUrl(null);
+          } else if (typeof d.frame === 'string' && d.frame.startsWith('data:image/')) {
+            setLiveFrameDataUrl(d.frame);
+          }
+        })
+        .catch(() => {});
+    };
+
+    pollFrameOrStatus();
+    const timer = setInterval(pollFrameOrStatus, intervalMs);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [config.enabled, config.streamType, normSlug, isLocalHostBroadcasting, viewerWsConnected, isHostOnline, isWebrtcPlaying]);
+
+  // Sinkronkan mute audio & srcObject pada elemen video webcam remote/lokal saat mode tampilan berubah
+  useEffect(() => {
+    const vid = remoteWebcamVideoRef.current;
+    if (!vid) return;
+    if (isLocalHostBroadcasting && hostBroadcastState.stream) {
+      if (vid.srcObject !== hostBroadcastState.stream) {
+        vid.srcObject = hostBroadcastState.stream;
+      }
+    } else if (remoteWebcamStreamRef.current && vid.srcObject !== remoteWebcamStreamRef.current && !isLocalHostBroadcasting) {
+      vid.srcObject = remoteWebcamStreamRef.current;
+    }
+    vid.muted = isMuted || isLocalHostBroadcasting;
+    if (vid.srcObject) {
+      vid.play().catch(() => {});
+    }
+  }, [isMuted, displayMode, isWebrtcPlaying, isLocalHostBroadcasting, hostBroadcastState.stream, isHostOnline]);
 
   // Listener event eksternal untuk trigger buka live atau update config
   useEffect(() => {
@@ -420,10 +761,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }
   }, [comments, displayMode]);
 
-  // Jika live streaming dinonaktifkan di admin
-  if (!config.enabled) {
-    return null;
-  }
+  // (Pengecekan !config.enabled dilakukan setelah seluruh React hooks agar aman)
 
   // Multiple Promoted Products (Daftar barang yang dipromokan host/admin)
   const promotedProducts: Product[] = React.useMemo(() => {
@@ -877,8 +1215,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === activeVideoUrl)?.fallbackVideoUrl ||
     PRESET_STREAM_VIDEOS[0].fallbackVideoUrl;
 
-  // Pastikan video selalu berputar otomatis (Autoplay with sound or muted fallback)
+  // Pastikan video preset/custom selalu berputar otomatis (Autoplay with sound or muted fallback)
   useEffect(() => {
+    if (!config.enabled || config.streamType === 'webcam') return;
     const vid = videoRef.current;
     if (!vid) return;
 
@@ -937,6 +1276,11 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }).format(val);
   };
 
+  // Jika live streaming dinonaktifkan di admin
+  if (!config.enabled) {
+    return null;
+  }
+
   // =========================================================================
   // 1. TAMPILAN JIKA DI-HIDE: FLOATING BUBBLE PIN DI SUDUT KIRI BAWAH
   // =========================================================================
@@ -991,6 +1335,107 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   // Menampilkan siaran langsung video toko/host yang sedang live streaming (Shopee & TikTok Live)
   // =========================================================================
   const renderVideoElement = () => {
+    // MODE KAMERA LIVE TOKO (WEBCAM / HP HOST)
+    if (config.streamType === 'webcam') {
+      const hostLiveNow = isLocalHostBroadcasting || isHostOnline;
+      const hostCamMuted = isLocalHostBroadcasting
+        ? hostBroadcastState.isCameraMuted
+        : hostBroadcastMeta.isCameraMuted;
+
+      if (!hostLiveNow) {
+        return (
+          <div className="relative w-full h-full overflow-hidden bg-slate-950 select-none flex flex-col items-center justify-center p-4 text-center">
+            <img
+              src={config.streamerAvatar || storeLogoUrl || '/pwa-192x192.png'}
+              alt={config.streamerName}
+              className="absolute inset-0 w-full h-full object-cover opacity-20 blur-md scale-110"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/pwa-192x192.png';
+              }}
+            />
+            <div className="relative z-10 flex flex-col items-center max-w-[260px] space-y-2.5">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400/60 flex items-center justify-center text-emerald-300 shadow-lg shadow-emerald-500/20 animate-pulse">
+                <Camera className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-black text-white leading-snug">
+                  Kamera Live Toko Menunggu Host
+                </p>
+                {displayMode !== 'pip' && (
+                  <p className="text-[11px] text-white/75 leading-relaxed">
+                    Host toko belum menyalakan kamera HP/Webcam. Siaran video langsung akan otomatis tampil di sini begitu host mulai menyiarkan.
+                  </p>
+                )}
+              </div>
+              {displayMode === 'fullscreen' && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startHostBroadcast({ slug: normSlug, facingMode: 'user' });
+                  }}
+                  className="mt-1 px-3 py-1.5 rounded-xl bg-emerald-600/80 hover:bg-emerald-500 text-white text-[10px] font-bold border border-emerald-300/40 shadow cursor-pointer transition-all"
+                >
+                  🎥 Anda Host Toko? Mulai Kamera di Perangkat Ini
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="relative w-full h-full overflow-hidden bg-slate-950 select-none">
+          {/* Layer fallback avatar */}
+          <img
+            src={config.streamerAvatar || storeLogoUrl || '/pwa-192x192.png'}
+            alt={config.streamerName}
+            className="absolute inset-0 w-full h-full object-cover opacity-25 blur-sm"
+          />
+
+          {/* Layer Frame Relay Real-time (Tampil instan di HP & jaringan 4G CGNAT) */}
+          {!isLocalHostBroadcasting && liveFrameDataUrl && !isWebrtcPlaying && (
+            <img
+              src={liveFrameDataUrl}
+              alt="Siaran Kamera Live Toko"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          )}
+
+          {/* Layer Video WebRTC Real-time HD + Audio / Preview Lokal Host */}
+          <video
+            ref={remoteWebcamVideoRef}
+            autoPlay
+            playsInline
+            muted={isMuted || isLocalHostBroadcasting}
+            onPlaying={() => setIsWebrtcPlaying(true)}
+            onLoadedData={() => setIsWebrtcPlaying(true)}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
+              isLocalHostBroadcasting && hostBroadcastState.facingMode === 'user' ? '-scale-x-100' : ''
+            } ${isLocalHostBroadcasting || isWebrtcPlaying ? 'opacity-100' : 'opacity-0'}`}
+          />
+
+          {/* Indikator jika kamera host dijeda sementara */}
+          {hostCamMuted && (
+            <div className="absolute inset-0 z-10 bg-black/75 flex flex-col items-center justify-center p-4 text-center text-white">
+              <VideoOff className="w-8 h-8 text-amber-400 mb-2" />
+              <p className="text-xs font-bold">Kamera Host Dijeda Sementara</p>
+              <p className="text-[10px] text-white/70 mt-0.5">Suara siaran tetap aktif</p>
+            </div>
+          )}
+
+          {/* Indikator menyambungkan saat frame pertama baru masuk */}
+          {!isLocalHostBroadcasting && !liveFrameDataUrl && !isWebrtcPlaying && !hostCamMuted && (
+            <div className="absolute inset-0 z-10 bg-black/55 flex flex-col items-center justify-center p-4 text-center text-white">
+              <RefreshCw className="w-7 h-7 text-emerald-400 animate-spin mb-2" />
+              <p className="text-xs font-bold">Menghubungkan ke Kamera Live Toko...</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // MODE PRESET VIDEO / CUSTOM URL
     return (
       <div 
         className="relative w-full h-full overflow-hidden bg-slate-950 select-none cursor-pointer"

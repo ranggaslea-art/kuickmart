@@ -29,7 +29,21 @@ import {
   Trash2,
   Star,
   Tag,
+  Mic,
+  MicOff,
+  VideoOff,
+  RefreshCw,
+  Square,
+  Users,
 } from 'lucide-react';
+import {
+  useHostBroadcast,
+  startHostBroadcast,
+  stopHostBroadcast,
+  toggleHostMic,
+  toggleHostCamera,
+  flipHostCamera,
+} from '../utils/liveBroadcastManager';
 
 interface LiveStreamManagerProps {
   currentStore: Store;
@@ -53,10 +67,46 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
   const [customUrlInput, setCustomUrlInput] = useState<string>('');
   const [productSearch, setProductSearch] = useState<string>('');
   const [selectedFilterCategory, setSelectedFilterCategory] = useState<string>('all');
+  const hostState = useHostBroadcast();
+  const studioPreviewRef = React.useRef<HTMLVideoElement>(null);
+  const mockupVideoRef = React.useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setConfig(loadLiveStreamConfig(activeTenantSlug, currentStore.name, storeLogoUrl, products));
-  }, [activeTenantSlug, currentStore.name, storeLogoUrl, products]);
+    fetch(`/api/live-stream-config?slug=${encodeURIComponent(activeTenantSlug)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.liveStreamConfig) {
+          setConfig(data.liveStreamConfig);
+        }
+      })
+      .catch(() => {});
+  }, [activeTenantSlug, currentStore.name, storeLogoUrl]);
+
+  useEffect(() => {
+    if (studioPreviewRef.current && hostState.stream) {
+      studioPreviewRef.current.srcObject = hostState.stream;
+      studioPreviewRef.current.play().catch(() => {});
+    }
+    if (mockupVideoRef.current && hostState.stream) {
+      mockupVideoRef.current.srcObject = hostState.stream;
+      mockupVideoRef.current.play().catch(() => {});
+    }
+  }, [hostState.stream, hostState.isBroadcasting, config.streamType]);
+
+  const handleStartLiveCamera = async () => {
+    const nextConfig: LiveStreamConfig = {
+      ...config,
+      enabled: true,
+      streamType: 'webcam',
+    };
+    setConfig(nextConfig);
+    saveLiveStreamConfig(nextConfig, activeTenantSlug);
+    await startHostBroadcast({
+      slug: activeTenantSlug,
+      facingMode: hostState.facingMode,
+    });
+  };
 
   const handleSave = () => {
     saveLiveStreamConfig(config, activeTenantSlug);
@@ -343,16 +393,159 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
               </button>
             </div>
 
-            {/* Jika mode webcam / kamera */}
+            {/* Jika mode webcam / kamera: Studio Siaran Kamera Live Toko */}
             {config.streamType === 'webcam' && (
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-emerald-600" />
-                  Mode Siaran Langsung dari Kamera Toko Aktif
-                </p>
-                <p className="text-[11px] opacity-90">
-                  Saat Anda membuka siaran live, aplikasi akan meminta izin kamera dan mikrofon perangkat Anda untuk mulai menyiarkan langsung toko Anda.
-                </p>
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border border-emerald-500/40 text-white space-y-3 shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-black text-xs sm:text-sm flex items-center gap-2 text-emerald-300">
+                      <Camera className="w-4 h-4 text-emerald-400" />
+                      Studio Siaran Kamera Live Toko (Webcam / HP)
+                    </p>
+                    <p className="text-[11px] text-slate-300 mt-0.5">
+                      Klik tombol mulai di bawah agar kamera HP/Laptop Anda langsung tampil di halaman index semua pengunjung.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {hostState.isBroadcasting ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider animate-pulse shadow">
+                        <span className="w-2 h-2 rounded-full bg-white" />
+                        ON AIR
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-700 text-slate-200 text-[10px] font-bold">
+                        Standby (Belum Menyiarkan)
+                      </span>
+                    )}
+                    {hostState.isBroadcasting && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 text-emerald-300 text-[10px] font-bold border border-white/15">
+                        <Users className="w-3 h-3" />
+                        {hostState.viewersCount} Penonton
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Live Camera Preview Box */}
+                <div className="relative w-full h-56 sm:h-64 rounded-xl overflow-hidden bg-black border border-white/15 flex items-center justify-center">
+                  {hostState.isBroadcasting && hostState.stream ? (
+                    <>
+                      <video
+                        ref={studioPreviewRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-full object-cover ${
+                          hostState.facingMode === 'user' ? '-scale-x-100' : ''
+                        } ${hostState.isCameraMuted ? 'opacity-20' : ''}`}
+                      />
+                      {hostState.isCameraMuted && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/80 text-xs font-bold gap-1">
+                          <VideoOff className="w-7 h-7 text-amber-400" />
+                          <span>Kamera Dijeda Sementara (Audio Aktif)</span>
+                        </div>
+                      )}
+                      <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-xs text-white/90">
+                        <span className="flex items-center gap-1.5 font-semibold text-emerald-300">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          Siaran Aktif ke Halaman Pengunjung
+                        </span>
+                        <span className="text-white/70">
+                          Kamera {hostState.facingMode === 'user' ? 'Depan' : 'Belakang'}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center p-4 space-y-2">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                        <Camera className="w-6 h-6" />
+                      </div>
+                      <p className="text-xs font-bold text-white">
+                        Kamera Host Belum Dinyalakan
+                      </p>
+                      <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                        Tekan tombol <strong className="text-emerald-300">Mulai Siarkan Kamera Live</strong> untuk mengaktifkan kamera & mikrofon toko Anda.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {hostState.error && (
+                  <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs font-semibold">
+                    ⚠️ {hostState.error}
+                  </div>
+                )}
+
+                {/* Broadcast Action Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {!hostState.isBroadcasting ? (
+                    <button
+                      type="button"
+                      onClick={handleStartLiveCamera}
+                      disabled={hostState.status === 'starting'}
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white shadow-lg shadow-red-600/30 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                    >
+                      <Radio className="w-4 h-4 animate-pulse" />
+                      <span>
+                        {hostState.status === 'starting'
+                          ? 'Menyalakan Kamera...'
+                          : '🔴 Mulai Siarkan Kamera Live Sekarang'}
+                      </span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => toggleHostMic()}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          hostState.isMicMuted
+                            ? 'bg-red-600/80 border-red-400 text-white'
+                            : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+                        }`}
+                      >
+                        {hostState.isMicMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+                        <span>{hostState.isMicMuted ? 'Mic Mati' : 'Mic Aktif'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleHostCamera()}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          hostState.isCameraMuted
+                            ? 'bg-amber-600/80 border-amber-400 text-white'
+                            : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+                        }`}
+                      >
+                        {hostState.isCameraMuted ? <VideoOff className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5 text-emerald-400" />}
+                        <span>{hostState.isCameraMuted ? 'Kamera Jeda' : 'Kamera Aktif'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => flipHostCamera()}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Balik Kamera</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => stopHostBroadcast()}
+                        className="ml-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-red-600 hover:bg-red-500 text-white shadow-md active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>Hentikan Siaran</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {hostState.isBroadcasting && (
+                  <p className="text-[10px] text-emerald-300/90">
+                    ✓ Anda dapat menutup panel Pengaturan Admin ini — kamera toko tetap aktif menyiarkan secara langsung ke seluruh HP pengunjung!
+                  </p>
+                )}
               </div>
             )}
 
@@ -763,19 +956,43 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
               <div className="w-full h-full rounded-[26px] overflow-hidden relative flex flex-col justify-between p-3 text-white bg-slate-900">
                 {/* Background Video Player in Admin Phone Mockup */}
                 <div className="absolute inset-0">
-                  <video
-                    key={config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl}
-                    src={config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover filter brightness-90"
-                    poster={
-                      PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === config.videoUrl)?.poster ||
-                      PRESET_STREAM_VIDEOS[0].poster
-                    }
-                  />
+                  {config.streamType === 'webcam' ? (
+                    hostState.isBroadcasting && hostState.stream ? (
+                      <video
+                        ref={mockupVideoRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        className={`w-full h-full object-cover ${
+                          hostState.facingMode === 'user' ? '-scale-x-100' : ''
+                        }`}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-b from-slate-900 via-emerald-950/60 to-slate-950 flex flex-col items-center justify-center px-5 text-center">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 mb-2">
+                          <Camera className="w-6 h-6" />
+                        </div>
+                        <p className="text-xs font-black text-white">Mode Kamera Live Toko</p>
+                        <p className="text-[10px] text-slate-300 mt-1">
+                          Klik &ldquo;Mulai Siarkan Kamera Live&rdquo; agar video kamera langsung tampil di sini &amp; HP pengunjung.
+                        </p>
+                      </div>
+                    )
+                  ) : (
+                    <video
+                      key={config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl}
+                      src={config.videoUrl || PRESET_STREAM_VIDEOS[0].videoUrl}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover filter brightness-90"
+                      poster={
+                        PRESET_STREAM_VIDEOS.find((p) => p.videoUrl === config.videoUrl)?.poster ||
+                        PRESET_STREAM_VIDEOS[0].poster
+                      }
+                    />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80 pointer-events-none" />
                 </div>
 

@@ -70,6 +70,7 @@ import {
   Chat 
 } from './components/Chat';
 import { LiveStreamPlayer } from './components/LiveStreamPlayer';
+import { FloatingHostBroadcastBar } from './components/FloatingHostBroadcastBar';
 import { 
   triggerOpenLiveStream,
   loadLiveStreamConfig,
@@ -2955,6 +2956,7 @@ export default function App() {
       />
 
       {/* 13. Floating Toko Online Live Streaming Jualan (TikTok & Shopee Live Style) */}
+      <FloatingHostBroadcastBar />
       <LiveStreamPlayer
         currentStore={currentStore}
         activeTenantSlug={currentSlug}

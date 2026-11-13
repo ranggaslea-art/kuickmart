@@ -329,6 +329,31 @@
         }
       },
       "required": ["giftId", "giftName", "giftPrice", "storeSlug", "senderName", "timestamp"]
+    },
+    "StoreSetting": {
+      "title": "StoreSetting",
+      "description": "Pengaturan modul toko termasuk konfigurasi Live Streaming tersinkronisasi lintas perangkat",
+      "type": "object",
+      "properties": {
+        "storeSlug": {
+          "type": "string",
+          "description": "Slug subdomain toko"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Status aktif modul"
+        },
+        "streamType": {
+          "type": "string",
+          "enum": ["preset_video", "custom_url", "webcam"],
+          "description": "Sumber video live streaming"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Waktu pembaruan unix timestamp"
+        }
+      },
+      "required": ["storeSlug"]
     }
   },
   "firestore": {
@@ -355,6 +380,10 @@
     "/store_tenants/{tenantId}": {
       "schema": "StoreTenant",
       "description": "Koleksi pendaftaran subdomain toko cabang yang tersinkronisasi di semua perangkat"
+    },
+    "/store_settings/{settingId}": {
+      "schema": "StoreSetting",
+      "description": "Koleksi pengaturan toko & konfigurasi live streaming lintas perangkat"
     }
   }
 }
