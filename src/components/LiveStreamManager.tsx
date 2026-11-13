@@ -43,6 +43,7 @@ import {
   toggleHostMic,
   toggleHostCamera,
   flipHostCamera,
+  resetHostCameraToDefault,
 } from '../utils/liveBroadcastManager';
 
 interface LiveStreamManagerProps {
@@ -435,7 +436,7 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                         autoPlay
                         playsInline
                         muted
-                        className={`w-full h-full object-cover ${
+                        className={`w-full h-full object-contain bg-black ${
                           hostState.facingMode === 'user' ? '-scale-x-100' : ''
                         } ${hostState.isCameraMuted ? 'opacity-20' : ''}`}
                       />
@@ -451,7 +452,11 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                           Siaran Aktif ke Halaman Pengunjung
                         </span>
                         <span className="text-white/70">
-                          Kamera {hostState.facingMode === 'user' ? 'Depan' : 'Belakang'}
+                          {hostState.facingMode === 'default'
+                            ? 'Lensa Default Bawaan'
+                            : hostState.facingMode === 'user'
+                            ? 'Kamera Depan'
+                            : 'Kamera Belakang'}
                         </span>
                       </div>
                     </>
@@ -528,6 +533,18 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>Balik Kamera</span>
                       </button>
+
+                      {hostState.facingMode !== 'default' && (
+                        <button
+                          type="button"
+                          onClick={() => resetHostCameraToDefault()}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-200 transition-colors cursor-pointer"
+                          title="Kembalikan ke lensa kamera bawaan perangkat"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Lensa Default</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -963,7 +980,7 @@ export const LiveStreamManager: React.FC<LiveStreamManagerProps> = ({
                         autoPlay
                         muted
                         playsInline
-                        className={`w-full h-full object-cover ${
+                        className={`w-full h-full object-contain bg-black ${
                           hostState.facingMode === 'user' ? '-scale-x-100' : ''
                         }`}
                       />

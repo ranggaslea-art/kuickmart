@@ -6,7 +6,7 @@ export interface HostBroadcastState {
   slug: string;
   hostId: string;
   stream: MediaStream | null;
-  facingMode: 'user' | 'environment';
+  facingMode: 'default' | 'user' | 'environment';
   isMicMuted: boolean;
   isCameraMuted: boolean;
   viewersCount: number;
@@ -30,7 +30,7 @@ let currentState: HostBroadcastState = {
   slug: 'default',
   hostId: 'host_' + Math.random().toString(36).slice(2, 10),
   stream: null,
-  facingMode: 'user',
+  facingMode: 'default',
   isMicMuted: false,
   isCameraMuted: false,
   viewersCount: 0,
@@ -344,18 +344,18 @@ function setupCapturePipeline(stream: MediaStream) {
   }, 125); // ~8 FPS real-time frame relay
 }
 
-async function acquireCameraStream(facingMode: 'user' | 'environment'): Promise<MediaStream> {
+async function acquireCameraStream(facingMode: 'default' | 'user' | 'environment'): Promise<MediaStream> {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     throw new Error('Browser ini tidak mendukung akses kamera atau harus dibuka melalui HTTPS.');
   }
 
+  // Gunakan video: true tanpa memaksa resolusi/rasio agar lensa & sudut pandang default bawaan HP/webcam tetap terjaga
+  const videoConstraint: boolean | MediaTrackConstraints =
+    facingMode === 'default' ? true : { facingMode };
+
   try {
     return await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode,
-        width: { ideal: 720 },
-        height: { ideal: 1280 },
-      },
+      video: videoConstraint,
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -364,12 +364,12 @@ async function acquireCameraStream(facingMode: 'user' | 'environment'): Promise<
   } catch {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
+        video: videoConstraint,
         audio: true,
       });
     } catch {
       return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode },
+        video: videoConstraint,
         audio: false,
       });
     }
@@ -378,10 +378,10 @@ async function acquireCameraStream(facingMode: 'user' | 'environment'): Promise<
 
 export async function startHostBroadcast(options?: {
   slug?: string;
-  facingMode?: 'user' | 'environment';
+  facingMode?: 'default' | 'user' | 'environment';
 }): Promise<boolean> {
   const normSlug = (options?.slug || currentState.slug || 'default').toLowerCase().trim() || 'default';
-  const facing = options?.facingMode || currentState.facingMode || 'user';
+  const facing = options?.facingMode || currentState.facingMode || 'default';
 
   if (currentState.isBroadcasting && currentState.stream && currentState.slug === normSlug) {
     return true;
@@ -568,8 +568,7 @@ export function toggleHostCamera(): boolean {
   return nextMuted;
 }
 
-export async function flipHostCamera(): Promise<void> {
-  const nextFacing = currentState.facingMode === 'user' ? 'environment' : 'user';
+async function switchHostCameraMode(nextFacing: 'default' | 'user' | 'environment'): Promise<void> {
   emitState({ facingMode: nextFacing });
 
   if (!currentState.isBroadcasting) return;
@@ -624,8 +623,23 @@ export async function flipHostCamera(): Promise<void> {
       isCameraMuted: currentState.isCameraMuted,
     });
   } catch (err) {
-    console.warn('[LiveBroadcast] Gagal membalik kamera:', err);
+    console.warn('[LiveBroadcast] Gagal mengganti lensa kamera:', err);
   }
+}
+
+export async function flipHostCamera(): Promise<void> {
+  let nextFacing: 'user' | 'environment';
+  if (currentState.facingMode === 'default') {
+    const activeSettingFacing = currentState.stream?.getVideoTracks()?.[0]?.getSettings?.()?.facingMode;
+    nextFacing = activeSettingFacing === 'user' ? 'environment' : 'user';
+  } else {
+    nextFacing = currentState.facingMode === 'user' ? 'environment' : 'user';
+  }
+  await switchHostCameraMode(nextFacing);
+}
+
+export async function resetHostCameraToDefault(): Promise<void> {
+  await switchHostCameraMode('default');
 }
 
 if (typeof window !== 'undefined') {

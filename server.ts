@@ -748,7 +748,7 @@ async function startServer() {
     hostSocket: WebSocket | null;
     hostId: string;
     isLive: boolean;
-    facingMode: 'user' | 'environment';
+    facingMode: 'default' | 'user' | 'environment';
     isCameraMuted: boolean;
     isMicMuted: boolean;
     updatedAt: number;
@@ -767,7 +767,7 @@ async function startServer() {
         hostSocket: null,
         hostId: '',
         isLive: false,
-        facingMode: 'user',
+        facingMode: 'default',
         isCameraMuted: false,
         isMicMuted: false,
         updatedAt: 0,
@@ -887,7 +887,10 @@ async function startServer() {
             room.hostSocket = ws;
             room.hostId = msg.hostId || clientId;
             room.isLive = true;
-            room.facingMode = msg.facingMode === 'environment' ? 'environment' : 'user';
+            room.facingMode =
+              msg.facingMode === 'environment' || msg.facingMode === 'user'
+                ? msg.facingMode
+                : 'default';
             room.isCameraMuted = Boolean(msg.isCameraMuted);
             room.isMicMuted = Boolean(msg.isMicMuted);
             room.updatedAt = Date.now();
@@ -904,7 +907,7 @@ async function startServer() {
               broadcastToRoomViewers(room, buildHostStatusPayload(room));
             }
           } else if (msg.type === 'host:state') {
-            if (msg.facingMode === 'user' || msg.facingMode === 'environment') {
+            if (msg.facingMode === 'default' || msg.facingMode === 'user' || msg.facingMode === 'environment') {
               room.facingMode = msg.facingMode;
             }
             if (typeof msg.isCameraMuted === 'boolean') room.isCameraMuted = msg.isCameraMuted;
@@ -1005,7 +1008,7 @@ async function startServer() {
 
       room.isLive = true;
       room.hostId = incoming.hostId || room.hostId || 'http_host';
-      if (incoming.facingMode === 'user' || incoming.facingMode === 'environment') {
+      if (incoming.facingMode === 'default' || incoming.facingMode === 'user' || incoming.facingMode === 'environment') {
         room.facingMode = incoming.facingMode;
       }
       if (typeof incoming.isCameraMuted === 'boolean') room.isCameraMuted = incoming.isCameraMuted;

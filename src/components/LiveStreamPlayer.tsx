@@ -230,12 +230,12 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [hostBroadcastMeta, setHostBroadcastMeta] = useState<{
     isCameraMuted: boolean;
     isMicMuted: boolean;
-    facingMode: 'user' | 'environment';
+    facingMode: 'default' | 'user' | 'environment';
     viewersCount: number;
   }>({
     isCameraMuted: false,
     isMicMuted: false,
-    facingMode: 'user',
+    facingMode: 'default',
     viewersCount: 0,
   });
   const [liveFrameDataUrl, setLiveFrameDataUrl] = useState<string | null>(null);
@@ -576,7 +576,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               setHostBroadcastMeta({
                 isCameraMuted: Boolean(msg.isCameraMuted),
                 isMicMuted: Boolean(msg.isMicMuted),
-                facingMode: msg.facingMode === 'environment' ? 'environment' : 'user',
+                facingMode:
+                  msg.facingMode === 'environment' || msg.facingMode === 'user'
+                    ? msg.facingMode
+                    : 'default',
                 viewersCount: Number(msg.viewersCount) || 0,
               });
               if (!online) {
@@ -646,7 +649,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           setHostBroadcastMeta((prev) => ({
             isCameraMuted: Boolean(d.isCameraMuted),
             isMicMuted: Boolean(d.isMicMuted),
-            facingMode: d.facingMode === 'environment' ? 'environment' : prev.facingMode,
+            facingMode:
+              d.facingMode === 'environment' || d.facingMode === 'user' || d.facingMode === 'default'
+                ? d.facingMode
+                : prev.facingMode,
             viewersCount: Number(d.viewersCount) || prev.viewersCount,
           }));
           if (!online) {
@@ -1372,7 +1378,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    startHostBroadcast({ slug: normSlug, facingMode: 'user' });
+                    startHostBroadcast({ slug: normSlug, facingMode: 'default' });
                   }}
                   className="mt-1 px-3 py-1.5 rounded-xl bg-emerald-600/80 hover:bg-emerald-500 text-white text-[10px] font-bold border border-emerald-300/40 shadow cursor-pointer transition-all"
                 >
@@ -1390,7 +1396,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           <img
             src={config.streamerAvatar || storeLogoUrl || '/pwa-192x192.png'}
             alt={config.streamerName}
-            className="absolute inset-0 w-full h-full object-cover opacity-25 blur-sm"
+            className="absolute inset-0 w-full h-full object-cover opacity-20 blur-md"
           />
 
           {/* Layer Frame Relay Real-time (Tampil instan di HP & jaringan 4G CGNAT) */}
@@ -1398,7 +1404,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <img
               src={liveFrameDataUrl}
               alt="Siaran Kamera Live Toko"
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-contain"
             />
           )}
 
@@ -1410,7 +1416,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             muted={isMuted || isLocalHostBroadcasting}
             onPlaying={() => setIsWebrtcPlaying(true)}
             onLoadedData={() => setIsWebrtcPlaying(true)}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
+            className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${
               isLocalHostBroadcasting && hostBroadcastState.facingMode === 'user' ? '-scale-x-100' : ''
             } ${isLocalHostBroadcasting || isWebrtcPlaying ? 'opacity-100' : 'opacity-0'}`}
           />
