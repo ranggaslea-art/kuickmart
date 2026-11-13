@@ -12,6 +12,7 @@ export interface HostBroadcastState {
   viewersCount: number;
   error: string | null;
   wsConnected: boolean;
+  isFullscreenPlayerOpen: boolean;
 }
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -36,6 +37,7 @@ let currentState: HostBroadcastState = {
   viewersCount: 0,
   error: null,
   wsConnected: false,
+  isFullscreenPlayerOpen: false,
 };
 
 let ws: WebSocket | null = null;
@@ -75,6 +77,12 @@ export function useHostBroadcast(): HostBroadcastState {
   const [state, setState] = useState<HostBroadcastState>(() => getHostBroadcastSnapshot());
   useEffect(() => subscribeHostBroadcast(setState), []);
   return state;
+}
+
+export function setFullscreenLivePlayerOpen(open: boolean): void {
+  if (currentState.isFullscreenPlayerOpen !== open) {
+    emitState({ isFullscreenPlayerOpen: open });
+  }
 }
 
 function sendWs(payload: any): boolean {

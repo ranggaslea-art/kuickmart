@@ -10,7 +10,7 @@ import {
 export const FloatingHostBroadcastBar: React.FC = () => {
   const hostState = useHostBroadcast();
 
-  if (!hostState.isBroadcasting) {
+  if (!hostState.isBroadcasting || hostState.isFullscreenPlayerOpen) {
     return null;
   }
 

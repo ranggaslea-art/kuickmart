@@ -53,6 +53,7 @@ import {
   ChevronRight,
   Smile,
   ThumbsUp,
+  Square,
 } from 'lucide-react';
 import { MemberProfile } from '../types';
 import { db } from '../lib/firebase';
@@ -66,7 +67,14 @@ import {
   limit,
   serverTimestamp,
 } from 'firebase/firestore';
-import { useHostBroadcast, startHostBroadcast } from '../utils/liveBroadcastManager';
+import {
+  useHostBroadcast,
+  startHostBroadcast,
+  setFullscreenLivePlayerOpen,
+  stopHostBroadcast,
+  toggleHostMic,
+  flipHostCamera,
+} from '../utils/liveBroadcastManager';
 
 const VIEWER_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -688,6 +696,13 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       vid.play().catch(() => {});
     }
   }, [isMuted, displayMode, isWebrtcPlaying, isLocalHostBroadcasting, hostBroadcastState.stream, isHostOnline]);
+
+  useEffect(() => {
+    setFullscreenLivePlayerOpen(Boolean(config.enabled) && displayMode === 'fullscreen');
+    return () => {
+      setFullscreenLivePlayerOpen(false);
+    };
+  }, [config.enabled, displayMode]);
 
   // Listener event eksternal untuk trigger buka live atau update config
   useEffect(() => {
@@ -1791,11 +1806,11 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </div>
           )}
 
-          {/* Middle Live Chat Stream in Medium Mode */}
-          <div className="relative z-30 flex-1 flex flex-col justify-end px-3 py-1 overflow-hidden pointer-events-none">
+          {/* Middle Live Chat Stream in Medium Mode (Rapi di sisi kiri bawah & teks ringkas) */}
+          <div className="relative z-30 flex-1 flex flex-col justify-end px-2.5 py-1 overflow-hidden pointer-events-none">
             <div
               ref={chatScrollRef}
-              className="max-h-[140px] overflow-y-auto space-y-1.5 pointer-events-auto pr-1 text-left scrollbar-none"
+              className="max-h-[88px] max-w-[78%] overflow-y-auto flex flex-col items-start gap-1 pointer-events-auto pr-1 text-left scrollbar-none [mask-image:linear-gradient(to_bottom,transparent_0%,black_28%,black_100%)]"
             >
               {comments.slice(-8).map((c) => {
                 const isMe =
@@ -1807,9 +1822,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   return (
                     <div
                       key={c.id}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/80 via-yellow-400/85 to-orange-500/80 text-slate-950 font-bold border border-amber-200 text-[11px] shadow-sm max-w-full"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-500/80 via-yellow-400/85 to-orange-500/80 text-slate-950 font-bold border border-amber-200 text-[10px] leading-tight shadow-xs max-w-full"
                     >
-                      <span className="text-sm shrink-0">{c.giftInfo?.giftIcon || '🎁'}</span>
+                      <span className="text-xs shrink-0">{c.giftInfo?.giftIcon || '🎁'}</span>
                       <span className="truncate">
                         <strong>{c.senderName}</strong> kirim {c.giftInfo?.giftName || 'Hadiah'} ({formatRupiah(c.giftInfo?.giftPrice || 0)})
                       </span>
@@ -1821,9 +1836,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   return (
                     <div
                       key={c.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-900/85 border border-emerald-400/60 text-emerald-200 font-bold text-[11px] shadow-sm max-w-full"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-900/80 border border-emerald-400/50 text-emerald-200 font-bold text-[10px] leading-tight shadow-xs max-w-full"
                     >
-                      <Video className="w-3 h-3 text-emerald-300 shrink-0 animate-pulse" />
+                      <Video className="w-2.5 h-2.5 text-emerald-300 shrink-0 animate-pulse" />
                       <span className="truncate">{c.message}</span>
                     </div>
                   );
@@ -1832,24 +1847,23 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 return (
                   <div
                     key={c.id}
-                    className={`inline-flex flex-wrap items-baseline gap-1 px-2.5 py-1 rounded-xl backdrop-blur-md border text-[11px] text-white shadow-xs max-w-full ${
-                      isMe ? 'bg-cyan-950/75 border-cyan-400/50 ring-1 ring-cyan-400/30' : 'bg-black/55 border-white/10'
+                    className={`inline-flex flex-wrap items-baseline gap-1 px-2 py-0.5 rounded-lg backdrop-blur-xs border text-[10px] leading-tight text-white shadow-xs max-w-full ${
+                      isMe ? 'bg-cyan-950/65 border-cyan-400/45' : 'bg-black/40 border-white/10'
                     }`}
                   >
                     <span
-                      className={`font-bold flex items-center gap-0.5 ${
-                        c.isHost ? 'text-amber-400' : isMe ? 'text-cyan-300 font-black' : 'text-rose-300'
+                      className={`font-bold ${
+                        c.isHost ? 'text-amber-300' : isMe ? 'text-cyan-300' : 'text-rose-300'
                       }`}
                     >
-                      {isMe && <User className="w-2.5 h-2.5 text-cyan-400 shrink-0" />}
                       {c.senderName}:
                     </span>
                     {isMe && (
-                      <span className="text-[8px] px-1 py-0.1 rounded bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 font-bold shrink-0">
+                      <span className="text-[8px] px-1 py-0 rounded bg-cyan-500/30 text-cyan-200 font-bold shrink-0">
                         Kamu
                       </span>
                     )}
-                    <span className="text-white/90 break-words font-medium">{c.message}</span>
+                    <span className="text-white/95 break-words">{c.message}</span>
                   </div>
                 );
               })}
@@ -1857,15 +1871,15 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           </div>
 
           {/* Bottom Area: Pinned Product & Actions in Medium Mode */}
-          <div className="relative z-30 p-2.5 space-y-2">
+          <div className="relative z-30 p-2 space-y-1.5">
             {/* Pinned Product Card (Multi-Item Support) */}
             {pinnedProduct && (
               <div
                 onClick={() => handleBuyPinned(pinnedProduct)}
-                className="p-2 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-amber-400/60 text-white flex items-center justify-between gap-2 cursor-pointer hover:border-amber-400 transition-all shadow-lg group relative"
+                className="p-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-amber-400/60 text-white flex items-center justify-between gap-2 cursor-pointer hover:border-amber-400 transition-all shadow-lg group relative"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <div className="relative w-10 h-10 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20">
+                  <div className="relative w-8 h-8 rounded-lg bg-white overflow-hidden shrink-0 border border-white/20">
                     <img
                       src={formatImageUrl(pinnedProduct.image)}
                       alt={pinnedProduct.name}
@@ -1874,25 +1888,25 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                         (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(pinnedProduct.name, pinnedProduct.category);
                       }}
                     />
-                    <span className="absolute top-0 left-0 px-1 py-0.2 rounded-br-md bg-red-600 text-[8px] font-black text-white">
+                    <span className="absolute top-0 left-0 px-1 py-0 rounded-br bg-red-600 text-[7px] font-black text-white">
                       #{safePromotedIndex + 1}
                     </span>
                   </div>
                   <div className="min-w-0 text-left flex-1">
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                        <Flame className="w-3 h-3 text-orange-400" />
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-0.5">
+                        <Flame className="w-2.5 h-2.5 text-orange-400" />
                         Promo Live {promotedProducts.length > 1 ? `(${safePromotedIndex + 1}/${promotedProducts.length})` : ''}
                       </span>
                       {promotedProducts.length > 1 && (
-                        <div className="flex items-center gap-0.5 bg-black/40 rounded-md p-0.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-0.5 bg-black/40 rounded p-0.5" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={handlePrevPromoted}
                             className="p-0.5 hover:bg-white/20 rounded text-white"
                             title="Produk Promo Sebelumnya"
                           >
-                            <ChevronLeft className="w-3 h-3" />
+                            <ChevronLeft className="w-2.5 h-2.5" />
                           </button>
                           <button
                             type="button"
@@ -1900,15 +1914,15 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                             className="p-0.5 hover:bg-white/20 rounded text-white"
                             title="Produk Promo Berikutnya"
                           >
-                            <ChevronRight className="w-3 h-3" />
+                            <ChevronRight className="w-2.5 h-2.5" />
                           </button>
                         </div>
                       )}
                     </div>
-                    <h5 className="text-xs font-bold text-white truncate leading-tight">
+                    <h5 className="text-[11px] font-bold text-white truncate leading-tight">
                       {pinnedProduct.name}
                     </h5>
-                    <p className="text-xs font-black text-amber-400">
+                    <p className="text-[11px] font-black text-amber-400">
                       {formatRupiah(pinnedProduct.price)}
                     </p>
                   </div>
@@ -1917,7 +1931,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 <button
                   type="button"
                   onClick={(e) => handleBuyPinned(pinnedProduct, e)}
-                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shrink-0 shadow-md active:scale-95 transition-all"
+                  className="px-2 py-1 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[10px] font-black shrink-0 shadow-md active:scale-95 transition-all"
                 >
                   + Beli
                 </button>
@@ -2175,26 +2189,26 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         )}
 
         {/* ================= HEADER SIARAN LIVE ================= */}
-        <div className="relative z-30 p-3.5 pt-4 sm:pt-3.5 flex items-center justify-between text-white">
+        <div className="relative z-30 p-2.5 pt-3 flex items-center justify-between text-white">
           {/* Info Toko & Streamer */}
-          <div className="flex items-center gap-2.5 p-1 pr-3 rounded-full bg-black/45 backdrop-blur-md border border-white/15 shadow-sm max-w-[210px] sm:max-w-[230px]">
-            <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white bg-slate-900 shrink-0">
+          <div className="flex items-center gap-2 p-1 pr-2.5 rounded-full bg-black/45 backdrop-blur-md border border-white/15 shadow-sm max-w-[195px] sm:max-w-[220px]">
+            <div className="relative w-8 h-8 rounded-full overflow-hidden border border-white bg-slate-900 shrink-0">
               <img
                 src={config.streamerAvatar || storeLogoUrl || '/pwa-192x192.png'}
                 alt={config.streamerName}
                 className="w-full h-full object-cover"
               />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black" />
+              <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 border border-black" />
             </div>
 
             <div className="min-w-0 text-left">
               <div className="flex items-center gap-1">
-                <h4 className="text-xs font-black text-white truncate leading-tight">
+                <h4 className="text-[11px] font-black text-white truncate leading-tight">
                   {currentStore.name}
                 </h4>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-white/80">
-                <span className="text-[9px] font-bold text-amber-300">
+              <div className="flex items-center gap-1 text-[9px] text-white/80">
+                <span className="font-bold text-amber-300">
                   {(likes / 1000).toFixed(1)}k suka
                 </span>
               </div>
@@ -2203,22 +2217,22 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               type="button"
               onClick={() => setIsFollowing(!isFollowing)}
-              className={`ml-1 px-2.5 py-1 rounded-full text-[10px] font-black transition-all shrink-0 ${
+              className={`ml-0.5 px-2 py-0.5 rounded-full text-[9px] font-black transition-all shrink-0 ${
                 isFollowing
                   ? 'bg-white/20 text-white'
                   : 'bg-red-600 hover:bg-red-500 text-white shadow-xs animate-pulse'
               }`}
             >
-              {isFollowing ? 'Mengikuti ✓' : '+ Ikuti'}
+              {isFollowing ? 'Diikuti ✓' : '+ Ikuti'}
             </button>
           </div>
 
           {/* Live Indicator, Viewers & Kontrol Ukuran */}
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-600/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-md">
-              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+          <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-600/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider shadow-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
               <span>LIVE</span>
-              <span className="ml-1 text-[11px] font-bold">
+              <span className="ml-0.5 text-[10px] font-bold">
                 {(viewers / 1000).toFixed(1)}k
               </span>
             </div>
@@ -2227,52 +2241,91 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               type="button"
               onClick={() => setIsMuted(!isMuted)}
-              className="p-2 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
+              className="p-1.5 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
               title={isMuted ? 'Nyalakan Suara Live' : 'Bisukan Suara'}
             >
-              {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
             </button>
 
             {/* Tombol Perkecil ke PiP (Minimize) */}
             <button
               type="button"
               onClick={() => setDisplayMode('pip')}
-              className="p-2 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
+              className="p-1.5 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
               title="Perkecil ke Layar Melayang (PiP)"
             >
-              <Minimize2 className="w-4 h-4" />
+              <Minimize2 className="w-3.5 h-3.5" />
             </button>
 
             {/* Tombol Tutup / Sembunyikan */}
             <button
               type="button"
               onClick={() => setDisplayMode('hidden')}
-              className="p-2 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
+              className="p-1.5 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md text-white transition-colors"
               title="Tutup Siaran Live"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Voucher Banner Melayang di Bawah Header */}
+        {/* Voucher Banner Melayang di Bawah Header (Ringkas) */}
         {config.promoVoucherCode && (
-          <div className="relative z-30 mx-3 py-1 px-3 rounded-full bg-gradient-to-r from-amber-500/90 to-orange-600/90 backdrop-blur-md border border-white/20 text-white flex items-center justify-between shadow-lg text-[11px]">
+          <div className="relative z-30 mx-2.5 py-0.5 px-2.5 rounded-full bg-gradient-to-r from-amber-500/85 to-orange-600/85 backdrop-blur-md border border-white/20 text-white flex items-center justify-between shadow text-[10px]">
             <span className="flex items-center gap-1 font-semibold truncate">
-              <Sparkles className="w-3.5 h-3.5 text-amber-200 shrink-0" />
-              <span>{config.promoVoucherText || 'Diskon Spesial Penonton Live!'}</span>
+              <Sparkles className="w-3 h-3 text-amber-200 shrink-0" />
+              <span className="truncate">{config.promoVoucherText || 'Diskon Spesial Penonton Live!'}</span>
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-black/30 font-mono font-black text-amber-200 shrink-0 ml-1">
+            <span className="px-1.5 py-0.2 rounded-full bg-black/30 font-mono font-black text-amber-200 shrink-0 ml-1 text-[9px]">
               {config.promoVoucherCode}
             </span>
           </div>
         )}
 
+        {/* Strip Kontrol Host Non-Overlap (Hanya muncul di perangkat Host saat menyiarkan kamera) */}
+        {isLocalHostBroadcasting && (
+          <div className="relative z-30 mx-2.5 mt-1 flex items-center justify-between px-2.5 py-1 rounded-full bg-black/55 backdrop-blur-md border border-red-500/40 text-white text-[10px]">
+            <span className="flex items-center gap-1.5 font-bold text-emerald-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+              <span>Kamera Host Aktif ({hostBroadcastState.viewersCount} penonton)</span>
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => toggleHostMic()}
+                className={`p-1 rounded-full transition-colors cursor-pointer ${
+                  hostBroadcastState.isMicMuted ? 'bg-red-600 text-white' : 'bg-white/15 hover:bg-white/25 text-white'
+                }`}
+                title={hostBroadcastState.isMicMuted ? 'Nyalakan Mic Host' : 'Bisukan Mic Host'}
+              >
+                {hostBroadcastState.isMicMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3 text-emerald-400" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => flipHostCamera()}
+                className="p-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors cursor-pointer"
+                title="Putar Kamera Depan/Belakang"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => stopHostBroadcast()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 hover:bg-red-500 text-white text-[9px] font-black transition-colors cursor-pointer"
+                title="Hentikan Siaran"
+              >
+                <Square className="w-2.5 h-2.5 fill-current" />
+                <span>Stop</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Toast Notifikasi Berhasil Tambah ke Keranjang */}
         {addedSuccessToast && (
-          <div className="absolute top-20 left-4 right-4 z-40 p-2.5 rounded-2xl bg-emerald-600/95 backdrop-blur-md text-white text-xs font-bold flex items-center justify-between shadow-2xl border border-white/30 animate-in slide-in-from-top-4 duration-200">
+          <div className="absolute top-20 left-4 right-4 z-40 p-2 rounded-xl bg-emerald-600/95 backdrop-blur-md text-white text-[11px] font-bold flex items-center justify-between shadow-2xl border border-white/30 animate-in slide-in-from-top-4 duration-200">
             <span className="flex items-center gap-1.5 truncate">
-              <Check className="w-4 h-4 text-emerald-200 shrink-0" />
+              <Check className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
               <span className="truncate">{addedSuccessToast}</span>
             </span>
             {onOpenCart && (
@@ -2282,7 +2335,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   setDisplayMode('pip');
                   onOpenCart();
                 }}
-                className="px-2.5 py-1 rounded-xl bg-white text-emerald-800 text-[10px] font-black shrink-0 hover:bg-emerald-50 transition-colors"
+                className="px-2 py-0.5 rounded-lg bg-white text-emerald-800 text-[10px] font-black shrink-0 hover:bg-emerald-50 transition-colors"
               >
                 Lihat Keranjang
               </button>
@@ -2292,18 +2345,18 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
         {/* Toast Share Link */}
         {shareSuccessToast && (
-          <div className="absolute top-20 left-6 right-6 z-40 p-2 rounded-xl bg-slate-900/95 text-white text-xs font-bold text-center border border-white/20 shadow-xl animate-in fade-in">
+          <div className="absolute top-20 left-6 right-6 z-40 p-2 rounded-xl bg-slate-900/95 text-white text-[11px] font-bold text-center border border-white/20 shadow-xl animate-in fade-in">
             Link siaran live streaming berhasil disalin!
           </div>
         )}
 
-        {/* ================= MIDDLE / CHAT STREAM ================= */}
-        <div className="relative z-30 flex-1 flex flex-col justify-end px-3.5 pb-2 overflow-hidden pointer-events-none">
+        {/* ================= MIDDLE / CHAT STREAM (Ringkas di pojok kiri bawah agar wajah host tidak tertutup) ================= */}
+        <div className="relative z-30 flex-1 flex flex-col justify-end px-2.5 pb-1 overflow-hidden pointer-events-none">
           <div
             ref={chatScrollRef}
-            className="max-h-[220px] overflow-y-auto space-y-2 pointer-events-auto pr-1 text-left scrollbar-none"
+            className="max-h-[112px] sm:max-h-[126px] max-w-[72%] sm:max-w-[75%] overflow-y-auto flex flex-col items-start gap-1 pointer-events-auto pr-1 text-left scrollbar-none [mask-image:linear-gradient(to_bottom,transparent_0%,black_30%,black_100%)]"
           >
-            {comments.map((c) => {
+            {comments.slice(-12).map((c) => {
               const isMe =
                 Boolean(c.senderId && c.senderId === effectiveVisitorId) ||
                 c.id.startsWith('my_') ||
@@ -2313,11 +2366,11 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 return (
                   <div
                     key={c.id}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500/90 via-yellow-400/90 to-orange-500/90 text-slate-950 font-black border border-amber-200 text-xs shadow-md max-w-[94%] animate-in slide-in-from-left duration-200"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-500/85 via-yellow-400/85 to-orange-500/85 text-slate-950 font-black border border-amber-200/80 text-[10px] leading-tight shadow-xs max-w-full animate-in slide-in-from-left duration-200"
                   >
-                    <span className="text-base shrink-0">{c.giftInfo?.giftIcon || '🎁'}</span>
+                    <span className="text-xs shrink-0">{c.giftInfo?.giftIcon || '🎁'}</span>
                     <span className="truncate">
-                      <strong>{c.senderName}</strong> mengirim <strong>{c.giftInfo?.giftName || 'Hadiah'}</strong> ({formatRupiah(c.giftInfo?.giftPrice || 0)})
+                      <strong>{c.senderName}</strong> kirim <strong>{c.giftInfo?.giftName || 'Hadiah'}</strong> ({formatRupiah(c.giftInfo?.giftPrice || 0)})
                     </span>
                   </div>
                 );
@@ -2327,9 +2380,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 return (
                   <div
                     key={c.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-950/90 border border-emerald-400/70 text-emerald-200 font-bold text-xs shadow-md max-w-[94%] animate-in slide-in-from-left duration-200"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/80 border border-emerald-400/60 text-emerald-200 font-bold text-[10px] leading-tight shadow-xs max-w-full animate-in slide-in-from-left duration-200"
                   >
-                    <Video className="w-3.5 h-3.5 text-emerald-300 shrink-0 animate-pulse" />
+                    <Video className="w-3 h-3 text-emerald-300 shrink-0 animate-pulse" />
                     <span className="truncate">{c.message}</span>
                   </div>
                 );
@@ -2338,42 +2391,41 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               return (
                 <div
                   key={c.id}
-                  className={`inline-flex flex-wrap items-baseline gap-1.5 px-3 py-1.5 rounded-2xl backdrop-blur-md border text-xs text-white shadow-sm max-w-[92%] transition-all ${
+                  className={`inline-flex flex-wrap items-baseline gap-1 px-2 py-0.5 rounded-lg backdrop-blur-xs border text-[10px] leading-tight text-white shadow-xs max-w-full transition-all ${
                     isMe
-                      ? 'bg-cyan-950/80 border-cyan-400/60 ring-1 ring-cyan-400/30'
-                      : 'bg-black/50 border-white/10'
+                      ? 'bg-cyan-950/60 border-cyan-400/45'
+                      : 'bg-black/40 border-white/10'
                   }`}
                 >
                   <span
-                    className={`font-black flex items-center gap-1 ${
-                      c.isHost ? 'text-amber-400' : isMe ? 'text-cyan-300' : 'text-rose-300'
+                    className={`font-bold ${
+                      c.isHost ? 'text-amber-300' : isMe ? 'text-cyan-300' : 'text-rose-300'
                     }`}
                   >
-                    {isMe && <User className="w-3 h-3 text-cyan-400 shrink-0" />}
                     {c.senderName}:
                   </span>
                   {isMe && (
-                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 font-bold shrink-0">
+                    <span className="text-[8px] px-1 py-0 rounded bg-cyan-500/30 text-cyan-200 font-bold shrink-0">
                       Kamu
                     </span>
                   )}
-                  <span className="text-white/95 break-words font-medium">{c.message}</span>
+                  <span className="text-white/95 break-words">{c.message}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* ================= BOTTOM BAR INTERACTIVE ================= */}
-        <div className="relative z-30 p-3 sm:p-4 space-y-2.5 bg-gradient-to-t from-black via-black/85 to-transparent">
+        {/* ================= BOTTOM BAR INTERACTIVE (Ringkas & Rapi di Bawah) ================= */}
+        <div className="relative z-30 px-2.5 pb-2.5 pt-1.5 space-y-1.5 bg-gradient-to-t from-black via-black/80 to-transparent">
           {/* Pinned Product Card (Multi-Item Promo Support) */}
           {pinnedProduct && (
             <div
               onClick={() => handleBuyPinned(pinnedProduct)}
-              className="p-2.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border-2 border-amber-400 text-white flex items-center justify-between gap-3 shadow-2xl cursor-pointer hover:border-amber-300 transition-all group relative"
+              className="p-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-amber-400/80 text-white flex items-center justify-between gap-2 shadow-xl cursor-pointer hover:border-amber-300 transition-all group relative"
             >
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <div className="relative w-12 h-12 rounded-xl bg-white overflow-hidden shrink-0 border border-white/20 shadow-xs">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="relative w-9 h-9 rounded-lg bg-white overflow-hidden shrink-0 border border-white/20 shadow-xs">
                   <img
                     src={formatImageUrl(pinnedProduct.image)}
                     alt={pinnedProduct.name}
@@ -2382,20 +2434,20 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                       (e.currentTarget as HTMLImageElement).src = getProductFallbackImage(pinnedProduct.name, pinnedProduct.category);
                     }}
                   />
-                  <span className="absolute top-0 left-0 px-1 py-0.2 rounded-br-md bg-red-600 text-[8px] font-black text-white">
+                  <span className="absolute top-0 left-0 px-1 py-0 rounded-br bg-red-600 text-[7px] font-black text-white">
                     #{safePromotedIndex + 1}
                   </span>
                 </div>
 
                 <div className="min-w-0 text-left flex-1">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                      <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
+                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-0.5">
+                      <Flame className="w-3 h-3 text-orange-400 fill-orange-400" />
                       Promo Live {promotedProducts.length > 1 ? `(${safePromotedIndex + 1}/${promotedProducts.length})` : ''}
                     </span>
                     {promotedProducts.length > 1 && (
                       <div
-                        className="flex items-center gap-1 bg-black/50 px-1.5 py-0.5 rounded-lg border border-white/20"
+                        className="flex items-center gap-0.5 bg-black/50 px-1 py-0.2 rounded border border-white/20"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
@@ -2404,9 +2456,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                           className="p-0.5 hover:bg-white/20 rounded text-white cursor-pointer"
                           title="Promo Sebelumnya"
                         >
-                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <ChevronLeft className="w-3 h-3" />
                         </button>
-                        <span className="text-[9px] font-bold text-white/80">
+                        <span className="text-[8px] font-bold text-white/80">
                           {safePromotedIndex + 1}/{promotedProducts.length}
                         </span>
                         <button
@@ -2415,19 +2467,19 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                           className="p-0.5 hover:bg-white/20 rounded text-white cursor-pointer"
                           title="Promo Berikutnya"
                         >
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-3 h-3" />
                         </button>
                       </div>
                     )}
                   </div>
-                  <h5 className="text-xs font-bold text-white truncate leading-tight">
+                  <h5 className="text-[11px] font-bold text-white truncate leading-tight">
                     {pinnedProduct.name}
                   </h5>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-sm font-black text-amber-400">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-amber-400">
                       {formatRupiah(pinnedProduct.price)}
                     </span>
-                    <span className="text-[10px] line-through text-white/50">
+                    <span className="text-[9px] line-through text-white/50">
                       {formatRupiah(Math.round(pinnedProduct.price * 1.25))}
                     </span>
                   </div>
@@ -2437,50 +2489,50 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               <button
                 type="button"
                 onClick={(e) => handleBuyPinned(pinnedProduct, e)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shrink-0 shadow-lg shadow-orange-500/30 active:scale-95 transition-all flex items-center gap-1"
+                className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white text-[11px] font-black shrink-0 shadow-md active:scale-95 transition-all flex items-center gap-0.5"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <Plus className="w-3 h-3 stroke-[3]" />
                 <span>Beli</span>
               </button>
             </div>
           )}
 
           {/* Visitor Name & Quick Suggestion Chips */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {/* Bar Nama Pengunjung */}
-            <div className="flex items-center justify-between text-[11px] text-white/90 px-0.5">
+            <div className="flex items-center justify-between text-[10px] text-white/90 px-0.5">
               {isEditingVisitorName ? (
-                <div className="flex items-center gap-1.5 w-full bg-black/70 p-1.5 rounded-xl border border-cyan-400" onClick={(e) => e.stopPropagation()}>
-                  <User className="w-3.5 h-3.5 text-cyan-400 shrink-0 ml-1" />
+                <div className="flex items-center gap-1.5 w-full bg-black/70 p-1 rounded-xl border border-cyan-400" onClick={(e) => e.stopPropagation()}>
+                  <User className="w-3 h-3 text-cyan-400 shrink-0 ml-1" />
                   <input
                     type="text"
                     value={tempVisitorName}
                     onChange={(e) => setTempVisitorName(e.target.value)}
                     placeholder="Tulis nama Anda..."
-                    className="flex-1 px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs border-0 focus:outline-none"
+                    className="flex-1 px-2 py-0.5 rounded-lg bg-white/10 text-white text-[11px] border-0 focus:outline-none"
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={() => handleSaveVisitorName(tempVisitorName)}
-                    className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs cursor-pointer"
+                    className="px-2.5 py-0.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[10px] cursor-pointer"
                   >
                     Simpan
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsEditingVisitorName(false)}
-                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs cursor-pointer"
+                    className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] cursor-pointer"
                   >
                     Batal
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center justify-between w-full">
-                  <span className="flex items-center gap-1.5 truncate">
-                    <User className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
-                    <span className="text-white/70">Nama Pengunjung:</span>
-                    <strong className="text-cyan-300 font-bold truncate max-w-[160px]">{visitorName}</strong>
+                  <span className="flex items-center gap-1 truncate">
+                    <User className="w-3 h-3 text-cyan-300 shrink-0" />
+                    <span className="text-white/70">Pengunjung:</span>
+                    <strong className="text-cyan-300 font-bold truncate max-w-[150px]">{visitorName}</strong>
                   </span>
                   <button
                     type="button"
@@ -2488,10 +2540,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                       setTempVisitorName(visitorName);
                       setIsEditingVisitorName(true);
                     }}
-                    className="text-[10px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-1 shrink-0 ml-1 cursor-pointer"
+                    className="text-[9px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-0.5 shrink-0 ml-1 cursor-pointer"
                     title="Ganti nama yang tampil saat kirim pesan"
                   >
-                    <Edit2 className="w-3 h-3" />
+                    <Edit2 className="w-2.5 h-2.5" />
                     <span>Ganti Nama</span>
                   </button>
                 </div>
@@ -2499,13 +2551,13 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </div>
 
             {/* Quick Chips Rekomendasi Chat */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
               {QUICK_COMMENT_CHIPS.map((chip, idx) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => handleSendComment(undefined, chip)}
-                  className="px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-[10px] text-white font-medium border border-white/20 shrink-0 transition-all cursor-pointer"
+                  className="px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-[9px] text-white font-medium border border-white/15 shrink-0 transition-all cursor-pointer"
                 >
                   {chip}
                 </button>
@@ -2514,16 +2566,16 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           </div>
 
           {/* Bar Kontrol & Komentar */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Tombol Etalase Keranjang Kuning */}
             <button
               type="button"
               onClick={() => setIsEtalaseOpen(!isEtalaseOpen)}
-              className="relative p-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-lg shadow-amber-400/25 active:scale-95 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+              className="relative p-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-lg shadow-amber-400/25 active:scale-95 transition-all flex items-center justify-center shrink-0 cursor-pointer"
               title="Buka Etalase Produk Live (Keranjang Kuning)"
             >
-              <ShoppingBag className="w-5 h-5 fill-slate-950" />
-              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[9px] font-black border border-slate-950 shadow-xs">
+              <ShoppingBag className="w-4 h-4 fill-slate-950" />
+              <span className="absolute -top-1.5 -right-1.5 px-1 py-0 rounded-full bg-red-600 text-white text-[8px] font-black border border-slate-950 shadow-xs">
                 {products.length}
               </span>
             </button>
@@ -2535,14 +2587,14 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                 value={myCommentText}
                 onChange={(e) => setMyCommentText(e.target.value)}
                 placeholder={`Pesan (${visitorName})...`}
-                className="w-full px-3 py-2.5 rounded-2xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-xs border border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full px-2.5 py-1.5 rounded-xl bg-white/20 backdrop-blur-md text-white placeholder-white/60 text-[11px] border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
               <button
                 type="submit"
-                className="p-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 active:scale-95 transition-all cursor-pointer shrink-0"
+                className="p-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 active:scale-95 transition-all cursor-pointer shrink-0"
                 title="Kirim Pesan Live"
               >
-                <Send className="w-4 h-4 fill-slate-950" />
+                <Send className="w-3.5 h-3.5 fill-slate-950" />
               </button>
             </form>
 
@@ -2550,10 +2602,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               type="button"
               onClick={() => setIsGiftDrawerOpen(true)}
-              className="p-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 shadow-lg shadow-amber-500/30 active:scale-95 transition-all shrink-0 cursor-pointer flex items-center justify-center"
+              className="p-2 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 shadow-lg shadow-amber-500/30 active:scale-95 transition-all shrink-0 cursor-pointer flex items-center justify-center"
               title="Kirim Hadiah Virtual (Gift) ke Host Toko"
             >
-              <Gift className="w-5 h-5 fill-slate-950" />
+              <Gift className="w-4 h-4 fill-slate-950" />
             </button>
 
             {/* Tombol Interaksi Live Video Bersama Host */}
@@ -2566,21 +2618,21 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   setIsGuestVideoPromptOpen(true);
                 }
               }}
-              className={`p-2.5 rounded-2xl text-white shadow-lg active:scale-95 transition-all shrink-0 cursor-pointer flex items-center justify-center ${
+              className={`p-2 rounded-xl text-white shadow-lg active:scale-95 transition-all shrink-0 cursor-pointer flex items-center justify-center ${
                 isGuestVideoActive
                   ? 'bg-emerald-600 hover:bg-emerald-500 ring-2 ring-emerald-300 animate-pulse'
                   : 'bg-indigo-600 hover:bg-indigo-500 ring-1 ring-indigo-400/50'
               }`}
               title={isGuestVideoActive ? 'Video Anda Aktif (Klik untuk ubah tampilan)' : 'Mulai Interaksi Video Live dengan Host Toko'}
             >
-              <Video className="w-5 h-5" />
+              <Video className="w-4 h-4" />
             </button>
 
             {/* Tombol Bagikan */}
             <button
               type="button"
               onClick={handleShare}
-              className="p-2.5 rounded-2xl bg-white/20 hover:bg-white/30 text-white active:scale-95 transition-all shrink-0 cursor-pointer"
+              className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white active:scale-95 transition-all shrink-0 cursor-pointer"
               title="Bagikan Siaran Live"
             >
               <Share2 className="w-4 h-4" />
@@ -2590,16 +2642,16 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               type="button"
               onClick={() => triggerHeart()}
-              className="relative p-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-lg shadow-rose-600/30 transition-all shrink-0 cursor-pointer"
+              className="relative p-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-90 text-white shadow-lg shadow-rose-600/30 transition-all shrink-0 cursor-pointer"
               title="Beri Suka / Hati ❤️"
             >
-              <Heart className="w-5 h-5 fill-current text-white animate-pulse" />
+              <Heart className="w-4 h-4 fill-current text-white animate-pulse" />
               {likeCombo > 1 ? (
-                <span className="absolute -top-2 -right-1 px-1.5 py-0.2 rounded-full bg-yellow-400 text-slate-950 text-[9px] font-black border border-slate-900 shadow-md animate-bounce">
+                <span className="absolute -top-2 -right-1 px-1 py-0 rounded-full bg-yellow-400 text-slate-950 text-[8px] font-black border border-slate-900 shadow-md animate-bounce">
                   {likeCombo}x
                 </span>
               ) : (
-                <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 rounded-full bg-white text-rose-600 text-[8px] font-black border border-rose-600">
+                <span className="absolute -top-1.5 -right-1 px-1 py-0 rounded-full bg-white text-rose-600 text-[7px] font-black border border-rose-600">
                   ❤️
                 </span>
               )}
