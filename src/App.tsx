@@ -2225,7 +2225,14 @@ export default function App() {
         onOpenChat={() => setIsChatOpen(prev => !prev)}
         unreadChatCount={unreadChatCount}
         isChatOpen={isChatOpen}
-        onOpenLiveStream={() => triggerOpenLiveStream('fullscreen')}
+        onOpenLiveStream={() => {
+          if (isLiveActive) {
+            triggerOpenLiveStream('fullscreen');
+          } else {
+            setAdminPanelInitialTab('live_stream');
+            setIsAdminPanelOpen(true);
+          }
+        }}
         isLiveActive={isLiveActive}
       />
 
@@ -2296,6 +2303,10 @@ export default function App() {
             }}
             onNavigatePromo={handleNavigatePromo}
             isLiveActive={isLiveActive}
+            onOpenLiveLogin={() => {
+              setAdminPanelInitialTab('live_stream');
+              setIsAdminPanelOpen(true);
+            }}
           />
 
           {/* Quick Category Bar */}

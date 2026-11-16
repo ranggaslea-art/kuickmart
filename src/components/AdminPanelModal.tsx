@@ -936,7 +936,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         const masterTabs = ['products', 'categories_brands', 'customers', 'suppliers', 'bulk_import'];
         const inventoryTabs = ['stock_card', 'stock_opname', 'stock_mutations', 'purchase_orders', 'purchases'];
         const marketingTabs = ['promos', 'vouchers', 'points_rewards', 'push_notifications'];
-        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'expeditions', 'brand_info'];
+        const settingsTabs = ['stores', 'subdomains', 'subdomain_modules', 'store_doku_settings', 'receipts', 'couriers', 'expeditions', 'brand_info', 'splash_screen', 'live_stream'];
         const systemTabs = ['users', 'permissions', 'mysql_db', 'vps_deploy', 'seo_google'];
 
         if (posTabs.includes(initialTab)) setSelectedGroup('pos');

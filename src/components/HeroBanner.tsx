@@ -19,6 +19,7 @@ import {
   Play,
   HardDrive,
   Radio,
+  Lock,
 } from 'lucide-react';
 import { StorePromoInfo } from '../types';
 import { resolvePromoMediaUrl, formatImageUrl } from '../utils/imageHelper';
@@ -41,6 +42,7 @@ interface HeroBannerProps {
   onOpenPromoManager?: () => void;
   onNavigatePromo?: (target: PromoNavigationTarget) => void;
   isLiveActive?: boolean;
+  onOpenLiveLogin?: () => void;
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ 
@@ -50,6 +52,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   onOpenPromoManager,
   onNavigatePromo,
   isLiveActive = false,
+  onOpenLiveLogin,
 }) => {
   const [activeSlide, setActiveSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -343,12 +346,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         ) : (
           <button
             type="button"
-            onClick={() => triggerOpenLiveStream('fullscreen')}
+            onClick={() => {
+              if (onOpenLiveLogin) {
+                onOpenLiveLogin();
+              } else {
+                triggerOpenLiveStream('fullscreen');
+              }
+            }}
             className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-stone-700 text-red-600 dark:text-red-400 hover:bg-red-50 text-xs font-black shadow-sm shrink-0 transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Klik untuk menyalakan dan membuka siaran live streaming"
+            title="Login terlebih dahulu untuk membuka dan menyalakan siaran live streaming"
           >
             <Play className="w-3.5 h-3.5 fill-current text-red-600" />
             <span>Buka Live 🛍️</span>
+            <Lock className="w-3 h-3 text-stone-400" />
           </button>
         )}
       </div>
