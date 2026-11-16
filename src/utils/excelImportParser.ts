@@ -179,70 +179,169 @@ const HEADER_SYNONYMS: Record<string, string> = {
 
   // KONVERSI 1..4
   KONVERSI1: 'KONVERSI1',
+  KONVERSISATUAN1: 'KONVERSI1',
+  KONVERSISAT1: 'KONVERSI1',
+  JUMLAHKONVERSI1: 'KONVERSI1',
   ISI1: 'KONVERSI1',
   PENGALI1: 'KONVERSI1',
   KONVERSI2: 'KONVERSI2',
+  KONVERSISATUAN2: 'KONVERSI2',
+  KONVERSISAT2: 'KONVERSI2',
+  JUMLAHKONVERSI2: 'KONVERSI2',
   ISI2: 'KONVERSI2',
   PENGALI2: 'KONVERSI2',
   KONVERSI3: 'KONVERSI3',
+  KONVERSISATUAN3: 'KONVERSI3',
+  KONVERSISAT3: 'KONVERSI3',
+  JUMLAHKONVERSI3: 'KONVERSI3',
   ISI3: 'KONVERSI3',
   PENGALI3: 'KONVERSI3',
   KONVERSI4: 'KONVERSI4',
+  KONVERSISATUAN4: 'KONVERSI4',
+  KONVERSISAT4: 'KONVERSI4',
+  JUMLAHKONVERSI4: 'KONVERSI4',
   ISI4: 'KONVERSI4',
   PENGALI4: 'KONVERSI4',
 
-  // HARGAPOKOK (HPP) 1..4
+  // HARGAPOKOK / HARGA BELI (HPP) 1..4
   HARGAPOKOK1: 'HARGAPOKOK1',
+  HARGAPOKOKSATUAN1: 'HARGAPOKOK1',
+  HARGAPOKOKSAT1: 'HARGAPOKOK1',
   HARGAPOKOK: 'HARGAPOKOK1',
+  HARGABELI1: 'HARGAPOKOK1',
+  HARGABELISATUAN1: 'HARGAPOKOK1',
+  HARGABELISAT1: 'HARGAPOKOK1',
+  HARGABELI: 'HARGAPOKOK1',
+  BELISATUAN1: 'HARGAPOKOK1',
+  BELI1: 'HARGAPOKOK1',
   HPP1: 'HARGAPOKOK1',
+  HPPSATUAN1: 'HARGAPOKOK1',
   HPP: 'HARGAPOKOK1',
   MODAL1: 'HARGAPOKOK1',
+  MODALSATUAN1: 'HARGAPOKOK1',
   MODAL: 'HARGAPOKOK1',
   HARGAMODAL1: 'HARGAPOKOK1',
+  HARGAMODAL: 'HARGAPOKOK1',
+  HARGADASAR1: 'HARGAPOKOK1',
+  HARGADASARSATUAN1: 'HARGAPOKOK1',
+  COSTPRICE: 'HARGAPOKOK1',
+  COST1: 'HARGAPOKOK1',
   HARGAPOKOK2: 'HARGAPOKOK2',
+  HARGAPOKOKSATUAN2: 'HARGAPOKOK2',
+  HARGAPOKOKSAT2: 'HARGAPOKOK2',
+  HARGABELI2: 'HARGAPOKOK2',
+  HARGABELISATUAN2: 'HARGAPOKOK2',
+  BELISATUAN2: 'HARGAPOKOK2',
+  BELI2: 'HARGAPOKOK2',
   HPP2: 'HARGAPOKOK2',
+  HPPSATUAN2: 'HARGAPOKOK2',
   MODAL2: 'HARGAPOKOK2',
+  MODALSATUAN2: 'HARGAPOKOK2',
+  HARGAMODAL2: 'HARGAPOKOK2',
+  HARGADASAR2: 'HARGAPOKOK2',
+  COST2: 'HARGAPOKOK2',
   HARGAPOKOK3: 'HARGAPOKOK3',
+  HARGAPOKOKSATUAN3: 'HARGAPOKOK3',
+  HARGAPOKOKSAT3: 'HARGAPOKOK3',
+  HARGABELI3: 'HARGAPOKOK3',
+  HARGABELISATUAN3: 'HARGAPOKOK3',
+  BELISATUAN3: 'HARGAPOKOK3',
+  BELI3: 'HARGAPOKOK3',
   HPP3: 'HARGAPOKOK3',
+  HPPSATUAN3: 'HARGAPOKOK3',
   MODAL3: 'HARGAPOKOK3',
+  MODALSATUAN3: 'HARGAPOKOK3',
+  HARGAMODAL3: 'HARGAPOKOK3',
+  HARGADASAR3: 'HARGAPOKOK3',
+  COST3: 'HARGAPOKOK3',
   HARGAPOKOK4: 'HARGAPOKOK4',
+  HARGAPOKOKSATUAN4: 'HARGAPOKOK4',
+  HARGAPOKOKSAT4: 'HARGAPOKOK4',
+  HARGABELI4: 'HARGAPOKOK4',
+  HARGABELISATUAN4: 'HARGAPOKOK4',
+  BELISATUAN4: 'HARGAPOKOK4',
+  BELI4: 'HARGAPOKOK4',
   HPP4: 'HARGAPOKOK4',
+  HPPSATUAN4: 'HARGAPOKOK4',
   MODAL4: 'HARGAPOKOK4',
+  MODALSATUAN4: 'HARGAPOKOK4',
+  HARGAMODAL4: 'HARGAPOKOK4',
+  HARGADASAR4: 'HARGAPOKOK4',
+  COST4: 'HARGAPOKOK4',
 
   // HARGAJUAL 1..4
   HARGAJUAL1: 'HARGAJUAL1',
+  HARGAJUALSATUAN1: 'HARGAJUAL1',
+  HARGAJUALSAT1: 'HARGAJUAL1',
   HARGAJUAL: 'HARGAJUAL1',
+  JUALSATUAN1: 'HARGAJUAL1',
+  JUAL1: 'HARGAJUAL1',
+  HARGASATUAN1: 'HARGAJUAL1',
   HARGA1: 'HARGAJUAL1',
   HARGA: 'HARGAJUAL1',
   PRICE1: 'HARGAJUAL1',
   PRICE: 'HARGAJUAL1',
   HARGAJUAL2: 'HARGAJUAL2',
+  HARGAJUALSATUAN2: 'HARGAJUAL2',
+  HARGAJUALSAT2: 'HARGAJUAL2',
+  JUALSATUAN2: 'HARGAJUAL2',
+  JUAL2: 'HARGAJUAL2',
+  HARGASATUAN2: 'HARGAJUAL2',
   HARGA2: 'HARGAJUAL2',
+  PRICE2: 'HARGAJUAL2',
   HARGAJUAL3: 'HARGAJUAL3',
+  HARGAJUALSATUAN3: 'HARGAJUAL3',
+  HARGAJUALSAT3: 'HARGAJUAL3',
+  JUALSATUAN3: 'HARGAJUAL3',
+  JUAL3: 'HARGAJUAL3',
+  HARGASATUAN3: 'HARGAJUAL3',
   HARGA3: 'HARGAJUAL3',
+  PRICE3: 'HARGAJUAL3',
   HARGAJUAL4: 'HARGAJUAL4',
+  HARGAJUALSATUAN4: 'HARGAJUAL4',
+  HARGAJUALSAT4: 'HARGAJUAL4',
+  JUALSATUAN4: 'HARGAJUAL4',
+  JUAL4: 'HARGAJUAL4',
+  HARGASATUAN4: 'HARGAJUAL4',
   HARGA4: 'HARGAJUAL4',
+  PRICE4: 'HARGAJUAL4',
 
   // POIN 1..4
   POIN1: 'POIN1',
+  POINSATUAN1: 'POIN1',
   POIN: 'POIN1',
   POINT1: 'POIN1',
   POIN2: 'POIN2',
+  POINSATUAN2: 'POIN2',
   POIN3: 'POIN3',
+  POINSATUAN3: 'POIN3',
   POIN4: 'POIN4',
+  POINSATUAN4: 'POIN4',
 
   // KOMISISALES 1..4
   KOMISISALES1: 'KOMISISALES1',
+  KOMISISALESSATUAN1: 'KOMISISALES1',
+  KOMISISATUAN1: 'KOMISISALES1',
   KOMISI1: 'KOMISISALES1',
   KOMISISALES2: 'KOMISISALES2',
+  KOMISISALESSATUAN2: 'KOMISISALES2',
+  KOMISISATUAN2: 'KOMISISALES2',
   KOMISI2: 'KOMISISALES2',
   KOMISISALES3: 'KOMISISALES3',
+  KOMISISALESSATUAN3: 'KOMISISALES3',
+  KOMISISATUAN3: 'KOMISISALES3',
   KOMISI3: 'KOMISISALES3',
   KOMISISALES4: 'KOMISISALES4',
+  KOMISISALESSATUAN4: 'KOMISISALES4',
+  KOMISISATUAN4: 'KOMISISALES4',
   KOMISI4: 'KOMISISALES4',
 
   // STOK
   STOKAWAL: 'STOKAWAL',
+  STOKSAATINI: 'STOKAWAL',
+  STOKSATUAN1: 'STOKAWAL',
+  JUMLAHSTOK: 'STOKAWAL',
+  STOKAKHIR: 'STOKAWAL',
   STOK: 'STOKAWAL',
   STOCK: 'STOKAWAL',
   STOKSEKARANG: 'STOKAWAL',
@@ -272,9 +371,13 @@ const HEADER_SYNONYMS: Record<string, string> = {
   NOTE: 'KETERANGAN',
   CATATAN: 'KETERANGAN',
   SKU1: 'SKU1',
+  SKUSATUAN1: 'SKU1',
   SKU2: 'SKU2',
+  SKUSATUAN2: 'SKU2',
   SKU3: 'SKU3',
+  SKUSATUAN3: 'SKU3',
   SKU4: 'SKU4',
+  SKUSATUAN4: 'SKU4',
   JENISPAJAK: 'JENISPAJAK',
   PAJAK: 'JENISPAJAK',
   SISTEMPAJAK: 'SISTEMPAJAK',
@@ -319,6 +422,12 @@ export function parseNumberField(val: any, fallback = 0): number {
     }
     // Asumsi pemisah ribuan
     const num = parseFloat(cleaned.replace(/,/g, ''));
+    return isNaN(num) ? fallback : num;
+  }
+
+  // Jika hanya memiliki titik ribuan gaya Indonesia tanpa koma (misal 15.000 atau 1.250.000)
+  if (!cleaned.includes(',') && /^\-?[1-9]\d{0,2}(\.\d{3})+$/.test(cleaned)) {
+    const num = parseFloat(cleaned.replace(/\./g, ''));
     return isNaN(num) ? fallback : num;
   }
 
@@ -457,16 +566,39 @@ export function mapRowToProduct(
   // Fallback image
   const fallbackImg = existing?.image || getProductFallbackImage(rawNama, rawJenis);
 
-  // Estimasi HPP jika kosong tetapi harga jual ada
-  const finalHpp = rawHpp1 > 0 ? rawHpp1 : (rawHarga1 > 0 ? Math.round(rawHarga1 * 0.8) : 0);
+  const hasExplicitHpp =
+    canonical.HARGAPOKOK1 !== undefined &&
+    canonical.HARGAPOKOK1 !== null &&
+    String(canonical.HARGAPOKOK1).trim() !== '';
+  const hasExplicitPrice =
+    canonical.HARGAJUAL1 !== undefined &&
+    canonical.HARGAJUAL1 !== null &&
+    String(canonical.HARGAJUAL1).trim() !== '';
+
+  // Gunakan HARGAPOKOKSATUAN1 / HARGAPOKOK1 persis jika kolom terisi; estimasi 80% hanya jika kolom HPP kosong
+  const finalHpp = hasExplicitHpp
+    ? rawHpp1
+    : rawHarga1 > 0
+      ? Math.round(rawHarga1 * 0.8)
+      : 0;
+
+  // Gunakan HARGAJUALSATUAN1 / HARGAJUAL1 persis jika kolom terisi; fallback ke estimasi hanya jika kosong
+  const finalPrice =
+    rawHarga1 > 0
+      ? rawHarga1
+      : hasExplicitPrice
+        ? 0
+        : finalHpp > 0
+          ? Math.round(finalHpp * 1.25)
+          : 10000;
 
   const product: Product = {
     id: productId,
     name: rawNama || `Item Baru #${index + 1}`,
     brand,
     category: categorySlug,
-    price: rawHarga1 > 0 ? rawHarga1 : (finalHpp > 0 ? Math.round(finalHpp * 1.25) : 10000),
-    originalPrice: rawHarga1 > 0 ? rawHarga1 : 10000,
+    price: finalPrice,
+    originalPrice: finalPrice,
     costPrice: finalHpp,
     unit: rawSatuan1,
     unitConversions: hasMultiUnit ? unitConversions : undefined,
@@ -540,7 +672,15 @@ export function parseRawJsonRows(
     Object.entries(row).forEach(([colName, colVal]) => {
       const norm = normalizeHeaderKey(colName);
       const canonKey = HEADER_SYNONYMS[norm] || norm;
-      canonical[canonKey] = colVal;
+      const hasExisting =
+        canonical[canonKey] !== undefined &&
+        canonical[canonKey] !== null &&
+        String(canonical[canonKey]).trim() !== '';
+      const isIncomingNonEmpty =
+        colVal !== undefined && colVal !== null && String(colVal).trim() !== '';
+      if (!hasExisting || isIncomingNonEmpty) {
+        canonical[canonKey] = colVal;
+      }
     });
 
     // Validasi baris kosong
@@ -633,9 +773,38 @@ export async function parseExcelFile(
       };
     }
 
-    // Ambil sheet pertama atau yang bernama "Item" / "Produk"
-    const firstSheetName = workbook.SheetNames[0];
-    const targetSheet = workbook.Sheets[firstSheetName];
+    // Pilih sheet yang memuat data item (prioritas sheet dengan kolom header item yang dikenali)
+    let selectedSheetName = workbook.SheetNames[0];
+    let detectedHeaderRowIndex = 0;
+
+    for (const sName of workbook.SheetNames) {
+      const candidateSheet = workbook.Sheets[sName];
+      if (!candidateSheet) continue;
+      const previewMatrix: any[][] = XLSX.utils.sheet_to_json(candidateSheet, {
+        header: 1,
+        defval: '',
+      });
+      const scanLimit = Math.min(previewMatrix.length, 15);
+      let foundRowIdx = -1;
+      for (let rIdx = 0; rIdx < scanLimit; rIdx++) {
+        const rowCells = Array.isArray(previewMatrix[rIdx]) ? previewMatrix[rIdx] : [];
+        const matchedCount = rowCells.filter((cell) => {
+          const norm = normalizeHeaderKey(String(cell ?? ''));
+          return Boolean(HEADER_SYNONYMS[norm]);
+        }).length;
+        if (matchedCount >= 2) {
+          foundRowIdx = rIdx;
+          break;
+        }
+      }
+      if (foundRowIdx >= 0) {
+        selectedSheetName = sName;
+        detectedHeaderRowIndex = foundRowIdx;
+        break;
+      }
+    }
+
+    const targetSheet = workbook.Sheets[selectedSheetName];
     if (!targetSheet) {
       return {
         success: false,
@@ -645,12 +814,15 @@ export async function parseExcelFile(
         detectedColumns: [],
         newCategoriesDetected: [],
         newBrandsDetected: [],
-        errorMessage: `Sheet '${firstSheetName}' kosong atau tidak terbaca.`,
+        errorMessage: `Sheet '${selectedSheetName}' kosong atau tidak terbaca.`,
       };
     }
 
-    // Convert sheet ke json objek
-    const rawData = XLSX.utils.sheet_to_json(targetSheet, { defval: '' });
+    // Convert sheet ke json objek mulai dari baris header yang terdeteksi
+    const rawData = XLSX.utils.sheet_to_json(targetSheet, {
+      defval: '',
+      range: detectedHeaderRowIndex,
+    });
     return parseRawJsonRows(rawData, existingProducts);
   } catch (err: any) {
     return {
@@ -719,10 +891,22 @@ export function parsePastedExcelText(
   const firstRowCols = firstLine.split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
   const firstRowNorm = firstRowCols.map(c => normalizeHeaderKey(c));
 
-  // Indikator kuat baris pertama adalah header: mengandung KODEITEM / NAMAITEM / JENIS / SATUAN1
-  const isHeaderRow = firstRowNorm.some(k => 
-    k === 'KODEITEM' || k === 'NAMAITEM' || k === 'JENIS' || k === 'MEREK' || k === 'SATUAN1' || k === 'HARGAJUAL1' || k === 'STOKAWAL' || k === 'NAMABARANG'
-  );
+  // Indikator kuat baris pertama adalah header: cocok dengan sinonim kolom resmi
+  const matchedHeaderCols = firstRowNorm.filter((k) => Boolean(HEADER_SYNONYMS[k])).length;
+  const isHeaderRow =
+    matchedHeaderCols >= 2 ||
+    firstRowNorm.some((k) =>
+      k === 'KODEITEM' ||
+      k === 'NAMAITEM' ||
+      k === 'JENIS' ||
+      k === 'MEREK' ||
+      k === 'SATUAN1' ||
+      k === 'HARGAJUAL1' ||
+      k === 'HARGAJUALSATUAN1' ||
+      k === 'HARGAPOKOKSATUAN1' ||
+      k === 'STOKAWAL' ||
+      k === 'NAMABARANG'
+    );
 
   let headerColumns: string[] = [];
   let dataLines: string[] = [];

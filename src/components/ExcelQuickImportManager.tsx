@@ -351,7 +351,7 @@ export const ExcelQuickImportManager: React.FC<ExcelQuickImportManagerProps> = (
               </h3>
             </div>
             <p className="text-xs text-emerald-100/90 leading-relaxed max-w-2xl">
-              Mendukung penuh <strong>49 kolom resmi</strong> template Excel: KODEITEM, NAMAITEM, JENIS, MEREK, SATUAN1-4, KONVERSI1-4, HARGAPOKOK1-4, HARGAJUAL1-4, STOKAWAL, RAK, dan multi-satuan bertingkat.
+              Mendukung penuh <strong>49 kolom resmi</strong> template Excel maupun format <strong>DATA ITEM SPLIT (iPos)</strong>: KODEITEM, NAMAITEM, JENIS, MEREK, SATUAN1-4, KONVERSI1-4, HARGAPOKOK1-4 / HARGAPOKOKSATUAN1-4, HARGAJUAL1-4 / HARGAJUALSATUAN1-4, STOKAWAL, dan multi-satuan bertingkat.
             </p>
           </div>
 
