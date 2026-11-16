@@ -12,6 +12,9 @@ import {
 import { 
   ProductCard 
 } from './components/ProductCard';
+import {
+  CategoryProductSections
+} from './components/CategoryProductSections';
 import { 
   ProductDetailModal 
 } from './components/ProductDetailModal';
@@ -160,7 +163,9 @@ import {
   Plus,
   AlertTriangle,
   MessageSquare,
-  X
+  X,
+  LayoutGrid,
+  ChevronLeft
 } from 'lucide-react';
 import { formatRupiah } from './utils/formatters';
 import { formatImageUrl, getProductFallbackImage } from './utils/imageHelper';
@@ -440,6 +445,7 @@ export default function App() {
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'popular' | 'price-asc' | 'price-desc' | 'discount'>('popular');
+  const [catalogViewMode, setCatalogViewMode] = useState<'grouped' | 'grid'>('grouped');
 
   // Checkout discounts & points
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(() => {
@@ -1772,15 +1778,58 @@ export default function App() {
     }
   }, [products, currentSlug]);
 
+  // Helper normalisasi slug kategori agar produk import Excel & kategori toko cocok konsisten
+  const normCatSlug = (val: string) =>
+    (val || '')
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/^cat_/, '')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  // Gabungkan kategori terdaftar dengan kategori tambahan dari produk (misal hasil import Excel)
+  const storefrontCategories = useMemo(() => {
+    const base = [...(categories || [])];
+    const knownSlugs = new Set(base.map((c) => normCatSlug(c.slug)));
+    (products || []).forEach((p) => {
+      if (!p || !p.category) return;
+      const slug = normCatSlug(p.category);
+      if (!slug || slug === 'all' || slug === 'jsm-promo' || knownSlugs.has(slug)) return;
+      knownSlugs.add(slug);
+      base.push({
+        id: slug,
+        name: p.category.replace(/^cat_/i, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
+        slug,
+        icon: 'Tag',
+        color: 'blue',
+      });
+    });
+    return base;
+  }, [categories, products]);
+
   // Count products by category
-  const productCountByCategory = (categories || []).reduce((acc, cat) => {
+  const productCountByCategory = (storefrontCategories || []).reduce((acc, cat) => {
     if (!cat || !cat.slug) return acc;
     if (cat.slug === 'all') {
       acc[cat.slug] = (products || []).length;
     } else if (cat.slug === 'jsm-promo') {
       acc[cat.slug] = (products || []).filter((p) => p && (p.tags?.includes('JSM') || ((p.discountPercent || 0) > 0))).length;
     } else {
-      acc[cat.slug] = (products || []).filter((p) => p && (p.category === cat.slug || p.category === cat.id || p.category === `cat_${cat.slug}` || (p.category && p.category.replace('cat_', '') === cat.slug))).length;
+      const targetNorm = normCatSlug(cat.slug);
+      const idNorm = normCatSlug(cat.id);
+      acc[cat.slug] = (products || []).filter((p) => {
+        if (!p) return false;
+        const pNorm = normCatSlug(p.category);
+        return (
+          p.category === cat.slug ||
+          p.category === cat.id ||
+          p.category === `cat_${cat.slug}` ||
+          pNorm === targetNorm ||
+          (idNorm && pNorm === idNorm)
+        );
+      }).length;
     }
     return acc;
   }, {} as Record<string, number>);
@@ -1804,15 +1853,17 @@ export default function App() {
       const isJsm = p.tags?.includes('JSM') || ((p.discountPercent || 0) > 0);
       if (!isJsm) return false;
     } else if (selectedCategory !== 'all') {
-      const matchedCatObj = (categories || []).find(c => c && (c.slug === selectedCategory || c.id === selectedCategory));
+      const matchedCatObj = (storefrontCategories || []).find(c => c && (c.slug === selectedCategory || c.id === selectedCategory || normCatSlug(c.slug) === normCatSlug(selectedCategory)));
       const targetSlug = matchedCatObj?.slug || selectedCategory;
+      const targetNorm = normCatSlug(targetSlug);
       const targetId = matchedCatObj?.id;
+      const pNorm = normCatSlug(p.category);
       const matchCat =
         p.category === selectedCategory ||
         p.category === targetSlug ||
         (targetId && p.category === targetId) ||
         p.category === `cat_${targetSlug}` ||
-        (p.category && p.category.replace('cat_', '') === targetSlug);
+        pNorm === targetNorm;
       if (!matchCat) return false;
     }
 
@@ -2311,7 +2362,7 @@ export default function App() {
 
           {/* Quick Category Bar */}
           <CategoryBar
-            categories={categories}
+            categories={storefrontCategories}
             selectedCategory={selectedCategory}
             onSelectCategory={(slug) => {
               setSelectedCategory(slug);
@@ -2435,17 +2486,29 @@ export default function App() {
             </div>
           )}
 
-          {/* Product Grid Catalog */}
+          {/* Product Catalog Section */}
           <div id="product-catalog-section" className="w-full min-w-full px-3 sm:px-6 lg:px-8 py-5 scroll-mt-20">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {selectedCategory !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('all')}
+                      className="px-2.5 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Semua Kategori</span>
+                    </button>
+                  )}
                   <h3 className="text-lg font-black text-stone-900 tracking-tight">
                     {selectedCategory === 'all'
-                      ? 'Semua Produk Minimarket'
+                      ? (catalogViewMode === 'grouped' && !searchQuery.trim() && !activeTagFilter
+                          ? 'Etalase Produk per Kategori'
+                          : 'Semua Produk Minimarket')
                       : selectedCategory === 'jsm-promo'
                       ? 'Promo JSM & Hemat Akhir Pekan'
-                      : categories.find((c) => c.slug === selectedCategory)?.name || 'Katalog Produk'}
+                      : storefrontCategories.find((c) => c.slug === selectedCategory || normCatSlug(c.slug) === normCatSlug(selectedCategory))?.name || 'Katalog Produk'}
                   </h3>
                   {activeTagFilter && (
                     <span className="text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
@@ -2467,14 +2530,45 @@ export default function App() {
                 </p>
               </div>
 
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-xs text-blue-600 font-bold hover:underline"
-                >
-                  Reset Pencarian
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {selectedCategory === 'all' && !searchQuery.trim() && !activeTagFilter && products.length > 0 && (
+                  <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-xl border border-stone-200">
+                    <button
+                      type="button"
+                      onClick={() => setCatalogViewMode('grouped')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                        catalogViewMode === 'grouped'
+                          ? 'bg-white text-blue-700 shadow-2xs'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Per Kategori</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCatalogViewMode('grid')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                        catalogViewMode === 'grid'
+                          ? 'bg-white text-blue-700 shadow-2xs'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>Semua Grid</span>
+                    </button>
+                  </div>
+                )}
+
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs text-blue-600 font-bold hover:underline"
+                  >
+                    Reset Pencarian
+                  </button>
+                )}
+              </div>
             </div>
 
             {products.length === 0 ? (
@@ -2524,6 +2618,22 @@ export default function App() {
                   Lihat Semua Produk
                 </button>
               </div>
+            ) : selectedCategory === 'all' && !searchQuery.trim() && !activeTagFilter && catalogViewMode === 'grouped' ? (
+              <CategoryProductSections
+                products={filteredProducts}
+                categories={storefrontCategories}
+                cartItems={cartItems}
+                onAddToCart={(p, q = 1, n, opt) => handleAddToCart(p, q, n, opt)}
+                onUpdateQuantity={handleUpdateQuantity}
+                onOpenDetail={(p) => setSelectedProductDetail(p)}
+                onSelectCategory={(slug) => {
+                  setSelectedCategory(slug);
+                  setTimeout(() => {
+                    const el = document.getElementById('product-catalog-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 60);
+                }}
+              />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                 {filteredProducts.map((product) => {
