@@ -24,7 +24,8 @@ import {
   getMySqlPool, 
   getMySqlConfig, 
   testMySqlConnection, 
-  initializeMySqlSchema 
+  initializeMySqlSchema,
+  executeRealMySqlQuery,
 } from './src/lib/mysqlServer';
 
 dotenv.config();
@@ -4301,14 +4302,63 @@ async function startServer() {
         } catch (_) {}
       }
 
-      // 6. Simpan Staff Users
+      // 6. Simpan Staff Users (termasuk password_hash di MySQL tanpa menimpa password existing dengan kosong)
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS staff_users (
+            id VARCHAR(64) PRIMARY KEY,
+            tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+            username VARCHAR(100) NOT NULL,
+            password_hash VARCHAR(255),
+            name VARCHAR(150) NOT NULL,
+            role VARCHAR(50) NOT NULL DEFAULT 'kasir',
+            phone VARCHAR(50) DEFAULT NULL,
+            email VARCHAR(150) DEFAULT NULL,
+            store_id VARCHAR(64),
+            store_name VARCHAR(150) DEFAULT NULL,
+            permissions JSON,
+            is_active TINYINT(1) DEFAULT 1,
+            last_login VARCHAR(100) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_tenant_username (tenant_slug, username),
+            INDEX idx_staff_tenant (tenant_slug)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+      } catch (_) {}
       for (const st of staffUsers) {
         try {
+          const rawPin = typeof st.pin === 'string' ? st.pin.trim() : '';
+          const hashedPin = rawPin && !/^[•*]+$/.test(rawPin) ? hashStaffPassword(rawPin) : '';
           await pool.query(
-            `INSERT INTO staff_users (id, tenant_slug, username, name, role, store_id, permissions, is_active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-             ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), permissions=VALUES(permissions)`,
-            [st.id, tenantSlug, st.username, st.name, st.role, st.storeId || '', JSON.stringify(st.permissions || {})]
+            `INSERT INTO staff_users (id, tenant_slug, username, password_hash, name, role, phone, email, store_id, store_name, permissions, is_active, last_login)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               name = VALUES(name),
+               role = VALUES(role),
+               phone = VALUES(phone),
+               email = VALUES(email),
+               store_id = VALUES(store_id),
+               store_name = VALUES(store_name),
+               permissions = VALUES(permissions),
+               is_active = VALUES(is_active),
+               last_login = COALESCE(NULLIF(VALUES(last_login), ''), last_login),
+               password_hash = COALESCE(NULLIF(VALUES(password_hash), ''), password_hash)`,
+            [
+              st.id,
+              tenantSlug,
+              String(st.username || '').trim().toLowerCase(),
+              hashedPin,
+              st.name,
+              st.role || 'kasir',
+              st.phone || '',
+              st.email || '',
+              st.storeId || 'all',
+              st.storeName || 'Semua Cabang',
+              JSON.stringify(st.permissions || {}),
+              st.isActive === false ? 0 : 1,
+              st.lastLogin || '',
+            ]
           );
           counts.staffUsers++;
         } catch (_) {}
@@ -4438,6 +4488,533 @@ async function startServer() {
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: `Migrasi gagal: ${err.message}` });
+    }
+  });
+
+  // ==========================================
+  // STAFF USERS & ADMIN AUTH MYSQL ENDPOINTS
+  // ==========================================
+  const STAFF_USERS_FALLBACK_FILE = path.join(process.cwd(), 'data', 'staff_users.json');
+
+  function hashStaffPassword(plain: string): string {
+    const clean = String(plain || '').trim();
+    if (!clean) return '';
+    if (clean.startsWith('scrypt:')) return clean;
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync(clean, salt, 32).toString('hex');
+    return `scrypt:${salt}:${derived}`;
+  }
+
+  function verifyStaffPassword(plain: string, stored: string): boolean {
+    const cleanInput = String(plain || '').trim();
+    const cleanStored = String(stored || '').trim();
+    if (!cleanInput || !cleanStored) return false;
+    if (cleanStored.startsWith('scrypt:')) {
+      const parts = cleanStored.split(':');
+      if (parts.length !== 3) return false;
+      const [, salt, expectedHex] = parts;
+      try {
+        const derivedBuf = crypto.scryptSync(cleanInput, salt, 32);
+        const expectedBuf = Buffer.from(expectedHex, 'hex');
+        if (derivedBuf.length !== expectedBuf.length) return false;
+        return crypto.timingSafeEqual(derivedBuf, expectedBuf);
+      } catch {
+        return false;
+      }
+    }
+    if (cleanStored.startsWith('sha256:')) {
+      const expectedHex = cleanStored.slice(7);
+      const actualHex = crypto.createHash('sha256').update(cleanInput).digest('hex');
+      return actualHex === expectedHex;
+    }
+    // Kompatibilitas langsung jika admin mengubah password_hash secara manual di phpMyAdmin
+    return cleanStored === cleanInput;
+  }
+
+  function isMaskedOrEmptyPassword(val?: string | null): boolean {
+    if (!val) return true;
+    const trimmed = String(val).trim();
+    return !trimmed || /^[•*]+$/.test(trimmed);
+  }
+
+  const DEFAULT_STAFF_SEED = [
+    {
+      id: 'usr_admin',
+      username: 'admin',
+      pin: 'admin123',
+      role: 'admin',
+      name: 'Store Manager (Admin)',
+      phone: '0812-9988-7766',
+      email: 'admin@lapakoke.com',
+      storeId: 'all',
+      storeName: 'Semua Cabang',
+      isActive: true,
+      createdAt: '01 Jan 2026',
+    },
+    {
+      id: 'usr_kasir',
+      username: 'kasir',
+      pin: '1234',
+      role: 'kasir',
+      name: 'Kasir Shift Toko',
+      phone: '0813-1122-3344',
+      email: 'kasir1@lapakoke.com',
+      storeId: 'str_01',
+      storeName: 'LapakOke - Sudirman Thamrin',
+      isActive: true,
+      createdAt: '15 Jan 2026',
+    },
+    {
+      id: 'usr_spv',
+      username: 'spv',
+      pin: 'spv2026',
+      role: 'supervisor',
+      name: 'Supervisor Toko',
+      phone: '0812-3344-5566',
+      email: 'spv@lapakoke.com',
+      storeId: 'all',
+      storeName: 'Semua Cabang',
+      isActive: true,
+      createdAt: '10 Jan 2026',
+    },
+    {
+      id: 'usr_gudang',
+      username: 'gudang',
+      pin: 'gudang2026',
+      role: 'gudang',
+      name: 'Staff Gudang & Picking',
+      phone: '0857-4455-6677',
+      email: 'gudang@lapakoke.com',
+      storeId: 'all',
+      storeName: 'Semua Cabang',
+      isActive: true,
+      createdAt: '20 Jan 2026',
+    },
+  ];
+
+  function readStaffFallbackFile(): Record<string, any[]> {
+    try {
+      if (fs.existsSync(STAFF_USERS_FALLBACK_FILE)) {
+        const raw = fs.readFileSync(STAFF_USERS_FALLBACK_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  function writeStaffFallbackFile(map: Record<string, any[]>) {
+    try {
+      const dir = path.dirname(STAFF_USERS_FALLBACK_FILE);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(STAFF_USERS_FALLBACK_FILE, JSON.stringify(map, null, 2), 'utf-8');
+    } catch (_) {}
+  }
+
+  async function ensureStaffUsersTableInMySql(): Promise<boolean> {
+    const createRes = await executeRealMySqlQuery(`
+      CREATE TABLE IF NOT EXISTS staff_users (
+        id VARCHAR(64) PRIMARY KEY,
+        tenant_slug VARCHAR(64) NOT NULL DEFAULT 'default',
+        username VARCHAR(100) NOT NULL,
+        password_hash VARCHAR(255),
+        name VARCHAR(150) NOT NULL,
+        role VARCHAR(50) NOT NULL DEFAULT 'kasir',
+        phone VARCHAR(50) DEFAULT NULL,
+        email VARCHAR(150) DEFAULT NULL,
+        store_id VARCHAR(64),
+        store_name VARCHAR(150) DEFAULT NULL,
+        permissions JSON,
+        is_active TINYINT(1) DEFAULT 1,
+        last_login VARCHAR(100) DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_tenant_username (tenant_slug, username),
+        INDEX idx_staff_tenant (tenant_slug)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+    if (!createRes.ok) return false;
+
+    const alterColumns = [
+      'ALTER TABLE staff_users ADD COLUMN password_hash VARCHAR(255) DEFAULT NULL',
+      'ALTER TABLE staff_users ADD COLUMN phone VARCHAR(50) DEFAULT NULL',
+      'ALTER TABLE staff_users ADD COLUMN email VARCHAR(150) DEFAULT NULL',
+      'ALTER TABLE staff_users ADD COLUMN store_name VARCHAR(150) DEFAULT NULL',
+      'ALTER TABLE staff_users ADD COLUMN last_login VARCHAR(100) DEFAULT NULL',
+      'ALTER TABLE staff_users ADD COLUMN permissions JSON',
+    ];
+    for (const stmt of alterColumns) {
+      await executeRealMySqlQuery(stmt).catch(() => {});
+    }
+    return true;
+  }
+
+  function sanitizeStaffRowForClient(row: any) {
+    let parsedPerms: any = undefined;
+    if (row.permissions) {
+      if (typeof row.permissions === 'string') {
+        try {
+          parsedPerms = JSON.parse(row.permissions);
+        } catch {
+          parsedPerms = undefined;
+        }
+      } else if (typeof row.permissions === 'object') {
+        parsedPerms = row.permissions;
+      }
+    }
+    const createdLabel = row.created_at
+      ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(row.created_at))
+      : (row.createdAt || '01 Jan 2026');
+
+    return {
+      id: row.id,
+      username: row.username,
+      name: row.name,
+      role: (row.role || 'kasir').toLowerCase(),
+      pin: '',
+      hasPassword: Boolean(row.password_hash),
+      phone: row.phone || '',
+      email: row.email || '',
+      storeId: row.store_id || row.storeId || 'all',
+      storeName: row.store_name || row.storeName || 'Semua Cabang',
+      isActive: row.is_active !== undefined ? Boolean(Number(row.is_active)) : (row.isActive !== false),
+      createdAt: createdLabel,
+      lastLogin: row.last_login || row.lastLogin || undefined,
+      permissions: parsedPerms,
+    };
+  }
+
+  async function loadOrSeedStaffRows(tenantSlug: string): Promise<{ source: 'mysql' | 'server_file'; rows: any[] }> {
+    const slug = (tenantSlug || 'default').toLowerCase().trim() || 'default';
+    const mysqlReady = await ensureStaffUsersTableInMySql();
+
+    if (mysqlReady) {
+      const existingRes = await executeRealMySqlQuery<any[]>(
+        'SELECT * FROM staff_users WHERE tenant_slug = ? ORDER BY created_at ASC',
+        [slug]
+      );
+      if (existingRes.ok) {
+        let rows = existingRes.rows || [];
+        // Seed akun default ke MySQL jika tabel tenant ini masih kosong
+        if (rows.length === 0) {
+          for (const seed of DEFAULT_STAFF_SEED) {
+            const seedId = slug === 'default' ? seed.id : `${seed.id}_${slug}`;
+            await executeRealMySqlQuery(
+              `INSERT IGNORE INTO staff_users (id, tenant_slug, username, password_hash, name, role, phone, email, store_id, store_name, permissions, is_active)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                seedId,
+                slug,
+                seed.username,
+                hashStaffPassword(seed.pin),
+                seed.name,
+                seed.role,
+                seed.phone,
+                seed.email,
+                seed.storeId,
+                seed.storeName,
+                JSON.stringify({}),
+                1,
+              ]
+            );
+          }
+          const seededRes = await executeRealMySqlQuery<any[]>(
+            'SELECT * FROM staff_users WHERE tenant_slug = ? ORDER BY created_at ASC',
+            [slug]
+          );
+          if (seededRes.ok) rows = seededRes.rows || [];
+        } else {
+          // Pastikan setiap row lama yang belum punya password_hash mendapat default hash yang aman
+          for (const r of rows) {
+            if (!r.password_hash) {
+              const defSeed = DEFAULT_STAFF_SEED.find((d) => d.username === String(r.username || '').toLowerCase());
+              const fallbackPlain = defSeed?.pin || '1234';
+              const newHash = hashStaffPassword(fallbackPlain);
+              await executeRealMySqlQuery('UPDATE staff_users SET password_hash = ? WHERE id = ?', [newHash, r.id]);
+              r.password_hash = newHash;
+            }
+          }
+        }
+        return { source: 'mysql', rows };
+      }
+    }
+
+    // Fallback server file hanya jika MySQL server tidak terhubung (misal di lingkungan preview sandbox)
+    const fallbackMap = readStaffFallbackFile();
+    if (!Array.isArray(fallbackMap[slug]) || fallbackMap[slug].length === 0) {
+      fallbackMap[slug] = DEFAULT_STAFF_SEED.map((seed) => ({
+        id: slug === 'default' ? seed.id : `${seed.id}_${slug}`,
+        tenant_slug: slug,
+        username: seed.username,
+        password_hash: hashStaffPassword(seed.pin),
+        name: seed.name,
+        role: seed.role,
+        phone: seed.phone,
+        email: seed.email,
+        store_id: seed.storeId,
+        store_name: seed.storeName,
+        permissions: {},
+        is_active: 1,
+        createdAt: seed.createdAt,
+      }));
+      writeStaffFallbackFile(fallbackMap);
+    }
+    return { source: 'server_file', rows: fallbackMap[slug] };
+  }
+
+  // GET /api/mysql/staff-users - Ambil daftar staf dari MySQL (tanpa mengekspos password asli)
+  app.get('/api/mysql/staff-users', async (req, res) => {
+    try {
+      const tenantSlug = String(req.query.tenantSlug || req.headers['x-tenant-slug'] || 'default').toLowerCase().trim() || 'default';
+      const { source, rows } = await loadOrSeedStaffRows(tenantSlug);
+      const staffUsers = rows.map(sanitizeStaffRowForClient);
+      res.json({ success: true, source, count: staffUsers.length, staffUsers });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message, staffUsers: [] });
+    }
+  });
+
+  // POST /api/mysql/staff-users - Simpan / Perbarui staf & password ke MySQL
+  app.post('/api/mysql/staff-users', async (req, res) => {
+    try {
+      const { user, users, staffUsers: bodyStaffUsers, tenantSlug: rawSlug } = req.body || {};
+      const tenantSlug = String(rawSlug || req.headers['x-tenant-slug'] || 'default').toLowerCase().trim() || 'default';
+      const incomingList: any[] = Array.isArray(users) && users.length > 0
+        ? users
+        : (Array.isArray(bodyStaffUsers) && bodyStaffUsers.length > 0 ? bodyStaffUsers : (user ? [user] : []));
+
+      if (incomingList.length === 0) {
+        return res.status(400).json({ success: false, message: 'Data staff user tidak boleh kosong' });
+      }
+
+      const { source } = await loadOrSeedStaffRows(tenantSlug);
+
+      if (source === 'mysql') {
+        for (const u of incomingList) {
+          if (!u || !u.username) continue;
+          const cleanUsername = String(u.username).trim().toLowerCase();
+          const userId = u.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const candidatePass = u.newPassword !== undefined ? String(u.newPassword) : String(u.pin || '');
+          const shouldUpdatePass = !isMaskedOrEmptyPassword(candidatePass);
+          const hashedPass = shouldUpdatePass ? hashStaffPassword(candidatePass) : '';
+
+          // Cek apakah username sudah ada untuk tenant ini agar password existing tidak tertimpa kosong
+          const existingCheck = await executeRealMySqlQuery<any[]>(
+            'SELECT id, password_hash FROM staff_users WHERE tenant_slug = ? AND (id = ? OR LOWER(username) = ?) LIMIT 1',
+            [tenantSlug, userId, cleanUsername]
+          );
+          const existingRow = existingCheck.ok && existingCheck.rows?.[0] ? existingCheck.rows[0] : null;
+          const finalId = existingRow?.id || userId;
+          const finalPasswordHash = shouldUpdatePass
+            ? hashedPass
+            : (existingRow?.password_hash || hashStaffPassword('1234'));
+
+          await executeRealMySqlQuery(
+            `INSERT INTO staff_users (
+              id, tenant_slug, username, password_hash, name, role, phone, email, store_id, store_name, permissions, is_active, last_login
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              username = VALUES(username),
+              password_hash = VALUES(password_hash),
+              name = VALUES(name),
+              role = VALUES(role),
+              phone = VALUES(phone),
+              email = VALUES(email),
+              store_id = VALUES(store_id),
+              store_name = VALUES(store_name),
+              permissions = VALUES(permissions),
+              is_active = VALUES(is_active),
+              last_login = COALESCE(NULLIF(VALUES(last_login), ''), last_login)`,
+            [
+              finalId,
+              tenantSlug,
+              cleanUsername,
+              finalPasswordHash,
+              u.name || cleanUsername,
+              u.role || 'kasir',
+              u.phone || '',
+              u.email || '',
+              u.storeId || 'all',
+              u.storeName || 'Semua Cabang',
+              JSON.stringify(u.permissions || {}),
+              u.isActive === false ? 0 : 1,
+              u.lastLogin || '',
+            ]
+          );
+        }
+
+        const refreshed = await loadOrSeedStaffRows(tenantSlug);
+        return res.json({
+          success: true,
+          source: 'mysql',
+          message: 'Data akun dan password berhasil disimpan ke database MySQL.',
+          staffUsers: refreshed.rows.map(sanitizeStaffRowForClient),
+        });
+      }
+
+      // Fallback file server (jika MySQL belum berjalan di sandbox)
+      const fallbackMap = readStaffFallbackFile();
+      const currentList = Array.isArray(fallbackMap[tenantSlug]) ? fallbackMap[tenantSlug] : [];
+      for (const u of incomingList) {
+        if (!u || !u.username) continue;
+        const cleanUsername = String(u.username).trim().toLowerCase();
+        const userId = u.id || `usr_${Date.now()}`;
+        const idx = currentList.findIndex(
+          (row: any) => row.id === userId || String(row.username || '').toLowerCase() === cleanUsername
+        );
+        const candidatePass = u.newPassword !== undefined ? String(u.newPassword) : String(u.pin || '');
+        const shouldUpdatePass = !isMaskedOrEmptyPassword(candidatePass);
+        const prevPass = idx >= 0 ? currentList[idx].password_hash : '';
+        const record = {
+          id: idx >= 0 ? currentList[idx].id : userId,
+          tenant_slug: tenantSlug,
+          username: cleanUsername,
+          password_hash: shouldUpdatePass ? hashStaffPassword(candidatePass) : (prevPass || hashStaffPassword('1234')),
+          name: u.name || cleanUsername,
+          role: u.role || 'kasir',
+          phone: u.phone || '',
+          email: u.email || '',
+          store_id: u.storeId || 'all',
+          store_name: u.storeName || 'Semua Cabang',
+          permissions: u.permissions || {},
+          is_active: u.isActive === false ? 0 : 1,
+          last_login: u.lastLogin || (idx >= 0 ? currentList[idx].last_login : ''),
+          createdAt: u.createdAt || (idx >= 0 ? currentList[idx].createdAt : '01 Jan 2026'),
+        };
+        if (idx >= 0) {
+          currentList[idx] = record;
+        } else {
+          currentList.unshift(record);
+        }
+      }
+      fallbackMap[tenantSlug] = currentList;
+      writeStaffFallbackFile(fallbackMap);
+
+      return res.json({
+        success: true,
+        source: 'server_file',
+        message: 'Data akun dan password tersimpan di server (MySQL offline fallback).',
+        staffUsers: currentList.map(sanitizeStaffRowForClient),
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // DELETE /api/mysql/staff-users/:id - Hapus akun staf dari MySQL
+  app.delete('/api/mysql/staff-users/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const tenantSlug = String(req.query.tenantSlug || req.headers['x-tenant-slug'] || 'default').toLowerCase().trim() || 'default';
+      const mysqlReady = await ensureStaffUsersTableInMySql();
+
+      if (mysqlReady) {
+        const delRes = await executeRealMySqlQuery(
+          'DELETE FROM staff_users WHERE id = ? AND tenant_slug = ?',
+          [id, tenantSlug]
+        );
+        if (delRes.ok) {
+          return res.json({ success: true, source: 'mysql', message: 'Akun staf berhasil dihapus dari MySQL.' });
+        }
+      }
+
+      const fallbackMap = readStaffFallbackFile();
+      if (Array.isArray(fallbackMap[tenantSlug])) {
+        fallbackMap[tenantSlug] = fallbackMap[tenantSlug].filter((r: any) => r.id !== id);
+        writeStaffFallbackFile(fallbackMap);
+      }
+      return res.json({ success: true, source: 'server_file', message: 'Akun staf berhasil dihapus.' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/mysql/staff-users/login - Verifikasi login admin/kasir langsung terhadap password tersimpan di MySQL
+  app.post('/api/mysql/staff-users/login', async (req, res) => {
+    try {
+      const { tenantSlug: rawSlug, username, password, pin } = req.body || {};
+      const tenantSlug = String(rawSlug || req.headers['x-tenant-slug'] || 'default').toLowerCase().trim() || 'default';
+      const cleanUser = String(username || '').trim().toLowerCase();
+      const cleanPassword = String(password ?? pin ?? '').trim();
+
+      if (!cleanUser || !cleanPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Harap masukkan ID Pengguna dan Password/PIN.',
+        });
+      }
+
+      const { source, rows } = await loadOrSeedStaffRows(tenantSlug);
+      const cleanPhoneQuery = cleanUser.replace(/\D/g, '');
+
+      const matched = rows.find((r: any) => {
+        const rUser = String(r.username || '').trim().toLowerCase();
+        const rPhone = String(r.phone || '').replace(/\D/g, '');
+        return rUser === cleanUser || (cleanPhoneQuery.length >= 6 && rPhone === cleanPhoneQuery);
+      });
+
+      if (!matched) {
+        return res.status(401).json({
+          success: false,
+          source,
+          message: 'ID Pengguna tidak ditemukan di database MySQL.',
+        });
+      }
+
+      const isActive = matched.is_active !== undefined ? Boolean(Number(matched.is_active)) : (matched.isActive !== false);
+      if (!isActive) {
+        return res.status(403).json({
+          success: false,
+          source,
+          message: 'Akun ini sedang dinonaktifkan oleh Administrator Toko.',
+        });
+      }
+
+      const storedHash = String(matched.password_hash || '');
+      if (!verifyStaffPassword(cleanPassword, storedHash)) {
+        return res.status(401).json({
+          success: false,
+          source,
+          message: 'Password / PIN salah. Gunakan password terbaru yang tersimpan di database MySQL.',
+        });
+      }
+
+      const nowStr = new Intl.DateTimeFormat('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date()) + ' WIB';
+
+      if (source === 'mysql') {
+        await executeRealMySqlQuery('UPDATE staff_users SET last_login = ? WHERE id = ?', [nowStr, matched.id]).catch(() => {});
+      } else {
+        const fallbackMap = readStaffFallbackFile();
+        if (Array.isArray(fallbackMap[tenantSlug])) {
+          const idx = fallbackMap[tenantSlug].findIndex((r: any) => r.id === matched.id);
+          if (idx >= 0) {
+            fallbackMap[tenantSlug][idx].last_login = nowStr;
+            writeStaffFallbackFile(fallbackMap);
+          }
+        }
+      }
+
+      const userPayload = {
+        ...sanitizeStaffRowForClient(matched),
+        lastLogin: nowStr,
+      };
+
+      return res.json({
+        success: true,
+        source,
+        message: 'Autentikasi berhasil.',
+        user: userPayload,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || 'Gagal memverifikasi login.' });
     }
   });
 

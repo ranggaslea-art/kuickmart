@@ -396,7 +396,7 @@ export const UserAccessManager: React.FC<UserAccessManagerProps> = ({
                 <div className="flex items-center gap-2 mt-1 text-xs text-stone-600 flex-wrap">
                   <span>Cabang: <strong>{activeStaff?.storeName || 'Semua Cabang'}</strong></span>
                   <span>•</span>
-                  <span>PIN Akses: <strong className="font-mono">{activeStaff?.pin || '-'}</strong></span>
+                  <span>PIN Akses: <strong className="font-mono">{activeStaff?.pin ? activeStaff.pin : 'Tersimpan di MySQL'}</strong></span>
                   <span>•</span>
                   <span>Ringkasan: <strong className="text-blue-700">{activeStats.viewCount} Boleh Dilihat</strong>, <strong className="text-emerald-700">{activeStats.editCount} Boleh Diedit</strong></span>
                 </div>

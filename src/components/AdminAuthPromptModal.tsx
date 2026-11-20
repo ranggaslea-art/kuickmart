@@ -15,6 +15,7 @@ import {
 import { StaffUser } from '../types';
 import { INITIAL_STAFF_USERS } from '../data/mockData';
 import { getTenantStorageKey } from '../utils/tenantHelper';
+import { loginStaffWithMySql } from '../lib/mysqlClientApi';
 
 interface AdminAuthPromptModalProps {
   isOpen: boolean;
@@ -47,7 +48,7 @@ export const AdminAuthPromptModal: React.FC<AdminAuthPromptModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -62,48 +63,61 @@ export const AdminAuthPromptModal: React.FC<AdminAuthPromptModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // 1. Ambil daftar staffUsers aktif (dari props atau LocalStorage multi-tenant)
-      let availableStaff: StaffUser[] = [];
-      if (propStaffUsers && propStaffUsers.length > 0) {
-        availableStaff = propStaffUsers;
-      } else {
-        try {
-          const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
-          const saved = localStorage.getItem(key);
-          availableStaff = saved ? JSON.parse(saved) : INITIAL_STAFF_USERS;
-        } catch {
-          availableStaff = INITIAL_STAFF_USERS;
-        }
-      }
+      let matchedUser: StaffUser | undefined;
 
-      // Pastikan akun default jika belum ada di list
-      INITIAL_STAFF_USERS.forEach(def => {
-        if (!availableStaff.some(u => (u?.username || '').toLowerCase() === def.username.toLowerCase())) {
-          availableStaff.push(def);
-        }
+      // 1. Verifikasi langsung terhadap password tersimpan di database MySQL
+      const mysqlAuth = await loginStaffWithMySql({
+        tenantSlug: currentSlug,
+        username: cleanUser,
+        password: cleanPin,
       });
 
-      // 2. Cari akun berdasarkan username
-      const matchedUser = availableStaff.find(
-        u => (u?.username || '').toLowerCase() === cleanUser
-      );
+      if (mysqlAuth.success && mysqlAuth.user) {
+        matchedUser = mysqlAuth.user;
+      } else if (!mysqlAuth.networkError) {
+        setErrorMessage(mysqlAuth.message || 'ID Pengguna atau Password / PIN salah di database MySQL.');
+        setIsSubmitting(false);
+        return;
+      } else {
+        // Fallback hanya jika jaringan/server offline
+        let availableStaff: StaffUser[] = [];
+        if (propStaffUsers && propStaffUsers.length > 0) {
+          availableStaff = [...propStaffUsers];
+        } else {
+          try {
+            const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
+            const saved = localStorage.getItem(key);
+            availableStaff = saved ? JSON.parse(saved) : [...INITIAL_STAFF_USERS];
+          } catch {
+            availableStaff = [...INITIAL_STAFF_USERS];
+          }
+        }
+        INITIAL_STAFF_USERS.forEach(def => {
+          if (!availableStaff.some(u => (u?.username || '').toLowerCase() === def.username.toLowerCase())) {
+            availableStaff.push(def);
+          }
+        });
+        const found = availableStaff.find(u => (u?.username || '').toLowerCase() === cleanUser);
+        if (!found) {
+          setErrorMessage('ID Pengguna tidak terdaftar dalam sistem.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (String(found.pin).trim() !== cleanPin) {
+          setErrorMessage('Password / PIN yang Anda masukkan salah. Silakan periksa kembali.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (found.isActive === false) {
+          setErrorMessage('Akun ini sedang dinonaktifkan oleh Administrator.');
+          setIsSubmitting(false);
+          return;
+        }
+        matchedUser = found;
+      }
 
       if (!matchedUser) {
-        setErrorMessage('ID Pengguna tidak terdaftar dalam sistem.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 3. Verifikasi Password / PIN
-      if (String(matchedUser.pin).trim() !== cleanPin) {
-        setErrorMessage('Password / PIN yang Anda masukkan salah. Silakan periksa kembali.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 4. Periksa apakah akun aktif
-      if (matchedUser.isActive === false) {
-        setErrorMessage('Akun ini sedang dinonaktifkan oleh Administrator.');
+        setErrorMessage('Autentikasi gagal.');
         setIsSubmitting(false);
         return;
       }

@@ -6,12 +6,14 @@ import {
   saveSuppliersToMySql,
   saveProductsToMySql,
   saveStoresToMySql,
+  saveStaffUsersToMySql,
   fetchCategoriesFromMySql,
   fetchBrandsFromMySql,
   fetchPurchasesFromMySql,
   fetchSuppliersFromMySql,
   fetchProductsFromMySql,
   fetchStoresFromMySql,
+  fetchStaffUsersFromMySql,
 } from '../lib/mysqlClientApi';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, onSnapshot, getDocs } from 'firebase/firestore';
@@ -56,14 +58,17 @@ export async function saveTenantDataToCloud<T = any>(
   const effectiveSlug = (storeSlug || (typeof window !== 'undefined' ? getStoreSlugFromUrl() : 'default') || 'default').toLowerCase();
   const now = new Date().toISOString();
 
-  // 1. Simpan segera ke localStorage lokal untuk responsivitas instan
+  // 1. Simpan segera ke localStorage lokal untuk responsivitas instan (tanpa ekspos password mentah untuk staff)
   if (typeof window !== 'undefined') {
     try {
       const baseKey = STORAGE_KEY_MAPPING[moduleKey] || `toko_online_${moduleKey}`;
       const localKey = moduleKey === 'identity' 
         ? `${STORAGE_TENANT_PREFIX}${effectiveSlug}` 
         : getTenantStorageKey(baseKey, effectiveSlug);
-      localStorage.setItem(localKey, JSON.stringify(data));
+      const dataToStore = moduleKey === 'staff' && Array.isArray(data)
+        ? data.map((u: any) => ({ ...u, pin: '', hasPassword: true }))
+        : data;
+      localStorage.setItem(localKey, JSON.stringify(dataToStore));
     } catch (e) {
       console.warn(`[CloudSync] Gagal menyimpan ke localStorage untuk ${moduleKey}:`, e);
     }
@@ -105,6 +110,8 @@ export async function saveTenantDataToCloud<T = any>(
       await saveSuppliersToMySql(data as any, effectiveSlug);
     } else if (moduleKey === 'products' && Array.isArray(data)) {
       await saveProductsToMySql(data as any, effectiveSlug);
+    } else if (moduleKey === 'staff' && Array.isArray(data)) {
+      await saveStaffUsersToMySql(data as any, effectiveSlug);
     } else if (['brand', 'identity', 'receipts', 'promos', 'couriers'].includes(moduleKey)) {
       // Sinkronisasi settingan toko ke server database
       const payloadKey = moduleKey === 'brand' ? 'brandConfig'
@@ -186,6 +193,9 @@ export async function fetchTenantDataFromCloud<T = any>(
     } else if (moduleKey === 'products') {
       const dbProducts = await fetchProductsFromMySql(effectiveSlug);
       if (dbProducts && dbProducts.length > 0) return dbProducts as any;
+    } else if (moduleKey === 'staff') {
+      const dbStaff = await fetchStaffUsersFromMySql(effectiveSlug);
+      if (dbStaff && dbStaff.length > 0) return dbStaff as any;
     }
   } catch (err) {
     console.warn(`[CloudSync] Server database fetch failed for ${moduleKey}, fallback to local:`, err);

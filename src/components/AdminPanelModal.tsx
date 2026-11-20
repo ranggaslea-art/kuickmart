@@ -175,7 +175,12 @@ import {
   deleteProductFromMySql, 
   saveCategoriesToMySql, 
   saveBrandsToMySql,
-  saveOrderToMySql 
+  saveOrderToMySql,
+  fetchStaffUsersFromMySql,
+  saveStaffUserToMySql,
+  saveStaffUsersToMySql,
+  deleteStaffUserFromMySql,
+  loginStaffWithMySql,
 } from '../lib/mysqlClientApi';
 import { 
   getStoreSlugFromUrl, 
@@ -474,14 +479,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         username: u?.username || defaultUser?.username || `staff_${Date.now()}`,
         name: u?.name || defaultUser?.name || 'Staff User',
         role,
-        pin: u?.pin || defaultUser?.pin || '1234',
+        pin: u?.hasPassword ? (u?.pin || '') : (u?.pin || defaultUser?.pin || '1234'),
+        hasPassword: u?.hasPassword ?? Boolean(u?.pin),
         isActive: u?.isActive ?? true,
         permissions: u?.permissions || defaultUser?.permissions || roleFallback,
       };
     });
   };
 
-  // Staff Users State (Persistent in localStorage & MySQL database sync)
+  // Staff Users State (Persistent in MySQL database sync & sanitized localStorage)
   const [internalStaffUsers, setInternalStaffUsers] = useState<StaffUser[]>(() => {
     try {
       const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
@@ -496,13 +502,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const staffUsers = propStaffUsers && propStaffUsers.length > 0 ? ensureStaffPermissions(propStaffUsers) : internalStaffUsers;
   const setStaffUsers = (updateAction: StaffUser[] | ((prev: StaffUser[]) => StaffUser[])) => {
     const updatedUsers = typeof updateAction === 'function' ? updateAction(staffUsers) : updateAction;
+    const sanitized = updatedUsers.map((u) => ({
+      ...u,
+      pin: u?.hasPassword ? '' : (u?.pin || ''),
+    }));
     if (onUpdateStaffUsers) {
-      onUpdateStaffUsers(updatedUsers);
+      onUpdateStaffUsers(sanitized);
     }
-    setInternalStaffUsers(updatedUsers);
+    setInternalStaffUsers(sanitized);
     try {
       const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
-      localStorage.setItem(key, JSON.stringify(updatedUsers));
+      localStorage.setItem(key, JSON.stringify(sanitized));
     } catch (e) {
       console.error(e);
     }
@@ -910,15 +920,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [inputPin, setInputPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Dialog konfirmasi keluar / tutup panel admin
   const [confirmExitAction, setConfirmExitAction] = useState<'logout' | 'close' | null>(null);
 
-  // Wajibkan autentikasi modul login setiap kali panel dibuka
+  // Wajibkan autentikasi modul login setiap kali panel dibuka & tarik data staf terbaru dari MySQL
   useEffect(() => {
     if (isOpen) {
       setLoginError(null);
+      setIsLoggingIn(false);
       syncSubdomainModulePolicyFromServer().catch(() => {});
+      fetchStaffUsersFromMySql(currentSlug)
+        .then((dbStaff) => {
+          if (dbStaff && dbStaff.length > 0) {
+            setInternalStaffUsers(ensureStaffPermissions(dbStaff));
+          }
+        })
+        .catch(() => {});
       
       // Bersihkan sesi dan pastikan user selalu harus login terlebih dahulu
       setCurrentUser(null);
@@ -1328,8 +1347,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
   if (!isOpen) return null;
 
-  // Handle Login Action (Dynamic Authentication against staffUsers + fallback DEFAULT_ACCOUNTS only for unseeded users)
-  const handleLogin = (e?: React.FormEvent) => {
+  // Handle Login Action (Wajib memverifikasi ke password yang tersimpan di MySQL terlebih dahulu)
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoginError(null);
 
@@ -1341,79 +1360,106 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
       return;
     }
 
-    // 1. Cek apakah pengguna terdaftar di daftar staffUsers aktif
-    const staffMatch = (staffUsers || []).find(
-      u => (u?.username || '').toLowerCase() === cleanInputUser
-    );
+    setIsLoggingIn(true);
 
-    let matchedAccount: StaffUser | typeof DEFAULT_ACCOUNTS[0] | null = null;
+    try {
+      // 1. Verifikasi langsung terhadap tabel staff_users di database MySQL
+      const mysqlAuth = await loginStaffWithMySql({
+        tenantSlug: currentSlug,
+        username: cleanInputUser,
+        password: cleanPin,
+      });
 
-    if (staffMatch) {
-      // Pengguna terdaftar dalam sistem: Wajib mencocokkan password/PIN terbaru dari staffUsers
-      if (String(staffMatch.pin).trim() === cleanPin) {
-        matchedAccount = staffMatch;
-      } else {
-        setLoginError('Password / PIN yang Anda masukkan salah. Silakan periksa kembali.');
+      if (mysqlAuth.success && mysqlAuth.user) {
+        const dbUser = mysqlAuth.user;
+        const userPerms =
+          dbUser.permissions && Object.keys(dbUser.permissions).length > 0
+            ? dbUser.permissions
+            : DEFAULT_ROLE_PERMISSIONS[dbUser.role as keyof typeof DEFAULT_ROLE_PERMISSIONS] || DEFAULT_ROLE_PERMISSIONS.kasir;
+
+        const authUser: AdminUser = {
+          username: dbUser.username,
+          role: dbUser.role,
+          name: dbUser.name,
+          permissions: userPerms,
+        };
+
+        setStaffUsers(prev =>
+          prev.map(u =>
+            (u.id === dbUser.id || (u.username || '').toLowerCase() === dbUser.username.toLowerCase())
+              ? { ...u, lastLogin: dbUser.lastLogin, hasPassword: true, pin: '' }
+              : u
+          )
+        );
+
+        setCurrentUser(authUser);
+        try {
+          sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+          sessionStorage.setItem('lapakoke_chat_admin_user', JSON.stringify(authUser));
+        } catch {}
+        setLoginError(null);
+        setInputPin('');
+
+        const effPerms = getEffectivePermissions(dbUser.role, userPerms);
+        const currentModule = activeTab as SystemModuleKey;
+        if (!effPerms[currentModule]?.canView) {
+          const orderPriority: SystemModuleKey[] = ['products', 'orders', 'promos', 'couriers', 'receipts', 'stores', 'vouchers', 'users', 'brand_info', 'bulk_import'];
+          const firstViewable = orderPriority.find(k => effPerms[k]?.canView) || 'orders';
+          setActiveTab(firstViewable as any);
+        }
         return;
       }
-    } else {
-      // 2. Hanya fallback ke DEFAULT_ACCOUNTS jika username ini belum ada di data staffUsers sama sekali
-      const defaultMatch = DEFAULT_ACCOUNTS.find(
-        acc => (acc?.username || '').toLowerCase() === cleanInputUser && String(acc.pin).trim() === cleanPin
+
+      // Jika server berhasil menjawab namun kredensial ditolak (401/403), JANGAN fallback ke DEFAULT_ACCOUNTS
+      if (!mysqlAuth.networkError) {
+        setLoginError(mysqlAuth.message || 'ID Pengguna atau Password/PIN salah di database MySQL.');
+        return;
+      }
+
+      // 2. Fallback hanya jika koneksi ke server/jaringan terputus
+      const staffMatch = (staffUsers || []).find(
+        u => (u?.username || '').toLowerCase() === cleanInputUser
       );
-      if (defaultMatch) {
-        matchedAccount = defaultMatch;
-      }
-    }
 
-    if (matchedAccount) {
-      if (staffMatch && !staffMatch.isActive) {
-        setLoginError('Akun ini sedang dinonaktifkan oleh Administrator Toko.');
-        return;
-      }
-
-      // Record last login
-      const nowStr = new Intl.DateTimeFormat('id-ID', { 
-        day: '2-digit', 
-        month: 'short', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date());
-
+      let matchedAccount: StaffUser | typeof DEFAULT_ACCOUNTS[0] | null = null;
       if (staffMatch) {
-        setStaffUsers(prev => prev.map(u => 
-          u.id === staffMatch.id ? { ...u, lastLogin: `${nowStr} WIB` } : u
-        ));
+        if (staffMatch.pin && String(staffMatch.pin).trim() === cleanPin) {
+          matchedAccount = staffMatch;
+        } else {
+          setLoginError('Server tidak dapat dihubungi dan password lokal tidak cocok.');
+          return;
+        }
+      } else {
+        const defaultMatch = DEFAULT_ACCOUNTS.find(
+          acc => (acc?.username || '').toLowerCase() === cleanInputUser && String(acc.pin).trim() === cleanPin
+        );
+        if (defaultMatch) matchedAccount = defaultMatch;
       }
 
-      const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role as keyof typeof DEFAULT_ROLE_PERMISSIONS] || DEFAULT_ROLE_PERMISSIONS.kasir;
-
-      const authUser: AdminUser = {
-        username: matchedAccount.username,
-        role: matchedAccount.role,
-        name: matchedAccount.name,
-        permissions: userPerms,
-      };
-
-      setCurrentUser(authUser);
-      try {
-        sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
-        sessionStorage.setItem('lapakoke_chat_admin_user', JSON.stringify(authUser));
-      } catch {}
-      setLoginError(null);
-      setInputPin('');
-
-      // Auto-redirect if current activeTab is not permitted to view
-      const effPerms = getEffectivePermissions(matchedAccount.role, userPerms);
-      const currentModule = activeTab as SystemModuleKey;
-      if (!effPerms[currentModule]?.canView) {
-        const orderPriority: SystemModuleKey[] = ['products', 'orders', 'promos', 'couriers', 'receipts', 'stores', 'vouchers', 'users', 'brand_info', 'bulk_import'];
-        const firstViewable = orderPriority.find(k => effPerms[k]?.canView) || 'orders';
-        setActiveTab(firstViewable as any);
+      if (matchedAccount) {
+        if (staffMatch && !staffMatch.isActive) {
+          setLoginError('Akun ini sedang dinonaktifkan oleh Administrator Toko.');
+          return;
+        }
+        const userPerms = staffMatch?.permissions || (matchedAccount as any).permissions || DEFAULT_ROLE_PERMISSIONS[matchedAccount.role as keyof typeof DEFAULT_ROLE_PERMISSIONS] || DEFAULT_ROLE_PERMISSIONS.kasir;
+        const authUser: AdminUser = {
+          username: matchedAccount.username,
+          role: matchedAccount.role,
+          name: matchedAccount.name,
+          permissions: userPerms,
+        };
+        setCurrentUser(authUser);
+        try {
+          sessionStorage.setItem('toko_online_admin_active_user', JSON.stringify(authUser));
+          sessionStorage.setItem('lapakoke_chat_admin_user', JSON.stringify(authUser));
+        } catch {}
+        setLoginError(null);
+        setInputPin('');
+      } else {
+        setLoginError('ID Pengguna tidak ditemukan atau Password/PIN salah.');
       }
-    } else {
-      setLoginError('ID Pengguna tidak ditemukan atau Password/PIN salah. Silakan coba kembali.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -1971,7 +2017,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setEditingUser(u);
     setUserName(u.name);
     setUserUsername(u.username);
-    setUserPin(u.pin);
+    setUserPin(u.hasPassword ? '' : (u.pin || ''));
     setShowUserPin(false);
     setUserRole(u.role);
     setUserCustomPermissions(getEffectivePermissions(u.role, u.permissions));
@@ -1982,9 +2028,10 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
     setIsAddingUser(true);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userName.trim() || !userUsername.trim() || !userPin.trim()) {
+    const isPasswordProvided = userPin.trim().length > 0;
+    if (!userName.trim() || !userUsername.trim() || (!editingUser && !isPasswordProvided)) {
       alert('Nama, Username, dan Password/PIN wajib diisi!');
       return;
     }
@@ -2008,7 +2055,8 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         ...editingUser,
         name: userName.trim(),
         username: cleanUsername,
-        pin: userPin.trim(),
+        pin: '',
+        hasPassword: true,
         role: userRole,
         permissions: userCustomPermissions,
         storeId: userStoreId,
@@ -2018,9 +2066,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         isActive: userIsActive,
       };
 
-      setStaffUsers(prev => prev.map(u => 
-        (u.id === editingUser.id || (u?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) ? updated : u
-      ));
+      const saveRes = await saveStaffUserToMySql(
+        { ...updated, newPassword: isPasswordProvided ? userPin.trim() : undefined },
+        currentSlug
+      );
+
+      if (saveRes.success && Array.isArray(saveRes.staffUsers) && saveRes.staffUsers.length > 0) {
+        setStaffUsers(saveRes.staffUsers);
+      } else {
+        setStaffUsers(prev => prev.map(u => 
+          (u.id === editingUser.id || (u?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) ? updated : u
+        ));
+      }
 
       if ((currentUser?.username || '').toLowerCase() === (editingUser?.username || '').toLowerCase()) {
         const updatedAuth: AdminUser = {
@@ -2032,13 +2089,18 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         setCurrentUser(updatedAuth);
       }
 
-      setUserFeedback(`Password dan data akun "${updated.name}" (@${updated.username}) berhasil disimpan dan aktif!`);
+      setUserFeedback(
+        isPasswordProvided
+          ? `Password baru & data akun "${updated.name}" (@${updated.username}) berhasil disimpan ke database MySQL!`
+          : `Data akun "${updated.name}" (@${updated.username}) berhasil diperbarui di database MySQL!`
+      );
     } else {
       const newUser: StaffUser = {
         id: `usr_${Date.now()}`,
         name: userName.trim(),
         username: cleanUsername,
-        pin: userPin.trim(),
+        pin: '',
+        hasPassword: true,
         role: userRole,
         permissions: userCustomPermissions,
         storeId: userStoreId,
@@ -2049,30 +2111,41 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
         createdAt: new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date()),
       };
 
-      setStaffUsers(prev => [newUser, ...prev]);
+      const saveRes = await saveStaffUserToMySql(
+        { ...newUser, newPassword: userPin.trim() },
+        currentSlug
+      );
 
-      setUserFeedback(`Pengguna baru "${newUser.name}" (@${newUser.username}) berhasil ditambahkan!`);
+      if (saveRes.success && Array.isArray(saveRes.staffUsers) && saveRes.staffUsers.length > 0) {
+        setStaffUsers(saveRes.staffUsers);
+      } else {
+        setStaffUsers(prev => [newUser, ...prev]);
+      }
+
+      setUserFeedback(`Pengguna baru "${newUser.name}" (@${newUser.username}) & password berhasil disimpan ke database MySQL!`);
     }
 
     setIsAddingUser(false);
     setEditingUser(null);
-    setTimeout(() => setUserFeedback(null), 3500);
+    setTimeout(() => setUserFeedback(null), 4000);
   };
 
-  const handleToggleUserStatus = (u: StaffUser) => {
+  const handleToggleUserStatus = async (u: StaffUser) => {
     if ((currentUser?.username || '').toLowerCase() === (u?.username || '').toLowerCase()) {
       alert('Anda tidak dapat menonaktifkan akun yang sedang Anda gunakan saat ini!');
       return;
     }
 
-    const updated = staffUsers.map(item => item.id === u.id ? { ...item, isActive: !item.isActive } : item);
+    const updatedUser: StaffUser = { ...u, isActive: !u.isActive };
+    const updated = staffUsers.map(item => item.id === u.id ? updatedUser : item);
     setStaffUsers(updated);
+    saveStaffUserToMySql(updatedUser, currentSlug).catch(() => {});
 
-    setUserFeedback(`Status akun "${u.name}" diubah menjadi ${!u.isActive ? 'AKTIF' : 'NONAKTIF'}.`);
+    setUserFeedback(`Status akun "${u.name}" diubah menjadi ${!u.isActive ? 'AKTIF' : 'NONAKTIF'} di MySQL.`);
     setTimeout(() => setUserFeedback(null), 3500);
   };
 
-  const handleDeleteUser = (u: StaffUser) => {
+  const handleDeleteUser = async (u: StaffUser) => {
     if ((currentUser?.username || '').toLowerCase() === (u?.username || '').toLowerCase()) {
       alert('Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif digunakan!');
       return;
@@ -2086,8 +2159,9 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
     if (window.confirm(`Yakin ingin menghapus akun pengguna "${u.name}" (@${u.username}) secara permanen?`)) {
       setStaffUsers(prev => prev.filter(item => item.id !== u.id));
+      deleteStaffUserFromMySql(u.id, currentSlug).catch(() => {});
 
-      setUserFeedback(`Akun pengguna "${u.name}" telah berhasil dihapus.`);
+      setUserFeedback(`Akun pengguna "${u.name}" telah berhasil dihapus dari MySQL.`);
       setTimeout(() => setUserFeedback(null), 3500);
     }
   };
@@ -2296,10 +2370,15 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
 
             <button
               type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md transition-transform active:scale-98 cursor-pointer mt-2"
+              disabled={isLoggingIn}
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-60 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md transition-transform active:scale-98 cursor-pointer mt-2"
             >
-              <Lock className="w-4 h-4 text-amber-300" />
-              <span>Masuk ke Panel Admin</span>
+              {isLoggingIn ? (
+                <Loader2 className="w-4 h-4 text-amber-300 animate-spin" />
+              ) : (
+                <Lock className="w-4 h-4 text-amber-300" />
+              )}
+              <span>{isLoggingIn ? 'Memverifikasi ke MySQL...' : 'Masuk ke Panel Admin'}</span>
             </button>
 
             {/* Tombol Tutup & Kembali ke Toko Belanja */}
@@ -5135,21 +5214,21 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         <label className="font-bold text-stone-700">Password / PIN Akses:</label>
                         {editingUser && (
                           <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                            userPin !== editingUser.pin 
+                            userPin.trim().length > 0 
                               ? 'bg-amber-100 text-amber-900 border border-amber-300' 
                               : 'bg-emerald-100 text-emerald-800'
                           }`}>
-                            {userPin !== editingUser.pin ? 'Password diubah (siap simpan)' : 'Password saat ini tersimpan'}
+                            {userPin.trim().length > 0 ? 'Password baru siap disimpan ke MySQL' : 'Tersimpan di MySQL (kosongkan jika tetap)'}
                           </span>
                         )}
                       </div>
                       <div className="relative">
                         <input
                           type={showUserPin ? 'text' : 'password'}
-                          required
+                          required={!editingUser}
                           value={userPin}
                           onChange={e => setUserPin(e.target.value)}
-                          placeholder="Masukkan Password atau PIN 4-8 digit"
+                          placeholder={editingUser ? 'Kosongkan jika tidak ingin mengubah password...' : 'Masukkan Password atau PIN 4-8 digit'}
                           className="w-full px-3 py-2 pr-10 border border-stone-300 rounded-xl bg-white font-mono text-stone-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                         <button
@@ -5162,7 +5241,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                         </button>
                       </div>
                       <p className="text-[11px] text-stone-500 mt-1">
-                        Password ini digunakan untuk login ke Panel Admin dan Kasir POS.
+                        Password dienkripsi & disimpan di database MySQL agar berlaku di semua perangkat & browser.
                       </p>
                     </div>
 
@@ -5339,7 +5418,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                         <span className="text-stone-300">•</span>
                                         <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
                                           <KeyRound className="w-2.5 h-2.5 text-stone-400" />
-                                          <span>{showUserPinInTable[u.id] ? u.pin : '••••••'}</span>
+                                          <span>{showUserPinInTable[u.id] ? (u.pin || 'Tersimpan di MySQL') : '••••••'}</span>
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -5347,7 +5426,7 @@ DJARUM 76 MANGGA | 16500 | 30 | rokok-tembakau | Djarum`);
                                               setShowUserPinInTable(prev => ({ ...prev, [u.id]: !prev[u.id] }));
                                             }}
                                             className="text-stone-400 hover:text-stone-700 ml-0.5 p-0.5"
-                                            title={showUserPinInTable[u.id] ? "Sembunyikan password" : "Lihat password"}
+                                            title={showUserPinInTable[u.id] ? "Sembunyikan password" : "Lihat status password"}
                                           >
                                             {showUserPinInTable[u.id] ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
                                           </button>

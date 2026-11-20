@@ -532,6 +532,144 @@ export async function deleteStoreFromMySql(storeId: string): Promise<boolean> {
   }
 }
 
+// ==========================================
+// MYSQL STAFF USERS & ADMIN AUTH API CLIENT
+// ==========================================
 
+/**
+ * Ambil daftar staf & admin dari MySQL (tanpa ekspos password asli)
+ */
+export async function fetchStaffUsersFromMySql(tenantSlug: string = 'default'): Promise<StaffUser[] | null> {
+  try {
+    const res = await fetch(`/api/mysql/staff-users?tenantSlug=${encodeURIComponent(tenantSlug)}`, {
+      cache: 'no-cache',
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return Array.isArray(json.staffUsers) ? json.staffUsers : null;
+  } catch (err) {
+    console.error('Error fetchStaffUsersFromMySql:', err);
+    return null;
+  }
+}
 
+/**
+ * Simpan / perbarui satu akun staf & password ke database MySQL
+ */
+export async function saveStaffUserToMySql(
+  user: StaffUser & { newPassword?: string },
+  tenantSlug: string = 'default'
+): Promise<{ success: boolean; staffUsers?: StaffUser[]; message?: string; source?: string }> {
+  try {
+    const res = await fetch('/api/mysql/staff-users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-slug': tenantSlug,
+      },
+      body: JSON.stringify({ user, tenantSlug }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return {
+      success: Boolean(json.success),
+      staffUsers: Array.isArray(json.staffUsers) ? json.staffUsers : undefined,
+      message: json.message,
+      source: json.source,
+    };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Gagal menghubungi server MySQL' };
+  }
+}
 
+/**
+ * Simpan / sinkronkan daftar akun staf ke database MySQL
+ */
+export async function saveStaffUsersToMySql(
+  users: Array<StaffUser & { newPassword?: string }>,
+  tenantSlug: string = 'default'
+): Promise<{ success: boolean; staffUsers?: StaffUser[]; message?: string; source?: string }> {
+  try {
+    if (!Array.isArray(users) || users.length === 0) return { success: true, staffUsers: [] };
+    const res = await fetch('/api/mysql/staff-users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-slug': tenantSlug,
+      },
+      body: JSON.stringify({ users, tenantSlug }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return {
+      success: Boolean(json.success),
+      staffUsers: Array.isArray(json.staffUsers) ? json.staffUsers : undefined,
+      message: json.message,
+      source: json.source,
+    };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Gagal menghubungi server MySQL' };
+  }
+}
+
+/**
+ * Hapus akun staf dari database MySQL
+ */
+export async function deleteStaffUserFromMySql(
+  userId: string,
+  tenantSlug: string = 'default'
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch(
+      `/api/mysql/staff-users/${encodeURIComponent(userId)}?tenantSlug=${encodeURIComponent(tenantSlug)}`,
+      { method: 'DELETE' }
+    );
+    const json = await res.json().catch(() => ({}));
+    return { success: Boolean(json.success), message: json.message };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Gagal menghapus dari MySQL' };
+  }
+}
+
+/**
+ * Verifikasi login Admin / Kasir langsung ke database MySQL di server
+ * agar bisa login dari perangkat & media mana saja menggunakan password tersimpan di MySQL.
+ */
+export async function loginStaffWithMySql({
+  tenantSlug = 'default',
+  username,
+  password,
+}: {
+  tenantSlug?: string;
+  username: string;
+  password: string;
+}): Promise<{
+  success: boolean;
+  user?: StaffUser;
+  message?: string;
+  source?: string;
+  networkError?: boolean;
+}> {
+  try {
+    const res = await fetch('/api/mysql/staff-users/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-tenant-slug': tenantSlug,
+      },
+      body: JSON.stringify({ tenantSlug, username, password }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return {
+      success: Boolean(res.ok && json.success),
+      user: json.user,
+      message: json.message,
+      source: json.source,
+      networkError: false,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Tidak dapat terhubung ke server MySQL',
+      networkError: true,
+    };
+  }
+}

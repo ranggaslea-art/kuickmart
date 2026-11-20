@@ -635,6 +635,7 @@ export interface StaffUser {
   name: string;
   role: 'admin' | 'supervisor' | 'kasir' | 'gudang';
   pin: string;
+  hasPassword?: boolean;
   phone?: string;
   email?: string;
   storeId?: string;

@@ -32,6 +32,8 @@ export function getMySqlConfig(): MySqlConfig {
   };
 }
 
+let rawRealPool: Pool | null = null;
+
 export function getMySqlPool(): Pool {
   if (pool) return pool;
 
@@ -53,9 +55,11 @@ export function getMySqlPool(): Pool {
   let realPool: Pool;
   try {
     realPool = mysql.createPool(poolConfig);
+    rawRealPool = realPool;
   } catch (err) {
     console.warn('[AI Studio] Could not create MySQL pool — using mock pool');
     realPool = {} as any;
+    rawRealPool = null;
   }
 
   const handleMockQuery = (sql: string) => {
@@ -112,6 +116,25 @@ export function getMySqlPool(): Pool {
 
   pool = poolProxy as Pool;
   return pool;
+}
+
+/**
+ * Jalankan query langsung ke MySQL asli dan kembalikan { ok: false } jika MySQL sedang offline.
+ */
+export async function executeRealMySqlQuery<T = any>(
+  sql: string,
+  params: any[] = []
+): Promise<{ ok: true; rows: T } | { ok: false; error: string }> {
+  try {
+    getMySqlPool();
+    if (!rawRealPool || typeof (rawRealPool as any).query !== 'function') {
+      return { ok: false, error: 'MySQL pool not initialized' };
+    }
+    const [rows] = await (rawRealPool as any).query(sql, params);
+    return { ok: true, rows: rows as T };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
 }
 
 /**

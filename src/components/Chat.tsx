@@ -42,6 +42,7 @@ import { Store, MemberProfile, ChatMessage, StaffUser } from '../types';
 import { INITIAL_STAFF_USERS } from '../data/mockData';
 import { getTenantStorageKey } from '../utils/tenantHelper';
 import { getWhatsAppChatUrl } from '../utils/whatsappHelper';
+import { loginStaffWithMySql } from '../lib/mysqlClientApi';
 
 interface ChatProps {
   isOpen: boolean;
@@ -146,8 +147,8 @@ export const Chat: React.FC<ChatProps> = ({
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
   const [authenticatedStaffUser, setAuthenticatedStaffUser] = useState<StaffUser | null>(null);
 
-  // Verifikasi Kredensial Admin untuk Masuk ke Mode Admin Chat di Semua Domain & Subdomain
-  const handleVerifyAndEnterAdminMode = (usernameInput: string, pinInput: string) => {
+  // Verifikasi Kredensial Admin untuk Masuk ke Mode Admin Chat di Semua Domain & Subdomain (via MySQL)
+  const handleVerifyAndEnterAdminMode = async (usernameInput: string, pinInput: string) => {
     const cleanUser = usernameInput.trim().toLowerCase();
     const cleanPin = pinInput.trim();
     if (!cleanUser || !cleanPin) {
@@ -155,6 +156,28 @@ export const Chat: React.FC<ChatProps> = ({
       return false;
     }
 
+    // 1. Verifikasi langsung terhadap password yang tersimpan di MySQL
+    const mysqlAuth = await loginStaffWithMySql({
+      tenantSlug: currentSlug,
+      username: cleanUser,
+      password: cleanPin,
+    });
+
+    if (mysqlAuth.success && mysqlAuth.user) {
+      setAuthenticatedStaffUser(mysqlAuth.user);
+      setIsAdminAuthDialogOpen(false);
+      setActiveRole('admin');
+      setAdminViewMode('chat_thread');
+      setAdminAuthError(null);
+      return true;
+    }
+
+    if (!mysqlAuth.networkError) {
+      setAdminAuthError(mysqlAuth.message || 'ID Pengguna atau Password / PIN salah di database MySQL.');
+      return false;
+    }
+
+    // Fallback offline jika server tidak terjangkau
     let staffList: StaffUser[] = [];
     try {
       const key = getTenantStorageKey('toko_online_staff_users', currentSlug);
@@ -167,7 +190,6 @@ export const Chat: React.FC<ChatProps> = ({
       }
     } catch {}
 
-    // Pastikan seluruh akun staf bawaan (admin, spv, kasir, gudang) selalu tersedia sebagai baseline di semua domain & subdomain
     INITIAL_STAFF_USERS.forEach(def => {
       if (!staffList.some(u => (u?.username || '').toLowerCase() === def.username.toLowerCase())) {
         staffList.push(def);

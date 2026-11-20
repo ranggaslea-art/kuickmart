@@ -27,6 +27,8 @@ import {
   Smartphone
 } from 'lucide-react';
 import { StaffUser } from '../types';
+import { loginStaffWithMySql } from '../lib/mysqlClientApi';
+import { getStoreSlugFromUrl } from '../utils/tenantHelper';
 
 export interface VisitorOriginStat {
   city: string;
@@ -246,7 +248,7 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleLogin = (e?: React.FormEvent) => {
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoginError(null);
 
@@ -258,7 +260,33 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       return;
     }
 
-    // 1. Cek apakah pengguna ada di daftar staffUsers
+    // 1. Verifikasi terhadap database MySQL terlebih dahulu
+    const tenantSlug = getStoreSlugFromUrl() || 'default';
+    const mysqlAuth = await loginStaffWithMySql({
+      tenantSlug,
+      username: cleanUser,
+      password: cleanPin,
+    });
+
+    if (mysqlAuth.success && mysqlAuth.user) {
+      setCurrentUser(mysqlAuth.user);
+      try {
+        localStorage.setItem('toko_online_traffic_auth', JSON.stringify(mysqlAuth.user));
+        window.dispatchEvent(new Event('storage'));
+      } catch {}
+      setUsernameInput('');
+      setPinInput('');
+      setLoginError(null);
+      fetchLiveStats();
+      return;
+    }
+
+    if (!mysqlAuth.networkError) {
+      setLoginError(mysqlAuth.message || 'ID Pengguna atau Password/PIN salah di database MySQL.');
+      return;
+    }
+
+    // Fallback offline jika server tidak dapat dihubungi
     const staffMatch = (staffUsers || []).find(
       u => (u?.username || '').toLowerCase() === cleanUser
     );
@@ -284,7 +312,6 @@ export const LiveTrafficModal: React.FC<LiveTrafficModalProps> = ({
       return;
     }
 
-    // 2. Fallback hanya jika username belum terdaftar sama sekali di staffUsers
     const defaultMatch = DEFAULT_ACCOUNTS.find(
       u => (u?.username || '').toLowerCase() === cleanUser && String(u.pin).trim() === cleanPin
     );

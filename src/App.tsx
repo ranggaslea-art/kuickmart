@@ -132,7 +132,9 @@ import {
   saveBrandsToMySql,
   fetchStoresFromMySql,
   saveStoresToMySql,
-  deleteStoreFromMySql
+  deleteStoreFromMySql,
+  fetchStaffUsersFromMySql,
+  saveStaffUsersToMySql,
 } from './lib/mysqlClientApi';
 import { db } from './lib/firebase';
 import { collection, doc, setDoc, onSnapshot, getDocs, deleteDoc } from 'firebase/firestore';
@@ -1047,8 +1049,14 @@ export default function App() {
   });
 
   useEffect(() => {
-    const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
-    localStorage.setItem(key, JSON.stringify(staffUsers));
+    try {
+      const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
+      const sanitized = (staffUsers || []).map((u) => ({
+        ...u,
+        pin: u?.hasPassword ? '' : u?.pin || '',
+      }));
+      localStorage.setItem(key, JSON.stringify(sanitized));
+    } catch {}
   }, [staffUsers, currentSlug]);
 
   // MySQL Database Connection State
@@ -1065,12 +1073,13 @@ export default function App() {
       const statusRes = await fetchMySqlStatus();
       setIsDatabaseConnected(Boolean(statusRes.connected));
 
-      const [dbProducts, dbCategories, dbBrands, dbOrders, dbStores, onlineSubdomains] = await Promise.all([
+      const [dbProducts, dbCategories, dbBrands, dbOrders, dbStores, dbStaffUsers, onlineSubdomains] = await Promise.all([
         fetchProductsFromMySql(currentSlug).catch(() => null),
         fetchCategoriesFromMySql(currentSlug).catch(() => null),
         fetchBrandsFromMySql(currentSlug).catch(() => null),
         fetchOrdersFromMySql(currentSlug).catch(() => null),
         fetchStoresFromMySql(currentSlug).catch(() => null),
+        fetchStaffUsersFromMySql(currentSlug).catch(() => null),
         fetchRegisteredSubdomains().catch(() => []),
       ]);
 
@@ -1111,6 +1120,10 @@ export default function App() {
         try {
           localStorage.setItem(getTenantStorageKey(STORAGE_ORDERS_KEY, currentSlug), JSON.stringify(normalized));
         } catch {}
+      }
+
+      if (dbStaffUsers && dbStaffUsers.length > 0) {
+        setStaffUsers(dbStaffUsers);
       }
 
       // Sinkronisasi Cabang Toko (Stores) & Subdomain Terdaftar ke seluruh media (PC, Tablet, HP)
@@ -1702,12 +1715,23 @@ export default function App() {
   };
 
   const handleUpdateStaffUsers = (newUsers: StaffUser[]) => {
+    const sanitized = (newUsers || []).map((u) => ({
+      ...u,
+      pin: u?.hasPassword ? '' : u?.pin || '',
+    }));
     try {
       const key = getTenantStorageKey(STORAGE_STAFF_USERS_KEY, currentSlug);
-      localStorage.setItem(key, JSON.stringify(newUsers));
+      localStorage.setItem(key, JSON.stringify(sanitized));
       saveTenantDataToCloud('staff', newUsers, currentSlug);
     } catch {}
-    setStaffUsers(newUsers);
+    setStaffUsers(sanitized);
+    saveStaffUsersToMySql(newUsers, currentSlug)
+      .then((res) => {
+        if (res.success && Array.isArray(res.staffUsers) && res.staffUsers.length > 0) {
+          setStaffUsers(res.staffUsers);
+        }
+      })
+      .catch(() => {});
   };
 
   // Save Cart to LocalStorage
